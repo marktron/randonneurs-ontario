@@ -11,6 +11,7 @@
   "dependencies": {
     "@base-ui/react": "^1.0.0",
     "@sendgrid/mail": "^8.1.6",
+    "@supabase/ssr": "^0.8.0",
     "@supabase/supabase-js": "^2.89.0",
     "better-sqlite3": "^12.5.0",
     "class-variance-authority": "^0.7.1",
