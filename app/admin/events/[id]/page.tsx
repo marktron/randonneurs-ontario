@@ -3,7 +3,8 @@ import { supabaseAdmin } from '@/lib/supabase-server'
 import { parseLocalDate } from '@/lib/utils'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
-import { ChevronLeft } from 'lucide-react'
+import { ChevronLeft, FileText } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { EventResultsManager } from '@/components/admin/event-results-manager'
 import { EventStatusSelect } from '@/components/admin/event-status-select'
@@ -141,11 +142,19 @@ export default async function EventDetailPage({ params }: EventPageProps) {
             {event.chapters?.name} &middot; {event.distance_km}km {event.event_type}
           </p>
         </div>
-        <EventStatusSelect
-          eventId={event.id}
-          initialStatus={event.status as EventStatus}
-          resultsCount={results.length}
-        />
+        <div className="flex items-center gap-2">
+          <Button variant="outline" asChild>
+            <Link href={`/admin/events/${event.id}/control-cards`}>
+              <FileText className="h-4 w-4 mr-2" />
+              Control Cards
+            </Link>
+          </Button>
+          <EventStatusSelect
+            eventId={event.id}
+            initialStatus={event.status as EventStatus}
+            resultsCount={results.length}
+          />
+        </div>
       </div>
 
       <div className="grid gap-4 md:grid-cols-4">
