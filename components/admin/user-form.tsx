@@ -17,6 +17,7 @@ interface AdminUser {
   id: string
   email: string
   name: string
+  phone: string | null
   role: 'admin' | 'chapter_admin'
   chapter_id: string | null
 }
@@ -34,6 +35,7 @@ export function UserForm({ chapters, user, mode }: UserFormProps) {
 
   const [name, setName] = useState(user?.name || '')
   const [email, setEmail] = useState(user?.email || '')
+  const [phone, setPhone] = useState(user?.phone || '')
   const [password, setPassword] = useState('')
   const [role, setRole] = useState<'admin' | 'chapter_admin'>(user?.role || 'chapter_admin')
   const [chapterId, setChapterId] = useState<string>(user?.chapter_id || '')
@@ -47,6 +49,7 @@ export function UserForm({ chapters, user, mode }: UserFormProps) {
         const result = await createAdminUser({
           email,
           name,
+          phone: phone || null,
           password,
           role,
           chapterId: role === 'chapter_admin' ? chapterId : null,
@@ -61,6 +64,7 @@ export function UserForm({ chapters, user, mode }: UserFormProps) {
       } else if (user) {
         const result = await updateAdminUser(user.id, {
           name,
+          phone: phone || null,
           role,
           chapterId: role === 'chapter_admin' ? chapterId : null,
         })
@@ -118,6 +122,19 @@ export function UserForm({ chapters, user, mode }: UserFormProps) {
             {mode === 'edit' && (
               <p className="text-xs text-muted-foreground">Email cannot be changed</p>
             )}
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="phone">Phone</Label>
+            <Input
+              id="phone"
+              type="tel"
+              placeholder="416-555-1234"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              disabled={isPending}
+            />
+            <p className="text-xs text-muted-foreground">Used as organizer contact on control cards</p>
           </div>
 
           {mode === 'create' && (

@@ -69,7 +69,7 @@ interface ControlCardsPageProps {
 
 export default async function ControlCardsPage({ params }: ControlCardsPageProps) {
   const { id } = await params
-  await requireAdmin()
+  const admin = await requireAdmin()
 
   const [event, registrations] = await Promise.all([
     getEventDetails(id),
@@ -115,12 +115,18 @@ export default async function ControlCardsPage({ params }: ControlCardsPageProps
           startTime: event.start_time || '06:00',
           startLocation: event.start_location || '',
           chapter: event.chapters?.name || 'Randonneurs Ontario',
+          rwgpsId: event.routes?.rwgps_id || null,
         }}
         riders={registrations.map((r) => ({
           id: r.riders.id,
           firstName: r.riders.first_name,
           lastName: r.riders.last_name,
         }))}
+        organizer={{
+          name: admin.name,
+          phone: admin.phone || '',
+          email: admin.email,
+        }}
       />
     </div>
   )

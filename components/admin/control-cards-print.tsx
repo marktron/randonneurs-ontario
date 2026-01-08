@@ -4,6 +4,21 @@ import type { ControlPoint, CardRider, OrganizerInfo, CardEvent } from '@/types/
 import { REGULATIONS_TEXT, EVENT_INFO_TEXT } from '@/types/control-card'
 import Image from 'next/image'
 
+// Helper to render text with bold label (text before first colon)
+function BoldLabelText({ text }: { text: string }) {
+  const colonIndex = text.indexOf(':')
+  if (colonIndex === -1) return <>{text}</>
+
+  const label = text.substring(0, colonIndex + 1)
+  const content = text.substring(colonIndex + 1)
+
+  return (
+    <>
+      <strong>{label}</strong>{content}
+    </>
+  )
+}
+
 interface ControlCardsPrintProps {
   event: CardEvent
   organizer: OrganizerInfo
@@ -37,10 +52,10 @@ export function ControlCardsPrint({
 
   return (
     <div className="control-cards-print">
-      {/* Load Noto Sans with variable width axis */}
+      {/* Load Noto Sans and Noto Serif with variable width axis */}
       <link
         rel="stylesheet"
-        href="https://fonts.googleapis.com/css2?family=Noto+Sans:wdth,wght@62.5..100,100..900&display=swap"
+        href="https://fonts.googleapis.com/css2?family=Noto+Sans:wdth,wght@62.5..100,100..900&family=Noto+Serif:wdth,wght@62.5..100,100..900&display=swap"
       />
       <style jsx global>{`
         @page {
@@ -50,8 +65,8 @@ export function ControlCardsPrint({
 
         @media print {
           html, body {
-            margin: 0;
-            padding: 0;
+            margin: 0 !important;
+            padding: 0 !important;
             -webkit-print-color-adjust: exact;
             print-color-adjust: exact;
           }
@@ -61,13 +76,51 @@ export function ControlCardsPrint({
           .page-break {
             page-break-after: always;
           }
+          /* Hide admin sidebar and wrapper when printing */
+          [data-sidebar],
+          aside,
+          nav,
+          [data-slot="sidebar"] {
+            display: none !important;
+            width: 0 !important;
+          }
+          /* Reset all layout containers */
+          main,
+          [data-slot="sidebar-inset"],
+          [data-sidebar-inset],
+          .flex,
+          body > div {
+            margin: 0 !important;
+            padding: 0 !important;
+            margin-left: 0 !important;
+            padding-left: 0 !important;
+            width: 100% !important;
+            max-width: 100% !important;
+            transform: none !important;
+          }
+          /* Reset fixed positioning for print */
+          .control-cards-print {
+            position: static !important;
+            overflow: visible !important;
+            inset: auto !important;
+            z-index: auto !important;
+          }
         }
 
+        /* On screen: make print page full width overlay */
         .control-cards-print {
+          position: fixed;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          z-index: 50;
+          background: #f5f5f5;
+          overflow: auto;
           font-family: 'Noto Sans', sans-serif;
           font-stretch: 62.5%;
           font-size: 7.5pt;
-          line-height: 1.2;
+          line-height: 1.3;
           color: #000;
         }
 
@@ -84,7 +137,7 @@ export function ControlCardsPrint({
           width: 8.5in;
           height: 5.5in;
           box-sizing: border-box;
-          border-bottom: 1px dashed #ccc;
+          border-bottom: 1px solid #D9D9D9;
           display: grid;
           grid-template-columns: 1fr 1fr 1fr;
         }
@@ -94,8 +147,8 @@ export function ControlCardsPrint({
         }
 
         .card-column {
-          padding: 0.15in;
-          border-right: 1px dotted #ddd;
+          padding: 0.2in;
+          border-right: 1px solid #D9D9D9;
           box-sizing: border-box;
           overflow: hidden;
         }
@@ -106,23 +159,30 @@ export function ControlCardsPrint({
 
         /* Front card styles */
         .front-left {
-          font-size: 6.5pt;
-          line-height: 1.15;
+          font-size: 7.5pt;
+          line-height: 1.25;
+          color: #404040;
         }
 
         .front-left p {
-          margin: 0 0 0.5em 0;
+          margin: 0 0 0.8em 0;
+        }
+
+        .front-left strong {
+          color: #000;
+          font-weight: 600;
+          letter-spacing: 0.02em;
         }
 
         .front-left .bold-warning {
           font-weight: 700;
-          margin: 0.5em 0;
+          color: #000;
         }
 
         .front-middle {
           display: flex;
           flex-direction: column;
-          gap: 0.1in;
+          gap: 0.12in;
         }
 
         .field-row {
@@ -131,21 +191,17 @@ export function ControlCardsPrint({
         }
 
         .field-label {
-          font-size: 6.5pt;
+          font-size: 7.5pt;
           text-transform: uppercase;
+          letter-spacing: 0.05em;
+          color: #525252;
           white-space: nowrap;
         }
 
         .field-box {
           border-bottom: 1px solid #000;
           flex: 1;
-          min-height: 0.25in;
-        }
-
-        .field-box-tall {
-          border: 1px solid #000;
-          flex: 1;
-          min-height: 0.5in;
+          min-height: 0.22in;
         }
 
         .checkbox-row {
@@ -155,8 +211,8 @@ export function ControlCardsPrint({
         }
 
         .checkbox {
-          width: 0.15in;
-          height: 0.15in;
+          width: 0.14in;
+          height: 0.14in;
           border: 1px solid #000;
         }
 
@@ -166,135 +222,156 @@ export function ControlCardsPrint({
         }
 
         .logo-section {
-          text-align: right;
-          margin-bottom: 0.1in;
+          display: flex;
+          justify-content: center;
+          margin-bottom: 0.15in;
         }
 
+
         .card-title {
-          font-size: 10pt;
-          font-weight: 700;
+          font-size: 8pt;
+          font-weight: 500;
           text-transform: uppercase;
+          color: #525252;
           margin-top: 0.1in;
         }
 
         .route-name {
-          font-size: 14pt;
+          font-family: 'Noto Serif', serif;
+          font-stretch: 75%;
+          font-size: 21pt;
           font-weight: 700;
-          margin: 0.05in 0;
+          letter-spacing: -0.02em;
+          line-height: 1.1;
+          margin: 0.02in 0 0.04in 0;
+          color: #000;
         }
 
-        .distance {
-          font-size: 12pt;
-          font-weight: 700;
+        .distance-date {
+          font-size: 10pt;
+          font-weight: 500;
+          color: #000;
+          font-variant-numeric: tabular-nums;
         }
 
         .rider-info {
-          margin-top: 0.15in;
-          font-size: 8pt;
+          margin-top: 0.2in;
+          font-size: 7pt;
         }
 
-        .rider-label {
-          font-size: 6.5pt;
+        .rider-label, .organizer-label {
+          font-size: 7.5pt;
+          text-transform: uppercase;
+          color: #525252;
+          margin-bottom: 0.02in;
         }
 
         .rider-name {
-          font-size: 10pt;
-          font-weight: 600;
+          font-family: 'Noto Serif', serif;
+          font-stretch: 75%;
+          font-size: 11pt;
+          font-weight: 500;
+          margin-top: 0.02in;
         }
 
         .event-info {
           margin-top: auto;
-          font-size: 6.5pt;
-          line-height: 1.3;
+          font-size: 9pt;
+          line-height: 1.4;
+          color: #404040;
+        }
+
+        .preamble-text {
+          margin: 0.12in 0;
         }
 
         .organizer-section {
-          margin-top: 0.1in;
-          padding-top: 0.1in;
-          border-top: 1px solid #ddd;
+          margin-top: 0.12in;
+          padding-top: 0.12in;
+          border-top: 1px solid #D9D9D9;
         }
 
         /* Back card styles */
         .back-header {
           display: flex;
           justify-content: space-between;
-          align-items: flex-start;
-          margin-bottom: 0.1in;
-          padding-bottom: 0.05in;
-          border-bottom: 1px solid #000;
+          align-items: baseline;
+          font-size: 10pt;
+          margin-bottom: 0;
+          padding-bottom: 0.08in;
+          border-bottom: 1.5px solid #000;
         }
 
         .back-header-left {
-          font-weight: 600;
-        }
-
-        .back-header-right {
-          text-align: right;
-        }
-
-        .controls-grid {
-          display: contents;
+          font-weight: 500;
         }
 
         .control-header {
           display: grid;
-          grid-template-columns: 1fr 0.6in 1fr;
-          font-size: 6pt;
+          grid-template-columns: 1fr 0.65in 0.85fr;
+          align-items: stretch;
+          font-size: 8pt;
           text-transform: uppercase;
+          color: #525252;
           border-bottom: 1px solid #000;
-          padding-bottom: 0.03in;
-          margin-bottom: 0.05in;
+          margin-bottom: 0;
+          text-align: center;
+        }
+
+        .control-header > div {
+          padding: 0.075in 0;
+          align-self: stretch;
+        }
+
+        .control-header > div:nth-child(2),
+        .control-header > div:nth-child(3) {
+          border-left: 1px solid #D9D9D9;
         }
 
         .control-row {
           display: grid;
-          grid-template-columns: 1fr 0.6in 1fr;
-          min-height: 0.65in;
-          border-bottom: 1px solid #ccc;
-          padding: 0.03in 0;
+          grid-template-columns: 1fr 0.65in 0.85fr;
+          min-height: 1in;
+          border-bottom: 1px solid #D9D9D9;
         }
 
         .control-info {
-          font-size: 7pt;
+          font-size: 8pt;
+          padding: 0.04in 0;
         }
 
         .control-name {
-          font-weight: 700;
+          font-weight: 600;
+          font-size: 11pt;
           text-transform: uppercase;
+          line-height: 1.1;
         }
 
         .control-distance {
-          font-size: 8pt;
+          font-size: 9pt;
+          font-variant-numeric: tabular-nums;
+          color: #000;
+          margin-top: 0.02in;
         }
 
         .control-times {
-          font-size: 6.5pt;
-          color: #333;
+          font-size: 9pt;
+          color: #525252;
+          font-variant-numeric: tabular-nums;
+          margin-top: 0.02in;
         }
 
         .time-cell {
-          border-left: 1px solid #ccc;
-          padding-left: 0.05in;
+          border-left: 1px solid #D9D9D9;
+          padding: 0.04in 0 0.04in 0.06in;
         }
 
         .signature-cell {
-          border-left: 1px solid #ccc;
-          padding-left: 0.05in;
-        }
-
-        .signature-stamp-box {
-          border: 1px solid #ccc;
-          height: 0.4in;
-          margin-top: 0.03in;
+          border-left: 1px solid #D9D9D9;
+          padding: 0.04in 0 0.04in 0.06in;
         }
 
         .back-column {
-          display: flex;
-          flex-direction: column;
-        }
-
-        .back-full-width {
-          grid-column: span 3;
           display: flex;
           flex-direction: column;
         }
@@ -337,15 +414,15 @@ export function ControlCardsPrint({
             ))}
           </div>
 
-          {/* BACK PAGE - Controls (reversed order for double-sided printing) */}
+          {/* BACK PAGE - Controls */}
           <div className="card-page page-break">
-            {/* Reverse order so when printed double-sided, backs align with fronts */}
-            {[...pair].reverse().map((rider, riderIndex) => (
+            {pair.map((rider, riderIndex) => (
               <CardBack
                 key={rider?.id || `empty-back-${riderIndex}`}
                 event={event}
                 controls={controls}
                 formattedDate={formattedDate}
+                rider={rider}
               />
             ))}
           </div>
@@ -372,13 +449,13 @@ function CardFront({
     <div className="card-half">
       {/* Left column - Regulations */}
       <div className="card-column front-left">
-        <p>{REGULATIONS_TEXT.regulations}</p>
+        <p><BoldLabelText text={REGULATIONS_TEXT.regulations} /></p>
         <p className="bold-warning">{REGULATIONS_TEXT.sagWagon}</p>
-        <p>{REGULATIONS_TEXT.controlCard}</p>
-        <p>{REGULATIONS_TEXT.conduct}</p>
-        <p>{REGULATIONS_TEXT.cycle}</p>
-        <p>{REGULATIONS_TEXT.assistance}</p>
-        <div style={{ marginTop: 'auto', paddingTop: '0.1in', borderTop: '1px solid #ccc' }}>
+        <p><BoldLabelText text={REGULATIONS_TEXT.controlCard} /></p>
+        <p><BoldLabelText text={REGULATIONS_TEXT.conduct} /></p>
+        <p><BoldLabelText text={REGULATIONS_TEXT.cycle} /></p>
+        <p><BoldLabelText text={REGULATIONS_TEXT.assistance} /></p>
+        <div style={{ marginTop: 'auto', paddingTop: '0.2in' }}>
           <div style={{ fontWeight: 600, marginBottom: '0.05in' }}>MACHINE EXAMINER&apos;S STAMP &amp; SIGNATURE</div>
           <div style={{ border: '1px solid #000', height: '0.6in' }}></div>
         </div>
@@ -386,40 +463,35 @@ function CardFront({
 
       {/* Middle column - Time fields */}
       <div className="card-column front-middle">
-        <div className="field-row">
-          <div style={{ flex: 1 }}>
-            <div className="field-label">Scheduled</div>
-            <div className="field-label">Start Time:</div>
-          </div>
-          <div className="field-box"></div>
+        <div className="field-row" style={{ alignItems: 'baseline' }}>
+          <div className="field-label">Start:</div>
+          <div style={{ fontWeight: 600, fontSize: '9pt' }}>{event.startTime.slice(0, 5)} &middot; {formattedDate}</div>
         </div>
 
-        <div className="field-row">
+        <div className="field-row" style={{ marginTop: '0.08in' }}>
           <div style={{ flex: 1 }}>
             <div className="field-label">Finish Time:</div>
+            <div className="field-box"></div>
           </div>
           <div style={{ flex: 1 }}>
             <div className="field-label">Date:</div>
+            <div className="field-box"></div>
           </div>
         </div>
-        <div className="field-row">
-          <div className="field-box"></div>
-          <div className="field-box"></div>
-        </div>
 
-        <div style={{ marginTop: '0.1in' }}>
-          <div className="field-label">Total Allowable Time</div>
+        <div style={{ marginTop: '0.12in' }}>
+          <div className="field-label" style={{ marginBottom: '0.04in' }}>Total Allowable Time</div>
           <div style={{ display: 'flex', gap: '0.1in', alignItems: 'baseline' }}>
             <span>HRS.</span>
             <span style={{ fontWeight: 700, fontSize: '10pt' }}>{totalAllowableTime.hours}</span>
             <span>MIN.</span>
-            <span style={{ fontWeight: 700, fontSize: '10pt' }}>{totalAllowableTime.minutes}</span>
+            <span style={{ fontWeight: 700, fontSize: '10pt' }}>{String(totalAllowableTime.minutes).padStart(2, '0')}</span>
           </div>
         </div>
 
-        <div style={{ marginTop: '0.1in' }}>
+        <div style={{ marginTop: '0.12in' }}>
           <div className="field-label">Time Rider Completed Distance</div>
-          <div className="field-row">
+          <div className="field-row" style={{ alignItems: 'baseline', marginTop: '0.02in' }}>
             <span>HRS.</span>
             <div className="field-box"></div>
             <span>MIN.</span>
@@ -436,7 +508,7 @@ function CardFront({
         </div>
 
         <div style={{ marginTop: '0.15in' }}>
-          <div className="field-label" style={{ fontStyle: 'italic' }}>Signature of Official</div>
+          <div className="field-label">Signature of Official</div>
           <div style={{ borderBottom: '1px solid #000', height: '0.4in' }}></div>
         </div>
       </div>
@@ -445,38 +517,34 @@ function CardFront({
       <div className="card-column front-right">
         <div className="logo-section">
           <Image
-            src="/logo.png"
+            src="/logo-gray.png"
             alt="Randonneurs Ontario"
-            width={80}
-            height={80}
+            width={100}
+            height={100}
             style={{ objectFit: 'contain' }}
           />
         </div>
 
         <div className="card-title">Control Card</div>
         <div className="route-name">{event.routeName}</div>
-        <div className="distance">{event.distance} km</div>
+        <div className="distance-date">{event.distance} km &middot; {formattedDate}</div>
 
         <div className="rider-info">
-          <div className="rider-label">Rider:</div>
+          <div className="rider-label">Rider</div>
           <div className="rider-name">
             {rider ? `${rider.firstName} ${rider.lastName}` : ''}
           </div>
-          <div className="rider-label" style={{ marginTop: '0.05in' }}>Date:</div>
-          <div>{formattedDate}</div>
         </div>
 
         <div className="event-info">
-          <div style={{ marginBottom: '0.05in' }}>Number:</div>
-          <div>{EVENT_INFO_TEXT.preamble}</div>
-          <div style={{ marginTop: '0.05in' }}>{EVENT_INFO_TEXT.emergency}</div>
-
           <div className="organizer-section">
-            <div>Ride Organizer.</div>
+            <div className="organizer-label">Ride Organizer</div>
             <div style={{ fontWeight: 600 }}>{organizer.name}</div>
             <div>{organizer.phone}</div>
             <div>{organizer.email}</div>
           </div>
+          <div className="preamble-text">{EVENT_INFO_TEXT.preamble}</div>
+          <div style={{ fontWeight: 700 }}>{EVENT_INFO_TEXT.emergency}</div>
         </div>
       </div>
     </div>
@@ -487,16 +555,21 @@ function CardBack({
   event,
   controls,
   formattedDate,
+  rider,
 }: {
   event: CardEvent
   controls: ControlPoint[]
   formattedDate: string
+  rider: CardRider | null
 }) {
-  // Split controls across three columns
-  const controlsPerColumn = Math.ceil(controls.length / 3)
-  const column1 = controls.slice(0, controlsPerColumn)
-  const column2 = controls.slice(controlsPerColumn, controlsPerColumn * 2)
-  const column3 = controls.slice(controlsPerColumn * 2)
+  const riderName = rider?.firstName || rider?.lastName
+    ? `${rider.firstName} ${rider.lastName}`.trim()
+    : ''
+  // Fill each column completely before moving to the next
+  const maxPerColumn = 4
+  const column1 = controls.slice(0, maxPerColumn)
+  const column2 = controls.slice(maxPerColumn, maxPerColumn * 2)
+  const column3 = controls.slice(maxPerColumn * 2, maxPerColumn * 3)
 
   return (
     <div className="card-half">
@@ -505,31 +578,35 @@ function CardBack({
           {/* Header only on first column or if it's the start of controls */}
           {colIndex === 0 && (
             <div className="back-header">
-              <div className="back-header-left">
+              <div className="back-header-left" style={{ display: 'flex', alignItems: 'center', gap: '0.1in' }}>
+                <Image
+                  src="/logo-gray.png"
+                  alt=""
+                  width={24}
+                  height={24}
+                  className="back-logo"
+                  style={{ objectFit: 'contain' }}
+                />
                 <div style={{ fontWeight: 700 }}>Randonneurs Ontario</div>
-              </div>
-              <div className="back-header-right">
-                <div>{formattedDate}</div>
               </div>
             </div>
           )}
           {colIndex === 1 && (
-            <div className="back-header">
-              <div className="back-header-left">
-                <div>{event.routeName} {event.distance} km</div>
-              </div>
+            <div className="back-header" style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <div style={{ fontWeight: 700 }}>{event.routeName} {event.distance} km</div>
+              <div>{formattedDate}</div>
             </div>
           )}
           {colIndex === 2 && (
             <div className="back-header">
-              <div className="back-header-left">&nbsp;</div>
+              <div className="back-header-left" style={{ fontWeight: 700 }}>{riderName || '\u00A0'}</div>
             </div>
           )}
 
           <div className="control-header">
-            <div>Control Location &amp;<br/>Open/Close Time</div>
+            <div>Control Location</div>
             <div>Time</div>
-            <div>Seal &amp; Signature<br/>of Control</div>
+            <div>Signature</div>
           </div>
 
           {columnControls.map((control) => (
@@ -538,27 +615,15 @@ function CardBack({
                 <div className="control-name">{control.name}</div>
                 <div className="control-distance">{control.distance} km</div>
                 <div className="control-times">
-                  O: {control.openTime}<br/>
-                  C: {control.closeTime}
+                  Open: {control.openTime}<br/>
+                  Close: {control.closeTime}
                 </div>
               </div>
               <div className="time-cell"></div>
               <div className="signature-cell">
-                <div className="signature-stamp-box"></div>
               </div>
             </div>
           ))}
-
-          {/* Fill remaining space with empty rows if needed */}
-          {columnControls.length < controlsPerColumn && colIndex < 2 && (
-            Array(controlsPerColumn - columnControls.length).fill(0).map((_, i) => (
-              <div key={`empty-${i}`} className="control-row" style={{ visibility: 'hidden' }}>
-                <div className="control-info">&nbsp;</div>
-                <div className="time-cell"></div>
-                <div className="signature-cell"></div>
-              </div>
-            ))
-          )}
         </div>
       ))}
     </div>

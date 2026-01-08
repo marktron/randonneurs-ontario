@@ -155,15 +155,6 @@ CREATE TABLE admins (
 );
 
 -- ============================================
--- Seed data: chapters
--- ============================================
-INSERT INTO chapters (slug, name, founded_year) VALUES
-  ('toronto', 'Toronto', 1982),
-  ('ottawa', 'Ottawa', 1999),
-  ('simcoe', 'Simcoe-Muskoka', 2005),
-  ('huron', 'Huron', 2010);
-
--- ============================================
 -- Updated_at trigger function
 -- ============================================
 CREATE OR REPLACE FUNCTION update_updated_at_column()

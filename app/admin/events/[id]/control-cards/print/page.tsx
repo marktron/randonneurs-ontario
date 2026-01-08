@@ -2,7 +2,7 @@ import { requireAdmin } from '@/lib/auth/get-admin'
 import { supabaseAdmin } from '@/lib/supabase-server'
 import { notFound } from 'next/navigation'
 import { ControlCardsPrint } from '@/components/admin/control-cards-print'
-import { computeControlTimes, getNominalDistance, formatControlTime, formatCardDate } from '@/lib/brmTimes'
+import { computeControlTimes, getNominalDistance, formatControlTime, formatCardDate, createTorontoDate } from '@/lib/brmTimes'
 import type { ControlPoint, CardRider, OrganizerInfo, CardEvent } from '@/types/control-card'
 
 interface EventDetail {
@@ -74,6 +74,7 @@ interface PrintPageProps {
     organizerPhone?: string
     organizerEmail?: string
     controls?: string
+    extraBlank?: string
   }>
 }
 
@@ -109,10 +110,10 @@ export default async function PrintPage({ params, searchParams }: PrintPageProps
     controlInputs = []
   }
 
-  // Calculate the start datetime
+  // Calculate the start datetime in Toronto timezone
   const [year, month, day] = event.event_date.split('-').map(Number)
   const [hours, minutes] = (event.start_time || '06:00').split(':').map(Number)
-  const startDate = new Date(year, month - 1, day, hours, minutes, 0, 0)
+  const startDate = createTorontoDate(year, month - 1, day, hours, minutes)
 
   // Get nominal distance for BRM calculations
   const nominalDistance = getNominalDistance(event.distance_km)
@@ -158,12 +159,31 @@ export default async function PrintPage({ params, searchParams }: PrintPageProps
     chapter: event.chapters?.name || 'Randonneurs Ontario',
   }
 
-  // Format riders
-  const riders: CardRider[] = registrations.map((r) => ({
+  // Parse extra blank cards count
+  const extraBlankCount = Math.max(0, parseInt(search.extraBlank || '0', 10) || 0)
+
+  // Format riders - if no registrations, create two blank entries
+  // Also add any extra blank cards requested
+  const registeredRiders: CardRider[] = registrations.map((r) => ({
     id: r.riders.id,
     firstName: r.riders.first_name,
     lastName: r.riders.last_name,
   }))
+
+  // Create extra blank cards
+  const extraBlankCards: CardRider[] = Array.from({ length: extraBlankCount }, (_, i) => ({
+    id: `extra-blank-${i + 1}`,
+    firstName: '',
+    lastName: '',
+  }))
+
+  // If no registrations and no extra blanks, default to 2 blank cards
+  const riders: CardRider[] = registeredRiders.length > 0 || extraBlankCount > 0
+    ? [...registeredRiders, ...extraBlankCards]
+    : [
+        { id: 'blank-1', firstName: '', lastName: '' },
+        { id: 'blank-2', firstName: '', lastName: '' },
+      ]
 
   return (
     <ControlCardsPrint

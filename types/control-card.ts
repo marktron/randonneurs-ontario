@@ -76,7 +76,7 @@ export interface ControlCardInput {
  * Regulations text for the front of the control card
  */
 export const REGULATIONS_TEXT = {
-  regulations: `REGULATIONS: Each participant is to be considered a private excursion and remains responsible for any accidents in which they may be involved. Each participant is responsible for following the route. Although Randonneurs Ontario will endeavor to ensure that all route instructions are correct, no responsibility can be accepted for participants becoming lost. Should a participant become lost or stranded by mechanical problems or fatigue, it will be their responsibility to get home.`,
+  regulations: `REGULATIONS: Each participant is to be considered a private excursion and remains responsible for any accidents in which they may be involved. Each participant is responsible for following the route. Although Randonneurs Ontario will endeavour to ensure that all route instructions are correct, no responsibility can be accepted for participants becoming lost. Should a participant become lost or stranded by mechanical problems or fatigue, it will be their responsibility to get home.`,
 
   sagWagon: `There will be no "sag wagon"`,
 

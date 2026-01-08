@@ -11,6 +11,7 @@ type AdminRole = Database['public']['Tables']['admins']['Row']['role']
 export interface AdminUserData {
   email: string
   name: string
+  phone?: string | null
   password: string
   role: AdminRole
   chapterId?: string | null
@@ -24,7 +25,7 @@ export async function createAdminUser(data: AdminUserData): Promise<ActionResult
     return { success: false, error: 'You do not have permission to create admin users' }
   }
 
-  const { email, name, password, role, chapterId } = data
+  const { email, name, phone, password, role, chapterId } = data
 
   if (!email || !name || !password) {
     return { success: false, error: 'Missing required fields' }
@@ -53,6 +54,7 @@ export async function createAdminUser(data: AdminUserData): Promise<ActionResult
     id: authData.user.id,
     email,
     name,
+    phone,
     role,
     chapter_id: role === 'chapter_admin' ? chapterId : null,
   })
@@ -78,7 +80,7 @@ export async function updateAdminUser(
     return { success: false, error: 'You do not have permission to update admin users' }
   }
 
-  const { name, role, chapterId } = data
+  const { name, phone, role, chapterId } = data
 
   if (role === 'chapter_admin' && !chapterId) {
     return { success: false, error: 'Chapter admins must have a chapter assigned' }
@@ -88,6 +90,7 @@ export async function updateAdminUser(
   const { error } = await (supabaseAdmin.from('admins') as any)
     .update({
       name,
+      phone,
       role,
       chapter_id: role === 'chapter_admin' ? chapterId : null,
     })

@@ -22,6 +22,7 @@ SET row_security = off;
 -- Data for Name: chapters; Type: TABLE DATA; Schema: public; Owner: postgres
 --
 
+TRUNCATE public.chapters CASCADE;
 INSERT INTO public.chapters VALUES ('ad83d0b9-4d25-472b-9d3e-5732730d761c', 'toronto', 'Toronto', NULL, 1982, '2026-01-07 06:04:57.170555+00', '2026-01-07 06:04:57.170555+00');
 INSERT INTO public.chapters VALUES ('6c44658e-8f0d-4569-9f79-a5f2d1dd6db6', 'ottawa', 'Ottawa', NULL, 1999, '2026-01-07 06:04:57.170555+00', '2026-01-07 06:04:57.170555+00');
 INSERT INTO public.chapters VALUES ('f333c259-1232-4a48-9b46-8ad42ab5d800', 'simcoe', 'Simcoe-Muskoka', NULL, 2005, '2026-01-07 06:04:57.170555+00', '2026-01-07 06:04:57.170555+00');

@@ -14,6 +14,7 @@ export type Database = {
           id: string
           email: string
           name: string
+          phone: string | null
           role: 'admin' | 'chapter_admin'
           chapter_id: string | null
           created_at: string
@@ -23,6 +24,7 @@ export type Database = {
           id: string
           email: string
           name: string
+          phone?: string | null
           role?: 'admin' | 'chapter_admin'
           chapter_id?: string | null
           created_at?: string
@@ -32,6 +34,7 @@ export type Database = {
           id?: string
           email?: string
           name?: string
+          phone?: string | null
           role?: 'admin' | 'chapter_admin'
           chapter_id?: string | null
           created_at?: string

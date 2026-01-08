@@ -2,6 +2,41 @@
 
 export type NominalDistance = 200 | 300 | 400 | 600 | 1000 | 1200 | 1300
 
+const TORONTO_TZ = 'America/Toronto'
+
+/**
+ * Create a Date object representing a specific local time in Toronto.
+ * This ensures that formatting with Toronto timezone will show the intended time,
+ * regardless of what timezone the server is running in.
+ */
+export function createTorontoDate(
+  year: number,
+  month: number, // 0-indexed (January = 0)
+  day: number,
+  hour: number,
+  minute: number
+): Date {
+  // Create a reference date at noon UTC on the target day
+  // (noon avoids DST transition edge cases which happen around 2am)
+  const refDate = new Date(Date.UTC(year, month, day, 12, 0, 0))
+
+  // Get Toronto's local hour at noon UTC using formatToParts
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: TORONTO_TZ,
+    hour: 'numeric',
+    hour12: false,
+  })
+  const torontoHourAtNoonUTC = parseInt(formatter.format(refDate), 10)
+
+  // Calculate Toronto's offset from UTC in hours
+  // If noon UTC = 8am Toronto, Toronto is UTC-4, so offset = +4
+  const offsetHours = 12 - torontoHourAtNoonUTC
+
+  // Create the date in UTC, adjusted so that when viewed in Toronto timezone
+  // it shows the intended local time
+  return new Date(Date.UTC(year, month, day, hour + offsetHours, minute, 0, 0))
+}
+
 export type Options = {
   /** Truncate distances to whole km before computing. Default: true */
   truncateKm?: boolean
@@ -142,23 +177,34 @@ export function getNominalDistance(distance: number): NominalDistance {
 
 /**
  * Format a date/time for control card display
- * Returns format like "Thu 04h30"
+ * Returns format like "Thu 04:30" in Toronto timezone
  */
 export function formatControlTime(date: Date): string {
-  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-  const day = dayNames[date.getDay()]
-  const hours = String(date.getHours()).padStart(2, '0')
-  const minutes = String(date.getMinutes()).padStart(2, '0')
-  return `${day} ${hours}h${minutes}`
+  // Format day of week in Toronto timezone
+  const day = date.toLocaleDateString('en-US', {
+    weekday: 'short',
+    timeZone: TORONTO_TZ,
+  })
+
+  // Format time in Toronto timezone (24-hour)
+  const time = date.toLocaleTimeString('en-US', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+    timeZone: TORONTO_TZ,
+  })
+
+  return `${day} ${time}`
 }
 
 /**
- * Format a date for card display (e.g., "Jan 08 2026")
+ * Format a date for card display (e.g., "Apr 18 2026") in Toronto timezone
  */
 export function formatCardDate(date: Date): string {
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-  const month = months[date.getMonth()]
-  const day = String(date.getDate()).padStart(2, '0')
-  const year = date.getFullYear()
-  return `${month} ${day} ${year}`
+  return date.toLocaleDateString('en-US', {
+    month: 'short',
+    day: '2-digit',
+    year: 'numeric',
+    timeZone: TORONTO_TZ,
+  }).replace(',', '')
 }
