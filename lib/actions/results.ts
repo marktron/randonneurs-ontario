@@ -3,8 +3,9 @@
 import { revalidatePath } from 'next/cache'
 import { supabaseAdmin } from '@/lib/supabase-server'
 import { requireAdmin } from '@/lib/auth/get-admin'
+import type { ActionResult } from '@/types/actions'
 
-export type ResultStatus = 'finished' | 'dnf' | 'dns' | 'otl' | 'dq'
+export type ResultStatus = 'pending' | 'finished' | 'dnf' | 'dns' | 'otl' | 'dq'
 
 export interface CreateResultData {
   eventId: string
@@ -22,11 +23,6 @@ export interface UpdateResultData {
   status?: ResultStatus
   teamName?: string | null
   note?: string | null
-}
-
-export interface ActionResult {
-  success: boolean
-  error?: string
 }
 
 export async function createResult(data: CreateResultData): Promise<ActionResult> {

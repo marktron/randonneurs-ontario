@@ -4,20 +4,7 @@ import { notFound } from 'next/navigation'
 import { RouteForm } from '@/components/admin/route-form'
 import Link from 'next/link'
 import { ChevronLeft } from 'lucide-react'
-
-interface Route {
-  id: string
-  name: string
-  slug: string
-  chapter_id: string | null
-  distance_km: number | null
-  collection: string | null
-  description: string | null
-  rwgps_id: string | null
-  cue_sheet_url: string | null
-  notes: string | null
-  is_active: boolean
-}
+import type { RouteOption } from '@/types/ui'
 
 async function getRoute(id: string) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -26,7 +13,7 @@ async function getRoute(id: string) {
     .eq('id', id)
     .single()
 
-  return data as Route | null
+  return data as RouteOption | null
 }
 
 async function getChapters() {

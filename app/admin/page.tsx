@@ -1,5 +1,6 @@
 import { supabaseAdmin } from '@/lib/supabase-server'
 import { requireAdmin } from '@/lib/auth/get-admin'
+import { parseLocalDate } from '@/lib/utils'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Calendar, Users, Route, Trophy } from 'lucide-react'
 
@@ -126,7 +127,7 @@ export default async function AdminDashboardPage() {
                     </p>
                   </div>
                   <div className="text-sm text-muted-foreground">
-                    {new Date(event.event_date).toLocaleDateString('en-CA', {
+                    {parseLocalDate(event.event_date).toLocaleDateString('en-CA', {
                       weekday: 'short',
                       month: 'short',
                       day: 'numeric',

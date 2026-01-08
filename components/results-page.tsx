@@ -146,12 +146,12 @@ export function ResultsPage({
             </div>
 
             {/* Season Stats */}
-            <div className="flex items-baseline gap-10">
+            <div className="flex items-baseline gap-6 sm:gap-10">
               <div className="group">
                 <p className="text-[10px] font-medium tracking-[0.2em] uppercase text-muted-foreground/70 transition-colors duration-200 group-hover:text-muted-foreground">
                   Events
                 </p>
-                <p className="font-serif text-3xl tracking-tight tabular-nums">
+                <p className="font-serif text-2xl sm:text-3xl tracking-tight tabular-nums">
                   {events.length}
                 </p>
               </div>
@@ -159,7 +159,7 @@ export function ResultsPage({
                 <p className="text-[10px] font-medium tracking-[0.2em] uppercase text-muted-foreground/70 transition-colors duration-200 group-hover:text-muted-foreground">
                   Riders
                 </p>
-                <p className="font-serif text-3xl tracking-tight tabular-nums">
+                <p className="font-serif text-2xl sm:text-3xl tracking-tight tabular-nums">
                   {totalStarters}
                 </p>
               </div>
@@ -167,7 +167,7 @@ export function ResultsPage({
                 <p className="text-[10px] font-medium tracking-[0.2em] uppercase text-muted-foreground/70 transition-colors duration-200 group-hover:text-muted-foreground">
                   Distance
                 </p>
-                <p className="font-serif text-3xl tracking-tight tabular-nums">
+                <p className="font-serif text-2xl sm:text-3xl tracking-tight tabular-nums whitespace-nowrap">
                   {totalDistance.toLocaleString()} km
                 </p>
               </div>
@@ -189,7 +189,7 @@ export function ResultsPage({
               const participants = event.riders.filter((r) => r.time !== "DNS");
 
               return (
-                <article key={`${event.date}-${event.name}-${event.distance}`}>
+                <article key={`${event.date}-${event.name}-${event.distance}`} id={`event-${event.date}`} className="scroll-mt-24">
                   {/* Event Header */}
                   <header className="mb-6">
                     <h2 className="font-serif text-2xl md:text-3xl tracking-tight">
@@ -207,9 +207,12 @@ export function ResultsPage({
                         key={`${rider.name}-${index}`}
                         className="flex items-baseline justify-between py-1.5 border-b border-border/50 group"
                       >
-                        <span className="text-sm group-hover:text-primary transition-colors truncate pr-4">
+                        <Link
+                          href={`/riders/${rider.slug}`}
+                          className="text-sm hover:text-primary transition-colors truncate pr-4"
+                        >
                           {rider.name}
-                        </span>
+                        </Link>
                         <span
                           className={`text-sm tabular-nums shrink-0 ${
                             rider.time === "DNF" || rider.time === "DNS"

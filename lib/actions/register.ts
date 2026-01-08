@@ -2,6 +2,7 @@
 
 import { supabaseAdmin } from '@/lib/supabase-server'
 import { sendRegistrationConfirmationEmail } from '@/lib/email/send-registration-email'
+import { formatEventType } from '@/lib/utils'
 import { format, parseISO } from 'date-fns'
 import type { Database } from '@/types/supabase'
 
@@ -62,16 +63,6 @@ function formatEventTime(timeStr: string | null): string {
   const ampm = hour >= 12 ? 'PM' : 'AM'
   const hour12 = hour % 12 || 12
   return `${hour12}:${minutes} ${ampm}`
-}
-
-function formatEventType(eventType: string): string {
-  const typeMap: Record<string, string> = {
-    brevet: 'Brevet',
-    populaire: 'Populaire',
-    fleche: 'Fleche',
-    permanent: 'Permanent',
-  }
-  return typeMap[eventType] || 'Brevet'
 }
 
 export async function registerForEvent(data: RegistrationData): Promise<RegistrationResult> {

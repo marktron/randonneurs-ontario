@@ -15200,5 +15200,4 @@ INSERT INTO public.result_awards VALUES ('62647a58-91de-5163-b239-a2646232d1cf',
 -- PostgreSQL database dump complete
 --
 
-\unrestrict 2bYnWtKcYaabeE0ml5iBycHjI7Q9mXTQTfOdxVAeKDT9vNt22YaD0TiriWSUbnE
 

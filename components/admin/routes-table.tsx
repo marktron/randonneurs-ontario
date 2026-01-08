@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useState, useTransition, useMemo } from 'react'
 import Link from 'next/link'
 import {
   Table,
@@ -13,6 +13,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
+import { Checkbox } from '@/components/ui/checkbox'
 import {
   Select,
   SelectContent,
@@ -30,39 +31,28 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { Pencil, Trash2, ExternalLink, Loader2, Eye, EyeOff } from 'lucide-react'
+import { Pencil, Trash2, ExternalLink, Loader2, Eye, EyeOff, GitMerge, X } from 'lucide-react'
 import { deleteRoute, toggleRouteActive } from '@/lib/actions/routes'
+import { MergeRoutesDialog } from './merge-routes-dialog'
 import { toast } from 'sonner'
-
-interface RouteWithChapter {
-  id: string
-  name: string
-  slug: string
-  distance_km: number | null
-  collection: string | null
-  rwgps_id: string | null
-  is_active: boolean
-  chapters: { id: string; name: string } | null
-}
-
-interface Chapter {
-  id: string
-  name: string
-}
+import type { ChapterOption, RouteWithChapter } from '@/types/ui'
 
 interface RoutesTableProps {
   routes: RouteWithChapter[]
-  chapters: Chapter[]
+  chapters: ChapterOption[]
+  defaultChapterId?: string | null
 }
 
-export function RoutesTable({ routes, chapters }: RoutesTableProps) {
+export function RoutesTable({ routes, chapters, defaultChapterId }: RoutesTableProps) {
   const [isPending, startTransition] = useTransition()
   const [deleteRouteId, setDeleteRouteId] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
-  const [chapterFilter, setChapterFilter] = useState<string>('all')
+  const [chapterFilter, setChapterFilter] = useState<string>(defaultChapterId ?? 'all')
   const [statusFilter, setStatusFilter] = useState<string>('all')
+  const [selectedRouteIds, setSelectedRouteIds] = useState<Set<string>>(new Set())
+  const [mergeDialogOpen, setMergeDialogOpen] = useState(false)
 
-  const filteredRoutes = routes.filter((route) => {
+  const filteredRoutes = useMemo(() => routes.filter((route) => {
     const matchesSearch = route.name.toLowerCase().includes(searchTerm.toLowerCase())
     const matchesChapter = chapterFilter === 'all' || route.chapters?.id === chapterFilter
     const matchesStatus =
@@ -71,7 +61,49 @@ export function RoutesTable({ routes, chapters }: RoutesTableProps) {
       (statusFilter === 'inactive' && !route.is_active)
 
     return matchesSearch && matchesChapter && matchesStatus
-  })
+  }), [routes, searchTerm, chapterFilter, statusFilter])
+
+  const selectedRoutes = useMemo(() =>
+    filteredRoutes.filter(route => selectedRouteIds.has(route.id)),
+    [filteredRoutes, selectedRouteIds]
+  )
+
+  const allFilteredSelected = filteredRoutes.length > 0 &&
+    filteredRoutes.every(route => selectedRouteIds.has(route.id))
+
+  const someFilteredSelected = filteredRoutes.some(route => selectedRouteIds.has(route.id))
+
+  const toggleSelectAll = () => {
+    if (allFilteredSelected) {
+      // Deselect all filtered routes
+      const newSelected = new Set(selectedRouteIds)
+      filteredRoutes.forEach(route => newSelected.delete(route.id))
+      setSelectedRouteIds(newSelected)
+    } else {
+      // Select all filtered routes
+      const newSelected = new Set(selectedRouteIds)
+      filteredRoutes.forEach(route => newSelected.add(route.id))
+      setSelectedRouteIds(newSelected)
+    }
+  }
+
+  const toggleSelectRoute = (routeId: string) => {
+    const newSelected = new Set(selectedRouteIds)
+    if (newSelected.has(routeId)) {
+      newSelected.delete(routeId)
+    } else {
+      newSelected.add(routeId)
+    }
+    setSelectedRouteIds(newSelected)
+  }
+
+  const clearSelection = () => {
+    setSelectedRouteIds(new Set())
+  }
+
+  const handleMergeSuccess = () => {
+    setSelectedRouteIds(new Set())
+  }
 
   const handleDelete = () => {
     if (!deleteRouteId) return
@@ -100,6 +132,32 @@ export function RoutesTable({ routes, chapters }: RoutesTableProps) {
 
   return (
     <>
+      {/* Selection action bar */}
+      {selectedRouteIds.size > 0 && (
+        <div className="flex items-center gap-4 mb-4 p-3 bg-muted/50 rounded-lg border">
+          <span className="text-sm font-medium">
+            {selectedRouteIds.size} route{selectedRouteIds.size !== 1 ? 's' : ''} selected
+          </span>
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              onClick={() => setMergeDialogOpen(true)}
+              disabled={selectedRouteIds.size < 2}
+            >
+              <GitMerge className="h-4 w-4 mr-2" />
+              Merge
+            </Button>
+          </div>
+          <button
+            onClick={clearSelection}
+            className="ml-auto text-sm text-muted-foreground hover:text-foreground flex items-center gap-1"
+          >
+            <X className="h-4 w-4" />
+            Clear selection
+          </button>
+        </div>
+      )}
+
       <div className="flex flex-col sm:flex-row gap-4 mb-4">
         <Input
           placeholder="Search routes..."
@@ -136,6 +194,18 @@ export function RoutesTable({ routes, chapters }: RoutesTableProps) {
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead className="w-[40px]">
+                <Checkbox
+                  checked={allFilteredSelected}
+                  ref={(el) => {
+                    if (el) {
+                      (el as unknown as HTMLInputElement).indeterminate = !allFilteredSelected && someFilteredSelected
+                    }
+                  }}
+                  onCheckedChange={toggleSelectAll}
+                  aria-label="Select all routes"
+                />
+              </TableHead>
               <TableHead>Name</TableHead>
               <TableHead>Chapter</TableHead>
               <TableHead>Distance</TableHead>
@@ -148,13 +218,23 @@ export function RoutesTable({ routes, chapters }: RoutesTableProps) {
           <TableBody>
             {filteredRoutes.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center text-muted-foreground">
+                <TableCell colSpan={8} className="text-center text-muted-foreground">
                   No routes found
                 </TableCell>
               </TableRow>
             ) : (
               filteredRoutes.map((route) => (
-                <TableRow key={route.id} className={!route.is_active ? 'opacity-60' : ''}>
+                <TableRow
+                  key={route.id}
+                  className={`${!route.is_active ? 'opacity-60' : ''} ${selectedRouteIds.has(route.id) ? 'bg-muted/50' : ''}`}
+                >
+                  <TableCell>
+                    <Checkbox
+                      checked={selectedRouteIds.has(route.id)}
+                      onCheckedChange={() => toggleSelectRoute(route.id)}
+                      aria-label={`Select ${route.name}`}
+                    />
+                  </TableCell>
                   <TableCell>
                     <p className="font-medium">{route.name}</p>
                     <p className="text-xs text-muted-foreground">{route.slug}</p>
@@ -249,6 +329,14 @@ export function RoutesTable({ routes, chapters }: RoutesTableProps) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <MergeRoutesDialog
+        selectedRoutes={selectedRoutes}
+        chapters={chapters}
+        open={mergeDialogOpen}
+        onOpenChange={setMergeDialogOpen}
+        onSuccess={handleMergeSuccess}
+      />
     </>
   )
 }

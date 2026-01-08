@@ -141,10 +141,10 @@
   }
   /* Standard content container for most pages */
   .content-container {
-    @apply mx-auto max-w-4xl px-6;
+    @apply mx-auto max-w-4xl px-4 sm:px-6;
   }
   /* Wide container for two-column layouts */
   .content-container-wide {
-    @apply mx-auto max-w-6xl px-6;
+    @apply mx-auto max-w-6xl px-4 sm:px-6;
   }
 }

@@ -18,30 +18,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { AlertCircle, Loader2, ExternalLink } from 'lucide-react'
 import { createRoute, updateRoute } from '@/lib/actions/routes'
+import { createSlug } from '@/lib/utils'
 import { toast } from 'sonner'
-
-interface Chapter {
-  id: string
-  name: string
-}
-
-interface Route {
-  id: string
-  name: string
-  slug: string
-  chapter_id: string | null
-  distance_km: number | null
-  collection: string | null
-  description: string | null
-  rwgps_id: string | null
-  cue_sheet_url: string | null
-  notes: string | null
-  is_active: boolean
-}
+import type { ChapterOption, RouteOption } from '@/types/ui'
 
 interface RouteFormProps {
-  chapters: Chapter[]
-  route?: Route | null
+  chapters: ChapterOption[]
+  route?: RouteOption | null
   mode: 'create' | 'edit'
 }
 
@@ -67,12 +50,7 @@ export function RouteForm({ chapters, route, mode }: RouteFormProps) {
   const handleNameChange = (value: string) => {
     setName(value)
     if (mode === 'create' || !route?.slug) {
-      const newSlug = value
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/^-|-$/g, '')
-        .substring(0, 100)
-      setSlug(newSlug)
+      setSlug(createSlug(value))
     }
   }
 
@@ -162,12 +140,12 @@ export function RouteForm({ chapters, route, mode }: RouteFormProps) {
           <div className="grid gap-4 sm:grid-cols-3">
             <div className="space-y-2">
               <Label htmlFor="chapter">Chapter</Label>
-              <Select value={chapterId} onValueChange={setChapterId} disabled={isPending}>
+              <Select value={chapterId || 'none'} onValueChange={(v) => setChapterId(v === 'none' ? '' : v)} disabled={isPending}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select chapter" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">No chapter</SelectItem>
+                  <SelectItem value="none">No chapter</SelectItem>
                   {chapters.map((chapter) => (
                     <SelectItem key={chapter.id} value={chapter.id}>
                       {chapter.name}

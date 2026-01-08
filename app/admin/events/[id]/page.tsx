@@ -1,11 +1,13 @@
 import { requireAdmin } from '@/lib/auth/get-admin'
 import { supabaseAdmin } from '@/lib/supabase-server'
+import { parseLocalDate } from '@/lib/utils'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { ChevronLeft } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
 import { EventResultsManager } from '@/components/admin/event-results-manager'
+import { EventStatusSelect } from '@/components/admin/event-status-select'
+import type { EventStatus } from '@/lib/actions/events'
 
 interface EventDetail {
   id: string
@@ -44,6 +46,7 @@ interface Result {
     id: string
     first_name: string
     last_name: string
+    email: string | null
   }
 }
 
@@ -95,7 +98,7 @@ async function getResults(eventId: string) {
       status,
       team_name,
       note,
-      riders (id, first_name, last_name)
+      riders (id, first_name, last_name, email)
     `)
     .eq('event_id', eventId)
     .order('finish_time', { ascending: true, nullsFirst: false })
@@ -121,25 +124,6 @@ export default async function EventDetailPage({ params }: EventPageProps) {
     notFound()
   }
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'scheduled':
-        return <Badge variant="secondary">Scheduled</Badge>
-      case 'completed':
-        return <Badge>Completed</Badge>
-      case 'cancelled':
-        return <Badge variant="destructive">Cancelled</Badge>
-      default:
-        return <Badge variant="outline">{status}</Badge>
-    }
-  }
-
-  // Find registrations that don't have results yet
-  const resultRiderIds = new Set(results.map((r) => r.rider_id))
-  const registrationsWithoutResults = registrations.filter(
-    (r) => !resultRiderIds.has(r.rider_id)
-  )
-
   return (
     <div className="space-y-6">
       <Link
@@ -157,7 +141,11 @@ export default async function EventDetailPage({ params }: EventPageProps) {
             {event.chapters?.name} &middot; {event.distance_km}km {event.event_type}
           </p>
         </div>
-        {getStatusBadge(event.status)}
+        <EventStatusSelect
+          eventId={event.id}
+          initialStatus={event.status as EventStatus}
+          resultsCount={results.length}
+        />
       </div>
 
       <div className="grid gap-4 md:grid-cols-4">
@@ -167,7 +155,7 @@ export default async function EventDetailPage({ params }: EventPageProps) {
           </CardHeader>
           <CardContent>
             <p className="text-lg font-medium">
-              {new Date(event.event_date).toLocaleDateString('en-CA', {
+              {parseLocalDate(event.event_date).toLocaleDateString('en-CA', {
                 weekday: 'long',
                 month: 'long',
                 day: 'numeric',
@@ -207,9 +195,12 @@ export default async function EventDetailPage({ params }: EventPageProps) {
 
       <EventResultsManager
         eventId={event.id}
+        eventName={event.name}
+        eventStatus={event.status}
+        isPastEvent={event.event_date < new Date().toISOString().split('T')[0]}
         season={event.season}
         distanceKm={event.distance_km}
-        registrations={registrationsWithoutResults}
+        registrations={registrations}
         results={results}
       />
     </div>

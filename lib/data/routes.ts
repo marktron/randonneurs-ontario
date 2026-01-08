@@ -1,6 +1,6 @@
 import { supabase } from '@/lib/supabase'
 import type { RouteCollection } from '@/components/routes-page'
-import { getChapterInfo, getAllChapterSlugs } from './events'
+import { getChapterInfo, getAllChapterSlugs, getDbSlug } from '@/lib/chapter-config'
 
 // Re-export chapter utilities for convenience
 export { getChapterInfo, getAllChapterSlugs }
@@ -33,18 +33,8 @@ function buildRwgpsUrl(rwgpsId: string): string {
 }
 
 export async function getRoutesByChapter(urlSlug: string): Promise<RouteCollection[]> {
-  // Map URL slug to database slug using the existing chapterMeta
-  const chapterInfo = getChapterInfo(urlSlug)
-  if (!chapterInfo) return []
-
-  // URL slug to DB slug mapping
-  const slugMap: Record<string, string> = {
-    'toronto': 'toronto',
-    'ottawa': 'ottawa',
-    'simcoe-muskoka': 'simcoe',
-    'huron': 'huron',
-  }
-  const dbSlug = slugMap[urlSlug]
+  // Map URL slug to database slug
+  const dbSlug = getDbSlug(urlSlug)
   if (!dbSlug) return []
 
   // Get the chapter ID

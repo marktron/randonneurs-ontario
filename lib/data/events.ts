@@ -1,73 +1,19 @@
 import { supabase } from '@/lib/supabase'
+import { formatEventType } from '@/lib/utils'
 import type { Event } from '@/components/event-card'
+import {
+  getChapterInfo,
+  getAllChapterSlugs,
+  getDbSlug,
+  type ChapterInfo,
+} from '@/lib/chapter-config'
 
-export interface ChapterInfo {
-  slug: string
-  name: string
-  description: string
-  coverImage: string
-}
-
-// URL slug to database slug mapping
-const slugMap: Record<string, string> = {
-  'toronto': 'toronto',
-  'ottawa': 'ottawa',
-  'simcoe-muskoka': 'simcoe',
-  'huron': 'huron',
-}
-
-// Chapter metadata (keyed by URL slug)
-const chapterMeta: Record<string, Omit<ChapterInfo, 'slug'> & { dbSlug: string }> = {
-  toronto: {
-    name: 'Toronto',
-    description: 'Brevets and populaires through the Greater Toronto Area, Niagara Peninsula, and the rolling hills beyond.',
-    coverImage: '/toronto.jpg',
-    dbSlug: 'toronto',
-  },
-  ottawa: {
-    name: 'Ottawa',
-    description: 'Explore the scenic routes of Eastern Ontario, from the Ottawa Valley to the St. Lawrence.',
-    coverImage: '/ottawa.jpg',
-    dbSlug: 'ottawa',
-  },
-  'simcoe-muskoka': {
-    name: 'Simcoe-Muskoka',
-    description: 'Brevets and populaires through the lakes and forests of Muskoka, Georgian Bay, and the Kawarthas.',
-    coverImage: '/simcoe.jpg',
-    dbSlug: 'simcoe',
-  },
-  huron: {
-    name: 'Huron',
-    description: 'Discover the shores of Lake Huron and the rolling farmland of Southwestern Ontario.',
-    coverImage: '/huron.jpg',
-    dbSlug: 'huron',
-  },
-}
-
-// Map database event_type to display type
-function formatEventType(eventType: string): Event['type'] {
-  const typeMap: Record<string, Event['type']> = {
-    brevet: 'Brevet',
-    populaire: 'Populaire',
-    fleche: 'Fleche',
-    permanent: 'Permanent',
-  }
-  return typeMap[eventType] || 'Brevet'
-}
-
-export function getChapterInfo(slug: string): ChapterInfo | null {
-  const meta = chapterMeta[slug]
-  if (!meta) return null
-  return { slug, ...meta }
-}
-
-export function getAllChapterSlugs(): string[] {
-  return Object.keys(chapterMeta)
-}
+// Re-export for convenience
+export { getChapterInfo, getAllChapterSlugs, type ChapterInfo }
 
 export async function getEventsByChapter(urlSlug: string): Promise<Event[]> {
   // Map URL slug to database slug
-  const dbSlug = chapterMeta[urlSlug]?.dbSlug
+  const dbSlug = getDbSlug(urlSlug)
   if (!dbSlug) return []
 
   // First get the chapter ID
@@ -82,12 +28,14 @@ export async function getEventsByChapter(urlSlug: string): Promise<Event[]> {
     return []
   }
 
-  // Fetch events for this chapter, ordered by date
+  // Fetch upcoming events for this chapter, ordered by date
+  const today = new Date().toISOString().split('T')[0]
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: events, error: eventsError } = await (supabase.from('events') as any)
     .select('*')
     .eq('chapter_id', chapter.id)
     .eq('status', 'scheduled')
+    .gte('event_date', today)
     .order('event_date', { ascending: true })
     .order('start_time', { ascending: true })
 

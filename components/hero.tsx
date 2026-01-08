@@ -48,7 +48,7 @@ export function Hero({ images }: HeroProps) {
   return (
     <section className="relative">
       {/* Hero Carousel - Full bleed */}
-      <div className="relative h-[70vh] min-h-[500px] w-full overflow-hidden bg-muted">
+      <div className="relative h-[50vh] min-h-[300px] md:h-[60vh] md:min-h-[400px] lg:h-[70vh] lg:min-h-[500px] w-full overflow-hidden bg-muted">
         <div ref={emblaRef} className="h-full overflow-hidden">
           <div className="flex h-full">
             {images.map((image, index) => (

@@ -49,6 +49,11 @@ const mainNavItems = [
     icon: Route,
   },
   {
+    title: 'Riders',
+    href: '/admin/riders',
+    icon: Users,
+  },
+  {
     title: 'Results',
     href: '/admin/results',
     icon: Trophy,
@@ -56,11 +61,6 @@ const mainNavItems = [
 ]
 
 const managementNavItems = [
-  {
-    title: 'Riders',
-    href: '/admin/riders',
-    icon: Users,
-  },
   {
     title: 'Admin Users',
     href: '/admin/users',
@@ -90,7 +90,6 @@ export function AdminSidebar({ admin }: AdminSidebarProps) {
 
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel>Navigation</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {mainNavItems.map((item) => (

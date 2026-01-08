@@ -1,7 +1,16 @@
 import { supabase } from '@/lib/supabase'
+import {
+  getResultsChapterInfo,
+  getAllResultsChapterSlugs,
+  getDbSlug,
+  getResultsDescription,
+  getUrlSlugFromDbSlug,
+  type ChapterInfo,
+} from '@/lib/chapter-config'
 
 export interface RiderResult {
   name: string
+  slug: string
   time: string | 'DNF' | 'DNS' | 'OTL'
 }
 
@@ -12,90 +21,21 @@ export interface EventResult {
   riders: RiderResult[]
 }
 
-export interface ChapterMeta {
-  name: string
-  slug: string
-  description: string
-  coverImage: string
-}
-
-// Chapter metadata with URL slugs
-const chapterMeta: Record<string, ChapterMeta> = {
-  toronto: {
-    name: 'Toronto',
-    slug: 'toronto',
-    description: 'Results from brevets and populaires in the Greater Toronto Area.',
-    coverImage: '/toronto.jpg',
-  },
-  ottawa: {
-    name: 'Ottawa',
-    slug: 'ottawa',
-    description: 'Results from brevets and populaires in the Ottawa Valley region.',
-    coverImage: '/ottawa.jpg',
-  },
-  'simcoe-muskoka': {
-    name: 'Simcoe-Muskoka',
-    slug: 'simcoe',
-    description: 'Results from brevets and populaires in Simcoe County and Muskoka.',
-    coverImage: '/simcoe.jpg',
-  },
-  huron: {
-    name: 'Huron',
-    slug: 'huron',
-    description: 'Results from brevets and populaires along Lake Huron and Bruce County.',
-    coverImage: '/huron.jpg',
-  },
-  niagara: {
-    name: 'Niagara',
-    slug: 'niagara',
-    description: 'Historical results from the Niagara chapter.',
-    coverImage: '/toronto.jpg', // Fallback image
-  },
-  other: {
-    name: 'Other',
-    slug: 'other',
-    description: 'Results from miscellaneous events.',
-    coverImage: '/toronto.jpg',
-  },
-  permanent: {
-    name: 'Permanents',
-    slug: 'permanent',
-    description: 'Routes ridden outside of the normal Brevet schedule.',
-    coverImage: '/toronto.jpg',
-  },
-  pbp: {
-    name: 'Paris-Brest-Paris',
-    slug: 'pbp',
-    description: 'Ontario randonneurs who have completed Paris-Brest-Paris.',
-    coverImage: '/toronto.jpg',
-  },
-  'granite-anvil': {
-    name: 'Granite Anvil',
-    slug: 'granite-anvil',
-    description: 'Results from the Granite Anvil 1000km+ series.',
-    coverImage: '/toronto.jpg',
-  },
-}
-
-// URL slug to database slug mapping (null means filter by collection instead)
-const urlToDbSlug: Record<string, string | null> = {
-  'toronto': 'toronto',
-  'ottawa': 'ottawa',
-  'simcoe-muskoka': 'simcoe',
-  'huron': 'huron',
-  'niagara': 'niagara',
-  'other': 'other',
-  'permanent': 'permanent',
-  'pbp': 'other', // PBP events are stored in the 'other' chapter
-  'granite-anvil': null, // Uses collection field instead of chapter
-}
+// Re-export ChapterMeta as alias for backwards compatibility
+export type ChapterMeta = ChapterInfo
 
 export function getChapterMeta(urlSlug: string): ChapterMeta | null {
-  return chapterMeta[urlSlug] || null
+  const info = getResultsChapterInfo(urlSlug)
+  if (!info) return null
+  // Return with results-specific description
+  return {
+    ...info,
+    description: getResultsDescription(urlSlug),
+  }
 }
 
 export function getAllChapterSlugs(): string[] {
-  return Object.keys(chapterMeta)
+  return getAllResultsChapterSlugs()
 }
 
 // Format interval to HH:MM string
@@ -126,8 +66,8 @@ function formatStatus(status: string): string | null {
 }
 
 export async function getAvailableYears(urlSlug: string): Promise<number[]> {
-  const dbSlug = urlToDbSlug[urlSlug]
-  if (!(urlSlug in urlToDbSlug)) return []
+  if (!getResultsChapterInfo(urlSlug)) return []
+  const dbSlug = getDbSlug(urlSlug)
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let eventsQuery: any
@@ -191,13 +131,14 @@ interface PublicResultRow {
   finish_time: string | null
   status: string
   team_name: string | null
+  rider_slug: string
   first_name: string
   last_name: string
 }
 
 export async function getChapterResults(urlSlug: string, year: number): Promise<EventResult[]> {
-  const dbSlug = urlToDbSlug[urlSlug]
-  if (!(urlSlug in urlToDbSlug)) return []
+  if (!getResultsChapterInfo(urlSlug)) return []
+  const dbSlug = getDbSlug(urlSlug)
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let eventsQuery: any
@@ -208,7 +149,7 @@ export async function getChapterResults(urlSlug: string, year: number): Promise<
       .select(`
         id, name, event_date, distance_km,
         public_results (
-          finish_time, status, team_name, first_name, last_name
+          finish_time, status, team_name, rider_slug, first_name, last_name
         )
       `)
       .eq('collection', urlSlug)
@@ -228,7 +169,7 @@ export async function getChapterResults(urlSlug: string, year: number): Promise<
       .select(`
         id, name, event_date, distance_km,
         public_results (
-          finish_time, status, team_name, first_name, last_name
+          finish_time, status, team_name, rider_slug, first_name, last_name
         )
       `)
       .eq('chapter_id', chapter.id)
@@ -260,11 +201,12 @@ export async function getChapterResults(urlSlug: string, year: number): Promise<
 
     const riders: RiderResult[] = eventResultsList.map((result) => {
       const name = `${result.first_name} ${result.last_name}`.trim() || 'Unknown'
+      const slug = result.rider_slug
       const statusStr = formatStatus(result.status)
       // Show status (DNF/DNS/OTL/DQ) if not finished, otherwise show finish time
       const time = statusStr ?? formatFinishTime(result.finish_time) ?? ''
 
-      return { name, time }
+      return { name, slug, time }
     })
 
     // Sort riders by last name A→Z
@@ -283,6 +225,135 @@ export async function getChapterResults(urlSlug: string, year: number): Promise<
   }
 
   return eventResults
+}
+
+export interface RiderInfo {
+  slug: string
+  firstName: string
+  lastName: string
+}
+
+export interface RiderEventResult {
+  date: string
+  eventName: string
+  distanceKm: number
+  time: string | null
+  status: string
+  note: string | null
+  chapterSlug: string | null
+}
+
+export interface RiderYearResults {
+  year: number
+  completedCount: number
+  totalDistanceKm: number
+  results: RiderEventResult[]
+}
+
+export async function getRiderBySlug(slug: string): Promise<RiderInfo | null> {
+  // Use public_riders view (riders table is restricted to protect emails)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase.from('public_riders') as any)
+    .select('slug, first_name, last_name')
+    .eq('slug', slug)
+    .single()
+
+  if (error || !data) return null
+
+  return {
+    slug: data.slug,
+    firstName: data.first_name,
+    lastName: data.last_name,
+  }
+}
+
+export async function getRiderResults(slug: string): Promise<RiderYearResults[]> {
+  // Get rider ID from slug (use public_riders view)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: rider } = await (supabase.from('public_riders') as any)
+    .select('id')
+    .eq('slug', slug)
+    .single()
+
+  if (!rider) return []
+
+  // Get all results for this rider with event info
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: results, error } = await (supabase.from('results') as any)
+    .select(`
+      finish_time,
+      status,
+      note,
+      season,
+      events (
+        name,
+        event_date,
+        distance_km,
+        chapters (
+          slug
+        )
+      )
+    `)
+    .eq('rider_id', rider.id)
+    .order('season', { ascending: false })
+
+  if (error || !results) return []
+
+  // Group by year
+  const yearMap = new Map<number, RiderEventResult[]>()
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  for (const result of results as any[]) {
+    const year = result.season
+    const event = result.events
+
+    if (!event) continue
+
+    // Get chapter URL slug from the database chapter slug
+    const dbChapterSlug = event.chapters?.slug
+    const chapterSlug = dbChapterSlug ? getUrlSlugFromDbSlug(dbChapterSlug) : null
+
+    const eventResult: RiderEventResult = {
+      date: event.event_date,
+      eventName: event.name,
+      distanceKm: event.distance_km,
+      time: formatFinishTime(result.finish_time),
+      status: result.status,
+      note: result.note,
+      chapterSlug,
+    }
+
+    if (!yearMap.has(year)) {
+      yearMap.set(year, [])
+    }
+    yearMap.get(year)!.push(eventResult)
+  }
+
+  // Convert to array, sort each year's results by date ascending
+  const yearResults: RiderYearResults[] = []
+
+  for (const [year, events] of yearMap) {
+    // Sort by date ascending within year
+    events.sort((a, b) => a.date.localeCompare(b.date))
+
+    // Calculate stats (only count finished rides)
+    const completedCount = events.filter(e => e.status === 'finished').length
+    const totalDistanceKm = events
+      .filter(e => e.status === 'finished')
+      .reduce((sum, e) => sum + e.distanceKm, 0)
+
+    yearResults.push({
+      year,
+      completedCount,
+      totalDistanceKm,
+      results: events,
+    })
+  }
+
+  // Sort years descending (most recent first)
+  yearResults.sort((a, b) => b.year - a.year)
+
+  return yearResults
 }
 
 export async function getAllChaptersWithYears(): Promise<Array<{ slug: string; name: string; years: number[] }>> {

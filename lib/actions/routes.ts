@@ -3,6 +3,8 @@
 import { revalidatePath } from 'next/cache'
 import { supabaseAdmin } from '@/lib/supabase-server'
 import { requireAdmin } from '@/lib/auth/get-admin'
+import { createSlug } from '@/lib/utils'
+import type { ActionResult, MergeResult } from '@/types/actions'
 
 export interface RouteData {
   name: string
@@ -15,11 +17,6 @@ export interface RouteData {
   cueSheetUrl?: string | null
   notes?: string | null
   isActive?: boolean
-}
-
-export interface ActionResult {
-  success: boolean
-  error?: string
 }
 
 /**
@@ -57,14 +54,6 @@ function extractRwgpsId(input: string | null | undefined): string | null {
   // If nothing matched but looks like it might be an ID, return as-is
   // This allows for flexibility
   return trimmed
-}
-
-function createSlug(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '')
-    .substring(0, 100)
 }
 
 export async function createRoute(data: RouteData): Promise<ActionResult> {
@@ -205,4 +194,117 @@ export async function toggleRouteActive(routeId: string, isActive: boolean): Pro
 
   revalidatePath('/admin/routes')
   return { success: true }
+}
+
+export interface MergeRoutesData {
+  targetRouteId: string // Route to keep
+  sourceRouteIds: string[] // All routes being merged (including target)
+  routeData: RouteData // Updated route properties
+}
+
+export async function mergeRoutes(data: MergeRoutesData): Promise<MergeResult> {
+  await requireAdmin()
+
+  const { targetRouteId, sourceRouteIds, routeData } = data
+
+  // Validate we have at least 2 routes to merge
+  if (sourceRouteIds.length < 2) {
+    return { success: false, error: 'At least 2 routes are required to merge' }
+  }
+
+  // Validate target is in the source list
+  if (!sourceRouteIds.includes(targetRouteId)) {
+    return { success: false, error: 'Target route must be one of the selected routes' }
+  }
+
+  // Routes to delete (all except target)
+  const routesToDelete = sourceRouteIds.filter(id => id !== targetRouteId)
+
+  try {
+    // Step 1: Update all events that reference any of the source routes to use target route
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: updatedEvents, error: updateEventsError } = await (supabaseAdmin.from('events') as any)
+      .update({ route_id: targetRouteId })
+      .in('route_id', routesToDelete)
+      .select('id')
+
+    if (updateEventsError) {
+      console.error('Error updating events:', updateEventsError)
+      return { success: false, error: 'Failed to update events' }
+    }
+
+    const updatedEventsCount = updatedEvents?.length || 0
+
+    // Step 2: Delete the other routes first (to free up slug if needed)
+    const { error: deleteError } = await supabaseAdmin
+      .from('routes')
+      .delete()
+      .in('id', routesToDelete)
+
+    if (deleteError) {
+      console.error('Error deleting old routes:', deleteError)
+      return { success: false, error: 'Failed to delete old routes' }
+    }
+
+    // Step 3: Update the target route with new properties
+    const rwgpsId = extractRwgpsId(routeData.rwgpsUrl)
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error: updateRouteError } = await (supabaseAdmin.from('routes') as any)
+      .update({
+        name: routeData.name.trim(),
+        slug: routeData.slug,
+        chapter_id: routeData.chapterId || null,
+        distance_km: routeData.distanceKm || null,
+        collection: routeData.collection || null,
+        description: routeData.description || null,
+        rwgps_id: rwgpsId,
+        cue_sheet_url: routeData.cueSheetUrl || null,
+        notes: routeData.notes || null,
+        is_active: routeData.isActive ?? true,
+      })
+      .eq('id', targetRouteId)
+
+    if (updateRouteError) {
+      console.error('Error updating target route:', updateRouteError)
+      if (updateRouteError.code === '23505') {
+        return { success: false, error: 'A route with this slug already exists' }
+      }
+      return { success: false, error: 'Failed to update merged route' }
+    }
+
+    revalidatePath('/admin/routes')
+    revalidatePath('/admin/events')
+
+    return {
+      success: true,
+      updatedEventsCount,
+      deletedRoutesCount: routesToDelete.length,
+    }
+  } catch (err) {
+    console.error('Error merging routes:', err)
+    return { success: false, error: 'An unexpected error occurred while merging routes' }
+  }
+}
+
+export async function getRouteEventCounts(routeIds: string[]): Promise<Record<string, number>> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabaseAdmin.from('events') as any)
+    .select('route_id')
+    .in('route_id', routeIds)
+
+  if (error) {
+    console.error('Error fetching event counts:', error)
+    return {}
+  }
+
+  // Count events per route
+  const counts: Record<string, number> = {}
+  for (const event of (data as { route_id: string | null }[]) || []) {
+    if (event.route_id) {
+      counts[event.route_id] = (counts[event.route_id] || 0) + 1
+    }
+  }
+
+  return counts
 }

@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { supabaseAdmin } from '@/lib/supabase-server'
 import { requireAdmin } from '@/lib/auth/get-admin'
 import type { Database } from '@/types/supabase'
+import type { ActionResult } from '@/types/actions'
 
 type AdminRole = Database['public']['Tables']['admins']['Row']['role']
 
@@ -13,11 +14,6 @@ export interface AdminUserData {
   password: string
   role: AdminRole
   chapterId?: string | null
-}
-
-export interface ActionResult {
-  success: boolean
-  error?: string
 }
 
 export async function createAdminUser(data: AdminUserData): Promise<ActionResult> {
@@ -189,7 +185,13 @@ export async function getAdminUsers() {
   return data
 }
 
-export async function getChapters() {
+interface Chapter {
+  id: string
+  name: string
+  slug: string
+}
+
+export async function getChapters(): Promise<Chapter[]> {
   const { data, error } = await supabaseAdmin
     .from('chapters')
     .select('id, name, slug')
@@ -200,5 +202,5 @@ export async function getChapters() {
     return []
   }
 
-  return data
+  return data as Chapter[]
 }

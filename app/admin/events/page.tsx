@@ -1,6 +1,8 @@
 import { requireAdmin } from '@/lib/auth/get-admin'
 import { supabaseAdmin } from '@/lib/supabase-server'
-import Link from 'next/link'
+import { getChapters } from '@/lib/actions/admin-users'
+import { parseLocalDate } from '@/lib/utils'
+import { ClickableTableRow } from '@/components/admin/clickable-table-row'
 import {
   Table,
   TableBody,
@@ -10,22 +12,16 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
-import { Eye } from 'lucide-react'
+import { EventFilters } from '@/components/admin/event-filters'
+import type { EventWithChapter } from '@/types/ui'
 
-interface EventWithChapter {
-  id: string
-  name: string
-  event_date: string
-  distance_km: number
-  event_type: string
-  status: string
-  chapters: { name: string } | null
-}
+type TimeFilter = 'all' | 'upcoming' | 'past'
 
-async function getEvents() {
+async function getEvents(filter: TimeFilter, chapterId?: string) {
+  const today = new Date().toISOString().split('T')[0]
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data } = await (supabaseAdmin.from('events') as any)
+  let query = (supabaseAdmin.from('events') as any)
     .select(`
       id,
       name,
@@ -33,17 +29,48 @@ async function getEvents() {
       distance_km,
       event_type,
       status,
+      chapter_id,
       chapters (name)
     `)
-    .order('event_date', { ascending: false })
-    .limit(100)
+
+  if (chapterId) {
+    query = query.eq('chapter_id', chapterId)
+  }
+
+  if (filter === 'upcoming') {
+    // Future events: soonest first
+    query = query.gte('event_date', today).order('event_date', { ascending: true })
+  } else if (filter === 'past') {
+    // Past events: most recent first
+    query = query.lt('event_date', today).order('event_date', { ascending: false })
+  } else {
+    // All events: most recent first
+    query = query.order('event_date', { ascending: false })
+  }
+
+  const { data } = await query.limit(200)
 
   return (data as EventWithChapter[]) ?? []
 }
 
-export default async function AdminEventsPage() {
-  await requireAdmin()
-  const events = await getEvents()
+interface AdminEventsPageProps {
+  searchParams: Promise<{ filter?: string; chapter?: string }>
+}
+
+export default async function AdminEventsPage({ searchParams }: AdminEventsPageProps) {
+  const [admin, params, chapters] = await Promise.all([
+    requireAdmin(),
+    searchParams,
+    getChapters(),
+  ])
+
+  const filter = (params.filter as TimeFilter) || 'all'
+  // Use URL param if set, otherwise default to admin's chapter (if they have one)
+  // 'all' means explicitly show all chapters (overrides admin default)
+  const chapterId = params.chapter === 'all'
+    ? null
+    : (params.chapter ?? admin.chapter_id ?? null)
+  const events = await getEvents(filter, chapterId || undefined)
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -51,6 +78,8 @@ export default async function AdminEventsPage() {
         return <Badge variant="secondary">Scheduled</Badge>
       case 'completed':
         return <Badge>Completed</Badge>
+      case 'submitted':
+        return <Badge className="bg-green-600 hover:bg-green-600">Submitted</Badge>
       case 'cancelled':
         return <Badge variant="destructive">Cancelled</Badge>
       default:
@@ -67,6 +96,12 @@ export default async function AdminEventsPage() {
         </p>
       </div>
 
+      <EventFilters
+        timeFilter={filter}
+        chapterId={chapterId}
+        chapters={chapters}
+      />
+
       <div className="rounded-md border">
         <Table>
           <TableHeader>
@@ -76,22 +111,21 @@ export default async function AdminEventsPage() {
               <TableHead>Date</TableHead>
               <TableHead>Distance</TableHead>
               <TableHead>Status</TableHead>
-              <TableHead className="w-[100px]">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {events.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="text-center text-muted-foreground">
+                <TableCell colSpan={5} className="text-center text-muted-foreground">
                   No events found
                 </TableCell>
               </TableRow>
             ) : (
               events.map((event) => (
-                <TableRow key={event.id}>
+                <ClickableTableRow key={event.id} href={`/admin/events/${event.id}`}>
                   <TableCell>
                     <div>
-                      <p className="font-medium">{event.name}</p>
+                      <span className="font-medium">{event.name}</span>
                       <p className="text-sm text-muted-foreground capitalize">
                         {event.event_type}
                       </p>
@@ -99,7 +133,7 @@ export default async function AdminEventsPage() {
                   </TableCell>
                   <TableCell>{event.chapters?.name || '—'}</TableCell>
                   <TableCell>
-                    {new Date(event.event_date).toLocaleDateString('en-CA', {
+                    {parseLocalDate(event.event_date).toLocaleDateString('en-CA', {
                       weekday: 'short',
                       month: 'short',
                       day: 'numeric',
@@ -108,14 +142,7 @@ export default async function AdminEventsPage() {
                   </TableCell>
                   <TableCell>{event.distance_km} km</TableCell>
                   <TableCell>{getStatusBadge(event.status)}</TableCell>
-                  <TableCell>
-                    <Button variant="ghost" size="icon-sm" asChild>
-                      <Link href={`/admin/events/${event.id}`}>
-                        <Eye className="h-4 w-4" />
-                      </Link>
-                    </Button>
-                  </TableCell>
-                </TableRow>
+                </ClickableTableRow>
               ))
             )}
           </TableBody>

@@ -4,17 +4,7 @@ import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Plus } from 'lucide-react'
 import { RoutesTable } from '@/components/admin/routes-table'
-
-interface RouteWithChapter {
-  id: string
-  name: string
-  slug: string
-  distance_km: number | null
-  collection: string | null
-  rwgps_id: string | null
-  is_active: boolean
-  chapters: { id: string; name: string } | null
-}
+import type { RouteWithChapter } from '@/types/ui'
 
 async function getRoutes() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -23,9 +13,13 @@ async function getRoutes() {
       id,
       name,
       slug,
+      chapter_id,
       distance_km,
       collection,
+      description,
       rwgps_id,
+      cue_sheet_url,
+      notes,
       is_active,
       chapters (id, name)
     `)
@@ -44,8 +38,11 @@ async function getChapters() {
 }
 
 export default async function AdminRoutesPage() {
-  await requireAdmin()
-  const [routes, chapters] = await Promise.all([getRoutes(), getChapters()])
+  const [admin, routes, chapters] = await Promise.all([
+    requireAdmin(),
+    getRoutes(),
+    getChapters(),
+  ])
 
   return (
     <div className="space-y-6">
@@ -64,7 +61,11 @@ export default async function AdminRoutesPage() {
         </Button>
       </div>
 
-      <RoutesTable routes={routes} chapters={chapters} />
+      <RoutesTable
+        routes={routes}
+        chapters={chapters}
+        defaultChapterId={admin.chapter_id}
+      />
     </div>
   )
 }

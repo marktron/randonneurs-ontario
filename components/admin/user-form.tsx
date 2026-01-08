@@ -11,12 +11,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { AlertCircle, Loader2 } from 'lucide-react'
 import { createAdminUser, updateAdminUser } from '@/lib/actions/admin-users'
 import { toast } from 'sonner'
-
-interface Chapter {
-  id: string
-  name: string
-  slug: string
-}
+import type { ChapterOptionWithSlug } from '@/types/ui'
 
 interface AdminUser {
   id: string
@@ -27,7 +22,7 @@ interface AdminUser {
 }
 
 interface UserFormProps {
-  chapters: Chapter[]
+  chapters: ChapterOptionWithSlug[]
   user?: AdminUser | null
   mode: 'create' | 'edit'
 }

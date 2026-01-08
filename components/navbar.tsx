@@ -214,7 +214,7 @@ export function Navbar() {
               <span className="sr-only">Toggle menu</span>
             </Button>
           </SheetTrigger>
-          <SheetContent side="right" className="w-80 overflow-y-auto">
+          <SheetContent side="right" className="w-[85vw] max-w-80 overflow-y-auto">
             <SheetHeader>
               <SheetTitle className="font-serif">Menu</SheetTitle>
             </SheetHeader>

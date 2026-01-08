@@ -98,7 +98,7 @@ export function RegistrationForm({ eventId }: RegistrationFormProps) {
 
   if (success) {
     return (
-      <div className="sticky top-24 rounded-2xl border border-border bg-card p-6 md:p-8">
+      <div className="lg:sticky lg:top-24 rounded-2xl border border-border bg-card p-6 md:p-8">
         <div className="text-center py-8">
           <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-green-100 dark:bg-green-900/30 mb-4">
             <svg className="w-6 h-6 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -115,7 +115,7 @@ export function RegistrationForm({ eventId }: RegistrationFormProps) {
   }
 
   return (
-    <div className="sticky top-24 rounded-2xl border border-border bg-card p-6 md:p-8">
+    <div className="lg:sticky lg:top-24 rounded-2xl border border-border bg-card p-6 md:p-8">
       <h2 className="font-serif text-2xl mb-6">Register</h2>
 
       <form className="space-y-5" onSubmit={handleSubmit}>

@@ -85,14 +85,14 @@ export function UpcomingRides() {
             </div>
 
             {/* Rides list */}
-            <ul className="space-y-2">
+            <ul className="space-y-1">
               {chapter.rides.map((ride, index) => {
                 const { month, day } = formatDate(ride.date);
                 return (
                   <li key={index}>
                     <Link
                       href={`/register/${ride.slug}`}
-                      className="group flex items-start gap-3 py-2 -mx-2 px-2 rounded-lg hover:bg-muted/50 transition-colors"
+                      className="group flex items-start gap-3 py-3 -mx-2 px-2 rounded-lg hover:bg-muted/50 transition-colors"
                     >
                       {/* Date block */}
                       <div className="flex-shrink-0 w-10 text-center">
