@@ -19,6 +19,7 @@ export interface EventResult {
   name: string
   distance: string
   riders: RiderResult[]
+  routeSlug: string | null
 }
 
 // Re-export ChapterMeta as alias for backwards compatibility
@@ -42,8 +43,8 @@ export function getAllChapterSlugs(): string[] {
 function formatFinishTime(interval: string | null): string {
   if (!interval) return ''
 
-  // Parse PostgreSQL interval format like "10:30:00" or "1 day 02:30:00"
-  const match = interval.match(/(?:(\d+)\s*days?\s*)?(\d{1,2}):(\d{2})(?::\d{2})?/)
+  // Parse PostgreSQL interval format like "10:30:00", "105:30:00", or "4 days 09:30:00"
+  const match = interval.match(/(?:(\d+)\s*days?\s*)?(\d+):(\d{2})(?::\d{2})?/)
   if (!match) return interval
 
   const days = parseInt(match[1] || '0', 10)
@@ -148,6 +149,7 @@ export async function getChapterResults(urlSlug: string, year: number): Promise<
     eventsQuery = (supabase.from('events') as any)
       .select(`
         id, name, event_date, distance_km,
+        routes (slug),
         public_results (
           finish_time, status, team_name, rider_slug, first_name, last_name
         )
@@ -168,6 +170,7 @@ export async function getChapterResults(urlSlug: string, year: number): Promise<
     eventsQuery = (supabase.from('events') as any)
       .select(`
         id, name, event_date, distance_km,
+        routes (slug),
         public_results (
           finish_time, status, team_name, rider_slug, first_name, last_name
         )
@@ -221,6 +224,7 @@ export async function getChapterResults(urlSlug: string, year: number): Promise<
       name: event.name,
       distance: event.distance_km.toString(),
       riders,
+      routeSlug: event.routes?.slug ?? null,
     })
   }
 
@@ -241,6 +245,7 @@ export interface RiderEventResult {
   status: string
   note: string | null
   chapterSlug: string | null
+  eventType: string
 }
 
 export interface RiderYearResults {
@@ -289,6 +294,7 @@ export async function getRiderResults(slug: string): Promise<RiderYearResults[]>
         name,
         event_date,
         distance_km,
+        event_type,
         chapters (
           slug
         )
@@ -321,6 +327,7 @@ export async function getRiderResults(slug: string): Promise<RiderYearResults[]>
       status: result.status,
       note: result.note,
       chapterSlug,
+      eventType: event.event_type,
     }
 
     if (!yearMap.has(year)) {

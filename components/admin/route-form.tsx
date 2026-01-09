@@ -46,11 +46,26 @@ export function RouteForm({ chapters, route, mode }: RouteFormProps) {
   const [notes, setNotes] = useState(route?.notes || '')
   const [isActive, setIsActive] = useState(route?.is_active ?? true)
 
-  // Auto-generate slug from name
+  // Auto-generate slug from name and distance
+  const generateSlug = (routeName: string, distance: string) => {
+    const parts = [routeName]
+    if (distance) {
+      parts.push(distance)
+    }
+    return createSlug(parts.join(' '))
+  }
+
   const handleNameChange = (value: string) => {
     setName(value)
     if (mode === 'create' || !route?.slug) {
-      setSlug(createSlug(value))
+      setSlug(generateSlug(value, distanceKm))
+    }
+  }
+
+  const handleDistanceChange = (value: string) => {
+    setDistanceKm(value)
+    if (mode === 'create' || !route?.slug) {
+      setSlug(generateSlug(name, value))
     }
   }
 
@@ -161,7 +176,7 @@ export function RouteForm({ chapters, route, mode }: RouteFormProps) {
                 id="distance"
                 type="number"
                 value={distanceKm}
-                onChange={(e) => setDistanceKm(e.target.value)}
+                onChange={(e) => handleDistanceChange(e.target.value)}
                 placeholder="200"
                 min="0"
                 step="0.1"

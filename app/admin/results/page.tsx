@@ -1,6 +1,6 @@
 import { requireAdmin } from '@/lib/auth/get-admin'
 import { supabaseAdmin } from '@/lib/supabase-server'
-import { parseLocalDate } from '@/lib/utils'
+import { parseLocalDate, formatFinishTime } from '@/lib/utils'
 import Link from 'next/link'
 import {
   Table,
@@ -35,9 +35,9 @@ interface ResultWithDetails {
   }
 }
 
-async function getResults() {
+async function getResults(season: number | null) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data } = await (supabaseAdmin.from('results') as any)
+  let query = (supabaseAdmin.from('results') as any)
     .select(`
       id,
       finish_time,
@@ -49,8 +49,14 @@ async function getResults() {
       riders (id, first_name, last_name),
       events (id, name, event_date, chapters (name))
     `)
+
+  if (season !== null) {
+    query = query.eq('season', season)
+  }
+
+  const { data } = await query
     .order('created_at', { ascending: false })
-    .limit(200)
+    .limit(500)
 
   return (data as ResultWithDetails[]) ?? []
 }
@@ -95,15 +101,10 @@ export default async function AdminResultsPage({ searchParams }: AdminResultsPag
   const params = await searchParams
   const selectedSeason = params.season ? parseInt(params.season, 10) : null
 
-  const [allResults, seasons] = await Promise.all([
-    getResults(),
+  const [results, seasons] = await Promise.all([
+    getResults(selectedSeason),
     getSeasons(),
   ])
-
-  // Filter by season if selected
-  const results = selectedSeason
-    ? allResults.filter((r) => r.season === selectedSeason)
-    : allResults
 
   return (
     <div className="space-y-6">
@@ -190,7 +191,7 @@ export default async function AdminResultsPage({ searchParams }: AdminResultsPag
                     {result.finish_time ? (
                       <span className="inline-flex items-center gap-1">
                         <Clock className="h-3 w-3" />
-                        {result.finish_time}
+                        {formatFinishTime(result.finish_time)}
                       </span>
                     ) : (
                       '—'

@@ -60,10 +60,22 @@ function formatTime(time: string | null, status: string): string {
   return statusMap[status] || status.toUpperCase()
 }
 
+function getDisplayNote(result: RiderEventResult): string | null {
+  const parts: string[] = []
+  if (result.eventType === 'permanent') {
+    parts.push('Permanent')
+  }
+  if (result.note) {
+    parts.push(result.note)
+  }
+  return parts.length > 0 ? parts.join(' · ') : null
+}
+
 function ResultCard({ result, year }: { result: RiderEventResult; year: number }) {
   const eventLink = result.chapterSlug
     ? `/results/${year}/${result.chapterSlug}#event-${result.date}`
     : null
+  const displayNote = getDisplayNote(result)
 
   return (
     <div className="py-3 border-b border-border last:border-0">
@@ -82,8 +94,8 @@ function ResultCard({ result, year }: { result: RiderEventResult; year: number }
           <p className="text-sm text-muted-foreground mt-0.5">
             {formatDate(result.date)} · {result.distanceKm} km
           </p>
-          {result.note && (
-            <p className="text-sm text-muted-foreground mt-1">{result.note}</p>
+          {displayNote && (
+            <p className="text-sm text-muted-foreground mt-1">{displayNote}</p>
           )}
         </div>
         <span className={`font-mono text-sm shrink-0 ${
@@ -160,7 +172,7 @@ function YearSection({ yearData }: { yearData: RiderYearResults }) {
                   {formatTime(result.time, result.status)}
                 </TableCell>
                 <TableCell className="text-muted-foreground">
-                  {result.note || ''}
+                  {getDisplayNote(result) || ''}
                 </TableCell>
               </TableRow>
             ))}

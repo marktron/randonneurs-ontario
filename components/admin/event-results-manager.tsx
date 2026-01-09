@@ -23,6 +23,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea'
 import { MessageSquare, X, Loader2, Check, Plus } from 'lucide-react'
 import { createResult, updateResult, type ResultStatus } from '@/lib/actions/results'
+import { formatFinishTime } from '@/lib/utils'
 import { SubmitResultsButton } from './submit-results-button'
 import { AddRiderDialog } from './add-rider-dialog'
 import { toast } from 'sonner'
@@ -100,7 +101,7 @@ function RiderRow({ participant, result, eventId, season, distanceKm, onNoteClic
   const [localStatus, setLocalStatus] = useState<ResultStatus>(
     (result?.status as ResultStatus) || 'pending'
   )
-  const [localTime, setLocalTime] = useState(result?.finish_time || '')
+  const [localTime, setLocalTime] = useState(formatFinishTime(result?.finish_time ?? null))
   const [showSaved, setShowSaved] = useState(false)
 
   const riderName = `${participant.firstName} ${participant.lastName}`
@@ -151,7 +152,7 @@ function RiderRow({ participant, result, eventId, season, distanceKm, onNoteClic
   }
 
   const handleTimeBlur = () => {
-    if (!result || localTime === (result.finish_time || '')) return
+    if (!result || localTime === formatFinishTime(result.finish_time)) return
 
     startTransition(async () => {
       const res = await updateResult(result.id, {
@@ -164,7 +165,7 @@ function RiderRow({ participant, result, eventId, season, distanceKm, onNoteClic
         flashSaved()
       } else {
         toast.error(res.error || 'Failed to update time')
-        setLocalTime(result.finish_time || '')
+        setLocalTime(formatFinishTime(result.finish_time))
       }
     })
   }

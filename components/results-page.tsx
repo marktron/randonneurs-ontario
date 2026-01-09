@@ -193,10 +193,19 @@ export function ResultsPage({
                   {/* Event Header */}
                   <header className="mb-6">
                     <h2 className="font-serif text-2xl md:text-3xl tracking-tight">
-                      {event.name} {event.distance}
+                      {event.routeSlug ? (
+                        <Link
+                          href={`/routes/${chapterSlug}/${event.routeSlug}`}
+                          className="hover:text-primary transition-colors"
+                        >
+                          {event.name} {event.distance}
+                        </Link>
+                      ) : (
+                        <>{event.name} {event.distance}</>
+                      )}
                     </h2>
                     <p className="text-sm text-muted-foreground mt-1">
-                      {formatFullDate(event.date)} · {event.distance} km · {participants.length} riders
+                      {formatFullDate(event.date)} · {event.distance} km · {participants.length} {participants.length === 1 ? 'rider' : 'riders'}
                     </p>
                   </header>
 

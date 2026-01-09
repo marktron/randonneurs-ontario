@@ -44,3 +44,20 @@ export function parseLocalDate(dateStr: string): Date {
   // Append T00:00:00 to interpret as local midnight instead of UTC
   return new Date(dateStr + 'T00:00:00')
 }
+
+/**
+ * Format a PostgreSQL interval finish time to HH:MM (stripping seconds).
+ * Handles formats like "10:30:00", "105:30:00", or "4 days 09:30:00".
+ */
+export function formatFinishTime(interval: string | null): string {
+  if (!interval) return ''
+
+  const match = interval.match(/(?:(\d+)\s*days?\s*)?(\d+):(\d{2})(?::\d{2})?/)
+  if (!match) return interval
+
+  const days = parseInt(match[1] || '0', 10)
+  const hours = parseInt(match[2], 10) + (days * 24)
+  const minutes = match[3]
+
+  return `${hours}:${minutes}`
+}

@@ -1,6 +1,6 @@
 import { requireAdmin } from '@/lib/auth/get-admin'
 import { supabaseAdmin } from '@/lib/supabase-server'
-import { parseLocalDate } from '@/lib/utils'
+import { parseLocalDate, formatFinishTime } from '@/lib/utils'
 import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
 import { ChevronLeft, Clock } from 'lucide-react'
@@ -246,7 +246,7 @@ export default async function RiderDetailPage({ params }: RiderPageProps) {
                         {result.finish_time ? (
                           <span className="inline-flex items-center gap-1">
                             <Clock className="h-3 w-3" />
-                            {result.finish_time}
+                            {formatFinishTime(result.finish_time)}
                           </span>
                         ) : (
                           '—'

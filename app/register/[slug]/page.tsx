@@ -118,8 +118,8 @@ export default async function RegisterPage({ params }: PageProps) {
               </div>
             </div>
 
-            {/* Route Map */}
-            {event.rwgpsId && (
+            {/* Route Map or Cue Sheet */}
+            {event.rwgpsId ? (
               <div className="mb-10">
                 <h2 className="text-xs font-medium tracking-[0.2em] uppercase text-muted-foreground mb-4">
                   Route
@@ -132,8 +132,45 @@ export default async function RegisterPage({ params }: PageProps) {
                     title="Route Map"
                   />
                 </div>
+                {event.routeSlug && (
+                  <p className="mt-3 text-sm">
+                    <Link
+                      href={`/routes/${event.chapterSlug}/${event.routeSlug}`}
+                      className="text-primary hover:underline underline-offset-2"
+                    >
+                      View past results for this route
+                    </Link>
+                  </p>
+                )}
               </div>
-            )}
+            ) : event.cueSheetUrl ? (
+              <div className="mb-10">
+                <h2 className="text-xs font-medium tracking-[0.2em] uppercase text-muted-foreground mb-4">
+                  Route
+                </h2>
+                <a
+                  href={event.cueSheetUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 text-primary hover:underline underline-offset-2"
+                >
+                  View Cue Sheet
+                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                  </svg>
+                </a>
+                {event.routeSlug && (
+                  <p className="mt-3 text-sm">
+                    <Link
+                      href={`/routes/${event.chapterSlug}/${event.routeSlug}`}
+                      className="text-primary hover:underline underline-offset-2"
+                    >
+                      View past results for this route
+                    </Link>
+                  </p>
+                )}
+              </div>
+            ) : null}
 
             {/* Registered Riders */}
             <div className="border-t border-border pt-10">

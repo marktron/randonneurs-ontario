@@ -5,6 +5,7 @@ import {
   getChapterInfo,
   getAllChapterSlugs,
   getDbSlug,
+  getUrlSlugFromDbSlug,
   type ChapterInfo,
 } from '@/lib/chapter-config'
 
@@ -67,7 +68,10 @@ export interface EventDetails {
   distance: number
   type: 'Brevet' | 'Populaire' | 'Fleche' | 'Permanent'
   chapterName: string
+  chapterSlug: string
   rwgpsId: string | null
+  routeSlug: string | null
+  cueSheetUrl: string | null
 }
 
 export interface RegisteredRider {
@@ -123,8 +127,8 @@ export async function getEventBySlug(slug: string): Promise<EventDetails | null>
       start_location,
       distance_km,
       event_type,
-      chapters (name),
-      routes (rwgps_id)
+      chapters (name, slug),
+      routes (slug, rwgps_id, cue_sheet_url)
     `)
     .eq('slug', slug)
     .single()
@@ -134,6 +138,7 @@ export async function getEventBySlug(slug: string): Promise<EventDetails | null>
     return null
   }
 
+  const dbChapterSlug = event.chapters?.slug
   return {
     id: event.id,
     slug: event.slug,
@@ -144,6 +149,9 @@ export async function getEventBySlug(slug: string): Promise<EventDetails | null>
     distance: event.distance_km,
     type: formatEventType(event.event_type),
     chapterName: event.chapters?.name || '',
+    chapterSlug: dbChapterSlug ? getUrlSlugFromDbSlug(dbChapterSlug) : '',
     rwgpsId: event.routes?.rwgps_id || null,
+    routeSlug: event.routes?.slug || null,
+    cueSheetUrl: event.routes?.cue_sheet_url || null,
   }
 }
