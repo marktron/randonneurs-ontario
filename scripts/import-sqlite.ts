@@ -91,8 +91,12 @@ async function importChapters(chapterIds: Map<string, string>): Promise<void> {
   const existingSlugs = new Set(existing?.map(c => c.slug) || [])
   existing?.forEach(c => chapterIds.set(c.slug, c.id))
 
-  // Add historical chapters if needed
+  // Add all chapters (core + historical)
   const newChapters = [
+    { slug: 'toronto', name: 'Toronto', description: 'Brevets and populaires in the Greater Toronto Area' },
+    { slug: 'ottawa', name: 'Ottawa', description: 'Brevets and populaires in the Ottawa Valley region' },
+    { slug: 'simcoe', name: 'Simcoe-Muskoka', description: 'Brevets and populaires in Simcoe County and Muskoka' },
+    { slug: 'huron', name: 'Huron', description: 'Brevets and populaires along Lake Huron and Bruce County' },
     { slug: 'niagara', name: 'Niagara', description: 'Historical chapter (inactive)' },
     { slug: 'other', name: 'Other', description: 'Miscellaneous events' },
     { slug: 'permanent', name: 'Permanent', description: 'Permanent rides' },

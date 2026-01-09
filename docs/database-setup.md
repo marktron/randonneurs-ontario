@@ -30,7 +30,6 @@ Located in `supabase/migrations/`. Key migrations include:
 |-----------|-------------|
 | `initial_schema.sql` | Core tables (chapters, routes, events, riders, etc.) |
 | `add_rls_policies.sql` | Row Level Security policies |
-| `add_historical_chapters.sql` | Adds niagara, other, permanent chapters |
 | `clean_event_names.sql` | Removes distance suffixes from event names |
 | `add_granite_anvil_collection.sql` | Adds collection field and tags Granite Anvil events |
 | `clean_route_names_and_distances.sql` | Extracts distances and cleans route names |
@@ -40,26 +39,42 @@ Located in `supabase/migrations/`. Key migrations include:
 The seed file (`supabase/seed.sql`) is automatically loaded when running `supabase db reset`. It contains:
 
 - **7 chapters** (Toronto, Ottawa, Simcoe-Muskoka, Huron, Niagara, Other, Permanent)
-- **331 routes**
+- **302 routes**
 - **1,605 events** (1983-2026)
 - **1,130 riders**
 - **9,766 results**
+- **2,276 result awards**
 
 ## Regenerating Seed Data
 
-To capture the current database state as the new seed file:
+Use the generate-seed script to capture the current database state:
 
 ```bash
-docker exec supabase_db_randonneurs-ontario pg_dump -U postgres \
-  --data-only \
-  --inserts \
-  --schema=public \
-  postgres > supabase/seed.sql
+./scripts/generate-seed.sh
 ```
 
-Then remove the `\restrict` line if present:
+This script:
+- Uses `pg_dump` from inside Docker (avoids version mismatch issues)
+- Generates clean INSERT statements with column names
+- Excludes the `admins` table (requires auth.users)
+- Removes problematic backslash commands that can cause syntax errors
+
+After regenerating, test with:
 ```bash
-sed -i '' '/^\\restrict/d' supabase/seed.sql
+npx supabase db reset
+```
+
+### Creating Admin Users After Reset
+
+Admin users must be created after seeding since they require entries in `auth.users`:
+
+```bash
+NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:54321 \
+SUPABASE_SERVICE_ROLE_KEY=<secret-key-from-supabase-status> \
+ADMIN_EMAIL=admin@example.com \
+ADMIN_PASSWORD=password123 \
+ADMIN_NAME="Test Admin" \
+npx tsx scripts/create-admin.ts
 ```
 
 ## Row Level Security (RLS)

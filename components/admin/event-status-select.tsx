@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useState, useTransition, useEffect } from 'react'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -35,6 +35,11 @@ export function EventStatusSelect({ eventId, initialStatus, resultsCount }: Even
   const [status, setStatus] = useState<EventStatus>(initialStatus)
   const [showSaved, setShowSaved] = useState(false)
   const [showCancelConfirm, setShowCancelConfirm] = useState(false)
+
+  // Sync local state when prop changes (e.g., after router.refresh())
+  useEffect(() => {
+    setStatus(initialStatus)
+  }, [initialStatus])
 
   const performStatusUpdate = (newStatus: EventStatus) => {
     startTransition(async () => {

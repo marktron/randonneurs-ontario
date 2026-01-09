@@ -4,10 +4,212 @@ import { revalidatePath } from 'next/cache'
 import { supabaseAdmin } from '@/lib/supabase-server'
 import { requireAdmin } from '@/lib/auth/get-admin'
 import { sendgrid } from '@/lib/email/sendgrid'
-import { parseLocalDate } from '@/lib/utils'
+import { parseLocalDate, createSlug } from '@/lib/utils'
 import type { ActionResult } from '@/types/actions'
 
 export type EventStatus = 'scheduled' | 'completed' | 'cancelled' | 'submitted'
+export type EventType = 'brevet' | 'populaire' | 'fleche' | 'permanent'
+
+export interface CreateEventData {
+  name: string
+  chapterId: string
+  routeId?: string | null
+  eventType: EventType
+  distanceKm: number
+  eventDate: string  // YYYY-MM-DD
+  startTime?: string | null  // HH:MM
+  startLocation?: string | null
+}
+
+export async function createEvent(data: CreateEventData): Promise<ActionResult<{ id: string }>> {
+  try {
+    await requireAdmin()
+
+    const {
+      name,
+      chapterId,
+      routeId,
+      eventType,
+      distanceKm,
+      eventDate,
+      startTime,
+      startLocation,
+    } = data
+
+    // Validate required fields
+    if (!name.trim() || !chapterId || !eventDate || !distanceKm) {
+      return { success: false, error: 'Missing required fields' }
+    }
+
+    // Generate slug from name, distance, and date
+    const slug = createSlug(`${name}-${distanceKm}-${eventDate}`)
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: newEvent, error } = await (supabaseAdmin.from('events') as any)
+      .insert({
+        slug,
+        name: name.trim(),
+        chapter_id: chapterId,
+        route_id: routeId || null,
+        event_type: eventType,
+        distance_km: distanceKm,
+        event_date: eventDate,
+        start_time: startTime || null,
+        start_location: startLocation || null,
+        status: 'scheduled',
+        // Note: season is a generated column computed from event_date
+      })
+      .select('id')
+      .single()
+
+    if (error) {
+      console.error('Error creating event:', error)
+      if (error.code === '23505') {
+        return { success: false, error: 'An event with this slug already exists' }
+      }
+      return { success: false, error: 'Failed to create event' }
+    }
+
+    revalidatePath('/admin/events')
+    revalidatePath('/admin')
+
+    return { success: true, data: { id: newEvent.id } }
+  } catch (error) {
+    console.error('Error in createEvent:', error)
+    return { success: false, error: 'An unexpected error occurred' }
+  }
+}
+
+export interface UpdateEventData {
+  name?: string
+  chapterId?: string
+  routeId?: string | null
+  eventType?: EventType
+  distanceKm?: number
+  eventDate?: string  // YYYY-MM-DD
+  startTime?: string | null  // HH:MM
+  startLocation?: string | null
+}
+
+export async function updateEvent(
+  eventId: string,
+  data: UpdateEventData
+): Promise<ActionResult> {
+  try {
+    await requireAdmin()
+
+    const updateData: Record<string, unknown> = {}
+
+    if (data.name !== undefined) {
+      updateData.name = data.name.trim()
+    }
+    if (data.chapterId !== undefined) {
+      updateData.chapter_id = data.chapterId
+    }
+    if (data.routeId !== undefined) {
+      updateData.route_id = data.routeId || null
+    }
+    if (data.eventType !== undefined) {
+      updateData.event_type = data.eventType
+    }
+    if (data.distanceKm !== undefined) {
+      updateData.distance_km = data.distanceKm
+    }
+    if (data.eventDate !== undefined) {
+      updateData.event_date = data.eventDate
+      // Note: season is a generated column, auto-updated from event_date
+    }
+    if (data.startTime !== undefined) {
+      updateData.start_time = data.startTime || null
+    }
+    if (data.startLocation !== undefined) {
+      updateData.start_location = data.startLocation || null
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await (supabaseAdmin.from('events') as any)
+      .update(updateData)
+      .eq('id', eventId)
+
+    if (error) {
+      console.error('Error updating event:', error)
+      return { success: false, error: 'Failed to update event' }
+    }
+
+    revalidatePath(`/admin/events/${eventId}`)
+    revalidatePath('/admin/events')
+    revalidatePath('/admin')
+
+    return { success: true }
+  } catch (error) {
+    console.error('Error in updateEvent:', error)
+    return { success: false, error: 'An unexpected error occurred' }
+  }
+}
+
+export async function deleteEvent(eventId: string): Promise<ActionResult> {
+  try {
+    await requireAdmin()
+
+    // Fetch the event to check the date
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: event, error: fetchError } = await (supabaseAdmin.from('events') as any)
+      .select('id, event_date')
+      .eq('id', eventId)
+      .single()
+
+    if (fetchError || !event) {
+      return { success: false, error: 'Event not found' }
+    }
+
+    // Check if event is in the past
+    const today = new Date().toISOString().split('T')[0]
+    if (event.event_date < today) {
+      return { success: false, error: 'Cannot delete past events' }
+    }
+
+    // Delete registrations for this event first
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error: regDeleteError } = await (supabaseAdmin.from('registrations') as any)
+      .delete()
+      .eq('event_id', eventId)
+
+    if (regDeleteError) {
+      console.error('Error deleting registrations:', regDeleteError)
+      return { success: false, error: 'Failed to delete event registrations' }
+    }
+
+    // Delete results for this event (shouldn't exist for future events, but just in case)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error: resultsDeleteError } = await (supabaseAdmin.from('results') as any)
+      .delete()
+      .eq('event_id', eventId)
+
+    if (resultsDeleteError) {
+      console.error('Error deleting results:', resultsDeleteError)
+      return { success: false, error: 'Failed to delete event results' }
+    }
+
+    // Delete the event
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error: deleteError } = await (supabaseAdmin.from('events') as any)
+      .delete()
+      .eq('id', eventId)
+
+    if (deleteError) {
+      console.error('Error deleting event:', deleteError)
+      return { success: false, error: 'Failed to delete event' }
+    }
+
+    revalidatePath('/admin/events')
+    revalidatePath('/admin')
+
+    return { success: true }
+  } catch (error) {
+    console.error('Error in deleteEvent:', error)
+    return { success: false, error: 'An unexpected error occurred' }
+  }
+}
 
 export async function updateEventStatus(
   eventId: string,
@@ -159,7 +361,7 @@ This email was sent from the Randonneurs Ontario admin system.
     } else {
       try {
         await sendgrid.send({
-          to: 'vp-admin@randonneursontario.ca',
+          to: 'vp-toronto@randonneursontario.ca',
           from: admin.email,
           subject,
           text: emailBody,

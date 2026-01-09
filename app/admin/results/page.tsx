@@ -13,6 +13,7 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Eye, Clock } from 'lucide-react'
+import { ResultsFilters } from '@/components/admin/results-filters'
 
 interface ResultWithDetails {
   id: string
@@ -35,7 +36,7 @@ interface ResultWithDetails {
   }
 }
 
-async function getResults(season: number | null) {
+async function getResults(season: number | null, chapterId: string | null) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let query = (supabaseAdmin.from('results') as any)
     .select(`
@@ -47,31 +48,47 @@ async function getResults(season: number | null) {
       distance_km,
       created_at,
       riders (id, first_name, last_name),
-      events (id, name, event_date, chapters (name))
+      events!inner (id, name, event_date, chapter_id, chapters (name))
     `)
 
   if (season !== null) {
     query = query.eq('season', season)
   }
 
+  if (chapterId) {
+    query = query.eq('events.chapter_id', chapterId)
+  }
+
   const { data } = await query
-    .order('created_at', { ascending: false })
+    .order('events(event_date)', { ascending: false })
     .limit(500)
 
   return (data as ResultWithDetails[]) ?? []
 }
 
 async function getSeasons() {
+  // Use RPC function to efficiently get distinct seasons
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data } = await (supabaseAdmin.from('results') as any)
-    .select('season')
-    .order('season', { ascending: false })
+  const { data } = await (supabaseAdmin as any).rpc('get_distinct_seasons')
 
   if (!data) return []
 
-  // Get unique seasons
-  const seasons = [...new Set(data.map((r: { season: number }) => r.season))]
-  return seasons as number[]
+  return (data as { season: number }[]).map(r => r.season)
+}
+
+interface Chapter {
+  id: string
+  name: string
+  slug: string
+}
+
+async function getChapters(): Promise<Chapter[]> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data } = await (supabaseAdmin.from('chapters') as any)
+    .select('id, name, slug')
+    .order('name', { ascending: true })
+
+  return (data as Chapter[]) ?? []
 }
 
 function getStatusBadge(status: string) {
@@ -92,7 +109,7 @@ function getStatusBadge(status: string) {
 }
 
 interface AdminResultsPageProps {
-  searchParams: Promise<{ season?: string }>
+  searchParams: Promise<{ season?: string; chapter?: string }>
 }
 
 export default async function AdminResultsPage({ searchParams }: AdminResultsPageProps) {
@@ -100,10 +117,12 @@ export default async function AdminResultsPage({ searchParams }: AdminResultsPag
 
   const params = await searchParams
   const selectedSeason = params.season ? parseInt(params.season, 10) : null
+  const selectedChapter = params.chapter || null
 
-  const [results, seasons] = await Promise.all([
-    getResults(selectedSeason),
+  const [results, seasons, chapters] = await Promise.all([
+    getResults(selectedSeason, selectedChapter),
     getSeasons(),
+    getChapters(),
   ])
 
   return (
@@ -115,31 +134,8 @@ export default async function AdminResultsPage({ searchParams }: AdminResultsPag
         </p>
       </div>
 
-      {/* Season filter */}
-      {seasons.length > 0 && (
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-muted-foreground">Filter by season:</span>
-          <div className="flex flex-wrap gap-1">
-            <Button
-              variant={selectedSeason === null ? 'default' : 'outline'}
-              size="sm"
-              asChild
-            >
-              <Link href="/admin/results">All</Link>
-            </Button>
-            {seasons.map((season) => (
-              <Button
-                key={season}
-                variant={selectedSeason === season ? 'default' : 'outline'}
-                size="sm"
-                asChild
-              >
-                <Link href={`/admin/results?season=${season}`}>{season}</Link>
-              </Button>
-            ))}
-          </div>
-        </div>
-      )}
+      {/* Filters */}
+      <ResultsFilters seasons={seasons} chapters={chapters} />
 
       <div className="rounded-md border">
         <Table>

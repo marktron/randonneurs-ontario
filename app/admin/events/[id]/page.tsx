@@ -3,11 +3,11 @@ import { supabaseAdmin } from '@/lib/supabase-server'
 import { parseLocalDate } from '@/lib/utils'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
-import { ChevronLeft, FileText } from 'lucide-react'
+import { ChevronLeft, FileText, Pencil, Calendar, Clock, Users, ClipboardList } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { EventResultsManager } from '@/components/admin/event-results-manager'
 import { EventStatusSelect } from '@/components/admin/event-status-select'
+import { EventDeleteButton } from '@/components/admin/event-delete-button'
 import type { EventStatus } from '@/lib/actions/events'
 
 interface EventDetail {
@@ -144,6 +144,12 @@ export default async function EventDetailPage({ params }: EventPageProps) {
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" asChild>
+            <Link href={`/admin/events/${event.id}/edit`}>
+              <Pencil className="h-4 w-4 mr-2" />
+              Edit
+            </Link>
+          </Button>
+          <Button variant="outline" asChild>
             <Link href={`/admin/events/${event.id}/control-cards`}>
               <FileText className="h-4 w-4 mr-2" />
               Control Cards
@@ -154,52 +160,39 @@ export default async function EventDetailPage({ params }: EventPageProps) {
             initialStatus={event.status as EventStatus}
             resultsCount={results.length}
           />
+          <EventDeleteButton
+            eventId={event.id}
+            eventName={event.name}
+            isPastEvent={event.event_date < new Date().toISOString().split('T')[0]}
+            registrationsCount={registrations.length}
+          />
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>Date</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <p className="text-lg font-medium">
-              {parseLocalDate(event.event_date).toLocaleDateString('en-CA', {
-                weekday: 'long',
-                month: 'long',
-                day: 'numeric',
-                year: 'numeric',
-              })}
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>Start Time</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <p className="text-lg font-medium">{event.start_time || 'TBD'}</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>Registrations</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <p className="text-lg font-medium">{registrations.length}</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>Results Entered</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <p className="text-lg font-medium">{results.length}</p>
-          </CardContent>
-        </Card>
+      <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm text-muted-foreground">
+        <div className="flex items-center gap-2">
+          <Calendar className="h-4 w-4" />
+          <span>
+            {parseLocalDate(event.event_date).toLocaleDateString('en-CA', {
+              weekday: 'long',
+              month: 'long',
+              day: 'numeric',
+              year: 'numeric',
+            })}
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          <Clock className="h-4 w-4" />
+          <span>{event.start_time?.slice(0, 5) || 'TBD'}</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <Users className="h-4 w-4" />
+          <span>{registrations.length} registered</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <ClipboardList className="h-4 w-4" />
+          <span>{results.length} results</span>
+        </div>
       </div>
 
       <EventResultsManager

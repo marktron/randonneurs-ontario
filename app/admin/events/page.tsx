@@ -12,7 +12,10 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { EventFilters } from '@/components/admin/event-filters'
+import { Plus } from 'lucide-react'
+import Link from 'next/link'
 import type { EventWithChapter } from '@/types/ui'
 
 type TimeFilter = 'all' | 'upcoming' | 'past'
@@ -89,11 +92,19 @@ export default async function AdminEventsPage({ searchParams }: AdminEventsPageP
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold">Events</h1>
-        <p className="text-muted-foreground">
-          Manage event registrations and results
-        </p>
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-3xl font-bold">Events</h1>
+          <p className="text-muted-foreground">
+            Manage event registrations and results
+          </p>
+        </div>
+        <Button asChild>
+          <Link href="/admin/events/new">
+            <Plus className="h-4 w-4 mr-2" />
+            New Event
+          </Link>
+        </Button>
       </div>
 
       <EventFilters

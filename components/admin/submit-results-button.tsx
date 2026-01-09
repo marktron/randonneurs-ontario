@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
+import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -18,9 +19,11 @@ interface SubmitResultsButtonProps {
   eventId: string
   eventName: string
   resultsCount: number
+  onSuccess?: () => void
 }
 
-export function SubmitResultsButton({ eventId, eventName, resultsCount }: SubmitResultsButtonProps) {
+export function SubmitResultsButton({ eventId, eventName, resultsCount, onSuccess }: SubmitResultsButtonProps) {
+  const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [showConfirm, setShowConfirm] = useState(false)
 
@@ -31,6 +34,8 @@ export function SubmitResultsButton({ eventId, eventName, resultsCount }: Submit
 
       if (result.success) {
         toast.success('Results submitted successfully')
+        onSuccess?.()
+        router.refresh()
       } else {
         toast.error(result.error || 'Failed to submit results')
       }

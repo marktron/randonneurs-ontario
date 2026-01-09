@@ -21,7 +21,8 @@ import {
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
-import { MessageSquare, X, Loader2, Check, Plus } from 'lucide-react'
+import { MessageSquare, X, Loader2, Check, Plus, CheckCircle2 } from 'lucide-react'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { createResult, updateResult, type ResultStatus } from '@/lib/actions/results'
 import { formatFinishTime } from '@/lib/utils'
 import { SubmitResultsButton } from './submit-results-button'
@@ -267,6 +268,7 @@ export function EventResultsManager({
   const [noteText, setNoteText] = useState('')
   const [isSavingNote, startSavingNote] = useTransition()
   const [addRiderOpen, setAddRiderOpen] = useState(false)
+  const [isSubmitted, setIsSubmitted] = useState(eventStatus === 'submitted')
 
   // Create a map of rider_id -> result for quick lookup
   const resultsByRiderId = new Map(results.map((r) => [r.rider_id, r]))
@@ -346,7 +348,16 @@ export function EventResultsManager({
           </CardDescription>
         )}
       </CardHeader>
-      <CardContent>
+      <CardContent className="space-y-4">
+        {isSubmitted && (
+          <Alert className="bg-green-50 border-green-200 dark:bg-green-950/30 dark:border-green-800">
+            <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" />
+            <AlertTitle className="text-green-800 dark:text-green-300">Results Submitted</AlertTitle>
+            <AlertDescription className="text-green-700 dark:text-green-400">
+              Results have been emailed to the VP of Brevet Administration for recording.
+            </AlertDescription>
+          </Alert>
+        )}
         {allParticipants.length === 0 ? (
           <p className="text-muted-foreground text-sm">
             No riders registered or results recorded for this event yet.
@@ -388,11 +399,12 @@ export function EventResultsManager({
             <Plus className="mr-2 h-4 w-4" />
             Add Rider
           </Button>
-          {eventStatus === 'completed' && (
+          {eventStatus === 'completed' && !isSubmitted && (
             <SubmitResultsButton
               eventId={eventId}
               eventName={eventName}
               resultsCount={results.length}
+              onSuccess={() => setIsSubmitted(true)}
             />
           )}
         </CardFooter>
