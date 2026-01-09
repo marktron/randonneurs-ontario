@@ -225,3 +225,42 @@ export async function getRoutesByChapter(urlSlug: string): Promise<RouteCollecti
 
   return collections
 }
+
+export interface ActiveRoute {
+  id: string
+  name: string
+  slug: string
+  distanceKm: number | null
+  chapterId: string | null
+  chapterName: string | null
+}
+
+export async function getActiveRoutes(): Promise<ActiveRoute[]> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: routes, error } = await (supabase.from('routes') as any)
+    .select(`
+      id,
+      name,
+      slug,
+      distance_km,
+      chapter_id,
+      chapters (name)
+    `)
+    .eq('is_active', true)
+    .order('name', { ascending: true })
+
+  if (error || !routes) {
+    console.error('Error fetching active routes:', error)
+    return []
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (routes as any[]).map((route) => ({
+    id: route.id,
+    name: route.name,
+    slug: route.slug,
+    distanceKm: route.distance_km,
+    chapterId: route.chapter_id,
+    chapterName: route.chapters?.name ?? null,
+  }))
+}

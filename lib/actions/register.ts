@@ -9,6 +9,7 @@ import type { Database } from '@/types/supabase'
 type RidersUpdate = Database['public']['Tables']['riders']['Update']
 type RidersInsert = Database['public']['Tables']['riders']['Insert']
 type RegistrationsInsert = Database['public']['Tables']['registrations']['Insert']
+type EventsInsert = Database['public']['Tables']['events']['Insert']
 
 interface EventWithChapter {
   id: string
@@ -182,6 +183,221 @@ export async function registerForEvent(data: RegistrationData): Promise<Registra
     eventLocation: event.start_location || 'TBD',
     eventDistance: event.distance_km,
     eventType: formatEventType(event.event_type),
+    chapterName: chapter?.name || '',
+    chapterSlug: chapter?.slug || '',
+    notes: notes || undefined,
+  }).catch((error) => {
+    console.error('Email sending failed:', error)
+  })
+
+  return { success: true }
+}
+
+export interface PermanentRegistrationData {
+  routeId: string
+  eventDate: string       // YYYY-MM-DD
+  startTime: string       // HH:MM
+  startLocation?: string  // Optional - only if different from route start
+  direction: 'as_posted' | 'reversed'
+  name: string
+  email: string
+  gender?: string
+  shareRegistration: boolean
+  notes?: string
+}
+
+interface RouteWithChapter {
+  id: string
+  name: string
+  slug: string
+  distance_km: number | null
+  chapter_id: string | null
+  chapters: { slug: string; name: string } | null
+}
+
+export async function registerForPermanent(data: PermanentRegistrationData): Promise<RegistrationResult> {
+  const {
+    routeId,
+    eventDate,
+    startTime,
+    startLocation,
+    direction,
+    name,
+    email,
+    gender,
+    shareRegistration,
+    notes,
+  } = data
+
+  // Validate required fields
+  if (!routeId || !eventDate || !startTime || !name.trim() || !email.trim()) {
+    return { success: false, error: 'Missing required fields' }
+  }
+
+  // Validate date is at least 2 weeks in the future
+  const eventDateObj = parseISO(eventDate)
+  const twoWeeksFromNow = new Date()
+  twoWeeksFromNow.setDate(twoWeeksFromNow.getDate() + 14)
+  twoWeeksFromNow.setHours(0, 0, 0, 0)
+
+  if (eventDateObj < twoWeeksFromNow) {
+    return { success: false, error: 'Permanent rides must be scheduled at least 2 weeks in advance' }
+  }
+
+  // Fetch route details
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: routeData, error: routeError } = await (supabaseAdmin.from('routes') as any)
+    .select(`
+      id, name, slug, distance_km, chapter_id,
+      chapters (slug, name)
+    `)
+    .eq('id', routeId)
+    .eq('is_active', true)
+    .single()
+
+  if (routeError || !routeData) {
+    return { success: false, error: 'Route not found or is not active' }
+  }
+
+  const route = routeData as RouteWithChapter
+
+  if (!route.chapter_id) {
+    return { success: false, error: 'This route is not associated with a chapter' }
+  }
+
+  // Generate event name and slug
+  const eventName = direction === 'reversed' ? `${route.name} (Reversed)` : route.name
+  const eventSlug = `permanent-${route.slug}-${eventDate}`
+
+  // Check if an event with this slug already exists
+  const { data: existingEvent } = await supabaseAdmin
+    .from('events')
+    .select('id')
+    .eq('slug', eventSlug)
+    .single()
+
+  let eventId: string
+
+  if (existingEvent) {
+    // Use existing event (another rider might have created it for the same route/date)
+    eventId = (existingEvent as { id: string }).id
+  } else {
+    // Create new event
+    const insertEvent: EventsInsert = {
+      slug: eventSlug,
+      name: eventName,
+      event_type: 'permanent',
+      status: 'scheduled',
+      route_id: route.id,
+      chapter_id: route.chapter_id,
+      distance_km: route.distance_km || 0,
+      event_date: eventDate,
+      start_time: startTime,
+      start_location: startLocation?.trim() || null,
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: newEvent, error: eventError } = await (supabaseAdmin.from('events') as any)
+      .insert(insertEvent)
+      .select('id')
+      .single()
+
+    if (eventError || !newEvent) {
+      console.error('Error creating permanent event:', eventError)
+      return { success: false, error: 'Failed to create permanent ride event' }
+    }
+
+    eventId = (newEvent as { id: string }).id
+  }
+
+  // Find or create rider (reusing same logic as registerForEvent)
+  const { firstName, lastName } = splitName(name)
+  const normalizedEmail = email.toLowerCase().trim()
+
+  let riderId: string
+
+  const { data: existingRider } = await supabaseAdmin
+    .from('riders')
+    .select('id')
+    .eq('email', normalizedEmail)
+    .single()
+
+  const parsedGender = gender === 'M' || gender === 'F' || gender === 'X' ? gender : null
+
+  if (existingRider) {
+    riderId = (existingRider as { id: string }).id
+
+    // Update rider info if they provided more details
+    const updateData: RidersUpdate = {
+      first_name: firstName,
+      last_name: lastName,
+      gender: parsedGender,
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (supabaseAdmin.from('riders') as any).update(updateData).eq('id', riderId)
+  } else {
+    // Create new rider
+    const insertRider: RidersInsert = {
+      slug: createRiderSlug(normalizedEmail),
+      first_name: firstName,
+      last_name: lastName,
+      email: normalizedEmail,
+      gender: parsedGender,
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: newRider, error: riderError } = await (supabaseAdmin.from('riders') as any)
+      .insert(insertRider)
+      .select('id')
+      .single()
+
+    if (riderError || !newRider) {
+      console.error('Error creating rider:', riderError)
+      return { success: false, error: 'Failed to create rider profile' }
+    }
+
+    riderId = (newRider as { id: string }).id
+  }
+
+  // Check if already registered
+  const { data: existingRegistration } = await supabaseAdmin
+    .from('registrations')
+    .select('id')
+    .eq('event_id', eventId)
+    .eq('rider_id', riderId)
+    .single()
+
+  if (existingRegistration) {
+    return { success: false, error: 'You are already registered for this permanent ride' }
+  }
+
+  // Create registration
+  const insertRegistration: RegistrationsInsert = {
+    event_id: eventId,
+    rider_id: riderId,
+    status: 'registered',
+    share_registration: shareRegistration,
+    notes: notes || null,
+  }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error: registrationError } = await (supabaseAdmin.from('registrations') as any)
+    .insert(insertRegistration)
+
+  if (registrationError) {
+    console.error('Error creating registration:', registrationError)
+    return { success: false, error: 'Failed to complete registration' }
+  }
+
+  // Send confirmation email (fire-and-forget)
+  const chapter = route.chapters
+  sendRegistrationConfirmationEmail({
+    registrantName: name,
+    registrantEmail: normalizedEmail,
+    eventName: eventName,
+    eventDate: formatEventDate(eventDate),
+    eventTime: formatEventTime(startTime),
+    eventLocation: startLocation?.trim() || 'Start control per route',
+    eventDistance: route.distance_km || 0,
+    eventType: 'Permanent',
     chapterName: chapter?.name || '',
     chapterSlug: chapter?.slug || '',
     notes: notes || undefined,

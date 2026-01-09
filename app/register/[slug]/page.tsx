@@ -106,14 +106,18 @@ export default async function RegisterPage({ params }: PageProps) {
               <div className="flex items-start gap-3">
                 <MapPinIcon className="h-5 w-5 text-muted-foreground mt-0.5" />
                 <div>
-                  <Link
-                    href={createGoogleMapsUrl(event.startLocation)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="font-medium text-primary hover:underline underline-offset-2"
-                  >
-                    {event.startLocation}
-                  </Link>
+                  {event.startLocation ? (
+                    <Link
+                      href={createGoogleMapsUrl(event.startLocation)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="font-medium text-primary hover:underline underline-offset-2"
+                    >
+                      {event.startLocation}
+                    </Link>
+                  ) : (
+                    <p className="font-medium text-muted-foreground">Start control per route</p>
+                  )}
                 </div>
               </div>
             </div>
@@ -203,7 +207,7 @@ export default async function RegisterPage({ params }: PageProps) {
 
           {/* Right Column - Registration Form */}
           <div className="lg:w-[400px] lg:shrink-0">
-            <RegistrationForm eventId={event.id} />
+            <RegistrationForm eventId={event.id} isPermanent={event.type === "Permanent"} />
           </div>
         </div>
       </div>

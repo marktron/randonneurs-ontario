@@ -53,7 +53,37 @@ export async function getEventsByChapter(urlSlug: string): Promise<Event[]> {
     name: event.name,
     type: formatEventType(event.event_type),
     distance: event.distance_km.toString(),
-    startLocation: event.start_location || 'TBD',
+    startLocation: event.start_location || '',
+    startTime: event.start_time || '08:00',
+  }))
+}
+
+export async function getPermanentEvents(): Promise<Event[]> {
+  // Fetch upcoming permanent events, ordered by date
+  const today = new Date().toISOString().split('T')[0]
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: events, error } = await (supabase.from('events') as any)
+    .select('*')
+    .eq('event_type', 'permanent')
+    .eq('status', 'scheduled')
+    .gte('event_date', today)
+    .order('event_date', { ascending: true })
+    .order('start_time', { ascending: true })
+
+  if (error) {
+    console.error('Error fetching permanent events:', error)
+    return []
+  }
+
+  // Transform to Event type
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (events as any[]).map((event: any) => ({
+    slug: event.slug,
+    date: event.event_date,
+    name: event.name,
+    type: formatEventType(event.event_type),
+    distance: event.distance_km.toString(),
+    startLocation: event.start_location || '',
     startTime: event.start_time || '08:00',
   }))
 }
@@ -145,7 +175,7 @@ export async function getEventBySlug(slug: string): Promise<EventDetails | null>
     name: event.name,
     date: event.event_date,
     startTime: event.start_time || '08:00',
-    startLocation: event.start_location || 'TBD',
+    startLocation: event.start_location || '',
     distance: event.distance_km,
     type: formatEventType(event.event_type),
     chapterName: event.chapters?.name || '',

@@ -45,9 +45,10 @@ function saveData(data: SavedRegistrationData): void {
 
 interface RegistrationFormProps {
   eventId: string;
+  isPermanent?: boolean;
 }
 
-export function RegistrationForm({ eventId }: RegistrationFormProps) {
+export function RegistrationForm({ eventId, isPermanent }: RegistrationFormProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [name, setName] = useState("");
@@ -117,6 +118,18 @@ export function RegistrationForm({ eventId }: RegistrationFormProps) {
   return (
     <div className="lg:sticky lg:top-24 rounded-2xl border border-border bg-card p-6 md:p-8">
       <h2 className="font-serif text-2xl mb-6">Register</h2>
+
+      {isPermanent && (
+        <div className="bg-muted/50 border border-border rounded-lg p-4 mb-6 text-sm">
+          <p className="font-medium mb-1">This is a Permanent</p>
+          <p className="text-muted-foreground">
+            Join this rider on their scheduled permanent ride, or{" "}
+            <a href="/register/permanent" className="text-primary hover:underline underline-offset-2">
+              schedule your own
+            </a>.
+          </p>
+        </div>
+      )}
 
       <form className="space-y-5" onSubmit={handleSubmit}>
         {error && (

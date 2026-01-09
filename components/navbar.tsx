@@ -137,6 +137,15 @@ export function Navbar() {
                       </Link>
                     </li>
                   ))}
+                  <li className="border-t border-border my-1" />
+                  <li>
+                    <Link
+                      href="/calendar/permanents"
+                      className={dropdownLinkStyles}
+                    >
+                      Permanents
+                    </Link>
+                  </li>
                 </ul>
               </NavigationMenuContent>
             </NavigationMenuItem>
@@ -286,6 +295,14 @@ export function Navbar() {
                     {chapter}
                   </Link>
                 ))}
+                <div className="border-t border-border my-1" />
+                <Link
+                  href="/calendar/permanents"
+                  onClick={() => setOpen(false)}
+                  className="block px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors"
+                >
+                  Permanents
+                </Link>
               </MobileNavSection>
 
               {/* Results */}
