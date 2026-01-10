@@ -1,4 +1,4 @@
-import { supabase } from '@/lib/supabase'
+import { getSupabase } from '@/lib/supabase'
 import {
   getResultsChapterInfo,
   getAllResultsChapterSlugs,
@@ -75,20 +75,20 @@ export async function getAvailableYears(urlSlug: string): Promise<number[]> {
 
   // Collection-based query (e.g., granite-anvil)
   if (dbSlug === null) {
-    eventsQuery = (supabase.from('events') as any)
+    eventsQuery = (getSupabase().from('events') as any)
       .select('id, season, results(season)')
       .eq('collection', urlSlug)
   } else {
     // Chapter-based query
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: chapter } = await (supabase.from('chapters') as any)
+    const { data: chapter } = await (getSupabase().from('chapters') as any)
       .select('id')
       .eq('slug', dbSlug)
       .single()
 
     if (!chapter) return []
 
-    eventsQuery = (supabase.from('events') as any)
+    eventsQuery = (getSupabase().from('events') as any)
       .select('id, season, results(season)')
       .eq('chapter_id', chapter.id)
 
@@ -146,7 +146,7 @@ export async function getChapterResults(urlSlug: string, year: number): Promise<
 
   // Collection-based query (e.g., granite-anvil)
   if (dbSlug === null) {
-    eventsQuery = (supabase.from('events') as any)
+    eventsQuery = (getSupabase().from('events') as any)
       .select(`
         id, name, event_date, distance_km,
         routes (slug),
@@ -160,14 +160,14 @@ export async function getChapterResults(urlSlug: string, year: number): Promise<
   } else {
     // Chapter-based query
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: chapter } = await (supabase.from('chapters') as any)
+    const { data: chapter } = await (getSupabase().from('chapters') as any)
       .select('id')
       .eq('slug', dbSlug)
       .single()
 
     if (!chapter) return []
 
-    eventsQuery = (supabase.from('events') as any)
+    eventsQuery = (getSupabase().from('events') as any)
       .select(`
         id, name, event_date, distance_km,
         routes (slug),
@@ -258,7 +258,7 @@ export interface RiderYearResults {
 export async function getRiderBySlug(slug: string): Promise<RiderInfo | null> {
   // Use public_riders view (riders table is restricted to protect emails)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data, error } = await (supabase.from('public_riders') as any)
+  const { data, error } = await (getSupabase().from('public_riders') as any)
     .select('slug, first_name, last_name')
     .eq('slug', slug)
     .single()
@@ -275,7 +275,7 @@ export async function getRiderBySlug(slug: string): Promise<RiderInfo | null> {
 export async function getRiderResults(slug: string): Promise<RiderYearResults[]> {
   // Get rider ID from slug (use public_riders view)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: rider } = await (supabase.from('public_riders') as any)
+  const { data: rider } = await (getSupabase().from('public_riders') as any)
     .select('id')
     .eq('slug', slug)
     .single()
@@ -284,7 +284,7 @@ export async function getRiderResults(slug: string): Promise<RiderYearResults[]>
 
   // Get all results for this rider with event info
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: results, error } = await (supabase.from('results') as any)
+  const { data: results, error } = await (getSupabase().from('results') as any)
     .select(`
       finish_time,
       status,

@@ -1,7 +1,7 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
-import { supabaseAdmin } from '@/lib/supabase-server'
+import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { requireAdmin } from '@/lib/auth/get-admin'
 import type { Database } from '@/types/supabase'
 import type { ActionResult } from '@/types/actions'
@@ -37,7 +37,7 @@ export async function createAdminUser(data: AdminUserData): Promise<ActionResult
   }
 
   // Create auth user first
-  const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
+  const { data: authData, error: authError } = await getSupabaseAdmin().auth.admin.createUser({
     email,
     password,
     email_confirm: true,
@@ -50,7 +50,7 @@ export async function createAdminUser(data: AdminUserData): Promise<ActionResult
 
   // Create admin record
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error: adminError } = await (supabaseAdmin.from('admins') as any).insert({
+  const { error: adminError } = await (getSupabaseAdmin().from('admins') as any).insert({
     id: authData.user.id,
     email,
     name,
@@ -61,7 +61,7 @@ export async function createAdminUser(data: AdminUserData): Promise<ActionResult
 
   if (adminError) {
     // Rollback: delete the auth user
-    await supabaseAdmin.auth.admin.deleteUser(authData.user.id)
+    await getSupabaseAdmin().auth.admin.deleteUser(authData.user.id)
     console.error('Error creating admin record:', adminError)
     return { success: false, error: 'Failed to create admin record' }
   }
@@ -87,7 +87,7 @@ export async function updateAdminUser(
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error } = await (supabaseAdmin.from('admins') as any)
+  const { error } = await (getSupabaseAdmin().from('admins') as any)
     .update({
       name,
       phone,
@@ -118,7 +118,7 @@ export async function deleteAdminUser(userId: string): Promise<ActionResult> {
   }
 
   // Delete admin record first
-  const { error: adminError } = await supabaseAdmin
+  const { error: adminError } = await getSupabaseAdmin()
     .from('admins')
     .delete()
     .eq('id', userId)
@@ -129,7 +129,7 @@ export async function deleteAdminUser(userId: string): Promise<ActionResult> {
   }
 
   // Delete auth user
-  const { error: authError } = await supabaseAdmin.auth.admin.deleteUser(userId)
+  const { error: authError } = await getSupabaseAdmin().auth.admin.deleteUser(userId)
 
   if (authError) {
     console.error('Error deleting auth user:', authError)
@@ -153,7 +153,7 @@ export async function resetAdminPassword(userId: string, newPassword: string): P
     return { success: false, error: 'Password must be at least 8 characters' }
   }
 
-  const { error } = await supabaseAdmin.auth.admin.updateUserById(userId, {
+  const { error } = await getSupabaseAdmin().auth.admin.updateUserById(userId, {
     password: newPassword,
   })
 
@@ -172,7 +172,7 @@ export async function getAdminUsers() {
     return []
   }
 
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await getSupabaseAdmin()
     .from('admins')
     .select(`
       *,
@@ -195,7 +195,7 @@ interface Chapter {
 }
 
 export async function getChapters(): Promise<Chapter[]> {
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await getSupabaseAdmin()
     .from('chapters')
     .select('id, name, slug')
     .order('name', { ascending: true })

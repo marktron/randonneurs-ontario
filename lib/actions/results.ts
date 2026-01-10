@@ -1,7 +1,7 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
-import { supabaseAdmin } from '@/lib/supabase-server'
+import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { requireAdmin } from '@/lib/auth/get-admin'
 import type { ActionResult } from '@/types/actions'
 
@@ -31,7 +31,7 @@ export async function createResult(data: CreateResultData): Promise<ActionResult
   const { eventId, riderId, finishTime, status, teamName, note, season, distanceKm } = data
 
   // Check if result already exists for this rider/event
-  const { data: existing } = await supabaseAdmin
+  const { data: existing } = await getSupabaseAdmin()
     .from('results')
     .select('id')
     .eq('event_id', eventId)
@@ -43,7 +43,7 @@ export async function createResult(data: CreateResultData): Promise<ActionResult
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error } = await (supabaseAdmin.from('results') as any).insert({
+  const { error } = await (getSupabaseAdmin().from('results') as any).insert({
     event_id: eventId,
     rider_id: riderId,
     finish_time: finishTime || null,
@@ -67,7 +67,7 @@ export async function updateResult(resultId: string, data: UpdateResultData): Pr
   await requireAdmin()
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error } = await (supabaseAdmin.from('results') as any)
+  const { error } = await (getSupabaseAdmin().from('results') as any)
     .update({
       finish_time: data.finishTime,
       status: data.status,
@@ -88,7 +88,7 @@ export async function updateResult(resultId: string, data: UpdateResultData): Pr
 export async function deleteResult(resultId: string): Promise<ActionResult> {
   await requireAdmin()
 
-  const { error } = await supabaseAdmin
+  const { error } = await getSupabaseAdmin()
     .from('results')
     .delete()
     .eq('id', resultId)
@@ -128,7 +128,7 @@ export async function createBulkResults(
   }))
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error } = await (supabaseAdmin.from('results') as any).insert(insertData)
+  const { error } = await (getSupabaseAdmin().from('results') as any).insert(insertData)
 
   if (error) {
     console.error('Error creating bulk results:', error)

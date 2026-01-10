@@ -1,7 +1,7 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
-import { supabaseAdmin } from '@/lib/supabase-server'
+import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { requireAdmin } from '@/lib/auth/get-admin'
 import { createSlug } from '@/lib/utils'
 import type { ActionResult, MergeResult } from '@/types/actions'
@@ -69,7 +69,7 @@ export async function createRoute(data: RouteData): Promise<ActionResult> {
   const rwgpsId = extractRwgpsId(rwgpsUrl)
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error } = await (supabaseAdmin.from('routes') as any).insert({
+  const { error } = await (getSupabaseAdmin().from('routes') as any).insert({
     name: name.trim(),
     slug,
     chapter_id: chapterId || null,
@@ -131,7 +131,7 @@ export async function updateRoute(routeId: string, data: Partial<RouteData>): Pr
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error } = await (supabaseAdmin.from('routes') as any)
+  const { error } = await (getSupabaseAdmin().from('routes') as any)
     .update(updateData)
     .eq('id', routeId)
 
@@ -152,7 +152,7 @@ export async function deleteRoute(routeId: string): Promise<ActionResult> {
   await requireAdmin()
 
   // Check if route is used by any events
-  const { data: events } = await supabaseAdmin
+  const { data: events } = await getSupabaseAdmin()
     .from('events')
     .select('id')
     .eq('route_id', routeId)
@@ -165,7 +165,7 @@ export async function deleteRoute(routeId: string): Promise<ActionResult> {
     }
   }
 
-  const { error } = await supabaseAdmin
+  const { error } = await getSupabaseAdmin()
     .from('routes')
     .delete()
     .eq('id', routeId)
@@ -183,7 +183,7 @@ export async function toggleRouteActive(routeId: string, isActive: boolean): Pro
   await requireAdmin()
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error } = await (supabaseAdmin.from('routes') as any)
+  const { error } = await (getSupabaseAdmin().from('routes') as any)
     .update({ is_active: isActive })
     .eq('id', routeId)
 
@@ -223,7 +223,7 @@ export async function mergeRoutes(data: MergeRoutesData): Promise<MergeResult> {
   try {
     // Step 1: Update all events that reference any of the source routes to use target route
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: updatedEvents, error: updateEventsError } = await (supabaseAdmin.from('events') as any)
+    const { data: updatedEvents, error: updateEventsError } = await (getSupabaseAdmin().from('events') as any)
       .update({ route_id: targetRouteId })
       .in('route_id', routesToDelete)
       .select('id')
@@ -236,7 +236,7 @@ export async function mergeRoutes(data: MergeRoutesData): Promise<MergeResult> {
     const updatedEventsCount = updatedEvents?.length || 0
 
     // Step 2: Delete the other routes first (to free up slug if needed)
-    const { error: deleteError } = await supabaseAdmin
+    const { error: deleteError } = await getSupabaseAdmin()
       .from('routes')
       .delete()
       .in('id', routesToDelete)
@@ -250,7 +250,7 @@ export async function mergeRoutes(data: MergeRoutesData): Promise<MergeResult> {
     const rwgpsId = extractRwgpsId(routeData.rwgpsUrl)
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error: updateRouteError } = await (supabaseAdmin.from('routes') as any)
+    const { error: updateRouteError } = await (getSupabaseAdmin().from('routes') as any)
       .update({
         name: routeData.name.trim(),
         slug: routeData.slug,
@@ -289,7 +289,7 @@ export async function mergeRoutes(data: MergeRoutesData): Promise<MergeResult> {
 
 export async function getRouteEventCounts(routeIds: string[]): Promise<Record<string, number>> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data, error } = await (supabaseAdmin.from('events') as any)
+  const { data, error } = await (getSupabaseAdmin().from('events') as any)
     .select('route_id')
     .in('route_id', routeIds)
 

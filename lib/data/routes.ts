@@ -1,4 +1,4 @@
-import { supabase } from '@/lib/supabase'
+import { getSupabase } from '@/lib/supabase'
 import type { RouteCollection } from '@/components/routes-page'
 import { getChapterInfo, getAllChapterSlugs, getDbSlug, getUrlSlugFromDbSlug } from '@/lib/chapter-config'
 
@@ -52,7 +52,7 @@ function formatStatus(status: string): string | null {
 
 export async function getRouteBySlug(slug: string): Promise<RouteDetail | null> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: route, error } = await (supabase.from('routes') as any)
+  const { data: route, error } = await (getSupabase().from('routes') as any)
     .select(`
       slug, name, distance_km, description, rwgps_id,
       chapters (slug, name)
@@ -77,7 +77,7 @@ export async function getRouteBySlug(slug: string): Promise<RouteDetail | null> 
 export async function getRouteResults(routeSlug: string): Promise<RouteResultEvent[]> {
   // Get the route ID first
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: route } = await (supabase.from('routes') as any)
+  const { data: route } = await (getSupabase().from('routes') as any)
     .select('id')
     .eq('slug', routeSlug)
     .single()
@@ -86,7 +86,7 @@ export async function getRouteResults(routeSlug: string): Promise<RouteResultEve
 
   // Get all events that used this route, with their results
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: events, error } = await (supabase.from('events') as any)
+  const { data: events, error } = await (getSupabase().from('events') as any)
     .select(`
       name, event_date,
       public_results (
@@ -165,7 +165,7 @@ export async function getRoutesByChapter(urlSlug: string): Promise<RouteCollecti
 
   // Get the chapter ID
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: chapter, error: chapterError } = await (supabase.from('chapters') as any)
+  const { data: chapter, error: chapterError } = await (getSupabase().from('chapters') as any)
     .select('id')
     .eq('slug', dbSlug)
     .single()
@@ -177,7 +177,7 @@ export async function getRoutesByChapter(urlSlug: string): Promise<RouteCollecti
 
   // Fetch routes for this chapter that have rwgps_id and are active
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: routes, error: routesError } = await (supabase.from('routes') as any)
+  const { data: routes, error: routesError } = await (getSupabase().from('routes') as any)
     .select('name, distance_km, rwgps_id')
     .eq('chapter_id', chapter.id)
     .eq('is_active', true)
@@ -237,7 +237,7 @@ export interface ActiveRoute {
 
 export async function getActiveRoutes(): Promise<ActiveRoute[]> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: routes, error } = await (supabase.from('routes') as any)
+  const { data: routes, error } = await (getSupabase().from('routes') as any)
     .select(`
       id,
       name,

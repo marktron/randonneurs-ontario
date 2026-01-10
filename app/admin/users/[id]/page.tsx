@@ -1,6 +1,6 @@
 import { requireAdmin } from '@/lib/auth/get-admin'
 import { getChapters } from '@/lib/actions/admin-users'
-import { supabaseAdmin } from '@/lib/supabase-server'
+import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { redirect, notFound } from 'next/navigation'
 import { UserForm } from '@/components/admin/user-form'
 import { ResetPasswordForm } from '@/components/admin/reset-password-form'
@@ -22,7 +22,7 @@ export default async function EditUserPage({ params }: EditUserPageProps) {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [{ data: user }, chapters] = await Promise.all([
-    (supabaseAdmin.from('admins') as any).select('*').eq('id', id).single() as Promise<{ data: Admin | null }>,
+    (getSupabaseAdmin().from('admins') as any).select('*').eq('id', id).single() as Promise<{ data: Admin | null }>,
     getChapters(),
   ])
 

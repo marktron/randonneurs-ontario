@@ -1,12 +1,12 @@
 import { requireAdmin } from '@/lib/auth/get-admin'
-import { supabaseAdmin } from '@/lib/supabase-server'
+import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { getActiveRoutes } from '@/lib/data/routes'
 import { EventForm } from '@/components/admin/event-form'
 import Link from 'next/link'
 import { ChevronLeft } from 'lucide-react'
 
 async function getChapters() {
-  const { data } = await supabaseAdmin
+  const { data } = await getSupabaseAdmin()
     .from('chapters')
     .select('id, name')
     .order('name', { ascending: true })

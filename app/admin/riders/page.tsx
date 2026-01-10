@@ -1,5 +1,5 @@
 import { requireAdmin } from '@/lib/auth/get-admin'
-import { supabaseAdmin } from '@/lib/supabase-server'
+import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { applyRiderSearchFilter } from '@/lib/utils/rider-search'
 import { redirect } from 'next/navigation'
 import { RidersTable } from '@/components/admin/riders-table'
@@ -18,7 +18,7 @@ interface RiderWithStats {
 
 async function getRiders(search?: string) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let query = (supabaseAdmin.from('riders') as any)
+  let query = (getSupabaseAdmin().from('riders') as any)
     .select(`
       id,
       slug,

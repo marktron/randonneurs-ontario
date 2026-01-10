@@ -1,4 +1,4 @@
-import { supabaseAdmin } from '@/lib/supabase-server'
+import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { requireAdmin } from '@/lib/auth/get-admin'
 import { parseLocalDate } from '@/lib/utils'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -9,10 +9,10 @@ import Link from 'next/link'
 
 async function getStats() {
   const [eventsResult, ridersResult, routesResult, resultsResult] = await Promise.all([
-    supabaseAdmin.from('events').select('id', { count: 'exact', head: true }),
-    supabaseAdmin.from('riders').select('id', { count: 'exact', head: true }),
-    supabaseAdmin.from('routes').select('id', { count: 'exact', head: true }),
-    supabaseAdmin.from('results').select('id', { count: 'exact', head: true }),
+    getSupabaseAdmin().from('events').select('id', { count: 'exact', head: true }),
+    getSupabaseAdmin().from('riders').select('id', { count: 'exact', head: true }),
+    getSupabaseAdmin().from('routes').select('id', { count: 'exact', head: true }),
+    getSupabaseAdmin().from('results').select('id', { count: 'exact', head: true }),
   ])
 
   return {
@@ -36,7 +36,7 @@ async function getEventsNeedingResults(chapterId: string | null): Promise<EventN
   const today = new Date().toISOString().split('T')[0]
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let query = (supabaseAdmin.from('events') as any)
+  let query = (getSupabaseAdmin().from('events') as any)
     .select(`
       id,
       name,
@@ -62,11 +62,11 @@ async function getEventRiderCounts(eventIds: string[]): Promise<Record<string, n
   if (eventIds.length === 0) return {}
 
   const [registrationsResult, resultsResult] = await Promise.all([
-    supabaseAdmin
+    getSupabaseAdmin()
       .from('registrations')
       .select('event_id, rider_id')
       .in('event_id', eventIds),
-    supabaseAdmin
+    getSupabaseAdmin()
       .from('results')
       .select('event_id, rider_id')
       .in('event_id', eventIds),
@@ -115,7 +115,7 @@ async function getUpcomingEvents(chapterId: string | null): Promise<UpcomingEven
   const today = new Date().toISOString().split('T')[0]
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let query = (supabaseAdmin.from('events') as any)
+  let query = (getSupabaseAdmin().from('events') as any)
     .select(`
       id,
       name,

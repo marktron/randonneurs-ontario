@@ -1,7 +1,7 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
-import { supabaseAdmin } from '@/lib/supabase-server'
+import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { requireAdmin } from '@/lib/auth/get-admin'
 import { sendgrid } from '@/lib/email/sendgrid'
 import { parseLocalDate, createSlug } from '@/lib/utils'
@@ -45,7 +45,7 @@ export async function createEvent(data: CreateEventData): Promise<ActionResult<{
     const slug = createSlug(`${name}-${distanceKm}-${eventDate}`)
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: newEvent, error } = await (supabaseAdmin.from('events') as any)
+    const { data: newEvent, error } = await (getSupabaseAdmin().from('events') as any)
       .insert({
         slug,
         name: name.trim(),
@@ -127,7 +127,7 @@ export async function updateEvent(
     }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error } = await (supabaseAdmin.from('events') as any)
+    const { error } = await (getSupabaseAdmin().from('events') as any)
       .update(updateData)
       .eq('id', eventId)
 
@@ -153,7 +153,7 @@ export async function deleteEvent(eventId: string): Promise<ActionResult> {
 
     // Fetch the event to check the date
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: event, error: fetchError } = await (supabaseAdmin.from('events') as any)
+    const { data: event, error: fetchError } = await (getSupabaseAdmin().from('events') as any)
       .select('id, event_date')
       .eq('id', eventId)
       .single()
@@ -170,7 +170,7 @@ export async function deleteEvent(eventId: string): Promise<ActionResult> {
 
     // Delete registrations for this event first
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error: regDeleteError } = await (supabaseAdmin.from('registrations') as any)
+    const { error: regDeleteError } = await (getSupabaseAdmin().from('registrations') as any)
       .delete()
       .eq('event_id', eventId)
 
@@ -181,7 +181,7 @@ export async function deleteEvent(eventId: string): Promise<ActionResult> {
 
     // Delete results for this event (shouldn't exist for future events, but just in case)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error: resultsDeleteError } = await (supabaseAdmin.from('results') as any)
+    const { error: resultsDeleteError } = await (getSupabaseAdmin().from('results') as any)
       .delete()
       .eq('event_id', eventId)
 
@@ -192,7 +192,7 @@ export async function deleteEvent(eventId: string): Promise<ActionResult> {
 
     // Delete the event
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error: deleteError } = await (supabaseAdmin.from('events') as any)
+    const { error: deleteError } = await (getSupabaseAdmin().from('events') as any)
       .delete()
       .eq('id', eventId)
 
@@ -221,7 +221,7 @@ export async function updateEventStatus(
     // If cancelling, delete all results for this event first
     if (status === 'cancelled') {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { error: deleteError } = await (supabaseAdmin.from('results') as any)
+      const { error: deleteError } = await (getSupabaseAdmin().from('results') as any)
         .delete()
         .eq('event_id', eventId)
 
@@ -232,7 +232,7 @@ export async function updateEventStatus(
     }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error } = await (supabaseAdmin.from('events') as any)
+    const { error } = await (getSupabaseAdmin().from('events') as any)
       .update({ status })
       .eq('id', eventId)
 
@@ -278,7 +278,7 @@ export async function submitEventResults(eventId: string): Promise<ActionResult>
 
     // Fetch event details
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: event, error: eventError } = await (supabaseAdmin.from('events') as any)
+    const { data: event, error: eventError } = await (getSupabaseAdmin().from('events') as any)
       .select(`
         id,
         name,
@@ -303,7 +303,7 @@ export async function submitEventResults(eventId: string): Promise<ActionResult>
 
     // Fetch all results for this event
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: results, error: resultsError } = await (supabaseAdmin.from('results') as any)
+    const { data: results, error: resultsError } = await (getSupabaseAdmin().from('results') as any)
       .select(`
         riders (first_name, last_name),
         status,
@@ -374,7 +374,7 @@ This email was sent from the Randonneurs Ontario admin system.
 
     // Update event status to submitted
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error: updateError } = await (supabaseAdmin.from('events') as any)
+    const { error: updateError } = await (getSupabaseAdmin().from('events') as any)
       .update({ status: 'submitted' })
       .eq('id', eventId)
 

@@ -1,5 +1,5 @@
 import { requireAdmin } from '@/lib/auth/get-admin'
-import { supabaseAdmin } from '@/lib/supabase-server'
+import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { getChapters } from '@/lib/actions/admin-users'
 import { parseLocalDate } from '@/lib/utils'
 import { ClickableTableRow } from '@/components/admin/clickable-table-row'
@@ -24,7 +24,7 @@ async function getEvents(filter: TimeFilter, chapterId?: string) {
   const today = new Date().toISOString().split('T')[0]
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let query = (supabaseAdmin.from('events') as any)
+  let query = (getSupabaseAdmin().from('events') as any)
     .select(`
       id,
       name,

@@ -1,6 +1,6 @@
 'use server'
 
-import { supabaseAdmin } from '@/lib/supabase-server'
+import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { sendRegistrationConfirmationEmail } from '@/lib/email/send-registration-email'
 import { formatEventType } from '@/lib/utils'
 import { format, parseISO } from 'date-fns'
@@ -79,7 +79,7 @@ export async function registerForEvent(data: RegistrationData): Promise<Registra
 
   // Check if event exists and is scheduled (fetch details for confirmation email)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: eventData, error: eventError } = await (supabaseAdmin.from('events') as any)
+  const { data: eventData, error: eventError } = await (getSupabaseAdmin().from('events') as any)
     .select(`
       id, status, name, event_date, start_time,
       start_location, distance_km, event_type,
@@ -101,7 +101,7 @@ export async function registerForEvent(data: RegistrationData): Promise<Registra
   // Find or create rider
   let riderId: string
 
-  const { data: existingRider } = await supabaseAdmin
+  const { data: existingRider } = await getSupabaseAdmin()
     .from('riders')
     .select('id')
     .eq('email', normalizedEmail)
@@ -119,7 +119,7 @@ export async function registerForEvent(data: RegistrationData): Promise<Registra
       gender: parsedGender,
     }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (supabaseAdmin.from('riders') as any).update(updateData).eq('id', riderId)
+    await (getSupabaseAdmin().from('riders') as any).update(updateData).eq('id', riderId)
   } else {
     // Create new rider
     const insertRider: RidersInsert = {
@@ -130,7 +130,7 @@ export async function registerForEvent(data: RegistrationData): Promise<Registra
       gender: parsedGender,
     }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: newRider, error: riderError } = await (supabaseAdmin.from('riders') as any)
+    const { data: newRider, error: riderError } = await (getSupabaseAdmin().from('riders') as any)
       .insert(insertRider)
       .select('id')
       .single()
@@ -144,7 +144,7 @@ export async function registerForEvent(data: RegistrationData): Promise<Registra
   }
 
   // Check if already registered
-  const { data: existingRegistration } = await supabaseAdmin
+  const { data: existingRegistration } = await getSupabaseAdmin()
     .from('registrations')
     .select('id')
     .eq('event_id', eventId)
@@ -164,7 +164,7 @@ export async function registerForEvent(data: RegistrationData): Promise<Registra
     notes: notes || null,
   }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error: registrationError } = await (supabaseAdmin.from('registrations') as any)
+  const { error: registrationError } = await (getSupabaseAdmin().from('registrations') as any)
     .insert(insertRegistration)
 
   if (registrationError) {
@@ -246,7 +246,7 @@ export async function registerForPermanent(data: PermanentRegistrationData): Pro
 
   // Fetch route details
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: routeData, error: routeError } = await (supabaseAdmin.from('routes') as any)
+  const { data: routeData, error: routeError } = await (getSupabaseAdmin().from('routes') as any)
     .select(`
       id, name, slug, distance_km, chapter_id,
       chapters (slug, name)
@@ -262,7 +262,7 @@ export async function registerForPermanent(data: PermanentRegistrationData): Pro
   const route = routeData as RouteWithChapter
 
   // Get the permanent chapter ID
-  const { data: permanentChapter, error: chapterError } = await supabaseAdmin
+  const { data: permanentChapter, error: chapterError } = await getSupabaseAdmin()
     .from('chapters')
     .select('id')
     .eq('slug', 'permanent')
@@ -278,7 +278,7 @@ export async function registerForPermanent(data: PermanentRegistrationData): Pro
   const eventSlug = `permanent-${route.slug}-${eventDate}`
 
   // Check if an event with this slug already exists
-  const { data: existingEvent } = await supabaseAdmin
+  const { data: existingEvent } = await getSupabaseAdmin()
     .from('events')
     .select('id')
     .eq('slug', eventSlug)
@@ -305,7 +305,7 @@ export async function registerForPermanent(data: PermanentRegistrationData): Pro
     }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: newEvent, error: eventError } = await (supabaseAdmin.from('events') as any)
+    const { data: newEvent, error: eventError } = await (getSupabaseAdmin().from('events') as any)
       .insert(insertEvent)
       .select('id')
       .single()
@@ -324,7 +324,7 @@ export async function registerForPermanent(data: PermanentRegistrationData): Pro
 
   let riderId: string
 
-  const { data: existingRider } = await supabaseAdmin
+  const { data: existingRider } = await getSupabaseAdmin()
     .from('riders')
     .select('id')
     .eq('email', normalizedEmail)
@@ -342,7 +342,7 @@ export async function registerForPermanent(data: PermanentRegistrationData): Pro
       gender: parsedGender,
     }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (supabaseAdmin.from('riders') as any).update(updateData).eq('id', riderId)
+    await (getSupabaseAdmin().from('riders') as any).update(updateData).eq('id', riderId)
   } else {
     // Create new rider
     const insertRider: RidersInsert = {
@@ -353,7 +353,7 @@ export async function registerForPermanent(data: PermanentRegistrationData): Pro
       gender: parsedGender,
     }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: newRider, error: riderError } = await (supabaseAdmin.from('riders') as any)
+    const { data: newRider, error: riderError } = await (getSupabaseAdmin().from('riders') as any)
       .insert(insertRider)
       .select('id')
       .single()
@@ -367,7 +367,7 @@ export async function registerForPermanent(data: PermanentRegistrationData): Pro
   }
 
   // Check if already registered
-  const { data: existingRegistration } = await supabaseAdmin
+  const { data: existingRegistration } = await getSupabaseAdmin()
     .from('registrations')
     .select('id')
     .eq('event_id', eventId)
@@ -387,7 +387,7 @@ export async function registerForPermanent(data: PermanentRegistrationData): Pro
     notes: notes || null,
   }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error: registrationError } = await (supabaseAdmin.from('registrations') as any)
+  const { error: registrationError } = await (getSupabaseAdmin().from('registrations') as any)
     .insert(insertRegistration)
 
   if (registrationError) {

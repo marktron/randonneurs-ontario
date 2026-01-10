@@ -1,5 +1,5 @@
 import { requireAdmin } from '@/lib/auth/get-admin'
-import { supabaseAdmin } from '@/lib/supabase-server'
+import { getSupabaseAdmin } from '@/lib/supabase-server'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Plus } from 'lucide-react'
@@ -8,7 +8,7 @@ import type { RouteWithChapter } from '@/types/ui'
 
 async function getRoutes() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data } = await (supabaseAdmin.from('routes') as any)
+  const { data } = await (getSupabaseAdmin().from('routes') as any)
     .select(`
       id,
       name,
@@ -29,7 +29,7 @@ async function getRoutes() {
 }
 
 async function getChapters() {
-  const { data } = await supabaseAdmin
+  const { data } = await getSupabaseAdmin()
     .from('chapters')
     .select('id, name')
     .order('name', { ascending: true })

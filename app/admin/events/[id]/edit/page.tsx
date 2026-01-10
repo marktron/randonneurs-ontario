@@ -1,5 +1,5 @@
 import { requireAdmin } from '@/lib/auth/get-admin'
-import { supabaseAdmin } from '@/lib/supabase-server'
+import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { getActiveRoutes } from '@/lib/data/routes'
 import { EventForm, type EventFormData } from '@/components/admin/event-form'
 import { notFound } from 'next/navigation'
@@ -7,7 +7,7 @@ import Link from 'next/link'
 import { ChevronLeft } from 'lucide-react'
 
 async function getChapters() {
-  const { data } = await supabaseAdmin
+  const { data } = await getSupabaseAdmin()
     .from('chapters')
     .select('id, name')
     .order('name', { ascending: true })
@@ -29,7 +29,7 @@ interface EventDetailForEdit {
 
 async function getEvent(eventId: string): Promise<EventFormData | null> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: event } = await (supabaseAdmin.from('events') as any)
+  const { data: event } = await (getSupabaseAdmin().from('events') as any)
     .select(`
       id,
       name,

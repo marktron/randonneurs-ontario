@@ -1,5 +1,5 @@
 import { requireAdmin } from '@/lib/auth/get-admin'
-import { supabaseAdmin } from '@/lib/supabase-server'
+import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { parseLocalDate, formatFinishTime } from '@/lib/utils'
 import Link from 'next/link'
 import {
@@ -38,7 +38,7 @@ interface ResultWithDetails {
 
 async function getResults(season: number | null, chapterId: string | null) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let query = (supabaseAdmin.from('results') as any)
+  let query = (getSupabaseAdmin().from('results') as any)
     .select(`
       id,
       finish_time,
@@ -69,7 +69,7 @@ async function getResults(season: number | null, chapterId: string | null) {
 async function getSeasons() {
   // Use RPC function to efficiently get distinct seasons
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data } = await (supabaseAdmin as any).rpc('get_distinct_seasons')
+  const { data } = await (getSupabaseAdmin() as any).rpc('get_distinct_seasons')
 
   if (!data) return []
 
@@ -84,7 +84,7 @@ interface Chapter {
 
 async function getChapters(): Promise<Chapter[]> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data } = await (supabaseAdmin.from('chapters') as any)
+  const { data } = await (getSupabaseAdmin().from('chapters') as any)
     .select('id, name, slug')
     .order('name', { ascending: true })
 

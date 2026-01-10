@@ -1,5 +1,5 @@
 import { requireAdmin } from '@/lib/auth/get-admin'
-import { supabaseAdmin } from '@/lib/supabase-server'
+import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { notFound } from 'next/navigation'
 import { RouteForm } from '@/components/admin/route-form'
 import Link from 'next/link'
@@ -8,7 +8,7 @@ import type { RouteOption } from '@/types/ui'
 
 async function getRoute(id: string) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data } = await (supabaseAdmin.from('routes') as any)
+  const { data } = await (getSupabaseAdmin().from('routes') as any)
     .select('*')
     .eq('id', id)
     .single()
@@ -17,7 +17,7 @@ async function getRoute(id: string) {
 }
 
 async function getChapters() {
-  const { data } = await supabaseAdmin
+  const { data } = await getSupabaseAdmin()
     .from('chapters')
     .select('id, name')
     .order('name', { ascending: true })

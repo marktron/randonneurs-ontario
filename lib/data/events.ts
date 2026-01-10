@@ -1,4 +1,4 @@
-import { supabase } from '@/lib/supabase'
+import { getSupabase } from '@/lib/supabase'
 import { formatEventType } from '@/lib/utils'
 import type { Event } from '@/components/event-card'
 import {
@@ -19,7 +19,7 @@ export async function getEventsByChapter(urlSlug: string): Promise<Event[]> {
 
   // First get the chapter ID
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: chapter, error: chapterError } = await (supabase.from('chapters') as any)
+  const { data: chapter, error: chapterError } = await (getSupabase().from('chapters') as any)
     .select('id')
     .eq('slug', dbSlug)
     .single()
@@ -32,7 +32,7 @@ export async function getEventsByChapter(urlSlug: string): Promise<Event[]> {
   // Fetch upcoming events for this chapter, ordered by date
   const today = new Date().toISOString().split('T')[0]
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: events, error: eventsError } = await (supabase.from('events') as any)
+  const { data: events, error: eventsError } = await (getSupabase().from('events') as any)
     .select('*')
     .eq('chapter_id', chapter.id)
     .eq('status', 'scheduled')
@@ -62,7 +62,7 @@ export async function getPermanentEvents(): Promise<Event[]> {
   // Fetch upcoming permanent events, ordered by date
   const today = new Date().toISOString().split('T')[0]
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: events, error } = await (supabase.from('events') as any)
+  const { data: events, error } = await (getSupabase().from('events') as any)
     .select('*')
     .eq('event_type', 'permanent')
     .eq('status', 'scheduled')
@@ -110,7 +110,7 @@ export interface RegisteredRider {
 
 export async function getRegisteredRiders(eventId: string): Promise<RegisteredRider[]> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: riders, error } = await (supabase as any)
+  const { data: riders, error } = await (getSupabase() as any)
     .rpc('get_registered_riders', { p_event_id: eventId })
 
   if (error) {
@@ -132,7 +132,7 @@ export async function getRegisteredRiders(eventId: string): Promise<RegisteredRi
 
 export async function getAllEventSlugs(): Promise<string[]> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: events, error } = await (supabase.from('events') as any)
+  const { data: events, error } = await (getSupabase().from('events') as any)
     .select('slug')
     .eq('status', 'scheduled')
 
@@ -147,7 +147,7 @@ export async function getAllEventSlugs(): Promise<string[]> {
 
 export async function getEventBySlug(slug: string): Promise<EventDetails | null> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: event, error } = await (supabase.from('events') as any)
+  const { data: event, error } = await (getSupabase().from('events') as any)
     .select(`
       id,
       slug,

@@ -1,6 +1,6 @@
 'use server'
 
-import { supabaseAdmin } from '@/lib/supabase-server'
+import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { requireAdmin } from '@/lib/auth/get-admin'
 import { applyRiderSearchFilter } from '@/lib/utils/rider-search'
 import type { ActionResult } from '@/types/actions'
@@ -19,7 +19,7 @@ export async function searchRiders(query: string): Promise<RiderSearchResult[]> 
     return []
   }
 
-  let dbQuery = supabaseAdmin
+  let dbQuery = getSupabaseAdmin()
     .from('riders')
     .select('id, first_name, last_name, email')
 
@@ -58,7 +58,7 @@ export async function createRider(data: CreateRiderData): Promise<CreateRiderRes
 
   // Check if rider with same email already exists (if email provided)
   if (email) {
-    const { data: existing } = await supabaseAdmin
+    const { data: existing } = await getSupabaseAdmin()
       .from('riders')
       .select('id')
       .eq('email', email)
@@ -70,7 +70,7 @@ export async function createRider(data: CreateRiderData): Promise<CreateRiderRes
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: newRider, error } = await (supabaseAdmin.from('riders') as any)
+  const { data: newRider, error } = await (getSupabaseAdmin().from('riders') as any)
     .insert({
       first_name: firstName,
       last_name: lastName,
@@ -127,7 +127,7 @@ export async function mergeRiders(data: MergeRidersData): Promise<MergeRidersRes
   try {
     // Step 1: Update all registrations to use target rider
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: updatedRegistrations, error: updateRegsError } = await (supabaseAdmin.from('registrations') as any)
+    const { data: updatedRegistrations, error: updateRegsError } = await (getSupabaseAdmin().from('registrations') as any)
       .update({ rider_id: targetRiderId })
       .in('rider_id', ridersToDelete)
       .select('id')
@@ -139,7 +139,7 @@ export async function mergeRiders(data: MergeRidersData): Promise<MergeRidersRes
 
     // Step 2: Update all results to use target rider
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: updatedResults, error: updateResultsError } = await (supabaseAdmin.from('results') as any)
+    const { data: updatedResults, error: updateResultsError } = await (getSupabaseAdmin().from('results') as any)
       .update({ rider_id: targetRiderId })
       .in('rider_id', ridersToDelete)
       .select('id')
@@ -150,7 +150,7 @@ export async function mergeRiders(data: MergeRidersData): Promise<MergeRidersRes
     }
 
     // Step 3: Delete the other riders
-    const { error: deleteError } = await supabaseAdmin
+    const { error: deleteError } = await getSupabaseAdmin()
       .from('riders')
       .delete()
       .in('id', ridersToDelete)
@@ -166,7 +166,7 @@ export async function mergeRiders(data: MergeRidersData): Promise<MergeRidersRes
       : null
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error: updateRiderError } = await (supabaseAdmin.from('riders') as any)
+    const { error: updateRiderError } = await (getSupabaseAdmin().from('riders') as any)
       .update({
         first_name: riderData.firstName.trim(),
         last_name: riderData.lastName.trim(),
@@ -195,13 +195,13 @@ export async function mergeRiders(data: MergeRidersData): Promise<MergeRidersRes
 export async function getRiderCounts(riderIds: string[]): Promise<Record<string, { registrations: number; results: number }>> {
   // Get registration counts
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: regs } = await (supabaseAdmin.from('registrations') as any)
+  const { data: regs } = await (getSupabaseAdmin().from('registrations') as any)
     .select('rider_id')
     .in('rider_id', riderIds)
 
   // Get result counts
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: results } = await (supabaseAdmin.from('results') as any)
+  const { data: results } = await (getSupabaseAdmin().from('results') as any)
     .select('rider_id')
     .in('rider_id', riderIds)
 

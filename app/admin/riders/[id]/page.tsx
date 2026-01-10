@@ -1,5 +1,5 @@
 import { requireAdmin } from '@/lib/auth/get-admin'
-import { supabaseAdmin } from '@/lib/supabase-server'
+import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { parseLocalDate, formatFinishTime } from '@/lib/utils'
 import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
@@ -53,7 +53,7 @@ interface Result {
 
 async function getRiderDetails(riderId: string) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: rider } = await (supabaseAdmin.from('riders') as any)
+  const { data: rider } = await (getSupabaseAdmin().from('riders') as any)
     .select('*')
     .eq('id', riderId)
     .single()
@@ -63,7 +63,7 @@ async function getRiderDetails(riderId: string) {
 
 async function getRiderRegistrations(riderId: string) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data } = await (supabaseAdmin.from('registrations') as any)
+  const { data } = await (getSupabaseAdmin().from('registrations') as any)
     .select(`
       id,
       registered_at,
@@ -78,7 +78,7 @@ async function getRiderRegistrations(riderId: string) {
 
 async function getRiderResults(riderId: string) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data } = await (supabaseAdmin.from('results') as any)
+  const { data } = await (getSupabaseAdmin().from('results') as any)
     .select(`
       id,
       finish_time,
