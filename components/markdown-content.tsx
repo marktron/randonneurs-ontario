@@ -38,7 +38,7 @@ export function MarkdownContent({ content }: MarkdownContentProps) {
           ),
           // Style paragraphs
           p: ({ children }) => (
-            <p className="leading-relaxed text-muted-foreground my-4">
+            <p className="leading-relaxed text-foreground my-4">
               {children}
             </p>
           ),

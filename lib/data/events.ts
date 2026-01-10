@@ -102,6 +102,7 @@ export interface EventDetails {
   rwgpsId: string | null
   routeSlug: string | null
   cueSheetUrl: string | null
+  description: string | null
 }
 
 export interface RegisteredRider {
@@ -157,6 +158,7 @@ export async function getEventBySlug(slug: string): Promise<EventDetails | null>
       start_location,
       distance_km,
       event_type,
+      description,
       chapters (name, slug),
       routes (slug, rwgps_id, cue_sheet_url)
     `)
@@ -183,5 +185,6 @@ export async function getEventBySlug(slug: string): Promise<EventDetails | null>
     rwgpsId: event.routes?.rwgps_id || null,
     routeSlug: event.routes?.slug || null,
     cueSheetUrl: event.routes?.cue_sheet_url || null,
+    description: event.description || null,
   }
 }

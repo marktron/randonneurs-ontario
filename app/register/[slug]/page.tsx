@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { PageShell } from "@/components/page-shell";
 import { RegistrationForm } from "@/components/registration-form";
+import { MarkdownContent } from "@/components/markdown-content";
 import { getEventBySlug, getAllEventSlugs, getRegisteredRiders } from "@/lib/data/events";
 import { MapPinIcon, CalendarIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -121,6 +122,13 @@ export default async function RegisterPage({ params }: PageProps) {
                 </div>
               </div>
             </div>
+
+            {/* Event Description */}
+            {event.description && (
+              <div className="mb-10">
+                <MarkdownContent content={event.description} />
+              </div>
+            )}
 
             {/* Route Map or Cue Sheet */}
             {event.rwgpsId ? (

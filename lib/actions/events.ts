@@ -42,6 +42,7 @@ export interface CreateEventData {
   eventDate: string  // YYYY-MM-DD
   startTime?: string | null  // HH:MM
   startLocation?: string | null
+  description?: string | null  // Markdown-formatted description
 }
 
 export async function createEvent(data: CreateEventData): Promise<ActionResult<{ id: string }>> {
@@ -57,6 +58,7 @@ export async function createEvent(data: CreateEventData): Promise<ActionResult<{
       eventDate,
       startTime,
       startLocation,
+      description,
     } = data
 
     // Validate required fields
@@ -79,6 +81,7 @@ export async function createEvent(data: CreateEventData): Promise<ActionResult<{
         event_date: eventDate,
         start_time: startTime || null,
         start_location: startLocation || null,
+        description: description || null,
         status: 'scheduled',
         // Note: season is a generated column computed from event_date
       })
@@ -115,6 +118,7 @@ export interface UpdateEventData {
   eventDate?: string  // YYYY-MM-DD
   startTime?: string | null  // HH:MM
   startLocation?: string | null
+  description?: string | null  // Markdown-formatted description
 }
 
 export async function updateEvent(
@@ -150,6 +154,9 @@ export async function updateEvent(
     }
     if (data.startLocation !== undefined) {
       updateData.start_location = data.startLocation || null
+    }
+    if (data.description !== undefined) {
+      updateData.description = data.description || null
     }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

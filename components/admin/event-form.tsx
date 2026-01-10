@@ -6,6 +6,7 @@ import { format } from 'date-fns'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
 import { Calendar } from '@/components/ui/calendar'
 import {
   Popover,
@@ -49,6 +50,7 @@ export interface EventFormData {
   eventDate: string  // YYYY-MM-DD
   startTime: string | null
   startLocation: string | null
+  description: string | null
 }
 
 interface EventFormProps {
@@ -87,6 +89,7 @@ export function EventForm({ chapters, routes, defaultChapterId, event, mode = 'c
   const [datePickerOpen, setDatePickerOpen] = useState(false)
   const [startTime, setStartTime] = useState(event?.startTime || '')
   const [startLocation, setStartLocation] = useState(event?.startLocation || '')
+  const [description, setDescription] = useState(event?.description || '')
 
   // Separate chapters into main chapters and others
   const mainChapters = CHAPTER_ORDER
@@ -168,6 +171,7 @@ export function EventForm({ chapters, routes, defaultChapterId, event, mode = 'c
           eventDate: formattedDate,
           startTime: startTime || null,
           startLocation: startLocation.trim() || null,
+          description: description.trim() || null,
         })
 
         if (result.success) {
@@ -186,6 +190,7 @@ export function EventForm({ chapters, routes, defaultChapterId, event, mode = 'c
           eventDate: formattedDate,
           startTime: startTime || null,
           startLocation: startLocation.trim() || null,
+          description: description.trim() || null,
         })
 
         if (result.success) {
@@ -426,6 +431,23 @@ export function EventForm({ chapters, routes, defaultChapterId, event, mode = 'c
                 disabled={isPending}
               />
             </div>
+          </div>
+
+          {/* Description */}
+          <div className="space-y-2">
+            <Label htmlFor="description">Description (optional)</Label>
+            <Textarea
+              id="description"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Add event details, special instructions, or notes. Markdown formatting is supported."
+              rows={4}
+              disabled={isPending}
+              className="resize-y"
+            />
+            <p className="text-xs text-muted-foreground">
+              Supports markdown formatting (bold, italic, links, lists)
+            </p>
           </div>
 
           <div className="flex gap-4 pt-4">
