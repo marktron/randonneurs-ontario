@@ -11,7 +11,7 @@ export default function Page() {
       <Hero images={heroImages} />
 
       {/* Two-column layout: Intro + Sidebar */}
-      <div className="mx-auto max-w-7xl px-6 py-20 md:py-28">
+      <div className="mx-auto max-w-7xl px-6 py-16">
         <div className="flex flex-col gap-16 lg:flex-row lg:gap-20">
           {/* Main content */}
           <div className="flex-1 min-w-0">

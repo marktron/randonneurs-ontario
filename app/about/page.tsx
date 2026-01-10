@@ -1,5 +1,8 @@
 import { PageShell } from "@/components/page-shell";
 import { PageHero } from "@/components/page-hero";
+import { MarkdownContent } from "@/components/markdown-content";
+import { getPage } from "@/lib/content";
+import { notFound } from "next/navigation";
 
 export const metadata = {
   title: "About Us",
@@ -7,20 +10,22 @@ export const metadata = {
 };
 
 export default function AboutPage() {
+  const page = getPage("about");
+
+  if (!page) {
+    notFound();
+  }
+
   return (
     <PageShell>
       <PageHero
         image="/toronto.jpg"
         eyebrow="About"
-        title="About Us"
-        description="Randonneurs Ontario is a volunteer-run cycling organization dedicated to non-competitive long-distance cycling in Ontario."
+        title={page.title}
+        description={page.description}
       />
       <div className="content-container py-16 md:py-20">
-        <div className="prose prose-neutral dark:prose-invert max-w-none">
-          <p className="text-lg text-muted-foreground">
-            Content coming soon.
-          </p>
-        </div>
+        <MarkdownContent content={page.content} />
       </div>
     </PageShell>
   );

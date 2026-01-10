@@ -24,6 +24,7 @@ import {
   Route,
   Trophy,
   LogOut,
+  FileText,
 } from 'lucide-react'
 import { logout } from '@/lib/actions/auth'
 import type { Admin } from '@/types/supabase'
@@ -61,6 +62,11 @@ const mainNavItems = [
 ]
 
 const managementNavItems = [
+  {
+    title: 'Pages',
+    href: '/admin/pages',
+    icon: FileText,
+  },
   {
     title: 'Admin Users',
     href: '/admin/users',
