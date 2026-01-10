@@ -1,3 +1,29 @@
+/**
+ * Event Registration Server Actions
+ *
+ * This module handles all event registration logic including:
+ * - Registering for scheduled events (brevets, populaires)
+ * - Registering for permanent rides
+ * - Finding or creating rider records
+ * - Sending confirmation emails
+ *
+ * REGISTRATION FLOW:
+ * 1. Validate input data
+ * 2. Verify event exists and is open for registration
+ * 3. Find existing rider by email OR create new rider
+ * 4. Check for duplicate registration
+ * 5. Create registration record
+ * 6. Send confirmation email (async, non-blocking)
+ * 7. Revalidate cache to update UI
+ *
+ * PERMANENT RIDES:
+ * Permanent rides are self-scheduled events. When a rider registers:
+ * 1. System creates an event record for that route/date if needed
+ * 2. Multiple riders can share the same event if same route/date
+ * 3. Must be scheduled at least 2 weeks in advance
+ *
+ * @see docs/DATA_LAYER.md for more on server actions
+ */
 'use server'
 
 import { revalidatePath } from 'next/cache'
@@ -7,6 +33,7 @@ import { formatEventType } from '@/lib/utils'
 import { format, parseISO } from 'date-fns'
 import type { Database } from '@/types/supabase'
 
+// Type aliases for database operations - makes code more readable
 type RidersUpdate = Database['public']['Tables']['riders']['Update']
 type RidersInsert = Database['public']['Tables']['riders']['Insert']
 type RegistrationsInsert = Database['public']['Tables']['registrations']['Insert']
@@ -39,6 +66,19 @@ export interface RegistrationResult {
   error?: string
 }
 
+// ============================================================================
+// HELPER FUNCTIONS
+// ============================================================================
+
+/**
+ * Split a full name into first name and last name.
+ * Handles single names (first only) and multi-part last names.
+ *
+ * @example
+ * splitName("John Smith") → { firstName: "John", lastName: "Smith" }
+ * splitName("Mary Jane Watson") → { firstName: "Mary", lastName: "Jane Watson" }
+ * splitName("Cher") → { firstName: "Cher", lastName: "" }
+ */
 function splitName(fullName: string): { firstName: string; lastName: string } {
   const parts = fullName.trim().split(/\s+/)
   if (parts.length === 1) {
@@ -49,16 +89,31 @@ function splitName(fullName: string): { firstName: string; lastName: string } {
   return { firstName, lastName }
 }
 
+/**
+ * Create a URL-safe slug for a new rider based on their email.
+ * Adds a random suffix to ensure uniqueness.
+ *
+ * @example
+ * createRiderSlug("john.doe@example.com") → "john-doe-a3f2b1"
+ */
 function createRiderSlug(email: string): string {
   const prefix = email.split('@')[0].toLowerCase().replace(/[^a-z0-9]/g, '-')
   const suffix = Math.random().toString(36).substring(2, 8)
   return `${prefix}-${suffix}`
 }
 
+/**
+ * Format a date string for display in confirmation emails.
+ * @example formatEventDate("2025-06-15") → "Sunday, June 15, 2025"
+ */
 function formatEventDate(dateStr: string): string {
   return format(parseISO(dateStr), 'EEEE, MMMM d, yyyy')
 }
 
+/**
+ * Format a time string (HH:MM) for display in 12-hour format.
+ * @example formatEventTime("14:30") → "2:30 PM"
+ */
 function formatEventTime(timeStr: string | null): string {
   if (!timeStr) return 'TBD'
   const [hours, minutes] = timeStr.split(':')
@@ -68,10 +123,24 @@ function formatEventTime(timeStr: string | null): string {
   return `${hour12}:${minutes} ${ampm}`
 }
 
+// ============================================================================
+// SERVER ACTIONS
+// ============================================================================
+
+/**
+ * Register a rider for a scheduled event (brevet, populaire, etc.)
+ *
+ * This is the main registration handler called from the registration form.
+ * It handles the complete flow: validation → rider lookup/creation →
+ * registration creation → email confirmation.
+ *
+ * @param data - Registration form data
+ * @returns Success/error result
+ */
 export async function registerForEvent(data: RegistrationData): Promise<RegistrationResult> {
   const { eventId, name, email, gender, shareRegistration, notes } = data
 
-  // Validate required fields
+  // Step 1: Validate required fields
   if (!eventId || !name.trim() || !email.trim()) {
     return { success: false, error: 'Missing required fields' }
   }

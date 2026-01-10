@@ -1,6 +1,27 @@
 # Randonneurs Ontario Website
 
-The official website for Randonneurs Ontario, providing event calendars, route information, registration, and results for Ontario's randonneuring community.
+The official website for [Randonneurs Ontario](https://randonneursontario.ca), a volunteer-run organization dedicated to **randonneuring** - non-competitive, long-distance cycling in Ontario, Canada.
+
+This site serves as the central hub for:
+- **Event calendars** for 4 regional chapters (Toronto, Ottawa, Simcoe-Muskoka, Huron)
+- **Route information** with RideWithGPS integration
+- **Event registration** for scheduled and permanent rides
+- **Historical results** tracking and rider profiles
+- **Admin dashboard** for event organizers
+
+## Documentation
+
+New to the project? Start here:
+
+| Document | Description |
+|----------|-------------|
+| **[Getting Started](docs/GETTING_STARTED.md)** | Step-by-step setup guide for new developers |
+| **[Architecture](docs/ARCHITECTURE.md)** | High-level system overview and key concepts |
+| **[Data Layer](docs/DATA_LAYER.md)** | How data flows through the application |
+| **[Contributing](docs/CONTRIBUTING.md)** | Coding standards and contribution guidelines |
+| [Database Schema](docs/database-schema-plan.md) | Database design and ERD |
+| [Database Setup](docs/database-setup.md) | Local database setup details |
+| [Style Guide](docs/style_guide.md) | UI/UX design guidelines |
 
 ## Tech Stack
 
@@ -19,56 +40,26 @@ The official website for Randonneurs Ontario, providing event calendars, route i
 - Supabase CLI (`npx supabase`)
 - Docker (for local Supabase)
 
-## Getting Started
+## Quick Start
 
-### 1. Clone and Install
+> **Detailed instructions:** See [Getting Started Guide](docs/GETTING_STARTED.md) for step-by-step setup.
 
 ```bash
+# 1. Clone and install
 git clone <repository-url>
 cd randonneurs-ontario
 npm install
-```
 
-### 2. Environment Setup
-
-Copy the example environment file and fill in your values:
-
-```bash
+# 2. Set up environment
 cp .env.local.example .env.local
-```
 
-Required environment variables:
-- `NEXT_PUBLIC_SUPABASE_URL` - Your Supabase project URL
-- `NEXT_PUBLIC_SUPABASE_ANON_KEY` - Supabase anonymous key
-- `SUPABASE_SERVICE_ROLE_KEY` - Server-side key (never expose to client)
-- `SENDGRID_API_KEY` - For registration confirmation emails
-- `NEXT_PUBLIC_CURRENT_SEASON` - Current riding season year
-
-### 3. Database Setup
-
-Start the local Supabase instance:
-
-```bash
+# 3. Start local database
 npx supabase start
-```
-
-This runs PostgreSQL, Auth, and other Supabase services in Docker. The CLI will output local credentials to use in `.env.development.local`.
-
-Apply migrations and seed data:
-
-```bash
 npx supabase db reset
-```
 
-Stop Supabase when done:
+# 4. Copy credentials from supabase output to .env.local
 
-```bash
-npx supabase stop
-```
-
-### 4. Run Development Server
-
-```bash
+# 5. Start development server
 npm run dev
 ```
 
@@ -191,8 +182,18 @@ npx supabase migration new   # Create new migration
 
 ## Learn More
 
-- [Randonneurs Ontario](https://randonneursontario.ca) - Current website
-- [Audax Club Parisien](https://www.audax-club-parisien.com/) - International randonneuring organization
-- [Next.js Documentation](https://nextjs.org/docs)
-- [Supabase Documentation](https://supabase.com/docs)
-- [shadcn/ui Documentation](https://ui.shadcn.com/)
+### Project Documentation
+- [Architecture Overview](docs/ARCHITECTURE.md) - System design and key concepts
+- [Data Layer Guide](docs/DATA_LAYER.md) - Database patterns and queries
+- [Contributing Guide](docs/CONTRIBUTING.md) - How to contribute
+
+### External Resources
+- [Next.js Documentation](https://nextjs.org/docs) - Framework reference
+- [Supabase Documentation](https://supabase.com/docs) - Database and auth
+- [shadcn/ui Documentation](https://ui.shadcn.com/) - UI components
+- [Tailwind CSS](https://tailwindcss.com/docs) - Styling reference
+
+### About Randonneuring
+- [Randonneurs Ontario](https://randonneursontario.ca) - Club website
+- [Audax Club Parisien](https://www.audax-club-parisien.com/) - International organization
+- [Randonneurs USA](https://rusa.org/) - US randonneuring
