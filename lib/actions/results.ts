@@ -3,7 +3,25 @@
 import { revalidatePath } from 'next/cache'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { requireAdmin } from '@/lib/auth/get-admin'
+import { getUrlSlugFromDbSlug } from '@/lib/chapter-config'
 import type { ActionResult } from '@/types/actions'
+
+// Helper to revalidate public results pages
+async function revalidateResultsPages(eventId: string) {
+  // Get event info including season and chapter
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: event } = await (getSupabaseAdmin().from('events') as any)
+    .select('season, chapters (slug)')
+    .eq('id', eventId)
+    .single()
+
+  if (event?.season && event?.chapters?.slug) {
+    const urlSlug = getUrlSlugFromDbSlug(event.chapters.slug)
+    if (urlSlug) {
+      revalidatePath(`/results/${event.season}/${urlSlug}`)
+    }
+  }
+}
 
 export type ResultStatus = 'pending' | 'finished' | 'dnf' | 'dns' | 'otl' | 'dq'
 
@@ -60,6 +78,10 @@ export async function createResult(data: CreateResultData): Promise<ActionResult
   }
 
   revalidatePath(`/admin/events/${eventId}`)
+
+  // Revalidate public results pages
+  await revalidateResultsPages(eventId)
+
   return { success: true }
 }
 
@@ -82,11 +104,30 @@ export async function updateResult(resultId: string, data: UpdateResultData): Pr
   }
 
   revalidatePath('/admin/events')
+
+  // Get the event_id to revalidate results pages
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: result } = await (getSupabaseAdmin().from('results') as any)
+    .select('event_id')
+    .eq('id', resultId)
+    .single()
+
+  if (result?.event_id) {
+    await revalidateResultsPages(result.event_id)
+  }
+
   return { success: true }
 }
 
 export async function deleteResult(resultId: string): Promise<ActionResult> {
   await requireAdmin()
+
+  // Fetch event_id before deleting for revalidation
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: result } = await (getSupabaseAdmin().from('results') as any)
+    .select('event_id')
+    .eq('id', resultId)
+    .single()
 
   const { error } = await getSupabaseAdmin()
     .from('results')
@@ -99,6 +140,12 @@ export async function deleteResult(resultId: string): Promise<ActionResult> {
   }
 
   revalidatePath('/admin/events')
+
+  // Revalidate public results pages
+  if (result?.event_id) {
+    await revalidateResultsPages(result.event_id)
+  }
+
   return { success: true }
 }
 
@@ -136,5 +183,9 @@ export async function createBulkResults(
   }
 
   revalidatePath(`/admin/events/${eventId}`)
+
+  // Revalidate public results pages
+  await revalidateResultsPages(eventId)
+
   return { success: true }
 }

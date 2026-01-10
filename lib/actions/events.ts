@@ -5,7 +5,30 @@ import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { requireAdmin } from '@/lib/auth/get-admin'
 import { sendgrid } from '@/lib/email/sendgrid'
 import { parseLocalDate, createSlug } from '@/lib/utils'
+import { getUrlSlugFromDbSlug } from '@/lib/chapter-config'
 import type { ActionResult } from '@/types/actions'
+
+// Helper to revalidate public calendar pages
+async function revalidateCalendarPages(chapterId: string, eventType: string) {
+  // Get chapter slug
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: chapter } = await (getSupabaseAdmin().from('chapters') as any)
+    .select('slug')
+    .eq('id', chapterId)
+    .single()
+
+  if (chapter?.slug) {
+    const urlSlug = getUrlSlugFromDbSlug(chapter.slug)
+    if (urlSlug) {
+      revalidatePath(`/calendar/${urlSlug}`)
+    }
+  }
+
+  // Also revalidate permanents page if it's a permanent event
+  if (eventType === 'permanent') {
+    revalidatePath('/calendar/permanents')
+  }
+}
 
 export type EventStatus = 'scheduled' | 'completed' | 'cancelled' | 'submitted'
 export type EventType = 'brevet' | 'populaire' | 'fleche' | 'permanent'
@@ -72,6 +95,9 @@ export async function createEvent(data: CreateEventData): Promise<ActionResult<{
 
     revalidatePath('/admin/events')
     revalidatePath('/admin')
+
+    // Revalidate public calendar pages
+    await revalidateCalendarPages(chapterId, eventType)
 
     return { success: true, data: { id: newEvent.id } }
   } catch (error) {
@@ -140,6 +166,17 @@ export async function updateEvent(
     revalidatePath('/admin/events')
     revalidatePath('/admin')
 
+    // Fetch event to get chapter and type for calendar revalidation
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: event } = await (getSupabaseAdmin().from('events') as any)
+      .select('chapter_id, event_type')
+      .eq('id', eventId)
+      .single()
+
+    if (event) {
+      await revalidateCalendarPages(event.chapter_id, event.event_type)
+    }
+
     return { success: true }
   } catch (error) {
     console.error('Error in updateEvent:', error)
@@ -151,10 +188,10 @@ export async function deleteEvent(eventId: string): Promise<ActionResult> {
   try {
     await requireAdmin()
 
-    // Fetch the event to check the date
+    // Fetch the event to check the date and get chapter info for revalidation
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: event, error: fetchError } = await (getSupabaseAdmin().from('events') as any)
-      .select('id, event_date')
+      .select('id, event_date, chapter_id, event_type')
       .eq('id', eventId)
       .single()
 
@@ -204,6 +241,9 @@ export async function deleteEvent(eventId: string): Promise<ActionResult> {
     revalidatePath('/admin/events')
     revalidatePath('/admin')
 
+    // Revalidate public calendar pages
+    await revalidateCalendarPages(event.chapter_id, event.event_type)
+
     return { success: true }
   } catch (error) {
     console.error('Error in deleteEvent:', error)
@@ -245,6 +285,17 @@ export async function updateEventStatus(
     revalidatePath('/admin/events')
     revalidatePath('/admin')
     revalidatePath('/admin/results')
+
+    // Fetch event to get chapter and type for calendar revalidation
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: event } = await (getSupabaseAdmin().from('events') as any)
+      .select('chapter_id, event_type')
+      .eq('id', eventId)
+      .single()
+
+    if (event) {
+      await revalidateCalendarPages(event.chapter_id, event.event_type)
+    }
 
     return { success: true }
   } catch (error) {

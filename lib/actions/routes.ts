@@ -4,7 +4,27 @@ import { revalidatePath } from 'next/cache'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { requireAdmin } from '@/lib/auth/get-admin'
 import { createSlug } from '@/lib/utils'
+import { getUrlSlugFromDbSlug } from '@/lib/chapter-config'
 import type { ActionResult, MergeResult } from '@/types/actions'
+
+// Helper to revalidate public routes pages
+async function revalidateRoutesPages(chapterId: string | null) {
+  if (!chapterId) return
+
+  // Get chapter slug
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: chapter } = await (getSupabaseAdmin().from('chapters') as any)
+    .select('slug')
+    .eq('id', chapterId)
+    .single()
+
+  if (chapter?.slug) {
+    const urlSlug = getUrlSlugFromDbSlug(chapter.slug)
+    if (urlSlug) {
+      revalidatePath(`/routes/${urlSlug}`)
+    }
+  }
+}
 
 export interface RouteData {
   name: string
@@ -91,6 +111,12 @@ export async function createRoute(data: RouteData): Promise<ActionResult> {
   }
 
   revalidatePath('/admin/routes')
+
+  // Revalidate public routes pages
+  if (chapterId) {
+    await revalidateRoutesPages(chapterId)
+  }
+
   return { success: true }
 }
 
@@ -145,11 +171,30 @@ export async function updateRoute(routeId: string, data: Partial<RouteData>): Pr
 
   revalidatePath('/admin/routes')
   revalidatePath(`/admin/routes/${routeId}`)
+
+  // Fetch route to get chapter for routes page revalidation
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: route } = await (getSupabaseAdmin().from('routes') as any)
+    .select('chapter_id')
+    .eq('id', routeId)
+    .single()
+
+  if (route?.chapter_id) {
+    await revalidateRoutesPages(route.chapter_id)
+  }
+
   return { success: true }
 }
 
 export async function deleteRoute(routeId: string): Promise<ActionResult> {
   await requireAdmin()
+
+  // Fetch route to get chapter info before deleting
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: route } = await (getSupabaseAdmin().from('routes') as any)
+    .select('chapter_id')
+    .eq('id', routeId)
+    .single()
 
   // Check if route is used by any events
   const { data: events } = await getSupabaseAdmin()
@@ -176,6 +221,12 @@ export async function deleteRoute(routeId: string): Promise<ActionResult> {
   }
 
   revalidatePath('/admin/routes')
+
+  // Revalidate public routes pages
+  if (route?.chapter_id) {
+    await revalidateRoutesPages(route.chapter_id)
+  }
+
   return { success: true }
 }
 
@@ -193,6 +244,18 @@ export async function toggleRouteActive(routeId: string, isActive: boolean): Pro
   }
 
   revalidatePath('/admin/routes')
+
+  // Fetch route to get chapter for routes page revalidation
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: route } = await (getSupabaseAdmin().from('routes') as any)
+    .select('chapter_id')
+    .eq('id', routeId)
+    .single()
+
+  if (route?.chapter_id) {
+    await revalidateRoutesPages(route.chapter_id)
+  }
+
   return { success: true }
 }
 

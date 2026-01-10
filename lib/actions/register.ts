@@ -1,5 +1,6 @@
 'use server'
 
+import { revalidatePath } from 'next/cache'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { sendRegistrationConfirmationEmail } from '@/lib/email/send-registration-email'
 import { formatEventType } from '@/lib/utils'
@@ -13,6 +14,7 @@ type EventsInsert = Database['public']['Tables']['events']['Insert']
 
 interface EventWithChapter {
   id: string
+  slug: string
   status: string
   name: string
   event_date: string
@@ -81,7 +83,7 @@ export async function registerForEvent(data: RegistrationData): Promise<Registra
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: eventData, error: eventError } = await (getSupabaseAdmin().from('events') as any)
     .select(`
-      id, status, name, event_date, start_time,
+      id, slug, status, name, event_date, start_time,
       start_location, distance_km, event_type,
       chapters (slug, name)
     `)
@@ -189,6 +191,9 @@ export async function registerForEvent(data: RegistrationData): Promise<Registra
   }).catch((error) => {
     console.error('Email sending failed:', error)
   })
+
+  // Revalidate the registration page to show the new registration
+  revalidatePath(`/register/${event.slug}`)
 
   return { success: true }
 }
@@ -412,6 +417,9 @@ export async function registerForPermanent(data: PermanentRegistrationData): Pro
   }).catch((error) => {
     console.error('Email sending failed:', error)
   })
+
+  // Revalidate the registration page to show the new registration
+  revalidatePath(`/register/${eventSlug}`)
 
   return { success: true }
 }
