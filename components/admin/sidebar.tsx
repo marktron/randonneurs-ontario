@@ -25,6 +25,7 @@ import {
   Trophy,
   LogOut,
   FileText,
+  Settings,
 } from 'lucide-react'
 import { logout } from '@/lib/actions/auth'
 import type { Admin } from '@/types/supabase'
@@ -140,12 +141,19 @@ export function AdminSidebar({ admin }: AdminSidebarProps) {
             <p className="text-muted-foreground text-xs">{admin.email}</p>
             <p className="text-muted-foreground text-xs capitalize">{admin.role.replace('_', ' ')}</p>
           </div>
-          <form action={logout}>
-            <Button variant="outline" size="sm" className="w-full" type="submit">
-              <LogOut className="h-4 w-4 mr-2" />
-              Sign Out
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" className="flex-1" asChild>
+              <Link href="/admin/settings">
+                <Settings className="h-4 w-4 mr-2" />
+                Settings
+              </Link>
             </Button>
-          </form>
+            <form action={logout}>
+              <Button variant="outline" size="sm" type="submit">
+                <LogOut className="h-4 w-4" />
+              </Button>
+            </form>
+          </div>
         </div>
       </SidebarFooter>
     </Sidebar>

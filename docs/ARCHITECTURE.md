@@ -30,6 +30,8 @@ Randonneurs Ontario is a volunteer-run organization dedicated to **randonneuring
 randonneurs-ontario/
 ├── app/                      # Next.js App Router (pages & API routes)
 │   ├── admin/                # Protected admin dashboard
+│   │   ├── settings/         # Admin account settings & password change
+│   │   └── users/            # Admin user management (super admin only)
 │   ├── calendar/[chapter]/   # Chapter event calendars
 │   ├── routes/[chapter]/     # Route listings
 │   ├── results/[year]/       # Historical results
@@ -190,6 +192,11 @@ This site has a **split authentication model**:
 Admin roles:
 - `admin` - Full access to all chapters
 - `chapter_admin` - Scoped to their chapter only
+
+Admin features:
+- Login at `/admin/login`
+- Settings page at `/admin/settings` for password changes
+- Super admins can manage other admin users at `/admin/users`
 
 ## Key Configuration Files
 

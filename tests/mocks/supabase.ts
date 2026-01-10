@@ -230,57 +230,58 @@ export function createMockSupabaseClient() {
       }
       tables.set(tableName, config)
 
-      return {
+      const builder = {
         /**
          * Set response for select().single()
          */
         onSelectSingle: (data: unknown, error: unknown = null) => {
           config.responses.set('select.single', { data, error })
-          return this
+          return builder
         },
         /**
          * Set response for select() (list)
          */
         onSelect: (data: unknown[], error: unknown = null) => {
           config.responses.set('select', { data, error })
-          return this
+          return builder
         },
         /**
          * Set response for insert()
          */
         onInsert: (data: unknown = null, error: unknown = null) => {
           config.responses.set('insert', { data, error })
-          return this
+          return builder
         },
         /**
          * Set response for insert().select().single()
          */
         onInsertSelectSingle: (data: unknown, error: unknown = null) => {
           config.responses.set('insert.select.single', { data, error })
-          return this
+          return builder
         },
         /**
          * Set response for update()
          */
         onUpdate: (data: unknown = null, error: unknown = null) => {
           config.responses.set('update', { data, error })
-          return this
+          return builder
         },
         /**
          * Set response for delete()
          */
         onDelete: (error: unknown = null) => {
           config.responses.set('delete', { data: null, error })
-          return this
+          return builder
         },
         /**
          * Set default response for any operation on this table
          */
         default: (data: unknown = null, error: unknown = null) => {
           config.defaultResponse = { data, error }
-          return this
+          return builder
         },
       }
+      return builder
     },
 
     /**
