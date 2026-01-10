@@ -1,6 +1,7 @@
 import { getSupabase } from '@/lib/supabase'
 import type { RouteCollection } from '@/components/routes-page'
 import { getChapterInfo, getAllChapterSlugs, getDbSlug, getUrlSlugFromDbSlug } from '@/lib/chapter-config'
+import { formatFinishTime, formatStatus } from '@/lib/utils'
 
 // Re-export chapter utilities for convenience
 export { getChapterInfo, getAllChapterSlugs }
@@ -27,28 +28,6 @@ export interface RouteResultEvent {
   riders: RouteResultRider[]
 }
 
-// Format interval to HH:MM string
-function formatFinishTime(interval: string | null): string {
-  if (!interval) return ''
-  // Parse PostgreSQL interval format like "10:30:00", "105:30:00", or "4 days 09:30:00"
-  const match = interval.match(/(?:(\d+)\s*days?\s*)?(\d+):(\d{2})(?::\d{2})?/)
-  if (!match) return interval
-  const days = parseInt(match[1] || '0', 10)
-  const hours = parseInt(match[2], 10) + (days * 24)
-  const minutes = match[3]
-  return `${hours}:${minutes}`
-}
-
-function formatStatus(status: string): string | null {
-  const statusMap: Record<string, string> = {
-    'dnf': 'DNF',
-    'dns': 'DNS',
-    'otl': 'OTL',
-    'dq': 'DQ',
-  }
-  if (status === 'finished') return null
-  return statusMap[status] || status.toUpperCase()
-}
 
 export async function getRouteBySlug(slug: string): Promise<RouteDetail | null> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

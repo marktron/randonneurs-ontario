@@ -61,3 +61,18 @@ export function formatFinishTime(interval: string | null): string {
 
   return `${hours}:${minutes}`
 }
+
+/**
+ * Format a result status for display.
+ * Returns null for 'finished' (no badge needed), uppercase for others.
+ */
+export function formatStatus(status: string): string | null {
+  const statusMap: Record<string, string> = {
+    'dnf': 'DNF',
+    'dns': 'DNS',
+    'otl': 'OTL',
+    'dq': 'DQ',
+  }
+  if (status === 'finished') return null
+  return statusMap[status] || status.toUpperCase()
+}

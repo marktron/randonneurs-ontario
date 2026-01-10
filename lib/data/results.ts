@@ -1,4 +1,5 @@
 import { getSupabase } from '@/lib/supabase'
+import { formatFinishTime, formatStatus } from '@/lib/utils'
 import {
   getResultsChapterInfo,
   getAllResultsChapterSlugs,
@@ -39,32 +40,6 @@ export function getAllChapterSlugs(): string[] {
   return getAllResultsChapterSlugs()
 }
 
-// Format interval to HH:MM string
-function formatFinishTime(interval: string | null): string {
-  if (!interval) return ''
-
-  // Parse PostgreSQL interval format like "10:30:00", "105:30:00", or "4 days 09:30:00"
-  const match = interval.match(/(?:(\d+)\s*days?\s*)?(\d+):(\d{2})(?::\d{2})?/)
-  if (!match) return interval
-
-  const days = parseInt(match[1] || '0', 10)
-  const hours = parseInt(match[2], 10) + (days * 24)
-  const minutes = match[3]
-
-  return `${hours}:${minutes}`
-}
-
-// Map database status to display string (returns null for 'finished' to use time instead)
-function formatStatus(status: string): string | null {
-  const statusMap: Record<string, string> = {
-    'dnf': 'DNF',
-    'dns': 'DNS',
-    'otl': 'OTL',
-    'dq': 'DQ',
-  }
-  if (status === 'finished') return null
-  return statusMap[status] || status.toUpperCase()
-}
 
 export async function getAvailableYears(urlSlug: string): Promise<number[]> {
   if (!getResultsChapterInfo(urlSlug)) return []
