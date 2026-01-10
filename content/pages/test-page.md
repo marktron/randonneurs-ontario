@@ -1,7 +1,7 @@
 ---
 title: test page
 slug: test-page
-description: Will this work?
+description: testing!
 lastUpdated: 2026-01-10
 ---
 
