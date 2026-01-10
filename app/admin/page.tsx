@@ -180,19 +180,15 @@ export default async function AdminDashboardPage() {
         </div>
       </div>
 
-      <Card className="ring-red-300 ring-3 shadow-md">
-        <CardHeader>
-          <CardTitle className="text-red-800">Events Needing Attention</CardTitle>
-          <CardDescription>
-            {eventsNeedingResults.length} completed event{eventsNeedingResults.length !== 1 ? 's' : ''} awaiting submission{chapterId ? '' : ' (all chapters)'}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {eventsNeedingResults.length === 0 ? (
-            <p className="text-muted-foreground py-4 text-center">
-              All caught up! No events need results.
-            </p>
-          ) : (
+      {eventsNeedingResults.length > 0 && (
+        <Card className="ring-red-300 ring-3 shadow-md">
+          <CardHeader>
+            <CardTitle className="text-red-800">Events Needing Attention</CardTitle>
+            <CardDescription>
+              {eventsNeedingResults.length} completed event{eventsNeedingResults.length !== 1 ? 's' : ''} awaiting submission{chapterId ? '' : ' (all chapters)'}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
             <div className="space-y-3">
               {eventsNeedingResults.map((event) => {
                 const riderCount = riderCounts[event.id] || 0
@@ -221,9 +217,9 @@ export default async function AdminDashboardPage() {
                 )
               })}
             </div>
-          )}
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader>
