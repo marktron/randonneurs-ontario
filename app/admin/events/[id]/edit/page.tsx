@@ -26,6 +26,7 @@ interface EventDetailForEdit {
   start_time: string | null
   start_location: string | null
   description: string | null
+  image_url: string | null
 }
 
 async function getEvent(eventId: string): Promise<EventFormData | null> {
@@ -41,7 +42,8 @@ async function getEvent(eventId: string): Promise<EventFormData | null> {
       event_date,
       start_time,
       start_location,
-      description
+      description,
+      image_url
     `)
     .eq('id', eventId)
     .single()
@@ -60,6 +62,7 @@ async function getEvent(eventId: string): Promise<EventFormData | null> {
     startTime: e.start_time,
     startLocation: e.start_location,
     description: e.description,
+    imageUrl: e.image_url,
   }
 }
 
