@@ -70,6 +70,7 @@ export async function getEventsByChapter(urlSlug: string): Promise<Event[]> {
     .select('*')
     .eq('chapter_id', chapter.id)
     .eq('status', 'scheduled')
+    .neq('event_type', 'permanent')
     .gte('event_date', today)
     .order('event_date', { ascending: true })
     .order('start_time', { ascending: true })

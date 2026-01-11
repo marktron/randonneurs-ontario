@@ -335,16 +335,8 @@ export async function registerForPermanent(data: PermanentRegistrationData): Pro
 
   const route = routeData as RouteWithChapter
 
-  // Get the permanent chapter ID
-  const { data: permanentChapter, error: chapterError } = await getSupabaseAdmin()
-    .from('chapters')
-    .select('id')
-    .eq('slug', 'permanent')
-    .single()
-
-  if (chapterError || !permanentChapter) {
-    console.error('Error fetching permanent chapter:', chapterError)
-    return { success: false, error: 'Failed to find permanent chapter' }
+  if (!route.chapter_id) {
+    return { success: false, error: 'Route does not have an assigned chapter' }
   }
 
   // Generate event name and slug
@@ -371,7 +363,7 @@ export async function registerForPermanent(data: PermanentRegistrationData): Pro
       event_type: 'permanent',
       status: 'scheduled',
       route_id: route.id,
-      chapter_id: (permanentChapter as { id: string }).id,
+      chapter_id: route.chapter_id,
       distance_km: route.distance_km || 0,
       event_date: eventDate,
       start_time: startTime,

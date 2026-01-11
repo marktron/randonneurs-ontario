@@ -53,6 +53,11 @@ export async function getAvailableYears(urlSlug: string): Promise<number[]> {
     eventsQuery = (getSupabase().from('events') as any)
       .select('id, season, results(season)')
       .eq('collection', urlSlug)
+  } else if (urlSlug === 'permanent') {
+    // Permanent results: query by event_type instead of chapter
+    eventsQuery = (getSupabase().from('events') as any)
+      .select('id, season, results(season)')
+      .eq('event_type', 'permanent')
   } else {
     // Chapter-based query
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -132,6 +137,19 @@ export async function getChapterResults(urlSlug: string, year: number): Promise<
       .eq('collection', urlSlug)
       .gte('event_date', `${year}-01-01`)
       .lte('event_date', `${year}-12-31`)
+  } else if (urlSlug === 'permanent') {
+    // Permanent results: query by event_type instead of chapter
+    eventsQuery = (getSupabase().from('events') as any)
+      .select(`
+        id, name, event_date, distance_km,
+        routes (slug),
+        public_results (
+          finish_time, status, team_name, rider_slug, first_name, last_name
+        )
+      `)
+      .eq('event_type', 'permanent')
+      .gte('event_date', `${year}-01-01`)
+      .lte('event_date', `${year}-12-31`)
   } else {
     // Chapter-based query
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -151,6 +169,7 @@ export async function getChapterResults(urlSlug: string, year: number): Promise<
         )
       `)
       .eq('chapter_id', chapter.id)
+      .neq('event_type', 'permanent')
       .gte('event_date', `${year}-01-01`)
       .lte('event_date', `${year}-12-31`)
 

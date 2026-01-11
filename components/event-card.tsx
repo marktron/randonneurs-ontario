@@ -63,8 +63,12 @@ export function EventCard({ event }: { event: Event }) {
         </div>
 
         <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted-foreground">
-          <span>{event.startLocation}</span>
-          <span className="hidden sm:inline text-border">|</span>
+          {event.startLocation && (
+            <>
+              <span>{event.startLocation}</span>
+              <span className="hidden sm:inline text-border">|</span>
+            </>
+          )}
           <span className="tabular-nums">{formatTime(event.startTime)}</span>
           <Badge variant="outline" className="text-[10px] tracking-wider font-medium ml-auto sm:ml-0">
             {event.type}
