@@ -39,7 +39,7 @@ import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import type { ChapterOption } from '@/types/ui'
 import type { ActiveRoute } from '@/lib/data/routes'
-import { ImagePicker } from '@/components/admin/image-picker'
+import { ImageUpload } from '@/components/admin/image-upload'
 
 export interface EventFormData {
   id: string
@@ -456,14 +456,16 @@ export function EventForm({ chapters, routes, defaultChapterId, event, mode = 'c
           </div>
 
           {/* Event Image */}
-          <ImagePicker
-            value={imageUrl || null}
-            onChange={(url) => setImageUrl(url || '')}
-            folder="events"
-            disabled={isPending}
-            label="Event Image (optional)"
-            description="Add an image to display with this event"
-          />
+          <div className="space-y-2">
+            <Label>Event Image (optional)</Label>
+            <p className="text-xs text-muted-foreground">Add an image to display with this event</p>
+            <ImageUpload
+              value={imageUrl || null}
+              onChange={(url) => setImageUrl(url || '')}
+              folder="events"
+              disabled={isPending}
+            />
+          </div>
 
           <div className="flex gap-4 pt-4">
             <Button type="submit" disabled={isPending}>

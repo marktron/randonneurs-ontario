@@ -143,6 +143,7 @@ export function ImageUpload({
               fill
               className="object-cover"
               sizes="(max-width: 768px) 100vw, 400px"
+              unoptimized
             />
           </div>
           <Button

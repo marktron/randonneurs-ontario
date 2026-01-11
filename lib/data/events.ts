@@ -151,6 +151,7 @@ export interface EventDetails {
   routeSlug: string | null    // For linking to route details page
   cueSheetUrl: string | null  // PDF cue sheet download URL
   description: string | null  // Optional markdown event description
+  imageUrl: string | null     // Optional event image URL
 }
 
 /**
@@ -245,6 +246,7 @@ export async function getEventBySlug(slug: string): Promise<EventDetails | null>
       distance_km,
       event_type,
       description,
+      image_url,
       chapters (name, slug),
       routes (slug, rwgps_id, cue_sheet_url)
     `)
@@ -272,5 +274,6 @@ export async function getEventBySlug(slug: string): Promise<EventDetails | null>
     routeSlug: event.routes?.slug || null,
     cueSheetUrl: event.routes?.cue_sheet_url || null,
     description: event.description || null,
+    imageUrl: event.image_url || null,
   }
 }

@@ -12,8 +12,7 @@ ON CONFLICT (id) DO UPDATE SET
   file_size_limit = EXCLUDED.file_size_limit,
   allowed_mime_types = EXCLUDED.allowed_mime_types;
 
--- Enable RLS on storage.objects (should already be enabled, but ensure it is)
-ALTER TABLE storage.objects ENABLE ROW LEVEL SECURITY;
+-- Note: RLS is already enabled on storage.objects by Supabase
 
 -- Policy: Anyone can view images in the public bucket
 CREATE POLICY "Public read access for images"

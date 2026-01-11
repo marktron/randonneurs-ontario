@@ -30,9 +30,9 @@ interface AdminUserWithChapter {
   id: string
   email: string
   name: string
-  role: 'admin' | 'chapter_admin'
+  role: string | null
   chapter_id: string | null
-  created_at: string
+  created_at: string | null
   chapters: { id: string; name: string } | null
 }
 
@@ -94,7 +94,7 @@ export function AdminUsersTable({ users, currentAdminId }: AdminUsersTableProps)
                     {user.chapters?.name || '—'}
                   </TableCell>
                   <TableCell>
-                    {new Date(user.created_at).toLocaleDateString()}
+                    {user.created_at ? new Date(user.created_at).toLocaleDateString() : '—'}
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2">

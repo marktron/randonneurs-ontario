@@ -138,7 +138,7 @@ export function AdminSidebar({ admin }: AdminSidebarProps) {
           <div className="text-sm">
             <p className="font-medium">{admin.name}</p>
             <p className="text-muted-foreground text-xs">{admin.email}</p>
-            <p className="text-muted-foreground text-xs capitalize">{admin.role.replace('_', ' ')}</p>
+            <p className="text-muted-foreground text-xs capitalize">{admin.role?.replace('_', ' ') || 'User'}</p>
           </div>
           <form action={logout}>
             <Button variant="outline" size="sm" className="w-full" type="submit">
