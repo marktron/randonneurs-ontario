@@ -4,7 +4,7 @@ import Image from "next/image";
 import { PageShell } from "@/components/page-shell";
 import { RegisterCTA } from "@/components/register-cta";
 import { MarkdownContent } from "@/components/markdown-content";
-import { getEventBySlug, getRegisteredRiders, getAllEventSlugs } from "@/lib/data/events";
+import { getEventBySlug, getRegisteredRiders } from "@/lib/data/events";
 import { MapPinIcon, CalendarIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
@@ -12,17 +12,8 @@ interface PageProps {
   params: Promise<{ slug: string }>;
 }
 
-// Revalidate every 60 seconds - registration data changes frequently
-export const revalidate = 60;
-
-// Allow dynamic params for event slugs not pre-built
-export const dynamicParams = true;
-
-// Pre-generate pages for all scheduled events at build time
-export async function generateStaticParams() {
-  const slugs = await getAllEventSlugs();
-  return slugs.map((slug) => ({ slug }));
-}
+// Always render fresh - registered riders list changes frequently
+export const dynamic = 'force-dynamic';
 
 // Generate metadata for each event
 export async function generateMetadata({ params }: PageProps) {
