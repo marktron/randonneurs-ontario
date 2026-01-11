@@ -89,7 +89,7 @@ export function IntroSection() {
     <section className="mx-auto max-w-3xl px-6 py-20 md:py-28">
       {/* Headline */}
       <h1 className="font-serif text-4xl leading-tight tracking-tight md:text-5xl lg:text-6xl">
-        Long-Distance Cycling, at Your Own Pacef
+        Long-Distance Cycling, at Your Own Pace
       </h1>
 
       {/* Intro Copy */}

@@ -39,6 +39,7 @@ import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import type { ChapterOption } from '@/types/ui'
 import type { ActiveRoute } from '@/lib/data/routes'
+import { ImageUpload } from '@/components/admin/image-upload'
 
 export interface EventFormData {
   id: string
@@ -51,6 +52,7 @@ export interface EventFormData {
   startTime: string | null
   startLocation: string | null
   description: string | null
+  imageUrl: string | null
 }
 
 interface EventFormProps {
@@ -90,6 +92,7 @@ export function EventForm({ chapters, routes, defaultChapterId, event, mode = 'c
   const [startTime, setStartTime] = useState(event?.startTime || '')
   const [startLocation, setStartLocation] = useState(event?.startLocation || '')
   const [description, setDescription] = useState(event?.description || '')
+  const [imageUrl, setImageUrl] = useState(event?.imageUrl || '')
 
   // Separate chapters into main chapters and others
   const mainChapters = CHAPTER_ORDER
@@ -172,6 +175,7 @@ export function EventForm({ chapters, routes, defaultChapterId, event, mode = 'c
           startTime: startTime || null,
           startLocation: startLocation.trim() || null,
           description: description.trim() || null,
+          imageUrl: imageUrl || null,
         })
 
         if (result.success) {
@@ -191,6 +195,7 @@ export function EventForm({ chapters, routes, defaultChapterId, event, mode = 'c
           startTime: startTime || null,
           startLocation: startLocation.trim() || null,
           description: description.trim() || null,
+          imageUrl: imageUrl || null,
         })
 
         if (result.success) {
@@ -448,6 +453,18 @@ export function EventForm({ chapters, routes, defaultChapterId, event, mode = 'c
             <p className="text-xs text-muted-foreground">
               Supports markdown formatting (bold, italic, links, lists)
             </p>
+          </div>
+
+          {/* Event Image */}
+          <div className="space-y-2">
+            <Label>Event Image (optional)</Label>
+            <p className="text-xs text-muted-foreground">Add an image to display with this event</p>
+            <ImageUpload
+              value={imageUrl || null}
+              onChange={(url) => setImageUrl(url || '')}
+              folder="events"
+              disabled={isPending}
+            />
           </div>
 
           <div className="flex gap-4 pt-4">

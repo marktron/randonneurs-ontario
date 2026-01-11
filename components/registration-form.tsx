@@ -46,9 +46,11 @@ function saveData(data: SavedRegistrationData): void {
 interface RegistrationFormProps {
   eventId: string;
   isPermanent?: boolean;
+  /** "card" shows border/title container, "plain" for use in modals */
+  variant?: "card" | "plain";
 }
 
-export function RegistrationForm({ eventId, isPermanent }: RegistrationFormProps) {
+export function RegistrationForm({ eventId, isPermanent, variant = "card" }: RegistrationFormProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [name, setName] = useState("");
@@ -97,27 +99,36 @@ export function RegistrationForm({ eventId, isPermanent }: RegistrationFormProps
     });
   }
 
+  const Wrapper = ({ children }: { children: React.ReactNode }) =>
+    variant === "card" ? (
+      <div className="lg:sticky lg:top-24 rounded-2xl border border-border bg-card p-6 md:p-8">
+        {children}
+      </div>
+    ) : (
+      <>{children}</>
+    );
+
   if (success) {
     return (
-      <div className="lg:sticky lg:top-24 rounded-2xl border border-border bg-card p-6 md:p-8">
+      <Wrapper>
         <div className="text-center py-8">
           <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-green-100 dark:bg-green-900/30 mb-4">
             <svg className="w-6 h-6 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
             </svg>
           </div>
-          <h2 className="font-serif text-2xl mb-2">You&apos;re registered!</h2>
+          <h2 className="font-serif text-2xl tracking-tight mb-2">You&apos;re registered!</h2>
           <p className="text-sm text-muted-foreground">
             See you at the start line.
           </p>
         </div>
-      </div>
+      </Wrapper>
     );
   }
 
   return (
-    <div className="lg:sticky lg:top-24 rounded-2xl border border-border bg-card p-6 md:p-8">
-      <h2 className="font-serif text-2xl mb-6">Register</h2>
+    <Wrapper>
+      {variant === "card" && <h2 className="font-serif text-2xl tracking-tight mb-6">Register</h2>}
 
       {isPermanent && (
         <div className="bg-muted/50 border border-border rounded-lg p-4 mb-6 text-sm">
@@ -230,6 +241,6 @@ export function RegistrationForm({ eventId, isPermanent }: RegistrationFormProps
           {isPending ? "Registering..." : "Register"}
         </Button>
       </form>
-    </div>
+    </Wrapper>
   );
 }

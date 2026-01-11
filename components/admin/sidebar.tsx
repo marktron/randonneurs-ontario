@@ -139,7 +139,7 @@ export function AdminSidebar({ admin }: AdminSidebarProps) {
           <div className="text-sm">
             <p className="font-medium">{admin.name}</p>
             <p className="text-muted-foreground text-xs">{admin.email}</p>
-            <p className="text-muted-foreground text-xs capitalize">{admin.role.replace('_', ' ')}</p>
+            <p className="text-muted-foreground text-xs capitalize">{admin.role?.replace('_', ' ') || 'User'}</p>
           </div>
           <div className="flex gap-2">
             <Button variant="outline" size="sm" className="flex-1" asChild>

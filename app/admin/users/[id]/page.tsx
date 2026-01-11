@@ -41,7 +41,14 @@ export default async function EditUserPage({ params }: EditUserPageProps) {
       </Link>
 
       <div className="max-w-2xl space-y-6">
-        <UserForm chapters={chapters} user={user} mode="edit" />
+        <UserForm
+          chapters={chapters}
+          user={{
+            ...user,
+            role: (user.role as 'admin' | 'chapter_admin') || 'chapter_admin',
+          }}
+          mode="edit"
+        />
         <ResetPasswordForm userId={user.id} />
       </div>
     </div>

@@ -43,6 +43,7 @@ export interface CreateEventData {
   startTime?: string | null  // HH:MM
   startLocation?: string | null
   description?: string | null  // Markdown-formatted description
+  imageUrl?: string | null  // URL to event image from Supabase Storage
 }
 
 export async function createEvent(data: CreateEventData): Promise<ActionResult<{ id: string }>> {
@@ -59,6 +60,7 @@ export async function createEvent(data: CreateEventData): Promise<ActionResult<{
       startTime,
       startLocation,
       description,
+      imageUrl,
     } = data
 
     // Validate required fields
@@ -82,6 +84,7 @@ export async function createEvent(data: CreateEventData): Promise<ActionResult<{
         start_time: startTime || null,
         start_location: startLocation || null,
         description: description || null,
+        image_url: imageUrl || null,
         status: 'scheduled',
         // Note: season is a generated column computed from event_date
       })
@@ -119,6 +122,7 @@ export interface UpdateEventData {
   startTime?: string | null  // HH:MM
   startLocation?: string | null
   description?: string | null  // Markdown-formatted description
+  imageUrl?: string | null  // URL to event image from Supabase Storage
 }
 
 export async function updateEvent(
@@ -157,6 +161,9 @@ export async function updateEvent(
     }
     if (data.description !== undefined) {
       updateData.description = data.description || null
+    }
+    if (data.imageUrl !== undefined) {
+      updateData.image_url = data.imageUrl || null
     }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

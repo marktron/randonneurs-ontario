@@ -7,426 +7,570 @@ export type Json =
   | Json[]
 
 export type Database = {
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
   public: {
     Tables: {
       admins: {
         Row: {
-          id: string
+          chapter_id: string | null
+          created_at: string | null
           email: string
+          id: string
           name: string
           phone: string | null
-          role: 'admin' | 'chapter_admin'
-          chapter_id: string | null
-          created_at: string
-          updated_at: string
+          role: string | null
+          updated_at: string | null
         }
         Insert: {
-          id: string
+          chapter_id?: string | null
+          created_at?: string | null
           email: string
+          id: string
           name: string
           phone?: string | null
-          role?: 'admin' | 'chapter_admin'
-          chapter_id?: string | null
-          created_at?: string
-          updated_at?: string
+          role?: string | null
+          updated_at?: string | null
         }
         Update: {
-          id?: string
+          chapter_id?: string | null
+          created_at?: string | null
           email?: string
+          id?: string
           name?: string
           phone?: string | null
-          role?: 'admin' | 'chapter_admin'
-          chapter_id?: string | null
-          created_at?: string
-          updated_at?: string
+          role?: string | null
+          updated_at?: string | null
         }
         Relationships: [
           {
             foreignKeyName: "admins_chapter_id_fkey"
             columns: ["chapter_id"]
+            isOneToOne: false
             referencedRelation: "chapters"
             referencedColumns: ["id"]
-          }
+          },
         ]
       }
       awards: {
         Row: {
+          award_type: string | null
+          created_at: string | null
+          description: string | null
           id: string
           slug: string
           title: string
-          description: string | null
-          award_type: string | null
-          created_at: string
-          updated_at: string
+          updated_at: string | null
         }
         Insert: {
+          award_type?: string | null
+          created_at?: string | null
+          description?: string | null
           id?: string
           slug: string
           title: string
-          description?: string | null
-          award_type?: string | null
-          created_at?: string
-          updated_at?: string
+          updated_at?: string | null
         }
         Update: {
+          award_type?: string | null
+          created_at?: string | null
+          description?: string | null
           id?: string
           slug?: string
           title?: string
-          description?: string | null
-          award_type?: string | null
-          created_at?: string
-          updated_at?: string
+          updated_at?: string | null
         }
         Relationships: []
       }
       chapters: {
         Row: {
-          id: string
-          slug: string
-          name: string
+          created_at: string | null
           description: string | null
           founded_year: number | null
-          created_at: string
-          updated_at: string
+          id: string
+          name: string
+          slug: string
+          updated_at: string | null
         }
         Insert: {
-          id?: string
-          slug: string
-          name: string
+          created_at?: string | null
           description?: string | null
           founded_year?: number | null
-          created_at?: string
-          updated_at?: string
+          id?: string
+          name: string
+          slug: string
+          updated_at?: string | null
         }
         Update: {
-          id?: string
-          slug?: string
-          name?: string
+          created_at?: string | null
           description?: string | null
           founded_year?: number | null
-          created_at?: string
-          updated_at?: string
+          id?: string
+          name?: string
+          slug?: string
+          updated_at?: string | null
         }
         Relationships: []
       }
       events: {
         Row: {
-          id: string
-          slug: string
           chapter_id: string
-          route_id: string | null
-          name: string
-          event_type: 'brevet' | 'populaire' | 'fleche' | 'permanent'
+          collection: string | null
+          created_at: string | null
+          description: string | null
           distance_km: number
           event_date: string
-          start_time: string | null
-          start_location: string | null
-          registration_opens_at: string | null
-          registration_closes_at: string | null
+          event_type: string
           external_register_url: string | null
-          status: 'scheduled' | 'cancelled' | 'completed'
-          season: number
-          created_at: string
-          updated_at: string
+          id: string
+          image_url: string | null
+          name: string
+          registration_closes_at: string | null
+          registration_opens_at: string | null
+          route_id: string | null
+          season: number | null
+          slug: string
+          start_location: string | null
+          start_time: string | null
+          status: string | null
+          updated_at: string | null
         }
         Insert: {
-          id?: string
-          slug: string
           chapter_id: string
-          route_id?: string | null
-          name: string
-          event_type: 'brevet' | 'populaire' | 'fleche' | 'permanent'
+          collection?: string | null
+          created_at?: string | null
+          description?: string | null
           distance_km: number
           event_date: string
-          start_time?: string | null
-          start_location?: string | null
-          registration_opens_at?: string | null
-          registration_closes_at?: string | null
+          event_type: string
           external_register_url?: string | null
-          status?: 'scheduled' | 'cancelled' | 'completed'
-          created_at?: string
-          updated_at?: string
+          id?: string
+          image_url?: string | null
+          name: string
+          registration_closes_at?: string | null
+          registration_opens_at?: string | null
+          route_id?: string | null
+          season?: number | null
+          slug: string
+          start_location?: string | null
+          start_time?: string | null
+          status?: string | null
+          updated_at?: string | null
         }
         Update: {
-          id?: string
-          slug?: string
           chapter_id?: string
-          route_id?: string | null
-          name?: string
-          event_type?: 'brevet' | 'populaire' | 'fleche' | 'permanent'
+          collection?: string | null
+          created_at?: string | null
+          description?: string | null
           distance_km?: number
           event_date?: string
-          start_time?: string | null
-          start_location?: string | null
-          registration_opens_at?: string | null
-          registration_closes_at?: string | null
+          event_type?: string
           external_register_url?: string | null
-          status?: 'scheduled' | 'cancelled' | 'completed'
-          created_at?: string
-          updated_at?: string
+          id?: string
+          image_url?: string | null
+          name?: string
+          registration_closes_at?: string | null
+          registration_opens_at?: string | null
+          route_id?: string | null
+          season?: number | null
+          slug?: string
+          start_location?: string | null
+          start_time?: string | null
+          status?: string | null
+          updated_at?: string | null
         }
         Relationships: [
           {
             foreignKeyName: "events_chapter_id_fkey"
             columns: ["chapter_id"]
+            isOneToOne: false
             referencedRelation: "chapters"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "events_route_id_fkey"
             columns: ["route_id"]
+            isOneToOne: false
             referencedRelation: "routes"
             referencedColumns: ["id"]
-          }
+          },
         ]
+      }
+      images: {
+        Row: {
+          alt_text: string | null
+          content_type: string
+          created_at: string
+          filename: string
+          height: number | null
+          id: string
+          size_bytes: number
+          storage_path: string
+          uploaded_by: string | null
+          width: number | null
+        }
+        Insert: {
+          alt_text?: string | null
+          content_type: string
+          created_at?: string
+          filename: string
+          height?: number | null
+          id?: string
+          size_bytes: number
+          storage_path: string
+          uploaded_by?: string | null
+          width?: number | null
+        }
+        Update: {
+          alt_text?: string | null
+          content_type?: string
+          created_at?: string
+          filename?: string
+          height?: number | null
+          id?: string
+          size_bytes?: number
+          storage_path?: string
+          uploaded_by?: string | null
+          width?: number | null
+        }
+        Relationships: []
       }
       registrations: {
         Row: {
-          id: string
-          event_id: string
-          rider_id: string
-          registered_at: string
-          notes: string | null
           emergency_contact: string | null
-          status: 'registered' | 'cancelled'
-          share_registration: boolean
+          event_id: string
+          id: string
+          notes: string | null
+          registered_at: string | null
+          rider_id: string
+          share_registration: boolean | null
+          status: string | null
         }
         Insert: {
-          id?: string
-          event_id: string
-          rider_id: string
-          registered_at?: string
-          notes?: string | null
           emergency_contact?: string | null
-          status?: 'registered' | 'cancelled'
-          share_registration?: boolean
+          event_id: string
+          id?: string
+          notes?: string | null
+          registered_at?: string | null
+          rider_id: string
+          share_registration?: boolean | null
+          status?: string | null
         }
         Update: {
-          id?: string
-          event_id?: string
-          rider_id?: string
-          registered_at?: string
-          notes?: string | null
           emergency_contact?: string | null
-          status?: 'registered' | 'cancelled'
-          share_registration?: boolean
+          event_id?: string
+          id?: string
+          notes?: string | null
+          registered_at?: string | null
+          rider_id?: string
+          share_registration?: boolean | null
+          status?: string | null
         }
         Relationships: [
           {
             foreignKeyName: "registrations_event_id_fkey"
             columns: ["event_id"]
+            isOneToOne: false
             referencedRelation: "events"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "registrations_rider_id_fkey"
             columns: ["rider_id"]
+            isOneToOne: false
+            referencedRelation: "public_riders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "registrations_rider_id_fkey"
+            columns: ["rider_id"]
+            isOneToOne: false
             referencedRelation: "riders"
             referencedColumns: ["id"]
-          }
+          },
         ]
       }
       result_awards: {
         Row: {
-          result_id: string
           award_id: string
+          result_id: string
         }
         Insert: {
-          result_id: string
           award_id: string
+          result_id: string
         }
         Update: {
-          result_id?: string
           award_id?: string
+          result_id?: string
         }
         Relationships: [
           {
-            foreignKeyName: "result_awards_result_id_fkey"
-            columns: ["result_id"]
-            referencedRelation: "results"
+            foreignKeyName: "result_awards_award_id_fkey"
+            columns: ["award_id"]
+            isOneToOne: false
+            referencedRelation: "awards"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "result_awards_award_id_fkey"
-            columns: ["award_id"]
-            referencedRelation: "awards"
+            foreignKeyName: "result_awards_result_id_fkey"
+            columns: ["result_id"]
+            isOneToOne: false
+            referencedRelation: "public_results"
             referencedColumns: ["id"]
-          }
+          },
+          {
+            foreignKeyName: "result_awards_result_id_fkey"
+            columns: ["result_id"]
+            isOneToOne: false
+            referencedRelation: "results"
+            referencedColumns: ["id"]
+          },
         ]
       }
       results: {
         Row: {
-          id: string
-          event_id: string
-          rider_id: string
-          finish_time: string | null
-          status: 'finished' | 'dnf' | 'dns' | 'otl' | 'dq'
-          note: string | null
-          team_name: string | null
-          season: number
+          created_at: string | null
           distance_km: number
-          created_at: string
-          updated_at: string
+          event_id: string
+          finish_time: string | null
+          id: string
+          note: string | null
+          rider_id: string
+          season: number
+          status: string | null
+          team_name: string | null
+          updated_at: string | null
         }
         Insert: {
-          id?: string
-          event_id: string
-          rider_id: string
-          finish_time?: string | null
-          status?: 'finished' | 'dnf' | 'dns' | 'otl' | 'dq'
-          note?: string | null
-          team_name?: string | null
-          season: number
+          created_at?: string | null
           distance_km: number
-          created_at?: string
-          updated_at?: string
+          event_id: string
+          finish_time?: string | null
+          id?: string
+          note?: string | null
+          rider_id: string
+          season: number
+          status?: string | null
+          team_name?: string | null
+          updated_at?: string | null
         }
         Update: {
-          id?: string
-          event_id?: string
-          rider_id?: string
-          finish_time?: string | null
-          status?: 'finished' | 'dnf' | 'dns' | 'otl' | 'dq'
-          note?: string | null
-          team_name?: string | null
-          season?: number
+          created_at?: string | null
           distance_km?: number
-          created_at?: string
-          updated_at?: string
+          event_id?: string
+          finish_time?: string | null
+          id?: string
+          note?: string | null
+          rider_id?: string
+          season?: number
+          status?: string | null
+          team_name?: string | null
+          updated_at?: string | null
         }
         Relationships: [
           {
             foreignKeyName: "results_event_id_fkey"
             columns: ["event_id"]
+            isOneToOne: false
             referencedRelation: "events"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "results_rider_id_fkey"
             columns: ["rider_id"]
+            isOneToOne: false
+            referencedRelation: "public_riders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "results_rider_id_fkey"
+            columns: ["rider_id"]
+            isOneToOne: false
             referencedRelation: "riders"
             referencedColumns: ["id"]
-          }
+          },
         ]
       }
       riders: {
         Row: {
-          id: string
-          slug: string
-          first_name: string
-          last_name: string
+          created_at: string | null
           email: string | null
-          gender: 'M' | 'F' | 'X' | null
-          created_at: string
-          updated_at: string
+          first_name: string
+          full_name: string | null
+          gender: string | null
+          id: string
+          last_name: string
+          slug: string
+          updated_at: string | null
         }
         Insert: {
-          id?: string
-          slug: string
-          first_name: string
-          last_name: string
+          created_at?: string | null
           email?: string | null
-          gender?: 'M' | 'F' | 'X' | null
-          created_at?: string
-          updated_at?: string
+          first_name: string
+          full_name?: string | null
+          gender?: string | null
+          id?: string
+          last_name: string
+          slug: string
+          updated_at?: string | null
         }
         Update: {
-          id?: string
-          slug?: string
-          first_name?: string
-          last_name?: string
+          created_at?: string | null
           email?: string | null
-          gender?: 'M' | 'F' | 'X' | null
-          created_at?: string
-          updated_at?: string
+          first_name?: string
+          full_name?: string | null
+          gender?: string | null
+          id?: string
+          last_name?: string
+          slug?: string
+          updated_at?: string | null
         }
         Relationships: []
       }
       routes: {
         Row: {
-          id: string
-          slug: string
-          name: string
           chapter_id: string | null
-          distance_km: number | null
           collection: string | null
-          description: string | null
-          rwgps_id: string | null
+          created_at: string | null
           cue_sheet_url: string | null
-          notes: string | null
+          description: string | null
+          distance_km: number | null
+          id: string
           is_active: boolean
-          created_at: string
-          updated_at: string
+          name: string
+          notes: string | null
+          rwgps_id: string | null
+          slug: string
+          updated_at: string | null
         }
         Insert: {
-          id?: string
-          slug: string
-          name: string
           chapter_id?: string | null
-          distance_km?: number | null
           collection?: string | null
-          description?: string | null
-          rwgps_id?: string | null
+          created_at?: string | null
           cue_sheet_url?: string | null
-          notes?: string | null
+          description?: string | null
+          distance_km?: number | null
+          id?: string
           is_active?: boolean
-          created_at?: string
-          updated_at?: string
+          name: string
+          notes?: string | null
+          rwgps_id?: string | null
+          slug: string
+          updated_at?: string | null
         }
         Update: {
-          id?: string
-          slug?: string
-          name?: string
           chapter_id?: string | null
-          distance_km?: number | null
           collection?: string | null
-          description?: string | null
-          rwgps_id?: string | null
+          created_at?: string | null
           cue_sheet_url?: string | null
-          notes?: string | null
+          description?: string | null
+          distance_km?: number | null
+          id?: string
           is_active?: boolean
-          created_at?: string
-          updated_at?: string
+          name?: string
+          notes?: string | null
+          rwgps_id?: string | null
+          slug?: string
+          updated_at?: string | null
         }
         Relationships: [
           {
             foreignKeyName: "routes_chapter_id_fkey"
             columns: ["chapter_id"]
+            isOneToOne: false
             referencedRelation: "chapters"
             referencedColumns: ["id"]
-          }
+          },
         ]
       }
     }
     Views: {
-      public_riders: {
-        Row: {
-          id: string
-          slug: string
-          first_name: string
-          last_name: string
-          gender: string | null
-          created_at: string
-          updated_at: string
-        }
-      }
       public_results: {
         Row: {
-          id: string
-          event_id: string
+          created_at: string | null
+          distance_km: number | null
+          event_id: string | null
           finish_time: string | null
-          status: string
+          first_name: string | null
+          id: string | null
+          last_name: string | null
           note: string | null
+          rider_slug: string | null
+          season: number | null
+          status: string | null
           team_name: string | null
-          season: number
-          distance_km: number
-          created_at: string
-          first_name: string
-          last_name: string
         }
+        Relationships: [
+          {
+            foreignKeyName: "results_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      public_riders: {
+        Row: {
+          created_at: string | null
+          first_name: string | null
+          gender: string | null
+          id: string | null
+          last_name: string | null
+          slug: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          first_name?: string | null
+          gender?: string | null
+          id?: string | null
+          last_name?: string | null
+          slug?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          first_name?: string | null
+          gender?: string | null
+          id?: string | null
+          last_name?: string | null
+          slug?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
       }
     }
     Functions: {
+      get_distinct_seasons: {
+        Args: never
+        Returns: {
+          season: number
+        }[]
+      }
       get_registered_riders: {
         Args: { p_event_id: string }
         Returns: {
@@ -435,14 +579,8 @@ export type Database = {
           share_registration: boolean
         }[]
       }
-      is_admin: {
-        Args: Record<string, never>
-        Returns: boolean
-      }
-      is_chapter_admin: {
-        Args: { check_chapter_id: string }
-        Returns: boolean
-      }
+      is_admin: { Args: never; Returns: boolean }
+      is_chapter_admin: { Args: { check_chapter_id: string }; Returns: boolean }
     }
     Enums: {
       [_ in never]: never
@@ -453,16 +591,139 @@ export type Database = {
   }
 }
 
-// Convenience types
-export type Tables<T extends keyof Database['public']['Tables']> = Database['public']['Tables'][T]['Row']
-export type InsertTables<T extends keyof Database['public']['Tables']> = Database['public']['Tables'][T]['Insert']
-export type UpdateTables<T extends keyof Database['public']['Tables']> = Database['public']['Tables'][T]['Update']
+type DatabaseWithoutInternals = Omit<Database, "__InternalSupabase">
 
-// Table row types
+type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, "public">]
+
+export type Tables<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+        DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
+    : never = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+      DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
+      Row: infer R
+    }
+    ? R
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof (DefaultSchema["Tables"] &
+        DefaultSchema["Views"])
+    ? (DefaultSchema["Tables"] &
+        DefaultSchema["Views"])[DefaultSchemaTableNameOrOptions] extends {
+        Row: infer R
+      }
+      ? R
+      : never
+    : never
+
+export type TablesInsert<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof DefaultSchema["Tables"]
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    : never = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+      Insert: infer I
+    }
+    ? I
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
+    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+        Insert: infer I
+      }
+      ? I
+      : never
+    : never
+
+export type TablesUpdate<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof DefaultSchema["Tables"]
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    : never = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+      Update: infer U
+    }
+    ? U
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
+    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+        Update: infer U
+      }
+      ? U
+      : never
+    : never
+
+export type Enums<
+  DefaultSchemaEnumNameOrOptions extends
+    | keyof DefaultSchema["Enums"]
+    | { schema: keyof DatabaseWithoutInternals },
+  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
+    : never = never,
+> = DefaultSchemaEnumNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
+  : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema["Enums"]
+    ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
+    : never
+
+export type CompositeTypes<
+  PublicCompositeTypeNameOrOptions extends
+    | keyof DefaultSchema["CompositeTypes"]
+    | { schema: keyof DatabaseWithoutInternals },
+  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
+    : never = never,
+> = PublicCompositeTypeNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
+  : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
+    ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
+    : never
+
+export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
+  public: {
+    Enums: {},
+  },
+} as const
+
+
+// Table row type aliases (using generated Tables type)
 export type Admin = Tables<'admins'>
 export type Award = Tables<'awards'>
 export type Chapter = Tables<'chapters'>
 export type Event = Tables<'events'>
+export type Image = Tables<'images'>
 export type Registration = Tables<'registrations'>
 export type ResultAward = Tables<'result_awards'>
 export type Result = Tables<'results'>
