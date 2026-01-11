@@ -4,7 +4,7 @@ import Image from "next/image";
 import { PageShell } from "@/components/page-shell";
 import { RegisterCTA } from "@/components/register-cta";
 import { MarkdownContent } from "@/components/markdown-content";
-import { getEventBySlug, getAllEventSlugs, getRegisteredRiders } from "@/lib/data/events";
+import { getEventBySlug, getRegisteredRiders } from "@/lib/data/events";
 import { MapPinIcon, CalendarIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
@@ -12,11 +12,8 @@ interface PageProps {
   params: Promise<{ slug: string }>;
 }
 
-// Generate static params for all events
-export async function generateStaticParams() {
-  const slugs = await getAllEventSlugs();
-  return slugs.map((slug) => ({ slug }));
-}
+// Force dynamic rendering - registration data changes frequently
+export const dynamic = 'force-dynamic';
 
 // Generate metadata for each event
 export async function generateMetadata({ params }: PageProps) {

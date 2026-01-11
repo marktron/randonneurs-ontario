@@ -2,8 +2,9 @@
 title: Devil Week 2026
 slug: devil-week-2026
 description: Devil Week is a one-week randonneuring challenge offering a full Super Randonneur series (600, 400, 300, and 200 km) plus camaraderie, endurance, and community.
-lastUpdated: 2026-01-10
+lastUpdated: 2026-01-11
 ---
+
 
 Devil Week is a one-week endurance cycling challenge designed to let riders complete a full Super Randonneur series in a single week. Hosted as a shared base event, it combines long-distance personal challenge with the rare opportunity to ride, recover, and connect alongside fellow randonneurs day after day. Whether you’re testing your limits or immersing yourself in the social side of ultra-distance cycling, Devil Week is as much about community as it is about the kilometers.
 
@@ -19,7 +20,7 @@ The 2026 edition of Devil Week is hosted by the Toronto chapter and will be run 
 
 ### Thursday June 18, 2026
 - **Distance**: 400 km
-- **Route**: [Niagara Peninsula](https://ridewithgps.com/routes/53015006)
+- **Route**: [Niagara Peninsula](./register/dw-niagara-peninsula-400km-2026-06-18)
 - **Start time**: 06:00
 - **Notes**: Also new for 2026, this route circumnavigates the borders of the Niagara region, and gives us the first of two Niagara Falls spottings for the week.
 
@@ -43,3 +44,4 @@ The 2026 edition of Devil Week is hosted by the Toronto chapter and will be run 
 
 ## Questions?
 Email [Mark Allen](mailto:vp-toronto@randonneursontario.ca), the Toronto chapter VP, join the [Randonneurs Ontario mailing list](https://randonneursontario.ca/who/Mailing_Lists.html), or join us on Slack in the #devil-week channel.
+
