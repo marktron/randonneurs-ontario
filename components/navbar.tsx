@@ -95,6 +95,11 @@ export function Navbar() {
                       Mailing List
                     </Link>
                   </li>
+                  <li>
+                    <Link href="/contact" className={dropdownLinkStyles}>
+                      Contact
+                    </Link>
+                  </li>
                 </ul>
               </NavigationMenuContent>
             </NavigationMenuItem>
@@ -144,6 +149,14 @@ export function Navbar() {
                       className={dropdownLinkStyles}
                     >
                       Permanents
+                    </Link>
+                  </li>
+                  <li>
+                    <Link
+                      href="/devil-week-2026"
+                      className={dropdownLinkStyles}
+                    >
+                      Devil Week 2026
                     </Link>
                   </li>
                 </ul>
@@ -201,15 +214,11 @@ export function Navbar() {
 
             {/* Membership */}
             <NavigationMenuItem>
-              <Link href="/membership" className={linkStyles}>
-                Membership
-              </Link>
-            </NavigationMenuItem>
-
-            {/* Contact */}
-            <NavigationMenuItem>
-              <Link href="/contact" className={linkStyles}>
-                Contact
+              <Link
+                href="/membership"
+                className="inline-flex items-center rounded-full bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-700"
+              >
+                Join the club
               </Link>
             </NavigationMenuItem>
           </NavigationMenuList>
@@ -267,6 +276,13 @@ export function Navbar() {
                 >
                   Mailing List
                 </Link>
+                <Link
+                  href="/contact"
+                  onClick={() => setOpen(false)}
+                  className="block px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors"
+                >
+                  Contact
+                </Link>
               </MobileNavSection>
 
               {/* Routes */}
@@ -302,6 +318,13 @@ export function Navbar() {
                   className="block px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors"
                 >
                   Permanents
+                </Link>
+                <Link
+                  href="/devil-week-2026"
+                  onClick={() => setOpen(false)}
+                  className="block px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors"
+                >
+                  Devil Week 2026
                 </Link>
               </MobileNavSection>
 
@@ -348,18 +371,9 @@ export function Navbar() {
               <Link
                 href="/membership"
                 onClick={() => setOpen(false)}
-                className="px-3 py-2.5 text-sm font-medium rounded-lg hover:bg-muted transition-colors"
+                className="ml-5 mt-2 rounded-full bg-red-600 px-4 py-2.5 text-center text-sm font-medium text-white transition-colors hover:bg-red-700"
               >
-                Membership
-              </Link>
-
-              {/* Contact */}
-              <Link
-                href="/contact"
-                onClick={() => setOpen(false)}
-                className="px-3 py-2.5 text-sm font-medium rounded-lg hover:bg-muted transition-colors"
-              >
-                Contact
+                Join the club
               </Link>
             </nav>
           </SheetContent>
