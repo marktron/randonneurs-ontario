@@ -216,7 +216,7 @@ export function Navbar() {
             <NavigationMenuItem>
               <Link
                 href="/membership"
-                className="inline-flex items-center rounded-full bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-700"
+                className="inline-flex items-center rounded-full bg-red-600 ml-3 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-700"
               >
                 Join the club
               </Link>
@@ -234,9 +234,9 @@ export function Navbar() {
           </SheetTrigger>
           <SheetContent side="right" className="w-[85vw] max-w-80 overflow-y-auto">
             <SheetHeader>
-              <SheetTitle className="font-serif">Menu</SheetTitle>
+              <SheetTitle className="font-serif">Randonneurs Ontario</SheetTitle>
             </SheetHeader>
-            <nav className="flex flex-col gap-1 mt-6">
+            <nav className="flex flex-col gap-1 mt-6 px-3">
               {/* About */}
               <MobileNavSection title="About">
                 <Link
@@ -371,7 +371,7 @@ export function Navbar() {
               <Link
                 href="/membership"
                 onClick={() => setOpen(false)}
-                className="ml-5 mt-2 rounded-full bg-red-600 px-4 py-2.5 text-center text-sm font-medium text-white transition-colors hover:bg-red-700"
+                className="mt-2 rounded-full bg-red-600 px-4 py-2.5 text-center text-sm font-medium text-white transition-colors hover:bg-red-700"
               >
                 Join the club
               </Link>
