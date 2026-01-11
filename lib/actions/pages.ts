@@ -1,5 +1,6 @@
 "use server"
 
+import { revalidatePath } from "next/cache"
 import { requireAdmin } from "@/lib/auth/get-admin"
 
 interface SavePageInput {
@@ -12,6 +13,25 @@ interface SavePageInput {
 interface SavePageResult {
   success: boolean
   error?: string
+}
+
+// Get reserved slugs dynamically from app directory
+function getReservedSlugs(): string[] {
+  try {
+    const fs = require("fs")
+    const path = require("path")
+    const appDir = path.join(process.cwd(), "app")
+
+    return fs.readdirSync(appDir, { withFileTypes: true })
+      .filter((entry: { isDirectory: () => boolean, name: string }) =>
+        entry.isDirectory() && !entry.name.startsWith("[") && !entry.name.startsWith("_")
+      )
+      .map((entry: { name: string }) => entry.name)
+  } catch {
+    // Fallback if filesystem read fails (e.g., in some production environments)
+    return ["about", "admin", "calendar", "contact", "intro", "mailing-list",
+            "membership", "policies", "register", "results", "riders", "routes"]
+  }
 }
 
 export async function savePage(input: SavePageInput): Promise<SavePageResult> {
@@ -30,6 +50,12 @@ export async function savePage(input: SavePageInput): Promise<SavePageResult> {
     return { success: false, error: "Slug can only contain lowercase letters, numbers, and hyphens" }
   }
 
+  // Check for reserved slugs (existing routes)
+  const reservedSlugs = getReservedSlugs()
+  if (reservedSlugs.includes(slug)) {
+    return { success: false, error: `"${slug}" is reserved and cannot be used as a page slug` }
+  }
+
   // Build markdown file content with frontmatter
   const today = new Date().toISOString().split("T")[0]
   const fileContent = `---
@@ -42,15 +68,16 @@ lastUpdated: ${today}
 ${content}
 `
 
+  // In development, always save locally (getPage reads from local filesystem)
+  if (process.env.NODE_ENV === "development") {
+    return saveLocalFile(slug, fileContent)
+  }
+
   // Check for required environment variables
   const githubToken = process.env.GITHUB_TOKEN
   const githubRepo = process.env.GITHUB_REPO
 
   if (!githubToken || !githubRepo) {
-    // Fallback: save locally in development
-    if (process.env.NODE_ENV === "development") {
-      return saveLocalFile(slug, fileContent)
-    }
     return { success: false, error: "GitHub integration not configured" }
   }
 
@@ -100,6 +127,11 @@ ${content}
       return { success: false, error: "Failed to save to GitHub" }
     }
 
+    // Revalidate cached pages
+    revalidatePath("/admin/pages")
+    revalidatePath(`/admin/pages/${slug}`)
+    revalidatePath(`/${slug}`)
+
     return { success: true }
   } catch (error) {
     console.error("Error saving page:", error)
@@ -115,6 +147,11 @@ async function saveLocalFile(slug: string, content: string): Promise<SavePageRes
 
     const filePath = path.join(process.cwd(), "content/pages", `${slug}.md`)
     await fs.writeFile(filePath, content, "utf-8")
+
+    // Revalidate cached pages
+    revalidatePath("/admin/pages")
+    revalidatePath(`/admin/pages/${slug}`)
+    revalidatePath(`/${slug}`)
 
     return { success: true }
   } catch (error) {
