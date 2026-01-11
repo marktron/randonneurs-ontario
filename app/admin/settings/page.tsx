@@ -33,7 +33,7 @@ export default async function AdminSettingsPage() {
             </div>
             <div>
               <span className="text-sm text-muted-foreground">Role</span>
-              <p className="font-medium capitalize">{admin.role.replace('_', ' ')}</p>
+              <p className="font-medium capitalize">{admin.role?.replace('_', ' ')}</p>
             </div>
           </CardContent>
         </Card>
