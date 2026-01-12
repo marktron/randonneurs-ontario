@@ -83,3 +83,38 @@ export async function changePassword(
 
   return { success: true }
 }
+
+export async function updateProfile(
+  name: string,
+  phone: string | null,
+  chapterId: string | null
+): Promise<ActionResult> {
+  if (!name || name.trim().length === 0) {
+    return { success: false, error: 'Name is required' }
+  }
+
+  const supabase = await createSupabaseServerClient()
+
+  // Get current user
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) {
+    return { success: false, error: 'Not authenticated' }
+  }
+
+  // Update admin profile
+  const { error } = await supabase
+    .from('admins')
+    .update({
+      name: name.trim(),
+      phone: phone?.trim() || null,
+      chapter_id: chapterId || null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', user.id)
+
+  if (error) {
+    return { success: false, error: error.message }
+  }
+
+  return { success: true }
+}

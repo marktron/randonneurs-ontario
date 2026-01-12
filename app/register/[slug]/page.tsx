@@ -4,6 +4,7 @@ import Image from "next/image";
 import { PageShell } from "@/components/page-shell";
 import { RegisterCTA } from "@/components/register-cta";
 import { MarkdownContent } from "@/components/markdown-content";
+import { RwgpsEmbed } from "@/components/rwgps-embed";
 import { getEventBySlug, getRegisteredRiders } from "@/lib/data/events";
 import { MapPinIcon, CalendarIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -156,12 +157,7 @@ export default async function RegisterPage({ params }: PageProps) {
                 <h2 className="font-serif text-2xl tracking-tight pb-4">
                   Route
                 </h2>
-                <iframe
-                  src={`https://ridewithgps.com/embeds?type=route&id=${event.rwgpsId}&sampleGraph=true&metricUnits=true`}
-                  style={{ width: "1px", minWidth: "100%", height: "500px", border: "none" }}
-                  scrolling="no"
-                  title="Route Map"
-                />
+                <RwgpsEmbed routeId={event.rwgpsId} />
                 {event.routeSlug && (
                   <p className="mt-3 text-sm">
                     <Link
