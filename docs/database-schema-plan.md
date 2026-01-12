@@ -100,6 +100,8 @@ CREATE TABLE riders (
   last_name TEXT NOT NULL,
   email TEXT,                       -- Optional, for contact
   gender TEXT CHECK (gender IN ('M', 'F', 'X')),
+  emergency_contact_name TEXT,      -- Emergency contact for rides
+  emergency_contact_phone TEXT,
   created_at TIMESTAMPTZ DEFAULT now(),
   updated_at TIMESTAMPTZ DEFAULT now()
 );
@@ -117,7 +119,6 @@ CREATE TABLE registrations (
 
   registered_at TIMESTAMPTZ DEFAULT now(),
   notes TEXT,                       -- Notes for organizer
-  emergency_contact TEXT,
 
   status TEXT DEFAULT 'registered' CHECK (status IN ('registered', 'cancelled')),
 

@@ -43,6 +43,8 @@ describe('registerForEvent', () => {
         lastName: 'User',
         email: 'test@example.com',
         shareRegistration: false,
+        emergencyContactName: 'Emergency Contact',
+        emergencyContactPhone: '555-1234',
       })
 
       expect(result.success).toBe(false)
@@ -56,6 +58,8 @@ describe('registerForEvent', () => {
         lastName: 'User',
         email: 'test@example.com',
         shareRegistration: false,
+        emergencyContactName: 'Emergency Contact',
+        emergencyContactPhone: '555-1234',
       })
 
       expect(result.success).toBe(false)
@@ -69,6 +73,8 @@ describe('registerForEvent', () => {
         lastName: '   ',
         email: 'test@example.com',
         shareRegistration: false,
+        emergencyContactName: 'Emergency Contact',
+        emergencyContactPhone: '555-1234',
       })
 
       expect(result.success).toBe(false)
@@ -82,6 +88,8 @@ describe('registerForEvent', () => {
         lastName: 'User',
         email: '  ',
         shareRegistration: false,
+        emergencyContactName: 'Emergency Contact',
+        emergencyContactPhone: '555-1234',
       })
 
       expect(result.success).toBe(false)
@@ -98,6 +106,8 @@ describe('registerForEvent', () => {
         lastName: 'User',
         email: 'test@example.com',
         shareRegistration: false,
+        emergencyContactName: 'Emergency Contact',
+        emergencyContactPhone: '555-1234',
       })
 
       expect(result.success).toBe(false)
@@ -131,6 +141,8 @@ describe('registerForPermanent', () => {
         lastName: 'User',
         email: 'test@example.com',
         shareRegistration: false,
+        emergencyContactName: 'Emergency Contact',
+        emergencyContactPhone: '555-1234',
       })
 
       expect(result.success).toBe(false)
@@ -147,6 +159,8 @@ describe('registerForPermanent', () => {
         lastName: 'User',
         email: 'test@example.com',
         shareRegistration: false,
+        emergencyContactName: 'Emergency Contact',
+        emergencyContactPhone: '555-1234',
       })
 
       expect(result.success).toBe(false)
@@ -168,6 +182,8 @@ describe('registerForPermanent', () => {
         lastName: 'User',
         email: 'test@example.com',
         shareRegistration: false,
+        emergencyContactName: 'Emergency Contact',
+        emergencyContactPhone: '555-1234',
       })
 
       expect(result.success).toBe(false)
@@ -184,6 +200,8 @@ describe('registerForPermanent', () => {
         lastName: 'User',
         email: 'test@example.com',
         shareRegistration: false,
+        emergencyContactName: 'Emergency Contact',
+        emergencyContactPhone: '555-1234',
       })
 
       expect(result.success).toBe(false)

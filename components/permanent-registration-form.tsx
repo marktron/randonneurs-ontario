@@ -43,6 +43,8 @@ interface SavedRegistrationData {
   email: string;
   gender: string;
   shareRegistration: boolean;
+  emergencyContactName: string;
+  emergencyContactPhone: string;
 }
 
 function getSavedData(): SavedRegistrationData | null {
@@ -89,6 +91,8 @@ export function PermanentRegistrationForm({ routes }: PermanentRegistrationFormP
   const [email, setEmail] = useState("");
   const [shareRegistration, setShareRegistration] = useState(false);
   const [gender, setGender] = useState<string>("");
+  const [emergencyContactName, setEmergencyContactName] = useState("");
+  const [emergencyContactPhone, setEmergencyContactPhone] = useState("");
   const [notes, setNotes] = useState("");
 
   // UI state
@@ -123,6 +127,8 @@ export function PermanentRegistrationForm({ routes }: PermanentRegistrationFormP
       setEmail(saved.email);
       setGender(saved.gender);
       setShareRegistration(saved.shareRegistration);
+      setEmergencyContactName(saved.emergencyContactName || "");
+      setEmergencyContactPhone(saved.emergencyContactPhone || "");
     }
   }, []);
 
@@ -158,11 +164,13 @@ export function PermanentRegistrationForm({ routes }: PermanentRegistrationFormP
         gender: gender || undefined,
         shareRegistration,
         notes: notes || undefined,
+        emergencyContactName,
+        emergencyContactPhone,
       });
 
       if (result.success) {
         // Save form data to localStorage for next registration
-        saveData({ firstName, lastName, email, gender, shareRegistration });
+        saveData({ firstName, lastName, email, gender, shareRegistration, emergencyContactName, emergencyContactPhone });
         setSuccess(true);
         router.refresh();
       } else if (result.needsRiderMatch && result.matchCandidates && result.pendingData) {
@@ -187,11 +195,13 @@ export function PermanentRegistrationForm({ routes }: PermanentRegistrationFormP
         gender: gender || undefined,
         shareRegistration,
         notes: notes || undefined,
+        emergencyContactName,
+        emergencyContactPhone,
       });
 
       if (result.success) {
         setMatchDialogOpen(false);
-        saveData({ firstName, lastName, email, gender, shareRegistration });
+        saveData({ firstName, lastName, email, gender, shareRegistration, emergencyContactName, emergencyContactPhone });
         setSuccess(true);
         router.refresh();
       } else {
@@ -472,6 +482,39 @@ export function PermanentRegistrationForm({ routes }: PermanentRegistrationFormP
                 <p className="text-xs text-muted-foreground">
                   Share your name with other riders before the event. All riders will appear on the results after the event.
                 </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Emergency Contact */}
+          <div className="bg-muted/50 border border-border rounded-lg p-4 space-y-3">
+            <p className="text-sm font-medium">Emergency contact</p>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="emergencyContactName">Name</Label>
+                <Input
+                  id="emergencyContactName"
+                  name="emergencyContactName"
+                  type="text"
+                  placeholder="Name"
+                  required
+                  disabled={isPending}
+                  value={emergencyContactName}
+                  onChange={(e) => setEmergencyContactName(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="emergencyContactPhone">Phone</Label>
+                <Input
+                  id="emergencyContactPhone"
+                  name="emergencyContactPhone"
+                  type="tel"
+                  placeholder="Phone number"
+                  required
+                  disabled={isPending}
+                  value={emergencyContactPhone}
+                  onChange={(e) => setEmergencyContactPhone(e.target.value)}
+                />
               </div>
             </div>
           </div>

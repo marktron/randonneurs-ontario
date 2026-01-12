@@ -33,6 +33,8 @@ interface Registration {
     first_name: string
     last_name: string
     email: string | null
+    emergency_contact_name: string | null
+    emergency_contact_phone: string | null
   }
 }
 
@@ -80,7 +82,7 @@ async function getRegistrations(eventId: string) {
       registered_at,
       status,
       notes,
-      riders (id, first_name, last_name, email)
+      riders (id, first_name, last_name, email, emergency_contact_name, emergency_contact_phone)
     `)
     .eq('event_id', eventId)
     .eq('status', 'registered')

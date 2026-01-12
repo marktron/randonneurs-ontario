@@ -61,6 +61,8 @@ export interface RegistrationData {
   gender?: string
   shareRegistration: boolean
   notes?: string
+  emergencyContactName: string
+  emergencyContactPhone: string
 }
 
 export interface RegistrationResult {
@@ -127,7 +129,7 @@ function formatEventTime(timeStr: string | null): string {
  * @returns Success/error result
  */
 export async function registerForEvent(data: RegistrationData): Promise<RegistrationResult> {
-  const { eventId, firstName, lastName, email, gender, shareRegistration, notes } = data
+  const { eventId, firstName, lastName, email, gender, shareRegistration, notes, emergencyContactName, emergencyContactPhone } = data
 
   // Step 1: Validate required fields
   if (!eventId || !firstName.trim() || !lastName.trim() || !email.trim()) {
@@ -174,10 +176,12 @@ export async function registerForEvent(data: RegistrationData): Promise<Registra
     riderId = (existingRider as { id: string }).id
 
     // Update rider info if they provided more details
-    const updateData: RidersUpdate = {
+    const updateData = {
       first_name: trimmedFirstName,
       last_name: trimmedLastName,
       gender: parsedGender,
+      emergency_contact_name: emergencyContactName || null,
+      emergency_contact_phone: emergencyContactPhone || null,
     }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await (getSupabaseAdmin().from('riders') as any).update(updateData).eq('id', riderId)
@@ -196,12 +200,14 @@ export async function registerForEvent(data: RegistrationData): Promise<Registra
     }
 
     // No matches found - create new rider
-    const insertRider: RidersInsert = {
+    const insertRider = {
       slug: createRiderSlug(normalizedEmail),
       first_name: trimmedFirstName,
       last_name: trimmedLastName,
       email: normalizedEmail,
       gender: parsedGender,
+      emergency_contact_name: emergencyContactName || null,
+      emergency_contact_phone: emergencyContactPhone || null,
     }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: newRider, error: riderError } = await (getSupabaseAdmin().from('riders') as any)
@@ -283,6 +289,8 @@ export interface PermanentRegistrationData {
   gender?: string
   shareRegistration: boolean
   notes?: string
+  emergencyContactName: string
+  emergencyContactPhone: string
 }
 
 interface RouteWithChapter {
@@ -307,6 +315,8 @@ export async function registerForPermanent(data: PermanentRegistrationData): Pro
     gender,
     shareRegistration,
     notes,
+    emergencyContactName,
+    emergencyContactPhone,
   } = data
 
   // Validate required fields
@@ -410,10 +420,12 @@ export async function registerForPermanent(data: PermanentRegistrationData): Pro
     riderId = (existingRider as { id: string }).id
 
     // Update rider info if they provided more details
-    const updateData: RidersUpdate = {
+    const updateData = {
       first_name: trimmedFirstName,
       last_name: trimmedLastName,
       gender: parsedGender,
+      emergency_contact_name: emergencyContactName || null,
+      emergency_contact_phone: emergencyContactPhone || null,
     }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await (getSupabaseAdmin().from('riders') as any).update(updateData).eq('id', riderId)
@@ -435,17 +447,21 @@ export async function registerForPermanent(data: PermanentRegistrationData): Pro
           gender,
           shareRegistration,
           notes,
+          emergencyContactName,
+          emergencyContactPhone,
         },
       }
     }
 
     // No matches found - create new rider
-    const insertRider: RidersInsert = {
+    const insertRider = {
       slug: createRiderSlug(normalizedEmail),
       first_name: trimmedFirstName,
       last_name: trimmedLastName,
       email: normalizedEmail,
       gender: parsedGender,
+      emergency_contact_name: emergencyContactName || null,
+      emergency_contact_phone: emergencyContactPhone || null,
     }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: newRider, error: riderError } = await (getSupabaseAdmin().from('riders') as any)
@@ -528,6 +544,8 @@ export interface CompleteRegistrationData {
   gender?: string
   shareRegistration: boolean
   notes?: string
+  emergencyContactName: string
+  emergencyContactPhone: string
 }
 
 /**
@@ -545,7 +563,7 @@ export interface CompleteRegistrationData {
 export async function completeRegistrationWithRider(
   data: CompleteRegistrationData
 ): Promise<RegistrationResult> {
-  const { eventId, selectedRiderId, firstName, lastName, email, gender, shareRegistration, notes } = data
+  const { eventId, selectedRiderId, firstName, lastName, email, gender, shareRegistration, notes, emergencyContactName, emergencyContactPhone } = data
 
   // Validate required fields
   if (!eventId || !firstName.trim() || !lastName.trim() || !email.trim()) {
@@ -611,22 +629,26 @@ export async function completeRegistrationWithRider(
     })
 
     // Update rider with new email and info
-    const updateData: RidersUpdate = {
+    const updateData = {
       first_name: trimmedFirstName,
       last_name: trimmedLastName,
       email: normalizedEmail,
       gender: parsedGender,
+      emergency_contact_name: emergencyContactName || null,
+      emergency_contact_phone: emergencyContactPhone || null,
     }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await (getSupabaseAdmin().from('riders') as any).update(updateData).eq('id', selectedRiderId)
   } else {
     // User confirmed they're a new rider - create new rider record
-    const insertRider: RidersInsert = {
+    const insertRider = {
       slug: createRiderSlug(normalizedEmail),
       first_name: trimmedFirstName,
       last_name: trimmedLastName,
       email: normalizedEmail,
       gender: parsedGender,
+      emergency_contact_name: emergencyContactName || null,
+      emergency_contact_phone: emergencyContactPhone || null,
     }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: newRider, error: riderError } = await (getSupabaseAdmin().from('riders') as any)

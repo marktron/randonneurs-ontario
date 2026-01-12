@@ -11,17 +11,9 @@ import {
 } from '@/components/ui/table'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Textarea } from '@/components/ui/textarea'
-import { MessageSquare, X, Loader2, Check, Plus, CheckCircle2 } from 'lucide-react'
+import { X, Loader2, Check, Plus, CheckCircle2 } from 'lucide-react'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { createResult, updateResult, type ResultStatus } from '@/lib/actions/results'
 import { formatFinishTime } from '@/lib/utils'
@@ -40,6 +32,8 @@ interface Registration {
     first_name: string
     last_name: string
     email: string | null
+    emergency_contact_name: string | null
+    emergency_contact_phone: string | null
   }
 }
 
@@ -65,6 +59,9 @@ interface Participant {
   firstName: string
   lastName: string
   email: string | null
+  emergencyContactName: string | null
+  emergencyContactPhone: string | null
+  registrationNotes: string | null
   hasRegistration: boolean
 }
 
@@ -94,10 +91,9 @@ interface RiderRowProps {
   eventId: string
   season: number
   distanceKm: number
-  onNoteClick: (riderId: string, riderName: string, currentNote: string) => void
 }
 
-function RiderRow({ participant, result, eventId, season, distanceKm, onNoteClick }: RiderRowProps) {
+function RiderRow({ participant, result, eventId, season, distanceKm }: RiderRowProps) {
   const [isPending, startTransition] = useTransition()
   const [localStatus, setLocalStatus] = useState<ResultStatus>(
     (result?.status as ResultStatus) || 'pending'
@@ -177,8 +173,6 @@ function RiderRow({ participant, result, eventId, season, distanceKm, onNoteClic
     }
   }
 
-  const hasNote = !!result?.note
-
   return (
     <TableRow className={isPending ? 'opacity-60' : undefined}>
       <TableCell className="font-medium">
@@ -186,6 +180,12 @@ function RiderRow({ participant, result, eventId, season, distanceKm, onNoteClic
           {riderName}
           {participant.email && (
             <p className="text-xs text-muted-foreground">{participant.email}</p>
+          )}
+          {participant.emergencyContactName && (
+            <p className="text-xs text-muted-foreground">
+              ICE: {participant.emergencyContactName}
+              {participant.emergencyContactPhone && ` (${participant.emergencyContactPhone})`}
+            </p>
           )}
         </div>
       </TableCell>
@@ -219,16 +219,15 @@ function RiderRow({ participant, result, eventId, season, distanceKm, onNoteClic
           className="w-[80px] h-8 font-mono"
         />
       </TableCell>
-      <TableCell>
-        <Button
-          variant={hasNote ? 'secondary' : 'ghost'}
-          size="icon-sm"
-          onClick={() => onNoteClick(participant.riderId, riderName, result?.note || '')}
-          disabled={isPending || !result}
-          title={result ? 'Add/edit note' : 'Set status first'}
-        >
-          <MessageSquare className="h-4 w-4" />
-        </Button>
+      <TableCell className="max-w-[200px]">
+        {participant.registrationNotes && (
+          <span
+            className="text-xs text-muted-foreground truncate block"
+            title={participant.registrationNotes}
+          >
+            {participant.registrationNotes}
+          </span>
+        )}
       </TableCell>
       <TableCell>
         {isPending ? (
@@ -260,13 +259,6 @@ export function EventResultsManager({
   registrations,
   results,
 }: EventResultsManagerProps) {
-  const [noteModal, setNoteModal] = useState<{
-    riderId: string
-    riderName: string
-    note: string
-  } | null>(null)
-  const [noteText, setNoteText] = useState('')
-  const [isSavingNote, startSavingNote] = useTransition()
   const [addRiderOpen, setAddRiderOpen] = useState(false)
   const [isSubmitted, setIsSubmitted] = useState(eventStatus === 'submitted')
 
@@ -282,6 +274,9 @@ export function EventResultsManager({
     firstName: reg.riders.first_name,
     lastName: reg.riders.last_name,
     email: reg.riders.email,
+    emergencyContactName: reg.riders.emergency_contact_name,
+    emergencyContactPhone: reg.riders.emergency_contact_phone,
+    registrationNotes: reg.notes,
     hasRegistration: true,
   }))
 
@@ -293,6 +288,9 @@ export function EventResultsManager({
       firstName: result.riders.first_name,
       lastName: result.riders.last_name,
       email: result.riders.email,
+      emergencyContactName: null,
+      emergencyContactPhone: null,
+      registrationNotes: null,
       hasRegistration: false,
     }))
 
@@ -300,33 +298,6 @@ export function EventResultsManager({
 
   // All rider IDs already in the event (for filtering in add rider dialog)
   const existingRiderIds = new Set(allParticipants.map((p) => p.riderId))
-
-  const openNoteModal = (riderId: string, riderName: string, currentNote: string) => {
-    setNoteModal({ riderId, riderName, note: currentNote })
-    setNoteText(currentNote)
-  }
-
-  const handleSaveNote = () => {
-    if (!noteModal) return
-
-    const result = resultsByRiderId.get(noteModal.riderId)
-    if (!result) return
-
-    startSavingNote(async () => {
-      const res = await updateResult(result.id, {
-        status: result.status as ResultStatus,
-        finishTime: result.finish_time,
-        teamName: result.team_name,
-        note: noteText || null,
-      })
-      if (res.success) {
-        toast.success('Note saved')
-        setNoteModal(null)
-      } else {
-        toast.error(res.error || 'Failed to save note')
-      }
-    })
-  }
 
   // Sort by last name ascending
   const sortedParticipants = [...allParticipants].sort((a, b) => {
@@ -383,7 +354,6 @@ export function EventResultsManager({
                     eventId={eventId}
                     season={season}
                     distanceKm={distanceKm}
-                    onNoteClick={openNoteModal}
                   />
                 ))}
               </TableBody>
@@ -419,36 +389,6 @@ export function EventResultsManager({
         distanceKm={distanceKm}
         existingRiderIds={existingRiderIds}
       />
-
-      {/* Note Modal */}
-      <Dialog open={!!noteModal} onOpenChange={(open) => !open && setNoteModal(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Note for {noteModal?.riderName}</DialogTitle>
-          </DialogHeader>
-          <Textarea
-            value={noteText}
-            onChange={(e) => setNoteText(e.target.value)}
-            placeholder="Add a note about this rider's result..."
-            rows={4}
-          />
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setNoteModal(null)}>
-              Cancel
-            </Button>
-            <Button onClick={handleSaveNote} disabled={isSavingNote}>
-              {isSavingNote ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Saving...
-                </>
-              ) : (
-                'Save Note'
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </Card>
   )
 }

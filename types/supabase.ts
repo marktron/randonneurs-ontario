@@ -260,7 +260,6 @@ export type Database = {
       }
       registrations: {
         Row: {
-          emergency_contact: string | null
           event_id: string
           id: string
           notes: string | null
@@ -270,7 +269,6 @@ export type Database = {
           status: string | null
         }
         Insert: {
-          emergency_contact?: string | null
           event_id: string
           id?: string
           notes?: string | null
@@ -280,7 +278,6 @@ export type Database = {
           status?: string | null
         }
         Update: {
-          emergency_contact?: string | null
           event_id?: string
           id?: string
           notes?: string | null
@@ -414,10 +411,66 @@ export type Database = {
           },
         ]
       }
+      rider_merges: {
+        Row: {
+          id: string
+          merge_source: string
+          merged_at: string | null
+          previous_email: string | null
+          previous_first_name: string | null
+          previous_last_name: string | null
+          rider_id: string
+          submitted_email: string
+          submitted_first_name: string
+          submitted_last_name: string
+        }
+        Insert: {
+          id?: string
+          merge_source: string
+          merged_at?: string | null
+          previous_email?: string | null
+          previous_first_name?: string | null
+          previous_last_name?: string | null
+          rider_id: string
+          submitted_email: string
+          submitted_first_name: string
+          submitted_last_name: string
+        }
+        Update: {
+          id?: string
+          merge_source?: string
+          merged_at?: string | null
+          previous_email?: string | null
+          previous_first_name?: string | null
+          previous_last_name?: string | null
+          rider_id?: string
+          submitted_email?: string
+          submitted_first_name?: string
+          submitted_last_name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rider_merges_rider_id_fkey"
+            columns: ["rider_id"]
+            isOneToOne: false
+            referencedRelation: "public_riders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rider_merges_rider_id_fkey"
+            columns: ["rider_id"]
+            isOneToOne: false
+            referencedRelation: "riders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       riders: {
         Row: {
           created_at: string | null
           email: string | null
+          emergency_contact_name: string | null
+          emergency_contact_phone: string | null
           first_name: string
           full_name: string | null
           gender: string | null
@@ -429,6 +482,8 @@ export type Database = {
         Insert: {
           created_at?: string | null
           email?: string | null
+          emergency_contact_name?: string | null
+          emergency_contact_phone?: string | null
           first_name: string
           full_name?: string | null
           gender?: string | null
@@ -440,6 +495,8 @@ export type Database = {
         Update: {
           created_at?: string | null
           email?: string | null
+          emergency_contact_name?: string | null
+          emergency_contact_phone?: string | null
           first_name?: string
           full_name?: string | null
           gender?: string | null
@@ -729,3 +786,4 @@ export type ResultAward = Tables<'result_awards'>
 export type Result = Tables<'results'>
 export type Rider = Tables<'riders'>
 export type Route = Tables<'routes'>
+
