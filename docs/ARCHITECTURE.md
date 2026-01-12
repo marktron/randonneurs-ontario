@@ -32,6 +32,8 @@ randonneurs-ontario/
 │   ├── admin/                # Protected admin dashboard
 │   │   ├── settings/         # Admin profile & password management
 │   │   └── users/            # Admin user management (super admin only)
+│   ├── api/                  # API routes
+│   │   └── calendar/         # iCal feeds for calendar subscriptions
 │   ├── calendar/[chapter]/   # Chapter event calendars
 │   ├── routes/[chapter]/     # Route listings
 │   ├── results/[year]/       # Historical results

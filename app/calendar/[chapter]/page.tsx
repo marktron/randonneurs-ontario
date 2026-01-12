@@ -43,6 +43,7 @@ export default async function ChapterCalendarPage({ params }: PageProps) {
   return (
     <CalendarPage
       chapter={chapterInfo.name}
+      chapterSlug={chapter}
       description={chapterInfo.description}
       coverImage={chapterInfo.coverImage}
       events={events}
