@@ -18,7 +18,7 @@ export function PageHero({ image, eyebrow, title, description }: PageHeroProps) 
         priority
       />
       <div className="absolute inset-0 bg-gradient-to-t from-neutral-900/70 to-neutral-900/30" />
-      <div className="relative mx-auto max-w-4xl px-6 py-24 md:py-32">
+      <div className="relative mx-auto max-w-4xl px-6 py-16 md:py-20">
         <p className="eyebrow-hero text-neutral-200 text-shadow-lg">
           {eyebrow}
         </p>

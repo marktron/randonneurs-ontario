@@ -67,13 +67,13 @@ export async function getEventsByChapter(urlSlug: string): Promise<Event[]> {
   const today = new Date().toISOString().split('T')[0]
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: events, error: eventsError } = await (getSupabase().from('events') as any)
-    .select('*')
+    .select('*, registrations(count)')
     .eq('chapter_id', chapter.id)
     .eq('status', 'scheduled')
     .neq('event_type', 'permanent')
     .gte('event_date', today)
     .order('event_date', { ascending: true })
-    .order('start_time', { ascending: true })
+    .order('distance_km', { ascending: false })
 
   if (eventsError) {
     console.error('Error fetching events:', eventsError)
@@ -90,6 +90,7 @@ export async function getEventsByChapter(urlSlug: string): Promise<Event[]> {
     distance: event.distance_km.toString(),
     startLocation: event.start_location || '',
     startTime: event.start_time || '08:00',
+    registeredCount: event.registrations?.[0]?.count ?? 0,
   }))
 }
 
@@ -104,12 +105,12 @@ export async function getPermanentEvents(): Promise<Event[]> {
   const today = new Date().toISOString().split('T')[0]
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: events, error } = await (getSupabase().from('events') as any)
-    .select('*')
+    .select('*, registrations(count)')
     .eq('event_type', 'permanent')
     .eq('status', 'scheduled')
     .gte('event_date', today)
     .order('event_date', { ascending: true })
-    .order('start_time', { ascending: true })
+    .order('distance_km', { ascending: false })
 
   if (error) {
     console.error('Error fetching permanent events:', error)
@@ -126,6 +127,7 @@ export async function getPermanentEvents(): Promise<Event[]> {
     distance: event.distance_km.toString(),
     startLocation: event.start_location || '',
     startTime: event.start_time || '08:00',
+    registeredCount: event.registrations?.[0]?.count ?? 0,
   }))
 }
 

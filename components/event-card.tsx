@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 
 export interface Event {
   slug: string; // Event slug for registration link
@@ -9,6 +10,7 @@ export interface Event {
   distance: string;
   startLocation: string;
   startTime: string; // HH:MM format
+  registeredCount?: number; // Number of registered riders
 }
 
 function formatDate(dateString: string): { dayOfWeek: string; month: string; day: string; year: string } {
@@ -28,22 +30,31 @@ function formatTime(time: string): string {
   return `${hour12}:${minutes}${ampm}`;
 }
 
-export function EventCard({ event }: { event: Event }) {
+export function EventCard({ event, showDate = true, showBorder = true }: { event: Event; showDate?: boolean; showBorder?: boolean }) {
   const { dayOfWeek, month, day } = formatDate(event.date);
 
   return (
-    <article className="group grid grid-cols-[4.5rem_1fr] gap-6 py-8 sm:grid-cols-[6rem_1fr] sm:gap-10">
+    <article className={`group relative grid grid-cols-[4.5rem_1fr] gap-6 sm:grid-cols-[6rem_1fr] sm:gap-10 ${showDate ? 'pt-8' : 'pt-4'} ${showBorder ? 'border-b border-border pb-8' : ''}`}>
       {/* Date block */}
-      <div className="text-center border-r border-border pr-6 sm:pr-10">
-        <div className="text-[11px] font-medium tracking-[0.2em] text-muted-foreground">
-          {month}
-        </div>
-        <div className="text-4xl font-serif tabular-nums leading-none mt-1 sm:text-5xl">
-          {day}
-        </div>
-        <div className="text-[11px] font-medium tracking-wide text-muted-foreground mt-2 hidden sm:block">
-          {dayOfWeek}
-        </div>
+      <div className="text-center">
+        {showDate ? (
+          <>
+            <div className="text-[11px] font-medium tracking-[0.2em] text-muted-foreground">
+              {month}
+            </div>
+            <div className="text-4xl font-serif tabular-nums leading-none mt-1 sm:text-5xl">
+              {day}
+            </div>
+            <div className="text-[11px] font-medium tracking-wide text-muted-foreground mt-2 hidden sm:block">
+              {dayOfWeek}
+            </div>
+          </>
+        ) : (
+          <div className="invisible">
+            <div className="text-[11px]">&nbsp;</div>
+            <div className="text-4xl mt-1 sm:text-5xl">&nbsp;</div>
+          </div>
+        )}
       </div>
 
       {/* Event details */}
@@ -52,7 +63,7 @@ export function EventCard({ event }: { event: Event }) {
           <h3 className="font-serif text-xl leading-tight sm:text-2xl">
             <Link
               href={`/register/${event.slug}`}
-              className="hover:text-primary transition-colors"
+              className="hover:text-primary transition-colors border-b border-transparent group-hover:border-current/50"
             >
               {event.name}
             </Link>
@@ -60,31 +71,35 @@ export function EventCard({ event }: { event: Event }) {
           <span className="text-sm tabular-nums text-muted-foreground">
             {event.distance} km
           </span>
+          {event.type === "Populaire" && (
+            <Badge variant="outline" className="text-[10px] tracking-wider font-medium">
+              Populaire
+            </Badge>
+          )}
         </div>
 
         <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted-foreground">
           {event.startLocation && (
             <>
               <span>{event.startLocation}</span>
-              <span className="hidden sm:inline text-border">|</span>
+              <span className="hidden sm:inline text-muted-foreground/50">•</span>
             </>
           )}
           <span className="tabular-nums">{formatTime(event.startTime)}</span>
-          <Badge variant="outline" className="text-[10px] tracking-wider font-medium ml-auto sm:ml-0">
-            {event.type}
-          </Badge>
+          {event.registeredCount !== undefined && event.registeredCount > 0 && (
+            <>
+              <span className="hidden sm:inline text-muted-foreground/50">•</span>
+              <span>{event.registeredCount} {event.registeredCount === 1 ? 'rider' : 'riders'}</span>
+            </>
+          )}
         </div>
 
-        <div className="mt-4">
-          <Link
-            href={`/register/${event.slug}`}
-            className="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline underline-offset-4 decoration-primary/40 hover:decoration-primary transition-colors"
-          >
-            Register for this event
-            <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
-            </svg>
-          </Link>
+        <div className="mt-4 md:mt-0 md:absolute md:right-0 md:opacity-0 md:group-hover:opacity-100 md:transition-opacity">
+          <Button variant="default" size="sm" asChild>
+            <Link href={`/register/${event.slug}`}>
+              Register
+            </Link>
+          </Button>
         </div>
       </div>
     </article>
@@ -107,15 +122,26 @@ export function EventList({ events }: { events: Event[] }) {
     <div className="space-y-16">
       {Object.entries(eventsByMonth).map(([month, monthEvents]) => (
         <section key={month}>
-          <header className="mb-8">
-            <h2 className="text-xs font-medium tracking-[0.25em] uppercase text-muted-foreground">
+          <header className="mb-2">
+            <h2 className="font-serif text-2xl tracking-tight">
               {month}
             </h2>
           </header>
-          <div className="divide-y divide-border">
-            {monthEvents.map((event, index) => (
-              <EventCard key={`${event.date}-${event.distance}-${index}`} event={event} />
-            ))}
+          <div>
+            {monthEvents.map((event, index) => {
+              const prevEvent = index > 0 ? monthEvents[index - 1] : null;
+              const nextEvent = index < monthEvents.length - 1 ? monthEvents[index + 1] : null;
+              const showDate = !prevEvent || prevEvent.date !== event.date;
+              const showBorder = !nextEvent || nextEvent.date !== event.date;
+              return (
+                <EventCard
+                  key={`${event.date}-${event.distance}-${index}`}
+                  event={event}
+                  showDate={showDate}
+                  showBorder={showBorder}
+                />
+              );
+            })}
           </div>
         </section>
       ))}

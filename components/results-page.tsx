@@ -1,9 +1,9 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { PageShell } from "@/components/page-shell";
+import { PageHero } from "@/components/page-hero";
 import { type EventResult } from "@/lib/data/results";
 import {
   DropdownMenu,
@@ -59,28 +59,12 @@ export function ResultsPage({
 
   return (
     <PageShell>
-      {/* Header */}
-      <div className="relative border-b border-border overflow-hidden">
-        <Image
-          src={coverImage}
-          alt=""
-          fill
-          className="object-cover editorial-image"
-          priority
-        />
-        <div className="absolute inset-0 bg-gradient-to-t from-neutral-900/80 via-neutral-900/40 to-neutral-900/20" />
-        <div className="relative mx-auto max-w-5xl px-6 py-28 md:py-36">
-          <p className="eyebrow-hero text-neutral-300 text-shadow-lg">
-            Season Results
-          </p>
-          <h1 className="font-serif text-5xl md:text-6xl lg:text-7xl tracking-tight mt-2 text-white text-shadow-lg">
-            {chapter}
-          </h1>
-          <p className="mt-4 text-lg leading-relaxed text-neutral-200 max-w-xl text-shadow-lg">
-            {description}
-          </p>
-        </div>
-      </div>
+      <PageHero
+        image={coverImage}
+        eyebrow="Season Results"
+        title={chapter}
+        description={description}
+      />
 
       {/* Year Navigation & Season Stats */}
       <div className="border-b border-border bg-muted/30">
