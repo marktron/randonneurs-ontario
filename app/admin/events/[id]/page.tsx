@@ -3,7 +3,7 @@ import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { parseLocalDate } from '@/lib/utils'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
-import { ChevronLeft, FileText, Pencil, Calendar, Clock, Users, ClipboardList } from 'lucide-react'
+import { ChevronLeft, FileText, Pencil, Calendar, Clock, Users } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { EventResultsManager } from '@/components/admin/event-results-manager'
 import { EventStatusSelect } from '@/components/admin/event-status-select'
@@ -45,6 +45,13 @@ interface Result {
   status: string
   team_name: string | null
   note: string | null
+  // Rider submission fields
+  gpx_url: string | null
+  gpx_file_path: string | null
+  control_card_front_path: string | null
+  control_card_back_path: string | null
+  rider_notes: string | null
+  submitted_at: string | null
   riders: {
     id: string
     first_name: string
@@ -101,6 +108,12 @@ async function getResults(eventId: string) {
       status,
       team_name,
       note,
+      gpx_url,
+      gpx_file_path,
+      control_card_front_path,
+      control_card_back_path,
+      rider_notes,
+      submitted_at,
       riders (id, first_name, last_name, email)
     `)
     .eq('event_id', eventId)
@@ -189,11 +202,14 @@ export default async function EventDetailPage({ params }: EventPageProps) {
         </div>
         <div className="flex items-center gap-2">
           <Users className="h-4 w-4" />
-          <span>{registrations.length} registered</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <ClipboardList className="h-4 w-4" />
-          <span>{results.length} results</span>
+          <span>
+            {(() => {
+              const registeredRiderIds = new Set(registrations.map(r => r.rider_id))
+              const resultsOnlyCount = results.filter(r => !registeredRiderIds.has(r.rider_id)).length
+              const total = registrations.length + resultsOnlyCount
+              return `${total} ${total === 1 ? 'rider' : 'riders'}`
+            })()}
+          </span>
         </div>
       </div>
 

@@ -19,7 +19,8 @@ import {
   deleteResultFile,
   type ResultSubmissionData,
 } from '@/lib/actions/rider-results'
-import { Upload, X, FileText, Image as ImageIcon, ExternalLink } from 'lucide-react'
+import { Upload, X, FileText, Image as ImageIcon, ExternalLink, Clock } from 'lucide-react'
+import { format } from 'date-fns'
 
 interface ResultSubmissionFormProps {
   token: string
@@ -41,7 +42,10 @@ export function ResultSubmissionForm({ token, initialData }: ResultSubmissionFor
   const [status, setStatus] = useState<string>(
     initialData.currentStatus === 'pending' ? '' : initialData.currentStatus
   )
-  const [finishTime, setFinishTime] = useState(initialData.finishTime || '')
+  // Parse initial finish time (format "HH:MM" or "H:MM") into hours and minutes
+  const [initialHours, initialMinutes] = (initialData.finishTime || '').split(':')
+  const [finishHours, setFinishHours] = useState(initialHours || '')
+  const [finishMinutes, setFinishMinutes] = useState(initialMinutes || '')
   const [gpxUrl, setGpxUrl] = useState(initialData.gpxUrl || '')
   const [riderNotes, setRiderNotes] = useState(initialData.riderNotes || '')
   const [error, setError] = useState<string | null>(null)
@@ -139,10 +143,15 @@ export function ResultSubmissionForm({ token, initialData }: ResultSubmissionFor
     }
 
     startTransition(async () => {
+      // Combine hours and minutes into HH:MM format
+      const finishTime = status === 'finished' && finishHours && finishMinutes
+        ? `${finishHours}:${finishMinutes.padStart(2, '0')}`
+        : null
+
       const result = await submitRiderResult({
         token,
         status: status as 'finished' | 'dnf' | 'dns',
-        finishTime: status === 'finished' ? finishTime : null,
+        finishTime,
         gpxUrl: gpxUrl || null,
         riderNotes: riderNotes || null,
       })
@@ -196,15 +205,34 @@ export function ResultSubmissionForm({ token, initialData }: ResultSubmissionFor
     )
   }
 
+  const eventDate = format(new Date(initialData.eventDate + 'T00:00:00'), 'EEEE, MMMM d, yyyy')
+
   return (
-    <div className="rounded-2xl border border-border bg-card p-6 md:p-8">
-      <h2 className="font-serif text-2xl tracking-tight mb-6">Submit Your Result</h2>
+    <div className="md:rounded-2xl md:border md:border-border md:bg-card md:p-8">
+      {/* Event Header */}
+      <header className="mb-8 pb-6 border-b border-border text-center">
+        <p className="text-base md:text-lg mb-1">
+          Result for <span className="font-medium">{initialData.riderName}</span>
+        </p>
+        <h1 className="font-serif text-2xl md:text-3xl tracking-tight mb-2">
+          {initialData.eventName}
+        </h1>
+        <p className="text-sm text-muted-foreground">
+          {eventDate} · {initialData.eventDistance} km · {initialData.chapterName}
+        </p>
+      </header>
 
       {initialData.submittedAt && (
-        <div className="bg-muted/50 border border-border rounded-lg p-4 mb-6 text-sm">
-          <p className="text-muted-foreground">
-            You previously submitted your result. You can update it below.
-          </p>
+        <div className="flex items-start gap-3 mb-6 pb-6 border-b border-border">
+          <div className="flex-shrink-0 w-10 h-10 rounded-full bg-muted flex items-center justify-center">
+            <Clock className="h-5 w-5 text-muted-foreground" />
+          </div>
+          <div>
+            <p className="font-medium text-sm">Previously Submitted</p>
+            <p className="text-sm text-muted-foreground">
+              You can update your submission below if needed.
+            </p>
+          </div>
         </div>
       )}
 
@@ -217,7 +245,7 @@ export function ResultSubmissionForm({ token, initialData }: ResultSubmissionFor
 
         {/* Status */}
         <div className="space-y-2">
-          <Label htmlFor="status">Finish Status *</Label>
+          <Label htmlFor="status">Finish Status</Label>
           <Select value={status} onValueChange={setStatus} disabled={isPending}>
             <SelectTrigger id="status" className="w-full">
               <SelectValue placeholder="Select your finish status..." />
@@ -233,101 +261,158 @@ export function ResultSubmissionForm({ token, initialData }: ResultSubmissionFor
         {/* Finish Time - only show if finished */}
         {status === 'finished' && (
           <div className="space-y-2">
-            <Label htmlFor="finishTime">Elapsed Time *</Label>
-            <Input
-              id="finishTime"
-              type="text"
-              placeholder="HH:MM (e.g., 13:30 or 105:45)"
-              value={finishTime}
-              onChange={(e) => setFinishTime(e.target.value)}
-              disabled={isPending}
-              pattern="\d{1,3}:\d{2}"
-              required={status === 'finished'}
-            />
-            <p className="text-xs text-muted-foreground">
-              Total elapsed time from start to finish (hours:minutes)
-            </p>
+            <Label>Elapsed Time</Label>
+            <div className="flex items-center gap-2">
+              <div className="flex-1">
+                <Input
+                  id="finishHours"
+                  type="number"
+                  min="0"
+                  max="999"
+                  placeholder="0"
+                  value={finishHours}
+                  onChange={(e) => setFinishHours(e.target.value)}
+                  disabled={isPending}
+                  required={status === 'finished'}
+                  className="text-center tabular-nums"
+                />
+                <p className="text-xs text-muted-foreground text-center mt-1">hours</p>
+              </div>
+              <span className="text-xl text-muted-foreground font-medium pb-5">:</span>
+              <div className="flex-1">
+                <Input
+                  id="finishMinutes"
+                  type="number"
+                  min="0"
+                  max="59"
+                  placeholder="00"
+                  value={finishMinutes}
+                  onChange={(e) => setFinishMinutes(e.target.value)}
+                  disabled={isPending}
+                  required={status === 'finished'}
+                  className="text-center tabular-nums"
+                />
+                <p className="text-xs text-muted-foreground text-center mt-1">minutes</p>
+              </div>
+            </div>
           </div>
         )}
 
-        {/* GPX / Strava URL */}
-        <div className="space-y-2">
-          <Label htmlFor="gpxUrl">
-            Strava or GPS Activity Link
-            <span className="text-muted-foreground font-normal ml-1">(optional)</span>
-          </Label>
-          <Input
-            id="gpxUrl"
-            type="url"
-            placeholder="https://www.strava.com/activities/..."
-            value={gpxUrl}
-            onChange={(e) => setGpxUrl(e.target.value)}
-            disabled={isPending}
-          />
-        </div>
-
-        {/* GPX File Upload */}
-        <div className="space-y-2">
-          <Label>
-            GPX File Upload
-            <span className="text-muted-foreground font-normal ml-1">(optional)</span>
-          </Label>
-          <FileUploadField
-            inputRef={gpxInputRef}
-            state={gpxFile}
-            accept=".gpx,.xml"
-            icon={<FileText className="h-4 w-4" />}
-            label="Upload GPX file"
-            disabled={isPending}
-            onUpload={(file) => handleFileUpload(file, 'gpx', setGpxFile)}
-            onDelete={() => handleFileDelete('gpx', setGpxFile, gpxInputRef)}
-          />
-        </div>
-
-        {/* Control Card Photos */}
-        <div className="bg-muted/50 border border-border rounded-lg p-4 space-y-4">
-          <p className="text-sm font-medium">Control Card Photos</p>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label>Front of Card</Label>
-              <FileUploadField
-                inputRef={frontInputRef}
-                state={controlCardFront}
-                accept="image/jpeg,image/png,image/webp"
-                icon={<ImageIcon className="h-4 w-4" />}
-                label="Upload front"
-                disabled={isPending}
-                onUpload={(file) => handleFileUpload(file, 'control_card_front', setControlCardFront)}
-                onDelete={() => handleFileDelete('control_card_front', setControlCardFront, frontInputRef)}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label>Back of Card</Label>
-              <FileUploadField
-                inputRef={backInputRef}
-                state={controlCardBack}
-                accept="image/jpeg,image/png,image/webp"
-                icon={<ImageIcon className="h-4 w-4" />}
-                label="Upload back"
-                disabled={isPending}
-                onUpload={(file) => handleFileUpload(file, 'control_card_back', setControlCardBack)}
-                onDelete={() => handleFileDelete('control_card_back', setControlCardBack, backInputRef)}
-              />
-            </div>
+        {/* Ride Evidence Section - only show if finished */}
+        {status === 'finished' && (
+          <div className="space-y-2">
+            <Label htmlFor="gpxUrl">Strava or GPS Activity Link</Label>
+            <Input
+              id="gpxUrl"
+              type="url"
+              placeholder="https://www.strava.com/activities/..."
+              value={gpxUrl}
+              onChange={(e) => setGpxUrl(e.target.value)}
+              disabled={isPending}
+            />
+            {/* GPX file upload - inline link style */}
+            <input
+              ref={gpxInputRef}
+              type="file"
+              accept=".gpx,.xml"
+              onChange={(e) => {
+                const file = e.target.files?.[0]
+                if (file) handleFileUpload(file, 'gpx', setGpxFile)
+              }}
+              disabled={isPending || gpxFile.uploading}
+              className="hidden"
+            />
+            {gpxFile.path && gpxFile.url ? (
+              <div className="flex items-center gap-2 text-sm">
+                <FileText className="h-3.5 w-3.5 text-muted-foreground" />
+                <a
+                  href={gpxFile.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-primary hover:underline"
+                >
+                  {gpxFile.path.split('/').pop()}
+                </a>
+                <button
+                  type="button"
+                  onClick={() => handleFileDelete('gpx', setGpxFile, gpxInputRef)}
+                  disabled={isPending || gpxFile.uploading}
+                  className="text-muted-foreground hover:text-destructive"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                {gpxFile.uploading ? (
+                  'Uploading...'
+                ) : (
+                  <>
+                    or{' '}
+                    <button
+                      type="button"
+                      onClick={() => gpxInputRef.current?.click()}
+                      disabled={isPending}
+                      className="text-primary hover:underline"
+                    >
+                      upload a GPX file
+                    </button>
+                  </>
+                )}
+              </p>
+            )}
+            {gpxFile.error && (
+              <p className="text-xs text-destructive">{gpxFile.error}</p>
+            )}
           </div>
-        </div>
+        )}
+
+        {/* Control Card Photos - only show if finished */}
+        {status === 'finished' && (
+          <fieldset
+            className="bg-muted/50 border border-border rounded-lg p-4 space-y-4"
+            disabled={isPending}
+          >
+            <legend className="text-sm font-medium px-1">Control Card Photos</legend>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Front of Card</Label>
+                <FileUploadField
+                  inputRef={frontInputRef}
+                  state={controlCardFront}
+                  accept="image/jpeg,image/png,image/webp"
+                  icon={<ImageIcon className="h-4 w-4" />}
+                  label="Upload front"
+                  disabled={isPending}
+                  onUpload={(file) => handleFileUpload(file, 'control_card_front', setControlCardFront)}
+                  onDelete={() => handleFileDelete('control_card_front', setControlCardFront, frontInputRef)}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Back of Card</Label>
+                <FileUploadField
+                  inputRef={backInputRef}
+                  state={controlCardBack}
+                  accept="image/jpeg,image/png,image/webp"
+                  icon={<ImageIcon className="h-4 w-4" />}
+                  label="Upload back"
+                  disabled={isPending}
+                  onUpload={(file) => handleFileUpload(file, 'control_card_back', setControlCardBack)}
+                  onDelete={() => handleFileDelete('control_card_back', setControlCardBack, backInputRef)}
+                />
+              </div>
+            </div>
+          </fieldset>
+        )}
 
         {/* Notes */}
         <div className="space-y-2">
-          <Label htmlFor="riderNotes">
-            Notes for Organizer
-            <span className="text-muted-foreground font-normal ml-1">(optional)</span>
-          </Label>
+          <Label htmlFor="riderNotes">Feedback for Ride Organizers (optional)</Label>
           <Textarea
             id="riderNotes"
-            placeholder="Any notes about your ride..."
+            placeholder="Any notes about your ride (e.g. route conditions, suggestions, etc.)"
             rows={3}
             value={riderNotes}
             onChange={(e) => setRiderNotes(e.target.value)}
@@ -337,8 +422,12 @@ export function ResultSubmissionForm({ token, initialData }: ResultSubmissionFor
 
         {/* Submit */}
         <Button type="submit" className="w-full" size="lg" disabled={isPending}>
-          {isPending ? 'Submitting...' : 'Submit Result'}
+          {isPending ? 'Saving…' : 'Submit Your Result'}
         </Button>
+
+        <p className="text-xs text-muted-foreground text-center">
+          Results are not official until reviewed by the Ride Organizer.
+        </p>
       </form>
     </div>
   )
@@ -419,8 +508,8 @@ function FileUploadField({
       >
         {state.uploading ? (
           <>
-            <span className="animate-spin mr-2">...</span>
-            Uploading...
+            <span className="animate-spin mr-2">…</span>
+            Uploading…
           </>
         ) : (
           <>
