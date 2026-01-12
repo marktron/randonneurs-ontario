@@ -350,40 +350,61 @@ export type Database = {
       results: {
         Row: {
           created_at: string | null
+          control_card_back_path: string | null
+          control_card_front_path: string | null
           distance_km: number
           event_id: string
           finish_time: string | null
+          gpx_file_path: string | null
+          gpx_url: string | null
           id: string
           note: string | null
           rider_id: string
+          rider_notes: string | null
           season: number
           status: string | null
+          submission_token: string | null
+          submitted_at: string | null
           team_name: string | null
           updated_at: string | null
         }
         Insert: {
           created_at?: string | null
+          control_card_back_path?: string | null
+          control_card_front_path?: string | null
           distance_km: number
           event_id: string
           finish_time?: string | null
+          gpx_file_path?: string | null
+          gpx_url?: string | null
           id?: string
           note?: string | null
           rider_id: string
+          rider_notes?: string | null
           season: number
           status?: string | null
+          submission_token?: string | null
+          submitted_at?: string | null
           team_name?: string | null
           updated_at?: string | null
         }
         Update: {
           created_at?: string | null
+          control_card_back_path?: string | null
+          control_card_front_path?: string | null
           distance_km?: number
           event_id?: string
           finish_time?: string | null
+          gpx_file_path?: string | null
+          gpx_url?: string | null
           id?: string
           note?: string | null
           rider_id?: string
+          rider_notes?: string | null
           season?: number
           status?: string | null
+          submission_token?: string | null
+          submitted_at?: string | null
           team_name?: string | null
           updated_at?: string | null
         }
