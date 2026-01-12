@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { X, Loader2, Check, Plus, CheckCircle2 } from 'lucide-react'
+import { Loader2, Check, Plus, CheckCircle2, Globe, FileText } from 'lucide-react'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { createResult, updateResult, type ResultStatus } from '@/lib/actions/results'
 import { formatFinishTime } from '@/lib/utils'
@@ -44,6 +44,13 @@ interface Result {
   status: string
   team_name: string | null
   note: string | null
+  // Rider submission fields
+  gpx_url: string | null
+  gpx_file_path: string | null
+  control_card_front_path: string | null
+  control_card_back_path: string | null
+  rider_notes: string | null
+  submitted_at: string | null
   riders: {
     id: string
     first_name: string
@@ -219,14 +226,77 @@ function RiderRow({ participant, result, eventId, season, distanceKm }: RiderRow
           className="w-[80px] h-8 font-mono"
         />
       </TableCell>
-      <TableCell className="max-w-[200px]">
+      <TableCell>
+        {/* Evidence - Strava/GPX links, Control Card thumbnails */}
+        {result && (result.gpx_url || result.gpx_file_path || result.control_card_front_path || result.control_card_back_path) ? (
+          <div className="flex items-center gap-1.5">
+            {result.gpx_url && (
+              <a
+                href={result.gpx_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                title="View Strava/GPS activity"
+                className="text-muted-foreground hover:text-primary"
+              >
+                <Globe className="h-5 w-5" />
+              </a>
+            )}
+            {result.gpx_file_path && (
+              <a
+                href={`${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/rider-submissions/${result.gpx_file_path}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                title="Download GPX file"
+                className="text-muted-foreground hover:text-primary"
+              >
+                <FileText className="h-4 w-4" />
+              </a>
+            )}
+            {result.control_card_front_path && (
+              <a
+                href={`${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/rider-submissions/${result.control_card_front_path}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                title="Control card front"
+                className="block"
+              >
+                <img
+                  src={`${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/rider-submissions/${result.control_card_front_path}`}
+                  alt="Control card front"
+                  className="h-8 w-8 object-cover rounded border border-border hover:border-primary transition-colors"
+                />
+              </a>
+            )}
+            {result.control_card_back_path && (
+              <a
+                href={`${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/rider-submissions/${result.control_card_back_path}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                title="Control card back"
+                className="block"
+              >
+                <img
+                  src={`${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/rider-submissions/${result.control_card_back_path}`}
+                  alt="Control card back"
+                  className="h-8 w-8 object-cover rounded border border-border hover:border-primary transition-colors"
+                />
+              </a>
+            )}
+          </div>
+        ) : (
+          <span className="text-xs text-muted-foreground">—</span>
+        )}
+      </TableCell>
+      <TableCell>
         {participant.registrationNotes && (
-          <span
-            className="text-xs text-muted-foreground truncate block"
-            title={participant.registrationNotes}
-          >
+          <p className="text-muted-foreground">
             {participant.registrationNotes}
-          </span>
+          </p>
+        )}
+        {result?.rider_notes && (
+          <p className="text-muted-foreground">
+            {result.rider_notes}
+          </p>
         )}
       </TableCell>
       <TableCell>
@@ -234,15 +304,6 @@ function RiderRow({ participant, result, eventId, season, distanceKm }: RiderRow
           <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
         ) : showSaved ? (
           <Check className="h-4 w-4 text-green-600" />
-        ) : result ? (
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            onClick={() => handleStatusChange('pending')}
-            title="Clear result"
-          >
-            <X className="h-4 w-4 text-muted-foreground hover:text-destructive" />
-          </Button>
         ) : null}
       </TableCell>
     </TableRow>
@@ -311,12 +372,20 @@ export function EventResultsManager({
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle>Registrations & Results</CardTitle>
+      <CardHeader className="flex flex-row items-start justify-between space-y-0">
+        <div>
+          <CardTitle>Registrations & Results</CardTitle>
+          {isPastEvent && (
+            <CardDescription>
+              {completedCount} of {totalCount} riders have results entered
+            </CardDescription>
+          )}
+        </div>
         {isPastEvent && (
-          <CardDescription>
-            {completedCount} of {totalCount} riders have results entered
-          </CardDescription>
+          <Button variant="outline" size="sm" onClick={() => setAddRiderOpen(true)}>
+            <Plus className="mr-2 h-4 w-4" />
+            Add Rider
+          </Button>
         )}
       </CardHeader>
       <CardContent className="space-y-4">
@@ -341,6 +410,7 @@ export function EventResultsManager({
                   <TableHead>Rider</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Time</TableHead>
+                  <TableHead>Evidence</TableHead>
                   <TableHead>Note</TableHead>
                   <TableHead className="w-[50px]"></TableHead>
                 </TableRow>
@@ -362,21 +432,15 @@ export function EventResultsManager({
         )}
       </CardContent>
 
-      {/* Footer actions - Add Rider for past events, Submit for completed */}
-      {isPastEvent && (
-        <CardFooter className="border-t pt-6 flex gap-4">
-          <Button variant="outline" onClick={() => setAddRiderOpen(true)}>
-            <Plus className="mr-2 h-4 w-4" />
-            Add Rider
-          </Button>
-          {eventStatus === 'completed' && !isSubmitted && (
-            <SubmitResultsButton
-              eventId={eventId}
-              eventName={eventName}
-              resultsCount={results.length}
-              onSuccess={() => setIsSubmitted(true)}
-            />
-          )}
+      {/* Footer actions - Submit for completed events */}
+      {eventStatus === 'completed' && !isSubmitted && (
+        <CardFooter className="border-t pt-6">
+          <SubmitResultsButton
+            eventId={eventId}
+            eventName={eventName}
+            resultsCount={results.length}
+            onSuccess={() => setIsSubmitted(true)}
+          />
         </CardFooter>
       )}
 

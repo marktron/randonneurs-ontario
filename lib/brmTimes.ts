@@ -68,7 +68,7 @@ const OPEN_SEGMENTS = [
  *  - 600–1000 km: 11.428 km/h
  *  - 1000–1300 km: 13.333 km/h
  */
-function closeHours(d: number): number {
+export function closeHours(d: number): number {
   if (d <= 0) return 1 // 1 hour for start control (km 0)
 
   // First 0–60 band: "1h + d/20" (applies only to the portion within that band)

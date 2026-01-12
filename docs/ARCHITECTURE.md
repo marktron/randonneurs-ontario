@@ -166,6 +166,36 @@ Send Confirmation Email (async)
 Revalidate Cache → Updated UI
 ```
 
+### Result Submission Flow
+
+After an event's closing time passes, riders can self-submit their results:
+
+```
+Event closes (cron or manual status change)
+       ↓
+Create pending results for registered riders
+       ↓
+Send email with unique submission link
+       ↓
+Rider visits /results/submit/[token]
+       ↓
+Rider submits: status, finish time, Strava link, GPX, control card photos
+       ↓
+Server Action (submitRiderResult) validates & saves
+       ↓
+Admin reviews in /admin/events/[id]
+       ↓
+Admin submits final results to ACP
+```
+
+**Key components:**
+- `lib/events/complete-event.ts` - Creates pending results and sends emails
+- `lib/actions/rider-results.ts` - Handles rider submissions and file uploads
+- `components/result-submission-form.tsx` - Rider-facing submission form
+- `components/admin/event-results-manager.tsx` - Admin view with evidence column
+
+**Security:** Each result has a unique `submission_token` (UUID). No authentication required - the token acts as a capability URL.
+
 ### Page Rendering Flow
 
 ```

@@ -6,6 +6,7 @@ import { requireAdmin } from '@/lib/auth/get-admin'
 import { sendgrid } from '@/lib/email/sendgrid'
 import { parseLocalDate, createSlug } from '@/lib/utils'
 import { getUrlSlugFromDbSlug } from '@/lib/chapter-config'
+import { createPendingResultsAndSendEmails } from '@/lib/events/complete-event'
 import type { ActionResult } from '@/types/actions'
 
 // Helper to revalidate public calendar pages
@@ -285,6 +286,18 @@ export async function updateEventStatus(
       }
     }
 
+    // Fetch event details before updating (needed for completion emails)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: event, error: fetchError } = await (getSupabaseAdmin().from('events') as any)
+      .select('id, name, event_date, distance_km, chapter_id, event_type, status, chapters(name)')
+      .eq('id', eventId)
+      .single()
+
+    if (fetchError || !event) {
+      console.error('Error fetching event:', fetchError)
+      return { success: false, error: 'Event not found' }
+    }
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { error } = await (getSupabaseAdmin().from('events') as any)
       .update({ status })
@@ -295,17 +308,27 @@ export async function updateEventStatus(
       return { success: false, error: 'Failed to update event status' }
     }
 
+    // If transitioning to "completed", create pending results and send emails
+    if (status === 'completed' && event.status === 'scheduled') {
+      const { resultsCreated, emailsSent, errors } = await createPendingResultsAndSendEmails({
+        id: event.id,
+        name: event.name,
+        event_date: event.event_date,
+        distance_km: event.distance_km,
+        chapters: event.chapters,
+      })
+
+      console.log(`Event ${event.name} completed: ${resultsCreated} results created, ${emailsSent} emails sent`)
+
+      if (errors.length > 0) {
+        console.error('Errors during completion:', errors)
+      }
+    }
+
     revalidatePath(`/admin/events/${eventId}`)
     revalidatePath('/admin/events')
     revalidatePath('/admin')
     revalidatePath('/admin/results')
-
-    // Fetch event to get chapter and type for calendar revalidation
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: event } = await (getSupabaseAdmin().from('events') as any)
-      .select('chapter_id, event_type')
-      .eq('id', eventId)
-      .single()
 
     if (event) {
       await revalidateCalendarPages(event.chapter_id, event.event_type)
