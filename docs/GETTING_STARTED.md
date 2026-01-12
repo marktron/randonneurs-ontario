@@ -49,6 +49,7 @@ For local development, the environment variables will be populated after startin
 | `SUPABASE_SERVICE_ROLE_KEY` | Server-side admin key | `npx supabase status` after starting |
 | `SENDGRID_API_KEY` | SendGrid API key (optional for dev) | [SendGrid Dashboard](https://sendgrid.com) |
 | `NEXT_PUBLIC_CURRENT_SEASON` | Current riding season year | Set to current year (e.g., `2025`) |
+| `CRON_SECRET` | Secret for authenticating cron jobs (production only) | Generate a random string (e.g., `openssl rand -hex 32`) |
 
 ## Step 4: Start Local Supabase
 
