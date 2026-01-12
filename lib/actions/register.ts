@@ -32,6 +32,7 @@ import { sendRegistrationConfirmationEmail } from '@/lib/email/send-registration
 import { formatEventType } from '@/lib/utils'
 import { format, parseISO } from 'date-fns'
 import type { Database } from '@/types/supabase'
+import { searchRiderCandidates, type RiderMatchCandidate } from './rider-match'
 
 // Type aliases for database operations - makes code more readable
 type RidersUpdate = Database['public']['Tables']['riders']['Update']
@@ -54,7 +55,8 @@ interface EventWithChapter {
 
 export interface RegistrationData {
   eventId: string
-  name: string
+  firstName: string
+  lastName: string
   email: string
   gender?: string
   shareRegistration: boolean
@@ -64,30 +66,17 @@ export interface RegistrationData {
 export interface RegistrationResult {
   success: boolean
   error?: string
+  /** Set when email not found but fuzzy name matches exist */
+  needsRiderMatch?: boolean
+  /** Potential rider matches for user to select from */
+  matchCandidates?: RiderMatchCandidate[]
+  /** Original form data to resubmit after selection */
+  pendingData?: RegistrationData
 }
 
 // ============================================================================
 // HELPER FUNCTIONS
 // ============================================================================
-
-/**
- * Split a full name into first name and last name.
- * Handles single names (first only) and multi-part last names.
- *
- * @example
- * splitName("John Smith") → { firstName: "John", lastName: "Smith" }
- * splitName("Mary Jane Watson") → { firstName: "Mary", lastName: "Jane Watson" }
- * splitName("Cher") → { firstName: "Cher", lastName: "" }
- */
-function splitName(fullName: string): { firstName: string; lastName: string } {
-  const parts = fullName.trim().split(/\s+/)
-  if (parts.length === 1) {
-    return { firstName: parts[0], lastName: '' }
-  }
-  const firstName = parts[0]
-  const lastName = parts.slice(1).join(' ')
-  return { firstName, lastName }
-}
 
 /**
  * Create a URL-safe slug for a new rider based on their email.
@@ -138,14 +127,15 @@ function formatEventTime(timeStr: string | null): string {
  * @returns Success/error result
  */
 export async function registerForEvent(data: RegistrationData): Promise<RegistrationResult> {
-  const { eventId, name, email, gender, shareRegistration, notes } = data
+  const { eventId, firstName, lastName, email, gender, shareRegistration, notes } = data
 
   // Step 1: Validate required fields
-  if (!eventId || !name.trim() || !email.trim()) {
+  if (!eventId || !firstName.trim() || !lastName.trim() || !email.trim()) {
     return { success: false, error: 'Missing required fields' }
   }
 
-  const { firstName, lastName } = splitName(name)
+  const trimmedFirstName = firstName.trim()
+  const trimmedLastName = lastName.trim()
   const normalizedEmail = email.toLowerCase().trim()
 
   // Check if event exists and is scheduled (fetch details for confirmation email)
@@ -185,18 +175,31 @@ export async function registerForEvent(data: RegistrationData): Promise<Registra
 
     // Update rider info if they provided more details
     const updateData: RidersUpdate = {
-      first_name: firstName,
-      last_name: lastName,
+      first_name: trimmedFirstName,
+      last_name: trimmedLastName,
       gender: parsedGender,
     }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await (getSupabaseAdmin().from('riders') as any).update(updateData).eq('id', riderId)
   } else {
-    // Create new rider
+    // Email not found - search for fuzzy name matches among riders without email
+    const { candidates } = await searchRiderCandidates(trimmedFirstName, trimmedLastName)
+
+    // If there are potential matches, return them for user selection
+    if (candidates.length > 0) {
+      return {
+        success: false,
+        needsRiderMatch: true,
+        matchCandidates: candidates,
+        pendingData: data,
+      }
+    }
+
+    // No matches found - create new rider
     const insertRider: RidersInsert = {
       slug: createRiderSlug(normalizedEmail),
-      first_name: firstName,
-      last_name: lastName,
+      first_name: trimmedFirstName,
+      last_name: trimmedLastName,
       email: normalizedEmail,
       gender: parsedGender,
     }
@@ -245,8 +248,9 @@ export async function registerForEvent(data: RegistrationData): Promise<Registra
 
   // Send confirmation email (fire-and-forget - don't block registration on email)
   const chapter = event.chapters
+  const fullName = `${trimmedFirstName} ${trimmedLastName}`
   sendRegistrationConfirmationEmail({
-    registrantName: name,
+    registrantName: fullName,
     registrantEmail: normalizedEmail,
     eventName: event.name,
     eventDate: formatEventDate(event.event_date),
@@ -273,7 +277,8 @@ export interface PermanentRegistrationData {
   startTime: string       // HH:MM
   startLocation?: string  // Optional - only if different from route start
   direction: 'as_posted' | 'reversed'
-  name: string
+  firstName: string
+  lastName: string
   email: string
   gender?: string
   shareRegistration: boolean
@@ -296,7 +301,8 @@ export async function registerForPermanent(data: PermanentRegistrationData): Pro
     startTime,
     startLocation,
     direction,
-    name,
+    firstName,
+    lastName,
     email,
     gender,
     shareRegistration,
@@ -304,9 +310,12 @@ export async function registerForPermanent(data: PermanentRegistrationData): Pro
   } = data
 
   // Validate required fields
-  if (!routeId || !eventDate || !startTime || !name.trim() || !email.trim()) {
+  if (!routeId || !eventDate || !startTime || !firstName.trim() || !lastName.trim() || !email.trim()) {
     return { success: false, error: 'Missing required fields' }
   }
+
+  const trimmedFirstName = firstName.trim()
+  const trimmedLastName = lastName.trim()
 
   // Validate date is at least 2 weeks in the future
   const eventDateObj = parseISO(eventDate)
@@ -385,7 +394,6 @@ export async function registerForPermanent(data: PermanentRegistrationData): Pro
   }
 
   // Find or create rider (reusing same logic as registerForEvent)
-  const { firstName, lastName } = splitName(name)
   const normalizedEmail = email.toLowerCase().trim()
 
   let riderId: string
@@ -403,18 +411,39 @@ export async function registerForPermanent(data: PermanentRegistrationData): Pro
 
     // Update rider info if they provided more details
     const updateData: RidersUpdate = {
-      first_name: firstName,
-      last_name: lastName,
+      first_name: trimmedFirstName,
+      last_name: trimmedLastName,
       gender: parsedGender,
     }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await (getSupabaseAdmin().from('riders') as any).update(updateData).eq('id', riderId)
   } else {
-    // Create new rider
+    // Email not found - search for fuzzy name matches among riders without email
+    const { candidates } = await searchRiderCandidates(trimmedFirstName, trimmedLastName)
+
+    // If there are potential matches, return them for user selection
+    if (candidates.length > 0) {
+      return {
+        success: false,
+        needsRiderMatch: true,
+        matchCandidates: candidates,
+        pendingData: {
+          eventId, // Event has already been created/found at this point
+          firstName: trimmedFirstName,
+          lastName: trimmedLastName,
+          email,
+          gender,
+          shareRegistration,
+          notes,
+        },
+      }
+    }
+
+    // No matches found - create new rider
     const insertRider: RidersInsert = {
       slug: createRiderSlug(normalizedEmail),
-      first_name: firstName,
-      last_name: lastName,
+      first_name: trimmedFirstName,
+      last_name: trimmedLastName,
       email: normalizedEmail,
       gender: parsedGender,
     }
@@ -463,8 +492,9 @@ export async function registerForPermanent(data: PermanentRegistrationData): Pro
 
   // Send confirmation email (fire-and-forget)
   const chapter = route.chapters
+  const fullName = `${trimmedFirstName} ${trimmedLastName}`
   sendRegistrationConfirmationEmail({
-    registrantName: name,
+    registrantName: fullName,
     registrantEmail: normalizedEmail,
     eventName: eventName,
     eventDate: formatEventDate(eventDate),
@@ -481,6 +511,187 @@ export async function registerForPermanent(data: PermanentRegistrationData): Pro
 
   // Revalidate the registration page to show the new registration
   revalidatePath(`/register/${eventSlug}`)
+
+  return { success: true }
+}
+
+// ============================================================================
+// COMPLETE REGISTRATION WITH SELECTED RIDER
+// ============================================================================
+
+export interface CompleteRegistrationData {
+  eventId: string
+  selectedRiderId: string | null  // null = create new rider
+  firstName: string
+  lastName: string
+  email: string
+  gender?: string
+  shareRegistration: boolean
+  notes?: string
+}
+
+/**
+ * Complete a registration after user has selected a rider from fuzzy matches.
+ * Called when email wasn't found and user chose from potential matches.
+ *
+ * If selectedRiderId is provided:
+ * - Updates that rider's email/name/gender
+ * - Creates audit log entry in rider_merges
+ * - Uses that rider for registration
+ *
+ * If selectedRiderId is null:
+ * - Creates a new rider (user confirmed they're new)
+ */
+export async function completeRegistrationWithRider(
+  data: CompleteRegistrationData
+): Promise<RegistrationResult> {
+  const { eventId, selectedRiderId, firstName, lastName, email, gender, shareRegistration, notes } = data
+
+  // Validate required fields
+  if (!eventId || !firstName.trim() || !lastName.trim() || !email.trim()) {
+    return { success: false, error: 'Missing required fields' }
+  }
+
+  const trimmedFirstName = firstName.trim()
+  const trimmedLastName = lastName.trim()
+  const normalizedEmail = email.toLowerCase().trim()
+  const parsedGender = gender === 'M' || gender === 'F' || gender === 'X' ? gender : null
+
+  // Check if event exists and is scheduled
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: eventData, error: eventError } = await (getSupabaseAdmin().from('events') as any)
+    .select(`
+      id, slug, status, name, event_date, start_time,
+      start_location, distance_km, event_type,
+      chapters (slug, name)
+    `)
+    .eq('id', eventId)
+    .single()
+
+  if (eventError || !eventData) {
+    return { success: false, error: 'Event not found' }
+  }
+
+  const event = eventData as EventWithChapter
+
+  if (event.status !== 'scheduled') {
+    return { success: false, error: 'Registration is not open for this event' }
+  }
+
+  let riderId: string
+
+  if (selectedRiderId) {
+    // User selected an existing rider - update their email and create audit log
+    riderId = selectedRiderId
+
+    // Fetch current rider data for audit log
+    const { data: currentRider, error: fetchError } = await getSupabaseAdmin()
+      .from('riders')
+      .select('first_name, last_name, email')
+      .eq('id', selectedRiderId)
+      .single()
+
+    if (fetchError || !currentRider) {
+      return { success: false, error: 'Selected rider not found' }
+    }
+
+    const rider = currentRider as { first_name: string; last_name: string; email: string | null }
+
+    // Create audit log entry in rider_merges table
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (getSupabaseAdmin() as any).from('rider_merges').insert({
+      rider_id: selectedRiderId,
+      submitted_first_name: trimmedFirstName,
+      submitted_last_name: trimmedLastName,
+      submitted_email: normalizedEmail,
+      previous_first_name: rider.first_name,
+      previous_last_name: rider.last_name,
+      previous_email: rider.email,
+      merge_source: 'registration',
+    })
+
+    // Update rider with new email and info
+    const updateData: RidersUpdate = {
+      first_name: trimmedFirstName,
+      last_name: trimmedLastName,
+      email: normalizedEmail,
+      gender: parsedGender,
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (getSupabaseAdmin().from('riders') as any).update(updateData).eq('id', selectedRiderId)
+  } else {
+    // User confirmed they're a new rider - create new rider record
+    const insertRider: RidersInsert = {
+      slug: createRiderSlug(normalizedEmail),
+      first_name: trimmedFirstName,
+      last_name: trimmedLastName,
+      email: normalizedEmail,
+      gender: parsedGender,
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: newRider, error: riderError } = await (getSupabaseAdmin().from('riders') as any)
+      .insert(insertRider)
+      .select('id')
+      .single()
+
+    if (riderError || !newRider) {
+      console.error('Error creating rider:', riderError)
+      return { success: false, error: 'Failed to create rider profile' }
+    }
+
+    riderId = (newRider as { id: string }).id
+  }
+
+  // Check if already registered
+  const { data: existingRegistration } = await getSupabaseAdmin()
+    .from('registrations')
+    .select('id')
+    .eq('event_id', eventId)
+    .eq('rider_id', riderId)
+    .single()
+
+  if (existingRegistration) {
+    return { success: false, error: 'You are already registered for this event' }
+  }
+
+  // Create registration
+  const insertRegistration: RegistrationsInsert = {
+    event_id: eventId,
+    rider_id: riderId,
+    status: 'registered',
+    share_registration: shareRegistration,
+    notes: notes || null,
+  }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error: registrationError } = await (getSupabaseAdmin().from('registrations') as any)
+    .insert(insertRegistration)
+
+  if (registrationError) {
+    console.error('Error creating registration:', registrationError)
+    return { success: false, error: 'Failed to complete registration' }
+  }
+
+  // Send confirmation email (fire-and-forget)
+  const chapter = event.chapters
+  const fullName = `${trimmedFirstName} ${trimmedLastName}`
+  sendRegistrationConfirmationEmail({
+    registrantName: fullName,
+    registrantEmail: normalizedEmail,
+    eventName: event.name,
+    eventDate: formatEventDate(event.event_date),
+    eventTime: formatEventTime(event.start_time),
+    eventLocation: event.start_location || 'TBD',
+    eventDistance: event.distance_km,
+    eventType: formatEventType(event.event_type),
+    chapterName: chapter?.name || '',
+    chapterSlug: chapter?.slug || '',
+    notes: notes || undefined,
+  }).catch((error) => {
+    console.error('Email sending failed:', error)
+  })
+
+  // Revalidate the registration page
+  revalidatePath(`/register/${event.slug}`)
 
   return { success: true }
 }

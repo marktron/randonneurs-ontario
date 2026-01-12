@@ -30,13 +30,16 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
-import { registerForPermanent } from "@/lib/actions/register";
+import { registerForPermanent, completeRegistrationWithRider } from "@/lib/actions/register";
+import { RiderMatchDialog } from "@/components/rider-match-dialog";
+import type { RiderMatchCandidate } from "@/lib/actions/rider-match";
 import type { ActiveRoute } from "@/lib/data/routes";
 
 const STORAGE_KEY = "ro-registration";
 
 interface SavedRegistrationData {
-  name: string;
+  firstName: string;
+  lastName: string;
   email: string;
   gender: string;
   shareRegistration: boolean;
@@ -81,7 +84,8 @@ export function PermanentRegistrationForm({ routes }: PermanentRegistrationFormP
   const [direction, setDirection] = useState<"as_posted" | "reversed">("as_posted");
 
   // Rider fields
-  const [name, setName] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [shareRegistration, setShareRegistration] = useState(false);
   const [gender, setGender] = useState<string>("");
@@ -90,6 +94,11 @@ export function PermanentRegistrationForm({ routes }: PermanentRegistrationFormP
   // UI state
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+
+  // Fuzzy matching state
+  const [matchDialogOpen, setMatchDialogOpen] = useState(false);
+  const [matchCandidates, setMatchCandidates] = useState<RiderMatchCandidate[]>([]);
+  const [pendingEventId, setPendingEventId] = useState<string>("");
 
   // Group routes by chapter
   const routesByChapter = useMemo(() => {
@@ -109,7 +118,8 @@ export function PermanentRegistrationForm({ routes }: PermanentRegistrationFormP
   useEffect(() => {
     const saved = getSavedData();
     if (saved) {
-      setName(saved.name);
+      setFirstName(saved.firstName);
+      setLastName(saved.lastName);
       setEmail(saved.email);
       setGender(saved.gender);
       setShareRegistration(saved.shareRegistration);
@@ -142,7 +152,8 @@ export function PermanentRegistrationForm({ routes }: PermanentRegistrationFormP
         startTime,
         startLocation: startLocation.trim(),
         direction,
-        name,
+        firstName,
+        lastName,
         email,
         gender: gender || undefined,
         shareRegistration,
@@ -151,10 +162,40 @@ export function PermanentRegistrationForm({ routes }: PermanentRegistrationFormP
 
       if (result.success) {
         // Save form data to localStorage for next registration
-        saveData({ name, email, gender, shareRegistration });
+        saveData({ firstName, lastName, email, gender, shareRegistration });
+        setSuccess(true);
+        router.refresh();
+      } else if (result.needsRiderMatch && result.matchCandidates && result.pendingData) {
+        // Show fuzzy matching dialog
+        setMatchCandidates(result.matchCandidates);
+        setPendingEventId(result.pendingData.eventId);
+        setMatchDialogOpen(true);
+      } else {
+        setError(result.error || "Registration failed");
+      }
+    });
+  }
+
+  async function handleRiderSelection(riderId: string | null) {
+    startTransition(async () => {
+      const result = await completeRegistrationWithRider({
+        eventId: pendingEventId,
+        selectedRiderId: riderId,
+        firstName,
+        lastName,
+        email,
+        gender: gender || undefined,
+        shareRegistration,
+        notes: notes || undefined,
+      });
+
+      if (result.success) {
+        setMatchDialogOpen(false);
+        saveData({ firstName, lastName, email, gender, shareRegistration });
         setSuccess(true);
         router.refresh();
       } else {
+        setMatchDialogOpen(false);
         setError(result.error || "Registration failed");
       }
     });
@@ -349,18 +390,33 @@ export function PermanentRegistrationForm({ routes }: PermanentRegistrationFormP
           </h3>
 
           {/* Name */}
-          <div className="space-y-2">
-            <Label htmlFor="name">Name</Label>
-            <Input
-              id="name"
-              name="name"
-              type="text"
-              placeholder="Your full name"
-              required
-              disabled={isPending}
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-            />
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="firstName">First name</Label>
+              <Input
+                id="firstName"
+                name="firstName"
+                type="text"
+                placeholder="First"
+                required
+                disabled={isPending}
+                value={firstName}
+                onChange={(e) => setFirstName(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="lastName">Last name</Label>
+              <Input
+                id="lastName"
+                name="lastName"
+                type="text"
+                placeholder="Last"
+                required
+                disabled={isPending}
+                value={lastName}
+                onChange={(e) => setLastName(e.target.value)}
+              />
+            </div>
           </div>
 
           {/* Email */}
@@ -443,6 +499,17 @@ export function PermanentRegistrationForm({ routes }: PermanentRegistrationFormP
           {isPending ? "Scheduling..." : "Schedule Permanent"}
         </Button>
       </form>
+
+      <RiderMatchDialog
+        open={matchDialogOpen}
+        onOpenChange={setMatchDialogOpen}
+        candidates={matchCandidates}
+        submittedFirstName={firstName}
+        submittedLastName={lastName}
+        onSelectRider={(riderId) => handleRiderSelection(riderId)}
+        onCreateNew={() => handleRiderSelection(null)}
+        isPending={isPending}
+      />
     </div>
   );
 }

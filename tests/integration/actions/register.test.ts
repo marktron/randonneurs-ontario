@@ -39,7 +39,8 @@ describe('registerForEvent', () => {
     it('returns error for missing eventId', async () => {
       const result = await registerForEvent({
         eventId: '',
-        name: 'Test User',
+        firstName: 'Test',
+        lastName: 'User',
         email: 'test@example.com',
         shareRegistration: false,
       })
@@ -48,10 +49,24 @@ describe('registerForEvent', () => {
       expect(result.error).toBe('Missing required fields')
     })
 
-    it('returns error for empty name', async () => {
+    it('returns error for empty firstName', async () => {
       const result = await registerForEvent({
         eventId: 'event-123',
-        name: '   ',
+        firstName: '   ',
+        lastName: 'User',
+        email: 'test@example.com',
+        shareRegistration: false,
+      })
+
+      expect(result.success).toBe(false)
+      expect(result.error).toBe('Missing required fields')
+    })
+
+    it('returns error for empty lastName', async () => {
+      const result = await registerForEvent({
+        eventId: 'event-123',
+        firstName: 'Test',
+        lastName: '   ',
         email: 'test@example.com',
         shareRegistration: false,
       })
@@ -63,7 +78,8 @@ describe('registerForEvent', () => {
     it('returns error for empty email', async () => {
       const result = await registerForEvent({
         eventId: 'event-123',
-        name: 'Test User',
+        firstName: 'Test',
+        lastName: 'User',
         email: '  ',
         shareRegistration: false,
       })
@@ -78,7 +94,8 @@ describe('registerForEvent', () => {
       // The mock returns null/error for single() by default
       const result = await registerForEvent({
         eventId: 'nonexistent',
-        name: 'Test User',
+        firstName: 'Test',
+        lastName: 'User',
         email: 'test@example.com',
         shareRegistration: false,
       })
@@ -110,7 +127,8 @@ describe('registerForPermanent', () => {
         eventDate: '2025-01-10', // Only 9 days from mocked date
         startTime: '08:00',
         direction: 'as_posted',
-        name: 'Test User',
+        firstName: 'Test',
+        lastName: 'User',
         email: 'test@example.com',
         shareRegistration: false,
       })
@@ -125,7 +143,8 @@ describe('registerForPermanent', () => {
         eventDate: '2025-01-14', // 13 days
         startTime: '08:00',
         direction: 'as_posted',
-        name: 'Test User',
+        firstName: 'Test',
+        lastName: 'User',
         email: 'test@example.com',
         shareRegistration: false,
       })
@@ -145,7 +164,8 @@ describe('registerForPermanent', () => {
         eventDate: '2025-01-20',
         startTime: '08:00',
         direction: 'as_posted',
-        name: 'Test User',
+        firstName: 'Test',
+        lastName: 'User',
         email: 'test@example.com',
         shareRegistration: false,
       })
@@ -160,7 +180,8 @@ describe('registerForPermanent', () => {
         eventDate: '2025-01-20',
         startTime: '',
         direction: 'as_posted',
-        name: 'Test User',
+        firstName: 'Test',
+        lastName: 'User',
         email: 'test@example.com',
         shareRegistration: false,
       })
