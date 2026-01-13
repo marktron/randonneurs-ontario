@@ -6,30 +6,52 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { MarkdownEditor } from "./markdown-editor"
+import { HeaderImagePicker } from "./header-image-picker"
 import { savePage } from "@/lib/actions/pages"
 import { toast } from "sonner"
 import { Loader2, Save } from "lucide-react"
 
 interface PageEditorProps {
-  slug: string
-  initialTitle: string
-  initialDescription: string
-  initialContent: string
+  initialSlug?: string
+  initialTitle?: string
+  initialDescription?: string
+  initialContent?: string
+  initialHeaderImage?: string
   isNew?: boolean
 }
 
+function generateSlug(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, "")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .trim()
+}
+
 export function PageEditor({
-  slug,
-  initialTitle,
-  initialDescription,
-  initialContent,
+  initialSlug = "",
+  initialTitle = "",
+  initialDescription = "",
+  initialContent = "",
+  initialHeaderImage,
   isNew = false,
 }: PageEditorProps) {
   const router = useRouter()
   const [title, setTitle] = useState(initialTitle)
+  const [slug, setSlug] = useState(initialSlug)
   const [description, setDescription] = useState(initialDescription)
   const [content, setContent] = useState(initialContent)
+  const [headerImage, setHeaderImage] = useState<string | undefined>(initialHeaderImage)
   const [saving, setSaving] = useState(false)
+
+  function handleTitleChange(newTitle: string) {
+    setTitle(newTitle)
+    // Auto-generate slug only for new pages and only if user hasn't manually edited it
+    if (isNew && (!slug || slug === generateSlug(title))) {
+      setSlug(generateSlug(newTitle))
+    }
+  }
 
   async function handleSave() {
     if (!title.trim()) {
@@ -37,13 +59,25 @@ export function PageEditor({
       return
     }
 
+    if (isNew) {
+      if (!slug.trim()) {
+        toast.error("Slug is required")
+        return
+      }
+      if (!/^[a-z0-9-]+$/.test(slug)) {
+        toast.error("Slug can only contain lowercase letters, numbers, and hyphens")
+        return
+      }
+    }
+
     setSaving(true)
     try {
       const result = await savePage({
-        slug,
+        slug: slug.trim(),
         title: title.trim(),
         description: description.trim(),
-        content,
+        content: content.trim(),
+        headerImage: headerImage?.trim(),
       })
 
       if (result.success) {
@@ -62,31 +96,39 @@ export function PageEditor({
     }
   }
 
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || ""
+
   return (
-    <div className="space-y-6">
-      <div className="grid gap-4 md:grid-cols-2">
-        <div className="space-y-2">
-          <Label htmlFor="title">Title</Label>
-          <Input
-            id="title"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="Page title"
-          />
-        </div>
+    <div className="space-y-6 max-w-4xl">
+      <div className="space-y-2">
+        <Label htmlFor="title">Title</Label>
+        <Input
+          id="title"
+          value={title}
+          onChange={(e) => handleTitleChange(e.target.value)}
+          placeholder="Page title"
+        />
+        {!isNew && (
+          <p className="text-xs text-muted-foreground">
+            The page will be available at {siteUrl}/{slug}
+          </p>
+        )}
+      </div>
+
+      {isNew && (
         <div className="space-y-2">
           <Label htmlFor="slug">URL Slug</Label>
           <Input
             id="slug"
             value={slug}
-            disabled
-            className="bg-muted"
+            onChange={(e) => setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))}
+            placeholder="page-slug"
           />
           <p className="text-xs text-muted-foreground">
-            The page will be available at /{slug}
+            The page will be available at {siteUrl}/{slug || "..."}
           </p>
         </div>
-      </div>
+      )}
 
       <div className="space-y-2">
         <Label htmlFor="description">Description</Label>
@@ -98,14 +140,14 @@ export function PageEditor({
         />
       </div>
 
-      <div className="space-y-2">
-        <Label>Content (Markdown)</Label>
-        <MarkdownEditor
-          value={content}
-          onChange={setContent}
-          placeholder="Write your page content here using Markdown..."
-        />
-      </div>
+      <HeaderImagePicker value={headerImage} onChange={setHeaderImage} />
+
+      <MarkdownEditor
+        label="Content (Markdown)"
+        value={content}
+        onChange={setContent}
+        placeholder="Write your page content here using Markdown..."
+      />
 
       <div className="flex justify-end gap-2">
         <Button variant="outline" onClick={() => router.back()}>
@@ -115,7 +157,7 @@ export function PageEditor({
           {saving ? (
             <>
               <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              Saving...
+              {isNew ? "Creating..." : "Saving..."}
             </>
           ) : (
             <>

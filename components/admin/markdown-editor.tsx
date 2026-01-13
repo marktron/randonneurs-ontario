@@ -8,14 +8,16 @@ import { Eye, Edit3, Upload, Loader2 } from "lucide-react"
 import { uploadImage } from "@/lib/actions/images"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
+import { Label } from "@/components/ui/label"
 
 interface MarkdownEditorProps {
   value: string
   onChange: (value: string) => void
   placeholder?: string
+  label?: string
 }
 
-export function MarkdownEditor({ value, onChange, placeholder }: MarkdownEditorProps) {
+export function MarkdownEditor({ value, onChange, placeholder, label }: MarkdownEditorProps) {
   const [showPreview, setShowPreview] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
   const [isUploading, setIsUploading] = useState(false)
@@ -131,7 +133,8 @@ export function MarkdownEditor({ value, onChange, placeholder }: MarkdownEditorP
 
   return (
     <div className="space-y-2">
-      <div className="flex justify-end">
+      <div className="flex items-center justify-between">
+        {label && <Label>{label}</Label>}
         <Button
           type="button"
           variant="outline"

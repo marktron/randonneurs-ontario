@@ -1,17 +1,15 @@
 ---
 title: Devil Week 2026
 slug: devil-week-2026
-description: Devil Week is a one-week randonneuring challenge offering a full Super Randonneur series (600, 400, 300, and 200 km) plus camaraderie, endurance, and community.
+description: A one-week randonneuring challenge offering a full Super Randonneur series (600, 400, 300, and 200 km) plus camaraderie, endurance, and community.
 lastUpdated: 2026-01-12
 ---
 
-
-
-Devil Week challenges riders to complete a full Super Randonneur series in a single week. Hosted as a shared base event, it combines long-distance personal challenge with the rare opportunity to ride, recover, and connect alongside fellow randonneurs day after day. Whether you're testing your limits or immersing yourself in the social side of ultra-distance cycling, Devil Week is as much about community as it is about the kilometers.
+Devil Week challenges riders to complete a full Super Randonneur series in a single week. Hosted a rotating club chapter every year, it combines a long-distance personal challenge with the rare opportunity to ride, recover, and connect alongside fellow randonneurs day after day. Whether you're testing your limits or immersing yourself in the social side of ultra-distance cycling, Devil Week is as much about the community as the kilometers.
 
 ## 2026 Devil Week: Grimsby, ON
 
-The 2026 edition of Devil Week is hosted by the Toronto chapter and will be run out of Grimsby. A block of hotel rooms at the starting location is being arranged, stay tuned for details.
+The 2026 edition of Devil Week is hosted by the Toronto chapter and will be run out of Grimsby. A block of hotel rooms at the starting location is being arranged – stay tuned for details.
 
 ### Monday June 15, 2026
 - **Distance**: 600 km
@@ -45,5 +43,3 @@ The 2026 edition of Devil Week is hosted by the Toronto chapter and will be run 
 
 ## Questions?
 Email [Mark Allen](mailto:vp-toronto@randonneursontario.ca), the Toronto chapter VP, join the [Randonneurs Ontario mailing list](https://randonneursontario.ca/who/Mailing_Lists.html), or join us on Slack in the #devil-week channel.
-
-

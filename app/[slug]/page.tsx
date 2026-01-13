@@ -38,13 +38,25 @@ export default async function ContentPage({ params }: PageProps) {
 
   return (
     <PageShell>
-      <PageHero
-        image="/toronto.jpg"
-        eyebrow="Information"
-        title={page.title}
-        description={page.description}
-      />
-      <div className="content-container py-16 md:py-20">
+      {page.headerImage ? (
+        <PageHero
+          image={page.headerImage}
+          title={page.title}
+          description={page.description}
+        />
+      ) : (
+        <div className="content-container pt-20 md:pt-28">
+          <h1 className="font-serif text-4xl md:text-5xl lg:text-6xl tracking-tight">
+            {page.title}
+          </h1>
+          {page.description && (
+            <p className="mt-6 text-lg text-muted-foreground leading-relaxed">
+              {page.description}
+            </p>
+          )}
+        </div>
+      )}
+      <div className="content-container py-8 md:py-10">
         <MarkdownContent content={page.content} />
       </div>
     </PageShell>

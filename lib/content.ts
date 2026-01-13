@@ -10,6 +10,7 @@ export interface PageContent {
   description: string;
   lastUpdated: string;
   content: string;
+  headerImage?: string;
 }
 
 export interface PageMeta {
@@ -17,6 +18,7 @@ export interface PageMeta {
   title: string;
   description: string;
   lastUpdated: string;
+  headerImage?: string;
 }
 
 /**
@@ -33,7 +35,8 @@ export function getPage(slug: string): PageContent | null {
       title: data.title || slug,
       description: data.description || "",
       lastUpdated: data.lastUpdated ? String(data.lastUpdated).split("T")[0] : "",
-      content,
+      content: content.trim(),
+      headerImage: data.headerImage || undefined,
     };
   } catch {
     return null;
@@ -65,6 +68,7 @@ export function getAllPages(): PageMeta[] {
         title: data.title || slug,
         description: data.description || "",
         lastUpdated: data.lastUpdated ? String(data.lastUpdated).split("T")[0] : "",
+        headerImage: data.headerImage || undefined,
       });
     }
 

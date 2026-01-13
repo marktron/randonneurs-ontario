@@ -8,6 +8,7 @@ interface SavePageInput {
   title: string
   description: string
   content: string
+  headerImage?: string
 }
 
 interface SavePageResult {
@@ -38,7 +39,7 @@ export async function savePage(input: SavePageInput): Promise<SavePageResult> {
   // Verify admin access
   await requireAdmin()
 
-  const { slug, title, description, content } = input
+  const { slug, title, description, content, headerImage } = input
 
   // Validate input
   if (!slug || !title) {
@@ -58,11 +59,12 @@ export async function savePage(input: SavePageInput): Promise<SavePageResult> {
 
   // Build markdown file content with frontmatter
   const today = new Date().toISOString().split("T")[0]
+  const headerImageLine = headerImage ? `headerImage: ${headerImage}\n` : ""
   const fileContent = `---
 title: ${title}
 slug: ${slug}
 description: ${description}
-lastUpdated: ${today}
+${headerImageLine}lastUpdated: ${today}
 ---
 
 ${content}

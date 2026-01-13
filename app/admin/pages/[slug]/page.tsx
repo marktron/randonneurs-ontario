@@ -44,10 +44,11 @@ export default async function AdminEditPagePage({ params }: PageProps) {
       </div>
 
       <PageEditor
-        slug={slug}
+        initialSlug={slug}
         initialTitle={page.title}
         initialDescription={page.description}
         initialContent={page.content}
+        initialHeaderImage={page.headerImage}
       />
     </div>
   )

@@ -1,5 +1,5 @@
 import { requireAdmin } from '@/lib/auth/get-admin'
-import { NewPageEditor } from '@/components/admin/new-page-editor'
+import { PageEditor } from '@/components/admin/page-editor'
 import { Button } from '@/components/ui/button'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
@@ -23,7 +23,7 @@ export default async function AdminNewPagePage() {
         </div>
       </div>
 
-      <NewPageEditor />
+      <PageEditor isNew />
     </div>
   )
 }
