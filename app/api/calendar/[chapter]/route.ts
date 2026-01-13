@@ -24,7 +24,7 @@ const BRM_TIME_LIMITS: Record<number, number> = {
  * Get event duration as hours and minutes (for valid iCal DURATION format).
  * - Brevets 200km+: Use BRM time limits
  * - Fleche: 24 hours
- * - Populaires: Use distance / 20 km/h
+ * - Populaires: Use distance / 15 km/h
  */
 function getEventDuration(distanceKm: number, eventType: string): { hours: number; minutes: number } {
   let totalHours: number
@@ -52,8 +52,8 @@ function getEventDuration(distanceKm: number, eventType: string): { hours: numbe
       totalHours = Math.ceil(distanceKm / 15)
     }
   } else {
-    // For populaires and other events, use ~20 km/h average
-    totalHours = Math.ceil(distanceKm / 20)
+    // For populaires and other events, use ~15 km/h average
+    totalHours = Math.ceil(distanceKm / 15)
   }
 
   // Convert decimal hours to hours and minutes
@@ -134,7 +134,7 @@ export async function GET(request: Request, { params }: RouteParams) {
   }
 
   // Convert events to iCal format
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://randonneurs.to'
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://randonneursontario.ca'
   const siteHostname = siteUrl.replace(/^https?:\/\//, '').replace(/\/$/, '')
 
   const icsEvents: EventAttributes[] = (events || []).map((event: {
@@ -177,8 +177,7 @@ export async function GET(request: Request, { params }: RouteParams) {
       `${event.distance_km}km ${eventType}`,
       event.description || '',
       '',
-      `Register: ${siteUrl}/register/${event.slug}`,
-      `Details: ${siteUrl}/event/${event.slug}`,
+      `Details & Registration: ${siteUrl}/register/${event.slug}`
     ].filter(Boolean)
 
     return {
