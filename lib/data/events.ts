@@ -8,6 +8,10 @@
  * - All functions use the public Supabase client (respects RLS)
  * - Results are automatically cached by Next.js (server components)
  * - Functions return empty arrays/null on errors (graceful degradation)
+ * - Request deduplication: Uses React cache() to deduplicate parallel calls
+ *   within the same request (e.g., when generateMetadata and the component
+ *   both call the same function)
+ * - Cross-request caching: Uses unstable_cache() for caching across requests
  *
  * SLUG MAPPING:
  * URL slugs (user-facing) may differ from database slugs. For example:
@@ -17,6 +21,7 @@
  * @see lib/chapter-config.ts for chapter slug mappings
  * @see docs/DATA_LAYER.md for data layer documentation
  */
+import { cache } from 'react'
 import { unstable_cache } from 'next/cache'
 import { getSupabase } from '@/lib/supabase'
 import { formatEventType } from '@/lib/utils'
@@ -55,45 +60,47 @@ export { getChapterInfo, getAllChapterSlugs, type ChapterInfo }
  * const events = await getEventsByChapter('toronto')
  * // Returns upcoming Toronto chapter events
  */
+const getEventsByChapterInner = cache(async (urlSlug: string): Promise<Event[]> => {
+  // Map URL slug to database slug
+  const dbSlug = getDbSlug(urlSlug)
+  if (!dbSlug) return []
+
+  // Fetch upcoming events for this chapter using a join, ordered by date
+  const today = new Date().toISOString().split('T')[0]
+  const { data: events, error: eventsError } = await getSupabase()
+    .from('events')
+    .select('*, registrations(count), chapters!inner(slug)')
+    .eq('chapters.slug', dbSlug)
+    .eq('status', 'scheduled')
+    .neq('event_type', 'permanent')
+    .gte('event_date', today)
+    .order('event_date', { ascending: true })
+    .order('distance_km', { ascending: false })
+
+  if (eventsError) {
+    return handleDataError(
+      eventsError,
+      { operation: 'getEventsByChapter', context: { urlSlug } },
+      []
+    )
+  }
+
+  // Transform to Event type
+  return (events as EventWithRegistrationCount[]).map((event) => ({
+    slug: event.slug,
+    date: event.event_date,
+    name: event.name,
+    type: formatEventType(event.event_type),
+    distance: event.distance_km.toString(),
+    startLocation: event.start_location || '',
+    startTime: event.start_time || '08:00',
+    registeredCount: event.registrations?.[0]?.count ?? 0,
+  }))
+})
+
 export async function getEventsByChapter(urlSlug: string): Promise<Event[]> {
   return unstable_cache(
-    async () => {
-      // Map URL slug to database slug
-      const dbSlug = getDbSlug(urlSlug)
-      if (!dbSlug) return []
-
-      // Fetch upcoming events for this chapter using a join, ordered by date
-      const today = new Date().toISOString().split('T')[0]
-      const { data: events, error: eventsError } = await getSupabase()
-        .from('events')
-        .select('*, registrations(count), chapters!inner(slug)')
-        .eq('chapters.slug', dbSlug)
-        .eq('status', 'scheduled')
-        .neq('event_type', 'permanent')
-        .gte('event_date', today)
-        .order('event_date', { ascending: true })
-        .order('distance_km', { ascending: false })
-
-      if (eventsError) {
-        return handleDataError(
-          eventsError,
-          { operation: 'getEventsByChapter', context: { urlSlug } },
-          []
-        )
-      }
-
-      // Transform to Event type
-      return (events as EventWithRegistrationCount[]).map((event) => ({
-        slug: event.slug,
-        date: event.event_date,
-        name: event.name,
-        type: formatEventType(event.event_type),
-        distance: event.distance_km.toString(),
-        startLocation: event.start_location || '',
-        startTime: event.start_time || '08:00',
-        registeredCount: event.registrations?.[0]?.count ?? 0,
-      }))
-    },
+    async () => getEventsByChapterInner(urlSlug),
     [`events-by-chapter-${urlSlug}`],
     {
       tags: ['events', `chapter-${urlSlug}`],
@@ -107,40 +114,42 @@ export async function getEventsByChapter(urlSlug: string): Promise<Event[]> {
  *
  * @returns Array of permanent events, sorted by date
  */
+const getPermanentEventsInner = cache(async (): Promise<Event[]> => {
+  // Fetch upcoming permanent events, ordered by date
+  const today = new Date().toISOString().split('T')[0]
+  const { data: events, error } = await getSupabase()
+    .from('events')
+    .select('*, registrations(count)')
+    .eq('event_type', 'permanent')
+    .eq('status', 'scheduled')
+    .gte('event_date', today)
+    .order('event_date', { ascending: true })
+    .order('distance_km', { ascending: false })
+
+  if (error) {
+    return handleDataError(
+      error,
+      { operation: 'getPermanentEvents' },
+      []
+    )
+  }
+
+  // Transform to Event type
+  return (events as EventWithRegistrationCount[]).map((event) => ({
+    slug: event.slug,
+    date: event.event_date,
+    name: event.name,
+    type: formatEventType(event.event_type),
+    distance: event.distance_km.toString(),
+    startLocation: event.start_location || '',
+    startTime: event.start_time || '08:00',
+    registeredCount: event.registrations?.[0]?.count ?? 0,
+  }))
+})
+
 export async function getPermanentEvents(): Promise<Event[]> {
   return unstable_cache(
-    async () => {
-      // Fetch upcoming permanent events, ordered by date
-      const today = new Date().toISOString().split('T')[0]
-      const { data: events, error } = await getSupabase()
-        .from('events')
-        .select('*, registrations(count)')
-        .eq('event_type', 'permanent')
-        .eq('status', 'scheduled')
-        .gte('event_date', today)
-        .order('event_date', { ascending: true })
-        .order('distance_km', { ascending: false })
-
-      if (error) {
-        return handleDataError(
-          error,
-          { operation: 'getPermanentEvents' },
-          []
-        )
-      }
-
-      // Transform to Event type
-      return (events as EventWithRegistrationCount[]).map((event) => ({
-        slug: event.slug,
-        date: event.event_date,
-        name: event.name,
-        type: formatEventType(event.event_type),
-        distance: event.distance_km.toString(),
-        startLocation: event.start_location || '',
-        startTime: event.start_time || '08:00',
-        registeredCount: event.registrations?.[0]?.count ?? 0,
-      }))
-    },
+    async () => getPermanentEventsInner(),
     ['permanent-events'],
     {
       tags: ['events', 'permanents'],
@@ -196,28 +205,30 @@ export interface RegisteredRider {
  * @param eventId - The UUID of the event
  * @returns Array of rider display names
  */
+const getRegisteredRidersInner = cache(async (eventId: string): Promise<RegisteredRider[]> => {
+  const { data: riders, error } = await getSupabase()
+    .rpc('get_registered_riders', { p_event_id: eventId })
+
+  if (error) {
+    console.error('Error fetching registered riders:', error)
+    return []
+  }
+
+  return (riders || []).map((rider: GetRegisteredRidersResult) => {
+    if (!rider.share_registration) {
+      return { name: 'Anonymous' }
+    }
+    const firstName = rider.first_name || ''
+    const lastInitial = rider.last_name ? `${rider.last_name.charAt(0)}.` : ''
+    return {
+      name: `${firstName} ${lastInitial}`.trim()
+    }
+  })
+})
+
 export async function getRegisteredRiders(eventId: string): Promise<RegisteredRider[]> {
   return unstable_cache(
-    async () => {
-      const { data: riders, error } = await getSupabase()
-        .rpc('get_registered_riders', { p_event_id: eventId })
-
-      if (error) {
-        console.error('Error fetching registered riders:', error)
-        return []
-      }
-
-      return (riders || []).map((rider: GetRegisteredRidersResult) => {
-        if (!rider.share_registration) {
-          return { name: 'Anonymous' }
-        }
-        const firstName = rider.first_name || ''
-        const lastInitial = rider.last_name ? `${rider.last_name.charAt(0)}.` : ''
-        return {
-          name: `${firstName} ${lastInitial}`.trim()
-        }
-      })
-    },
+    async () => getRegisteredRidersInner(eventId),
     [`registered-riders-${eventId}`],
     {
       tags: ['registrations', `event-${eventId}`],
@@ -231,21 +242,23 @@ export async function getRegisteredRiders(eventId: string): Promise<RegisteredRi
  *
  * @returns Array of event slug strings
  */
+const getAllEventSlugsInner = cache(async (): Promise<string[]> => {
+  const { data: events, error } = await getSupabase()
+    .from('events')
+    .select('slug')
+    .eq('status', 'scheduled')
+
+  if (error) {
+    console.error('Error fetching event slugs:', error)
+    return []
+  }
+
+  return (events as EventSlug[]).map((e) => e.slug)
+})
+
 export async function getAllEventSlugs(): Promise<string[]> {
   return unstable_cache(
-    async () => {
-      const { data: events, error } = await getSupabase()
-        .from('events')
-        .select('slug')
-        .eq('status', 'scheduled')
-
-      if (error) {
-        console.error('Error fetching event slugs:', error)
-        return []
-      }
-
-      return (events as EventSlug[]).map((e) => e.slug)
-    },
+    async () => getAllEventSlugsInner(),
     ['all-event-slugs'],
     {
       tags: ['events', 'slugs'],
@@ -266,55 +279,57 @@ export async function getAllEventSlugs(): Promise<string[]> {
  *   console.log(event.name, event.distance, event.chapterName)
  * }
  */
+const getEventBySlugInner = cache(async (slug: string): Promise<EventDetails | null> => {
+  // Fetch event with joined chapter and route data
+  const { data: event, error } = await getSupabase()
+    .from('events')
+    .select(`
+      id,
+      slug,
+      name,
+      event_date,
+      start_time,
+      start_location,
+      distance_km,
+      event_type,
+      description,
+      image_url,
+      chapters (name, slug),
+      routes (slug, rwgps_id, cue_sheet_url)
+    `)
+    .eq('slug', slug)
+    .single()
+
+  if (error || !event) {
+    console.error('Error fetching event:', error)
+    return null
+  }
+
+  // Type assertion for the query result with joins
+  const typedEvent = event as EventWithRelations
+  const dbChapterSlug = typedEvent.chapters?.slug
+  return {
+    id: typedEvent.id,
+    slug: typedEvent.slug,
+    name: typedEvent.name,
+    date: typedEvent.event_date,
+    startTime: typedEvent.start_time || '08:00',
+    startLocation: typedEvent.start_location || '',
+    distance: typedEvent.distance_km,
+    type: formatEventType(typedEvent.event_type),
+    chapterName: typedEvent.chapters?.name || '',
+    chapterSlug: dbChapterSlug ? getUrlSlugFromDbSlug(dbChapterSlug) : '',
+    rwgpsId: typedEvent.routes?.rwgps_id || null,
+    routeSlug: typedEvent.routes?.slug || null,
+    cueSheetUrl: typedEvent.routes?.cue_sheet_url || null,
+    description: typedEvent.description || null,
+    imageUrl: typedEvent.image_url || null,
+  }
+})
+
 export async function getEventBySlug(slug: string): Promise<EventDetails | null> {
   return unstable_cache(
-    async () => {
-      // Fetch event with joined chapter and route data
-      const { data: event, error } = await getSupabase()
-        .from('events')
-        .select(`
-          id,
-          slug,
-          name,
-          event_date,
-          start_time,
-          start_location,
-          distance_km,
-          event_type,
-          description,
-          image_url,
-          chapters (name, slug),
-          routes (slug, rwgps_id, cue_sheet_url)
-        `)
-        .eq('slug', slug)
-        .single()
-
-      if (error || !event) {
-        console.error('Error fetching event:', error)
-        return null
-      }
-
-      // Type assertion for the query result with joins
-      const typedEvent = event as EventWithRelations
-      const dbChapterSlug = typedEvent.chapters?.slug
-      return {
-        id: typedEvent.id,
-        slug: typedEvent.slug,
-        name: typedEvent.name,
-        date: typedEvent.event_date,
-        startTime: typedEvent.start_time || '08:00',
-        startLocation: typedEvent.start_location || '',
-        distance: typedEvent.distance_km,
-        type: formatEventType(typedEvent.event_type),
-        chapterName: typedEvent.chapters?.name || '',
-        chapterSlug: dbChapterSlug ? getUrlSlugFromDbSlug(dbChapterSlug) : '',
-        rwgpsId: typedEvent.routes?.rwgps_id || null,
-        routeSlug: typedEvent.routes?.slug || null,
-        cueSheetUrl: typedEvent.routes?.cue_sheet_url || null,
-        description: typedEvent.description || null,
-        imageUrl: typedEvent.image_url || null,
-      }
-    },
+    async () => getEventBySlugInner(slug),
     [`event-by-slug-${slug}`],
     {
       tags: ['events', `event-${slug}`],

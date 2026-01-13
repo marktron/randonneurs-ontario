@@ -4,7 +4,17 @@ import { vi } from 'vitest'
 vi.mock('next/cache', () => ({
   revalidatePath: vi.fn(),
   revalidateTag: vi.fn(),
+  unstable_cache: vi.fn((fn) => fn), // Pass through the function (no caching in tests)
 }))
+
+// Mock React cache (for request deduplication)
+vi.mock('react', async () => {
+  const actual = await vi.importActual('react')
+  return {
+    ...actual,
+    cache: (fn: unknown) => fn, // Pass through the function (no deduplication in tests)
+  }
+})
 
 // Mock Next.js navigation
 vi.mock('next/navigation', () => ({

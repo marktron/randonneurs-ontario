@@ -267,7 +267,36 @@ All tables have RLS enabled. Key policies:
 
 ## Caching & Revalidation
 
-Next.js automatically caches data fetched in server components. We use `revalidatePath()` to invalidate cache after mutations:
+### Request Deduplication
+
+All data fetching functions in `lib/data/` use React's `cache()` to deduplicate parallel calls within the same request. This prevents duplicate database queries when:
+
+- Multiple components on the same page fetch the same data
+- Both `generateMetadata()` and the page component call the same function
+- Multiple server components render in parallel
+
+```typescript
+// lib/data/events.ts
+const getEventBySlugInner = cache(async (slug: string) => {
+  // Database query logic
+})
+
+export async function getEventBySlug(slug: string) {
+  return unstable_cache(
+    async () => getEventBySlugInner(slug),
+    [`event-by-slug-${slug}`],
+    { tags: ['events', `event-${slug}`] }
+  )()
+}
+```
+
+The pattern combines:
+- **`cache()`** - Deduplicates calls within a single request (request-level)
+- **`unstable_cache()`** - Caches results across requests (cross-request caching)
+
+### Cache Invalidation
+
+We use `revalidatePath()` to invalidate cache after mutations:
 
 ```typescript
 // lib/actions/register.ts
