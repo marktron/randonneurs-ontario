@@ -37,18 +37,17 @@ We use different Supabase clients depending on the context:
 import { getSupabase } from '@/lib/supabase'
 
 // Example: Fetch public event data
-const { data: events } = await getSupabase()
-  .from('events')
-  .select('*')
-  .eq('status', 'scheduled')
+const { data: events } = await getSupabase().from('events').select('*').eq('status', 'scheduled')
 ```
 
 **Use when:**
+
 - Reading public data (events, routes, results)
 - In server components or data fetching functions
 - You want RLS (Row Level Security) policies to apply
 
 **Don't use when:**
+
 - Writing data (use `getSupabaseAdmin()` instead)
 - Accessing private data like rider emails
 
@@ -61,10 +60,13 @@ import { createSupabaseServerClient } from '@/lib/supabase-server-client'
 
 // Example: Check current user in server component
 const supabase = await createSupabaseServerClient()
-const { data: { user } } = await supabase.auth.getUser()
+const {
+  data: { user },
+} = await supabase.auth.getUser()
 ```
 
 **Use when:**
+
 - Accessing authenticated user session in server components
 - Server actions that need to know the current user
 - Cookie-based authentication flows
@@ -79,10 +81,11 @@ import { getSupabaseAdmin } from '@/lib/supabase-server'
 // Example: Create a registration (bypasses RLS)
 const { data, error } = await getSupabaseAdmin()
   .from('registrations')
-  .insert({ event_id: '...', rider_id: '...' })
+  .insert({ event_id: '…', rider_id: '…' })
 ```
 
 **Use when:**
+
 - Server actions (writes/mutations)
 - Accessing private data (rider emails)
 - Admin operations that need to bypass RLS
@@ -132,6 +135,13 @@ export async function getRoutesByChapter(chapter: string)
 export async function getPermanentRoutes()
 ```
 
+### lib/data/riders.ts
+
+```typescript
+// Get all riders for the directory (sorted by last name, then first name)
+export async function getAllRiders(): Promise<RiderListItem[]>
+```
+
 ### Usage Pattern
 
 ```typescript
@@ -161,7 +171,9 @@ All write operations live in `lib/actions/`. These are [Server Actions](https://
 export async function registerForEvent(data: RegistrationData): Promise<RegistrationResult>
 
 // Register for a permanent ride
-export async function registerForPermanent(data: PermanentRegistrationData): Promise<RegistrationResult>
+export async function registerForPermanent(
+  data: PermanentRegistrationData
+): Promise<RegistrationResult>
 ```
 
 ### lib/actions/events.ts (Admin)
@@ -217,24 +229,24 @@ export function RegistrationForm({ eventId }: { eventId: string }) {
 
 ### Core Tables
 
-| Table | Description |
-|-------|-------------|
-| `chapters` | 7 regional chapters (Toronto, Ottawa, etc.) |
-| `routes` | Route definitions with RWGPS links |
-| `events` | Scheduled events (brevets, populaires, etc.) |
-| `riders` | Rider profiles (name, email, gender) |
-| `registrations` | Event registrations |
-| `results` | Completion records with finish times |
-| `awards` | Award definitions |
-| `result_awards` | Junction table for results ↔ awards |
-| `admins` | Admin users (linked to Supabase Auth) |
+| Table           | Description                                  |
+| --------------- | -------------------------------------------- |
+| `chapters`      | 7 regional chapters (Toronto, Ottawa, etc.)  |
+| `routes`        | Route definitions with RWGPS links           |
+| `events`        | Scheduled events (brevets, populaires, etc.) |
+| `riders`        | Rider profiles (name, email, gender)         |
+| `registrations` | Event registrations                          |
+| `results`       | Completion records with finish times         |
+| `awards`        | Award definitions                            |
+| `result_awards` | Junction table for results ↔ awards          |
+| `admins`        | Admin users (linked to Supabase Auth)        |
 
 ### Database Views
 
-| View | Description |
-|------|-------------|
-| `public_riders` | Riders without email (for public display) |
-| `public_results` | Results with denormalized rider names |
+| View             | Description                               |
+| ---------------- | ----------------------------------------- |
+| `public_riders`  | Riders without email (for public display) |
+| `public_results` | Results with denormalized rider names     |
 
 ### Database Functions
 
@@ -254,14 +266,17 @@ is_chapter_admin(p_chapter_id UUID) RETURNS BOOLEAN
 All tables have RLS enabled. Key policies:
 
 ### Public Read Access
+
 - `chapters`, `routes`, `events`, `results`, `awards` - anyone can read
 - `public_riders` view - riders without emails
 
 ### Protected Data
+
 - `riders` table - blocked for anonymous (use `public_riders` instead)
 - Write operations - require admin authentication
 
 ### Admin Access
+
 - Admins can read/write everything
 - Chapter admins are scoped to their chapter
 
@@ -282,15 +297,14 @@ const getEventBySlugInner = cache(async (slug: string) => {
 })
 
 export async function getEventBySlug(slug: string) {
-  return unstable_cache(
-    async () => getEventBySlugInner(slug),
-    [`event-by-slug-${slug}`],
-    { tags: ['events', `event-${slug}`] }
-  )()
+  return unstable_cache(async () => getEventBySlugInner(slug), [`event-by-slug-${slug}`], {
+    tags: ['events', `event-${slug}`],
+  })()
 }
 ```
 
 The pattern combines:
+
 - **`cache()`** - Deduplicates calls within a single request (request-level)
 - **`unstable_cache()`** - Caches results across requests (cross-request caching)
 
@@ -335,13 +349,15 @@ type EventUpdate = Database['public']['Tables']['events']['Update']
 ```typescript
 const { data: event } = await getSupabase()
   .from('events')
-  .select(`
+  .select(
+    `
     id,
     name,
     event_date,
     chapters (name, slug),
     routes (rwgps_id, cue_sheet_url)
-  `)
+  `
+  )
   .eq('slug', 'my-event')
   .single()
 
@@ -360,7 +376,7 @@ const { data: events } = await getSupabase()
   .select('*')
   .eq('chapter_id', chapterId)
   .eq('status', 'scheduled')
-  .gte('event_date', today)          // Future events only
+  .gte('event_date', today) // Future events only
   .order('event_date', { ascending: true })
   .order('start_time', { ascending: true })
 ```
@@ -368,11 +384,7 @@ const { data: events } = await getSupabase()
 ### Handling Errors
 
 ```typescript
-const { data, error } = await getSupabase()
-  .from('events')
-  .select('*')
-  .eq('slug', slug)
-  .single()
+const { data, error } = await getSupabase().from('events').select('*').eq('slug', slug).single()
 
 if (error) {
   console.error('Error fetching event:', error)
@@ -385,8 +397,7 @@ return data
 ### Using RPC Functions
 
 ```typescript
-const { data: riders } = await getSupabase()
-  .rpc('get_registered_riders', { p_event_id: eventId })
+const { data: riders } = await getSupabase().rpc('get_registered_riders', { p_event_id: eventId })
 ```
 
 ## Best Practices

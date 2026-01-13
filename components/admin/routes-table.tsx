@@ -165,7 +165,7 @@ export function RoutesTable({ routes, chapters, defaultChapterId }: RoutesTableP
 
       <div className="flex flex-col sm:flex-row gap-4 mb-4">
         <Input
-          placeholder="Search routes..."
+          placeholder="Search routes…"
           aria-label="Search routes"
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}

@@ -138,7 +138,7 @@ export function RidersTable({ riders, searchQuery }: RidersTableProps) {
           <InputGroupInput
             type="search"
             name="q"
-            placeholder="Search by name or email..."
+            placeholder="Search by name or email…"
             aria-label="Search riders by name or email"
             value={localSearch}
             onChange={(e) => setLocalSearch(e.target.value)}

@@ -7,7 +7,7 @@ set -e
 SEED_FILE="supabase/seed.sql"
 CONTAINER="supabase_db_randonneurs-ontario"
 
-echo "Generating seed file from current database..."
+echo "Generating seed file from current database…"
 
 # Generate the dump with INSERT statements using pg_dump from inside Docker
 # (to avoid version mismatch issues)

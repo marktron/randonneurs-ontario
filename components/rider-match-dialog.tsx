@@ -1,6 +1,6 @@
-"use client"
+'use client'
 
-import { useState } from "react"
+import { useState } from 'react'
 import {
   Dialog,
   DialogContent,
@@ -8,11 +8,11 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog"
-import { Button } from "@/components/ui/button"
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
-import { Label } from "@/components/ui/label"
-import type { RiderMatchCandidate } from "@/lib/actions/rider-match"
+} from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
+import { Label } from '@/components/ui/label'
+import type { RiderMatchCandidate } from '@/lib/actions/rider-match'
 
 interface RiderMatchDialogProps {
   open: boolean
@@ -25,7 +25,7 @@ interface RiderMatchDialogProps {
   isPending: boolean
 }
 
-const NEW_RIDER_VALUE = "__new__"
+const NEW_RIDER_VALUE = '__new__'
 
 export function RiderMatchDialog({
   open,
@@ -37,7 +37,7 @@ export function RiderMatchDialog({
   onCreateNew,
   isPending,
 }: RiderMatchDialogProps) {
-  const [selectedValue, setSelectedValue] = useState<string>("")
+  const [selectedValue, setSelectedValue] = useState<string>('')
 
   const handleContinue = () => {
     if (!selectedValue) return
@@ -57,8 +57,8 @@ export function RiderMatchDialog({
         <DialogHeader>
           <DialogTitle>Have you ridden with us before?</DialogTitle>
           <DialogDescription>
-            We found some riders with similar names. If you&apos;ve participated in past
-            events, select your name below to link this registration to your history.
+            We found some riders with similar names. If you&apos;ve participated in past events,
+            select your name below to link this registration to your history.
           </DialogDescription>
         </DialogHeader>
 
@@ -70,10 +70,7 @@ export function RiderMatchDialog({
         >
           {/* Candidate riders */}
           {candidates.map((candidate) => (
-            <div
-              key={candidate.id}
-              className="flex items-center gap-3 py-3"
-            >
+            <div key={candidate.id} className="flex items-center gap-3 py-3">
               <RadioGroupItem value={candidate.id} id={candidate.id} />
               <Label
                 htmlFor={candidate.id}
@@ -81,15 +78,13 @@ export function RiderMatchDialog({
               >
                 <span className="font-medium">{candidate.fullName}</span>
                 <span className="text-sm text-muted-foreground">
-                  {candidate.firstSeason && (
-                    <span>Since {candidate.firstSeason}</span>
-                  )}
+                  {candidate.firstSeason && <span>Since {candidate.firstSeason}</span>}
                   {candidate.firstSeason && candidate.totalRides > 0 && (
                     <span className="mx-1">&middot;</span>
                   )}
                   {candidate.totalRides > 0 && (
                     <span>
-                      {candidate.totalRides} {candidate.totalRides === 1 ? "ride" : "rides"}
+                      {candidate.totalRides} {candidate.totalRides === 1 ? 'ride' : 'rides'}
                     </span>
                   )}
                 </span>
@@ -110,18 +105,11 @@ export function RiderMatchDialog({
         </RadioGroup>
 
         <DialogFooter>
-          <Button
-            variant="outline"
-            onClick={() => onOpenChange(false)}
-            disabled={isPending}
-          >
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isPending}>
             Cancel
           </Button>
-          <Button
-            onClick={handleContinue}
-            disabled={!selectedValue || isPending}
-          >
-            {isPending ? "Processing..." : "Continue"}
+          <Button onClick={handleContinue} disabled={!selectedValue || isPending}>
+            {isPending ? 'Processing…' : 'Continue'}
           </Button>
         </DialogFooter>
       </DialogContent>

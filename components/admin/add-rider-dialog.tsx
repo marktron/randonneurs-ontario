@@ -62,7 +62,7 @@ export function AddRiderDialog({
       setIsSearching(true)
       const results = await searchRiders(searchQuery)
       // Filter out riders already in the event
-      const filtered = results.filter(r => !existingRiderIds.has(r.id))
+      const filtered = results.filter((r) => !existingRiderIds.has(r.id))
       setSearchResults(filtered)
       setIsSearching(false)
     }, 300)
@@ -154,9 +154,7 @@ export function AddRiderDialog({
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Add Rider</DialogTitle>
-          <DialogDescription>
-            Search for an existing rider or create a new one.
-          </DialogDescription>
+          <DialogDescription>Search for an existing rider or create a new one.</DialogDescription>
         </DialogHeader>
 
         {mode === 'search' ? (
@@ -166,7 +164,7 @@ export function AddRiderDialog({
                 <Search className="h-4 w-4" />
               </InputGroupAddon>
               <InputGroupInput
-                placeholder="Search by name or email..."
+                placeholder="Search by name or email…"
                 value={searchQuery}
                 onChange={(e) => {
                   setSearchQuery(e.target.value)
@@ -193,25 +191,20 @@ export function AddRiderDialog({
                     <p className="font-medium">
                       {rider.first_name} {rider.last_name}
                     </p>
-                    {rider.email && (
-                      <p className="text-xs text-muted-foreground">{rider.email}</p>
-                    )}
+                    {rider.email && <p className="text-xs text-muted-foreground">{rider.email}</p>}
                   </button>
                 ))}
               </div>
             )}
 
-            {!isSearching && searchQuery.length >= 2 && searchResults.length === 0 && !selectedRider && (
-              <p className="text-sm text-muted-foreground text-center py-2">
-                No riders found
-              </p>
-            )}
+            {!isSearching &&
+              searchQuery.length >= 2 &&
+              searchResults.length === 0 &&
+              !selectedRider && (
+                <p className="text-sm text-muted-foreground text-center py-2">No riders found</p>
+              )}
 
-            <Button
-              variant="outline"
-              className="w-full"
-              onClick={() => setMode('create')}
-            >
+            <Button variant="outline" className="w-full" onClick={() => setMode('create')}>
               <UserPlus className="h-4 w-4 mr-2" />
               Create New Rider
             </Button>
@@ -249,11 +242,7 @@ export function AddRiderDialog({
               />
             </div>
 
-            <Button
-              variant="ghost"
-              className="w-full"
-              onClick={() => setMode('search')}
-            >
+            <Button variant="ghost" className="w-full" onClick={() => setMode('search')}>
               Back to Search
             </Button>
           </div>
@@ -264,10 +253,7 @@ export function AddRiderDialog({
             Cancel
           </Button>
           {mode === 'search' ? (
-            <Button
-              onClick={handleAddExistingRider}
-              disabled={!selectedRider || isPending}
-            >
+            <Button onClick={handleAddExistingRider} disabled={!selectedRider || isPending}>
               {isPending ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -281,10 +267,7 @@ export function AddRiderDialog({
               )}
             </Button>
           ) : (
-            <Button
-              onClick={handleCreateAndAdd}
-              disabled={!firstName || !lastName || isPending}
-            >
+            <Button onClick={handleCreateAndAdd} disabled={!firstName || !lastName || isPending}>
               {isPending ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />

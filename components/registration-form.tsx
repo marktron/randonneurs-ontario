@@ -287,7 +287,7 @@ export function RegistrationForm({
             disabled={isPending}
           >
             <SelectTrigger id="gender" className="w-full">
-              <SelectValue placeholder="Select..." />
+              <SelectValue placeholder="Select…" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="M">Male</SelectItem>
@@ -364,7 +364,7 @@ export function RegistrationForm({
           <Textarea
             id="notes"
             name="notes"
-            placeholder="Any special requirements or information..."
+            placeholder="Any special requirements or information…"
             rows={3}
             disabled={isPending}
           />
@@ -372,7 +372,7 @@ export function RegistrationForm({
 
         {/* Submit */}
         <Button type="submit" className="w-full" size="lg" disabled={isPending}>
-          {isPending ? 'Registering...' : 'Register'}
+          {isPending ? 'Registering…' : 'Register'}
         </Button>
       </form>
 

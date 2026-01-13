@@ -5,7 +5,13 @@ import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { AlertCircle, Loader2 } from 'lucide-react'
@@ -134,7 +140,9 @@ export function UserForm({ chapters, user, mode }: UserFormProps) {
               onChange={(e) => setPhone(e.target.value)}
               disabled={isPending}
             />
-            <p className="text-xs text-muted-foreground">Used as organizer contact on control cards</p>
+            <p className="text-xs text-muted-foreground">
+              Used as organizer contact on control cards
+            </p>
           </div>
 
           {mode === 'create' && (
@@ -155,7 +163,11 @@ export function UserForm({ chapters, user, mode }: UserFormProps) {
 
           <div className="space-y-2">
             <Label htmlFor="role">Role</Label>
-            <Select value={role} onValueChange={(v) => setRole(v as 'admin' | 'chapter_admin')} disabled={isPending}>
+            <Select
+              value={role}
+              onValueChange={(v) => setRole(v as 'admin' | 'chapter_admin')}
+              disabled={isPending}
+            >
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
@@ -189,10 +201,12 @@ export function UserForm({ chapters, user, mode }: UserFormProps) {
               {isPending ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  {mode === 'create' ? 'Creating...' : 'Saving...'}
+                  {mode === 'create' ? 'Creating…' : 'Saving…'}
                 </>
+              ) : mode === 'create' ? (
+                'Create User'
               ) : (
-                mode === 'create' ? 'Create User' : 'Save Changes'
+                'Save Changes'
               )}
             </Button>
             <Button

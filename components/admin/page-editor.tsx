@@ -1,22 +1,23 @@
-"use client"
+'use client'
 
-import { useState } from "react"
-import { useRouter } from "next/navigation"
-import dynamic from "next/dynamic"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { HeaderImagePicker } from "./header-image-picker"
-import { savePage } from "@/lib/actions/pages"
-import { toast } from "sonner"
-import { Loader2, Save } from "lucide-react"
+import { useState } from 'react'
+import { useRouter } from 'next/navigation'
+import dynamic from 'next/dynamic'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { HeaderImagePicker } from './header-image-picker'
+import { savePage } from '@/lib/actions/pages'
+import { toast } from 'sonner'
+import { Loader2, Save } from 'lucide-react'
 
 // Lazy-load MarkdownEditor (includes react-markdown and remark-gfm)
-const MarkdownEditor = dynamic(() => import("./markdown-editor").then(mod => ({ default: mod.MarkdownEditor })), {
-  loading: () => (
-    <div className="h-[500px] rounded-md border bg-muted animate-pulse" />
-  ),
-})
+const MarkdownEditor = dynamic(
+  () => import('./markdown-editor').then((mod) => ({ default: mod.MarkdownEditor })),
+  {
+    loading: () => <div className="h-[500px] rounded-md border bg-muted animate-pulse" />,
+  }
+)
 
 interface PageEditorProps {
   initialSlug?: string
@@ -30,17 +31,17 @@ interface PageEditorProps {
 function generateSlug(text: string): string {
   return text
     .toLowerCase()
-    .replace(/[^a-z0-9\s-]/g, "")
-    .replace(/\s+/g, "-")
-    .replace(/-+/g, "-")
+    .replace(/[^a-z0-9\s-]/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
     .trim()
 }
 
 export function PageEditor({
-  initialSlug = "",
-  initialTitle = "",
-  initialDescription = "",
-  initialContent = "",
+  initialSlug = '',
+  initialTitle = '',
+  initialDescription = '',
+  initialContent = '',
   initialHeaderImage,
   isNew = false,
 }: PageEditorProps) {
@@ -62,17 +63,17 @@ export function PageEditor({
 
   async function handleSave() {
     if (!title.trim()) {
-      toast.error("Title is required")
+      toast.error('Title is required')
       return
     }
 
     if (isNew) {
       if (!slug.trim()) {
-        toast.error("Slug is required")
+        toast.error('Slug is required')
         return
       }
       if (!/^[a-z0-9-]+$/.test(slug)) {
-        toast.error("Slug can only contain lowercase letters, numbers, and hyphens")
+        toast.error('Slug can only contain lowercase letters, numbers, and hyphens')
         return
       }
     }
@@ -88,22 +89,22 @@ export function PageEditor({
       })
 
       if (result.success) {
-        toast.success(isNew ? "Page created" : "Page saved")
+        toast.success(isNew ? 'Page created' : 'Page saved')
         if (isNew) {
           router.push(`/admin/pages/${slug}`)
         }
         router.refresh()
       } else {
-        toast.error(result.error || "Failed to save page")
+        toast.error(result.error || 'Failed to save page')
       }
     } catch {
-      toast.error("An error occurred while saving")
+      toast.error('An error occurred while saving')
     } finally {
       setSaving(false)
     }
   }
 
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || ""
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || ''
 
   return (
     <div className="space-y-6 max-w-4xl">
@@ -128,11 +129,11 @@ export function PageEditor({
           <Input
             id="slug"
             value={slug}
-            onChange={(e) => setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))}
+            onChange={(e) => setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
             placeholder="page-slug"
           />
           <p className="text-xs text-muted-foreground">
-            The page will be available at {siteUrl}/{slug || "..."}
+            The page will be available at {siteUrl}/{slug || '…'}
           </p>
         </div>
       )}
@@ -153,7 +154,7 @@ export function PageEditor({
         label="Content (Markdown)"
         value={content}
         onChange={setContent}
-        placeholder="Write your page content here using Markdown..."
+        placeholder="Write your page content here using Markdown…"
       />
 
       <div className="flex justify-end gap-2">
@@ -164,12 +165,12 @@ export function PageEditor({
           {saving ? (
             <>
               <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              {isNew ? "Creating..." : "Saving..."}
+              {isNew ? 'Creating…' : 'Saving…'}
             </>
           ) : (
             <>
               <Save className="h-4 w-4 mr-2" />
-              {isNew ? "Create Page" : "Save Changes"}
+              {isNew ? 'Create Page' : 'Save Changes'}
             </>
           )}
         </Button>

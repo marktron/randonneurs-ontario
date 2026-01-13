@@ -8,11 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Calendar } from '@/components/ui/calendar'
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import {
   Select,
   SelectContent,
@@ -48,7 +44,7 @@ export interface EventFormData {
   routeId: string | null
   eventType: string
   distanceKm: number
-  eventDate: string  // YYYY-MM-DD
+  eventDate: string // YYYY-MM-DD
   startTime: string | null
   startLocation: string | null
   description: string | null
@@ -73,7 +69,13 @@ const EVENT_TYPES: { value: EventType; label: string }[] = [
   { value: 'permanent', label: 'Permanent' },
 ]
 
-export function EventForm({ chapters, routes, defaultChapterId, event, mode = 'create' }: EventFormProps) {
+export function EventForm({
+  chapters,
+  routes,
+  defaultChapterId,
+  event,
+  mode = 'create',
+}: EventFormProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
@@ -95,28 +97,28 @@ export function EventForm({ chapters, routes, defaultChapterId, event, mode = 'c
   const [imageUrl, setImageUrl] = useState(event?.imageUrl || '')
 
   // Separate chapters into main chapters and others
-  const mainChapters = CHAPTER_ORDER
-    .map(name => chapters.find(c => c.name === name))
-    .filter((c): c is ChapterOption => c !== undefined)
+  const mainChapters = CHAPTER_ORDER.map((name) => chapters.find((c) => c.name === name)).filter(
+    (c): c is ChapterOption => c !== undefined
+  )
 
   const otherChapters = chapters
-    .filter(c => !CHAPTER_ORDER.includes(c.name))
+    .filter((c) => !CHAPTER_ORDER.includes(c.name))
     .sort((a, b) => a.name.localeCompare(b.name))
 
   // Filter routes by selected chapter
   const filteredRoutes = useMemo(() => {
     if (!chapterId) return routes
-    return routes.filter(r => r.chapterId === chapterId)
+    return routes.filter((r) => r.chapterId === chapterId)
   }, [routes, chapterId])
 
   // Get selected route
-  const selectedRoute = routes.find(r => r.id === routeId)
+  const selectedRoute = routes.find((r) => r.id === routeId)
 
   // When chapter changes, clear route if it doesn't belong to the new chapter
   const handleChapterChange = (newChapterId: string) => {
     setChapterId(newChapterId)
     if (routeId) {
-      const route = routes.find(r => r.id === routeId)
+      const route = routes.find((r) => r.id === routeId)
       if (route && route.chapterId !== newChapterId) {
         setRouteId(null)
       }
@@ -278,17 +280,18 @@ export function EventForm({ chapters, routes, defaultChapterId, event, mode = 'c
                   >
                     {selectedRoute ? (
                       <span className="truncate">
-                        {selectedRoute.name} {selectedRoute.distanceKm && `(${selectedRoute.distanceKm} km)`}
+                        {selectedRoute.name}{' '}
+                        {selectedRoute.distanceKm && `(${selectedRoute.distanceKm} km)`}
                       </span>
                     ) : (
-                      <span className="text-muted-foreground">Search routes...</span>
+                      <span className="text-muted-foreground">Search routes…</span>
                     )}
                     <ChevronDownIcon className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
                   <Command>
-                    <CommandInput placeholder="Search by name or distance..." />
+                    <CommandInput placeholder="Search by name or distance…" />
                     <CommandList>
                       <CommandEmpty>No routes found.</CommandEmpty>
                       <CommandGroup>
@@ -302,7 +305,11 @@ export function EventForm({ chapters, routes, defaultChapterId, event, mode = 'c
                           No route
                         </CommandItem>
                       </CommandGroup>
-                      <CommandGroup heading={chapterId ? chapters.find(c => c.id === chapterId)?.name : 'All Routes'}>
+                      <CommandGroup
+                        heading={
+                          chapterId ? chapters.find((c) => c.id === chapterId)?.name : 'All Routes'
+                        }
+                      >
                         {filteredRoutes.map((route) => (
                           <CommandItem
                             key={route.id}
@@ -328,8 +335,7 @@ export function EventForm({ chapters, routes, defaultChapterId, event, mode = 'c
           <p className="text-xs text-muted-foreground -mt-2">
             {chapterId
               ? `Showing ${filteredRoutes.length} routes for selected chapter`
-              : 'Select a chapter to filter routes'
-            }
+              : 'Select a chapter to filter routes'}
           </p>
 
           {/* Event Name */}
@@ -472,16 +478,22 @@ export function EventForm({ chapters, routes, defaultChapterId, event, mode = 'c
               {isPending ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  {mode === 'edit' ? 'Saving...' : 'Creating...'}
+                  {mode === 'edit' ? 'Saving…' : 'Creating…'}
                 </>
+              ) : mode === 'edit' ? (
+                'Save Changes'
               ) : (
-                mode === 'edit' ? 'Save Changes' : 'Create Event'
+                'Create Event'
               )}
             </Button>
             <Button
               type="button"
               variant="outline"
-              onClick={() => router.push(mode === 'edit' && event ? `/admin/events/${event.id}` : '/admin/events')}
+              onClick={() =>
+                router.push(
+                  mode === 'edit' && event ? `/admin/events/${event.id}` : '/admin/events'
+                )
+              }
               disabled={isPending}
             >
               Cancel

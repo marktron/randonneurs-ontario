@@ -92,12 +92,13 @@ export function RouteForm({ chapters, route, mode }: RouteFormProps) {
         isActive,
       }
 
-      const result = mode === 'create'
-        ? await createRoute(data)
-        : await updateRoute(route!.id, data)
+      const result =
+        mode === 'create' ? await createRoute(data) : await updateRoute(route!.id, data)
 
       if (result.success) {
-        toast.success(mode === 'create' ? 'Route created successfully' : 'Route updated successfully')
+        toast.success(
+          mode === 'create' ? 'Route created successfully' : 'Route updated successfully'
+        )
         router.push('/admin/routes')
       } else {
         setError(result.error || 'Failed to save route')
@@ -155,7 +156,11 @@ export function RouteForm({ chapters, route, mode }: RouteFormProps) {
           <div className="grid gap-4 sm:grid-cols-3">
             <div className="space-y-2">
               <Label htmlFor="chapter">Chapter</Label>
-              <Select value={chapterId || 'none'} onValueChange={(v) => setChapterId(v === 'none' ? '' : v)} disabled={isPending}>
+              <Select
+                value={chapterId || 'none'}
+                onValueChange={(v) => setChapterId(v === 'none' ? '' : v)}
+                disabled={isPending}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="Select chapter" />
                 </SelectTrigger>
@@ -238,7 +243,7 @@ export function RouteForm({ chapters, route, mode }: RouteFormProps) {
               id="description"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="Brief description of the route..."
+              placeholder="Brief description of the route…"
               rows={3}
               disabled={isPending}
             />
@@ -250,7 +255,7 @@ export function RouteForm({ chapters, route, mode }: RouteFormProps) {
               id="notes"
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              placeholder="Notes for administrators (not shown publicly)..."
+              placeholder="Notes for administrators (not shown publicly)…"
               rows={2}
               disabled={isPending}
             />
@@ -264,7 +269,9 @@ export function RouteForm({ chapters, route, mode }: RouteFormProps) {
               disabled={isPending}
             />
             <div>
-              <Label htmlFor="active" className="cursor-pointer">Active</Label>
+              <Label htmlFor="active" className="cursor-pointer">
+                Active
+              </Label>
               <p className="text-xs text-muted-foreground">
                 Inactive routes won&apos;t appear in route selection lists
               </p>
@@ -276,10 +283,12 @@ export function RouteForm({ chapters, route, mode }: RouteFormProps) {
               {isPending ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  {mode === 'create' ? 'Creating...' : 'Saving...'}
+                  {mode === 'create' ? 'Creating…' : 'Saving…'}
                 </>
+              ) : mode === 'create' ? (
+                'Create Route'
               ) : (
-                mode === 'create' ? 'Create Route' : 'Save Changes'
+                'Save Changes'
               )}
             </Button>
             <Button

@@ -286,14 +286,14 @@ export function PermanentRegistrationForm({ routes }: PermanentRegistrationFormP
                       {selectedRoute.name} ({selectedRoute.distanceKm} km)
                     </span>
                   ) : (
-                    'Search routes...'
+                    'Search routes…'
                   )}
                   <ChevronDownIcon className="h-4 w-4 opacity-50" />
                 </Button>
               </PopoverTrigger>
               <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
                 <Command>
-                  <CommandInput placeholder="Search by name, chapter, or distance..." />
+                  <CommandInput placeholder="Search by name, chapter, or distance…" />
                   <CommandList>
                     <CommandEmpty>No routes found.</CommandEmpty>
                     {routesByChapter.map(([chapter, chapterRoutes]) => (
@@ -476,7 +476,7 @@ export function PermanentRegistrationForm({ routes }: PermanentRegistrationFormP
               disabled={isPending}
             >
               <SelectTrigger id="gender" className="w-full">
-                <SelectValue placeholder="Select..." />
+                <SelectValue placeholder="Select…" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="M">Male</SelectItem>
@@ -553,7 +553,7 @@ export function PermanentRegistrationForm({ routes }: PermanentRegistrationFormP
             <Textarea
               id="notes"
               name="notes"
-              placeholder="Any special requirements or information..."
+              placeholder="Any special requirements or information…"
               rows={3}
               disabled={isPending}
               value={notes}
@@ -564,7 +564,7 @@ export function PermanentRegistrationForm({ routes }: PermanentRegistrationFormP
 
         {/* Submit */}
         <Button type="submit" className="w-full" size="lg" disabled={isPending}>
-          {isPending ? 'Scheduling...' : 'Schedule Permanent'}
+          {isPending ? 'Scheduling…' : 'Schedule Permanent'}
         </Button>
       </form>
 

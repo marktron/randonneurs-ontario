@@ -74,7 +74,7 @@ export function MergeRoutesDialog({
   // Handle target route change - populate form with that route's values
   const handleTargetChange = (routeId: string) => {
     setTargetRouteId(routeId)
-    const route = selectedRoutes.find(r => r.id === routeId)
+    const route = selectedRoutes.find((r) => r.id === routeId)
     if (route) {
       populateFromRoute(route)
     }
@@ -86,13 +86,13 @@ export function MergeRoutesDialog({
       setError(null)
 
       // Fetch event counts for selected routes, then select the best target
-      getRouteEventCounts(selectedRoutes.map(r => r.id)).then((counts) => {
+      getRouteEventCounts(selectedRoutes.map((r) => r.id)).then((counts) => {
         setEventCounts(counts)
 
         // Determine best route to use as target:
         // 1. If exactly one route is active, use that
         // 2. Otherwise, use the one with the most events
-        const activeRoutes = selectedRoutes.filter(r => r.is_active)
+        const activeRoutes = selectedRoutes.filter((r) => r.is_active)
         let bestRoute: RouteWithChapter
 
         if (activeRoutes.length === 1) {
@@ -131,7 +131,7 @@ export function MergeRoutesDialog({
     startTransition(async () => {
       const result = await mergeRoutes({
         targetRouteId,
-        sourceRouteIds: selectedRoutes.map(r => r.id),
+        sourceRouteIds: selectedRoutes.map((r) => r.id),
         routeData: {
           name: name.trim(),
           slug,
@@ -168,7 +168,8 @@ export function MergeRoutesDialog({
             Merge Routes
           </DialogTitle>
           <DialogDescription>
-            Merging {selectedRoutes.length} routes into one. All events will be updated to use the merged route.
+            Merging {selectedRoutes.length} routes into one. All events will be updated to use the
+            merged route.
           </DialogDescription>
         </DialogHeader>
 
@@ -202,7 +203,8 @@ export function MergeRoutesDialog({
             </ul>
             {totalEvents > 0 && (
               <p className="text-xs text-amber-600 dark:text-amber-400 mt-2">
-                ⚠️ {totalEvents} event{totalEvents !== 1 ? 's' : ''} will be updated to use the merged route
+                ⚠️ {totalEvents} event{totalEvents !== 1 ? 's' : ''} will be updated to use the
+                merged route
               </p>
             )}
           </div>
@@ -255,7 +257,11 @@ export function MergeRoutesDialog({
           <div className="grid gap-4 sm:grid-cols-3">
             <div className="space-y-2">
               <Label htmlFor="chapter">Chapter</Label>
-              <Select value={chapterId || 'none'} onValueChange={(v) => setChapterId(v === 'none' ? '' : v)} disabled={isPending}>
+              <Select
+                value={chapterId || 'none'}
+                onValueChange={(v) => setChapterId(v === 'none' ? '' : v)}
+                disabled={isPending}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="Select chapter" />
                 </SelectTrigger>
@@ -324,7 +330,7 @@ export function MergeRoutesDialog({
               id="description"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="Brief description of the route..."
+              placeholder="Brief description of the route…"
               rows={2}
               disabled={isPending}
             />
@@ -336,7 +342,7 @@ export function MergeRoutesDialog({
               id="notes"
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              placeholder="Notes for administrators..."
+              placeholder="Notes for administrators…"
               rows={2}
               disabled={isPending}
             />

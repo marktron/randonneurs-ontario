@@ -267,7 +267,7 @@ export function ResultSubmissionForm({ token, initialData }: ResultSubmissionFor
           <Label htmlFor="status">Finish Status</Label>
           <Select value={status} onValueChange={setStatus} disabled={isPending}>
             <SelectTrigger id="status" className="w-full">
-              <SelectValue placeholder="Select your finish status..." />
+              <SelectValue placeholder="Select your finish status…" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="finished">Finished</SelectItem>
@@ -324,7 +324,7 @@ export function ResultSubmissionForm({ token, initialData }: ResultSubmissionFor
             <Input
               id="gpxUrl"
               type="url"
-              placeholder="https://www.strava.com/activities/..."
+              placeholder="https://www.strava.com/activities/…"
               value={gpxUrl}
               onChange={(e) => setGpxUrl(e.target.value)}
               disabled={isPending}
@@ -364,7 +364,7 @@ export function ResultSubmissionForm({ token, initialData }: ResultSubmissionFor
             ) : (
               <p className="text-xs text-muted-foreground">
                 {gpxFile.uploading ? (
-                  'Uploading...'
+                  'Uploading…'
                 ) : (
                   <>
                     or{' '}
