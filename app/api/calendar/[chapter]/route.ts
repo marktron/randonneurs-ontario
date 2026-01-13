@@ -21,42 +21,46 @@ const BRM_TIME_LIMITS: Record<number, number> = {
 }
 
 /**
- * Get event duration in hours.
+ * Get event duration as hours and minutes (for valid iCal DURATION format).
  * - Brevets 200km+: Use BRM time limits
  * - Fleche: 24 hours
  * - Populaires: Use distance / 20 km/h
  */
-function getEventDurationHours(distanceKm: number, eventType: string): number {
+function getEventDuration(distanceKm: number, eventType: string): { hours: number; minutes: number } {
+  let totalHours: number
+
   // Fleche is always 24 hours
   if (eventType === 'fleche') {
-    return 24
-  }
-
-  // For brevets, use BRM time limits if we have an exact match
-  if (eventType === 'brevet' && BRM_TIME_LIMITS[distanceKm]) {
-    return BRM_TIME_LIMITS[distanceKm]
-  }
-
-  // For brevets without exact match, interpolate or use closest
-  if (eventType === 'brevet' && distanceKm >= 200) {
+    totalHours = 24
+  } else if (eventType === 'brevet' && BRM_TIME_LIMITS[distanceKm]) {
+    // For brevets, use BRM time limits if we have an exact match
+    totalHours = BRM_TIME_LIMITS[distanceKm]
+  } else if (eventType === 'brevet' && distanceKm >= 200) {
+    // For brevets without exact match, interpolate or use closest
     const distances = Object.keys(BRM_TIME_LIMITS).map(Number).sort((a, b) => a - b)
+    totalHours = BRM_TIME_LIMITS[distances[0]] // Default to 200km limit
 
-    // Find the bracket this distance falls into
     for (let i = 0; i < distances.length - 1; i++) {
       if (distanceKm >= distances[i] && distanceKm < distances[i + 1]) {
-        // Use the time limit for the lower bracket
-        return BRM_TIME_LIMITS[distances[i]]
+        totalHours = BRM_TIME_LIMITS[distances[i]]
+        break
       }
     }
 
     // If longer than 1200km, extrapolate at ~15 km/h
     if (distanceKm > 1200) {
-      return Math.ceil(distanceKm / 15)
+      totalHours = Math.ceil(distanceKm / 15)
     }
+  } else {
+    // For populaires and other events, use ~20 km/h average
+    totalHours = Math.ceil(distanceKm / 20)
   }
 
-  // For populaires and other events, use ~20 km/h average
-  return Math.ceil(distanceKm / 20)
+  // Convert decimal hours to hours and minutes
+  const hours = Math.floor(totalHours)
+  const minutes = Math.round((totalHours - hours) * 60)
+
+  return { hours, minutes }
 }
 
 interface RouteParams {
@@ -163,7 +167,7 @@ export async function GET(request: Request, { params }: RouteParams) {
     const utcDate = new Date(Date.UTC(year, month - 1, day, hour + offsetHours, minute))
 
     // Calculate duration based on event type and distance
-    const durationHours = getEventDurationHours(event.distance_km, event.event_type)
+    const duration = getEventDuration(event.distance_km, event.event_type)
 
     const eventType = formatEventType(event.event_type)
     const title = `${event.name} (${event.distance_km}km ${eventType})`
@@ -189,7 +193,7 @@ export async function GET(request: Request, { params }: RouteParams) {
       ] as [number, number, number, number, number],
       startInputType: 'utc' as const,
       startOutputType: 'utc' as const,
-      duration: { hours: durationHours },
+      duration,
       location: event.start_location || undefined,
       description: descriptionParts.join('\n'),
       url: `${siteUrl}/event/${event.slug}`,
