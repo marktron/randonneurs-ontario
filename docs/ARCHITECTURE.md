@@ -230,15 +230,58 @@ Admin features:
 - Settings page at `/admin/settings` for profile editing (name, phone, default chapter) and password changes
 - Super admins can manage other admin users at `/admin/users`
 
+## Scheduled Tasks
+
+The site uses **GitHub Actions** to run scheduled tasks (cron jobs). This avoids Vercel's paid cron feature.
+
+### Event Auto-Completion
+
+Events are automatically marked as "completed" once their closing time passes:
+
+```
+GitHub Actions (hourly) → /api/cron/complete-events → Update event status → Send result emails
+```
+
+**Workflow:** `.github/workflows/complete-events.yml`
+
+**How it works:**
+1. GitHub Actions triggers every hour (`0 * * * *`)
+2. Calls the `/api/cron/complete-events` endpoint with `CRON_SECRET` for auth
+3. The endpoint checks each scheduled event's closing time (start + BRM time limit)
+4. Events past their closing time are marked "completed"
+5. Registered riders receive emails with links to submit their results
+
+**Required GitHub Secrets:**
+- `CRON_SECRET` - Must match the Vercel environment variable
+- `SITE_URL` - Production URL (e.g., `https://randonneursontario.ca`)
+
+**Timezone handling:** All event times are interpreted as Toronto time (`America/Toronto`), with proper EST/EDT handling via `createTorontoDate()` in `lib/brmTimes.ts`.
+
+## Error Monitoring
+
+The site uses **Sentry** for error tracking and performance monitoring.
+
+**Configuration files:**
+- `instrumentation.ts` - Server-side initialization
+- `instrumentation-client.ts` - Client-side initialization
+- `sentry.server.config.ts` - Server config
+- `sentry.edge.config.ts` - Edge runtime config
+
+**Required Vercel environment variable:**
+- `SENTRY_AUTH_TOKEN` - For source map uploads during builds
+
+Errors are automatically captured for both client and server. View them at [sentry.io](https://sentry.io).
+
 ## Key Configuration Files
 
 | File | Purpose |
 |------|---------|
-| `next.config.ts` | Next.js configuration |
+| `next.config.ts` | Next.js configuration (wrapped with Sentry) |
 | `tailwind.config.ts` | Tailwind CSS customization |
 | `components.json` | shadcn/ui component settings |
 | `supabase/config.toml` | Local Supabase settings |
 | `.env.local` | Environment variables (secrets) |
+| `.github/workflows/` | GitHub Actions for scheduled tasks |
 
 ## Common Patterns
 
