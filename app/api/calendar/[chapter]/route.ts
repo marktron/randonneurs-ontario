@@ -71,7 +71,7 @@ interface RouteParams {
  * - /api/calendar/simcoe-muskoka.ics -> Simcoe-Muskoka chapter events
  *
  * Subscribe URL for Google Calendar:
- * https://calendar.google.com/calendar/r?cid=webcal://randonneurs.to/api/calendar/toronto.ics
+ * https://calendar.google.com/calendar/r?cid=webcal://[SITE_URL]/api/calendar/toronto.ics
  */
 export async function GET(request: Request, { params }: RouteParams) {
   const { chapter: chapterParam } = await params
@@ -130,6 +130,9 @@ export async function GET(request: Request, { params }: RouteParams) {
   }
 
   // Convert events to iCal format
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://randonneurs.to'
+  const siteHostname = siteUrl.replace(/^https?:\/\//, '').replace(/\/$/, '')
+  
   const icsEvents: EventAttributes[] = (events || []).map((event: {
     id: string
     slug: string
@@ -156,22 +159,22 @@ export async function GET(request: Request, { params }: RouteParams) {
       `${event.distance_km}km ${eventType}`,
       event.description || '',
       '',
-      `Register: https://randonneurs.to/register/${event.slug}`,
-      `Details: https://randonneurs.to/event/${event.slug}`,
+      `Register: ${siteUrl}/register/${event.slug}`,
+      `Details: ${siteUrl}/event/${event.slug}`,
     ].filter(Boolean)
 
     return {
-      uid: `${event.id}@randonneurs.to`,
+      uid: `${event.id}@${siteHostname}`,
       title,
       start: [year, month, day, hour, minute] as [number, number, number, number, number],
       duration: { hours: durationHours },
       location: event.start_location || undefined,
       description: descriptionParts.join('\n'),
-      url: `https://randonneurs.to/event/${event.slug}`,
+      url: `${siteUrl}/event/${event.slug}`,
       categories: [eventType, 'Cycling', 'Randonneuring'],
       status: 'CONFIRMED' as const,
       busyStatus: 'BUSY' as const,
-      organizer: { name: `Randonneurs Ontario - ${chapterInfo.name}`, email: 'info@randonneurs.to' },
+      organizer: { name: `Randonneurs Ontario - ${chapterInfo.name}`, email: `info@${siteHostname}` },
     }
   })
 

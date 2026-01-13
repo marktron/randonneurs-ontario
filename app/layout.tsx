@@ -6,7 +6,7 @@ const notoSans = Noto_Sans({variable:'--font-sans'});
 const notoSerif = Noto_Serif({variable:'--font-serif', subsets: ['latin']});
 
 export const metadata: Metadata = {
-  metadataBase: new URL('https://randonneurs.to'),
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL!),
   title: {
     default: 'Randonneurs Ontario',
     template: '%s | Randonneurs Ontario',

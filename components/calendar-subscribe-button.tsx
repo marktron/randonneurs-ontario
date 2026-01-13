@@ -27,9 +27,10 @@ export function CalendarSubscribeButton({
 
   // Build the calendar feed URL
   const feedPath = `/api/calendar/${chapter}.ics`
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://randonneurs.to'
   const feedUrl = typeof window !== 'undefined'
     ? `${window.location.origin}${feedPath}`
-    : `https://randonneurs.to${feedPath}`
+    : `${siteUrl}${feedPath}`
 
   // webcal:// protocol for native calendar apps
   const webcalUrl = feedUrl.replace(/^https?:/, 'webcal:')
