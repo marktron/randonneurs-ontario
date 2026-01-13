@@ -1,7 +1,15 @@
+'use client'
+
+import dynamic from 'next/dynamic'
 import { PageShell } from '@/components/page-shell'
 import { PageHero } from '@/components/page-hero'
 import { EventList, type Event } from '@/components/event-card'
-import { CalendarSubscribeButton } from '@/components/calendar-subscribe-button'
+
+// Dynamic import to avoid Radix UI hydration mismatch with DropdownMenu
+const CalendarSubscribeButton = dynamic(
+  () => import('@/components/calendar-subscribe-button').then((mod) => mod.CalendarSubscribeButton),
+  { ssr: false }
+)
 
 export interface CalendarPageProps {
   chapter: string

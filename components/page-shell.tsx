@@ -1,5 +1,13 @@
-import { Navbar } from '@/components/navbar'
+'use client'
+
+import dynamic from 'next/dynamic'
 import { Footer } from '@/components/footer'
+
+// Dynamic import with ssr: false to avoid Radix UI hydration mismatch
+// Radix components use useId() internally which can generate different IDs on server vs client
+const Navbar = dynamic(() => import('@/components/navbar').then((mod) => mod.Navbar), {
+  ssr: false,
+})
 
 interface PageShellProps {
   children: React.ReactNode

@@ -24,11 +24,11 @@ export function CalendarSubscribeButton({
 }: CalendarSubscribeButtonProps) {
   const [copied, setCopied] = useState(false)
 
-  // Build the calendar feed URL
+  // Build the calendar feed URL using the configured site URL
+  // Using NEXT_PUBLIC_SITE_URL consistently avoids hydration mismatches
   const feedPath = `/api/calendar/${chapter}.ics`
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://randonneurs.to'
-  const feedUrl =
-    typeof window !== 'undefined' ? `${window.location.origin}${feedPath}` : `${siteUrl}${feedPath}`
+  const feedUrl = `${siteUrl}${feedPath}`
 
   // webcal:// protocol for native calendar apps
   const webcalUrl = feedUrl.replace(/^https?:/, 'webcal:')
