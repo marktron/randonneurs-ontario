@@ -4,6 +4,7 @@ import { revalidatePath, revalidateTag } from 'next/cache'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { requireAdmin } from '@/lib/auth/get-admin'
 import { getUrlSlugFromDbSlug } from '@/lib/chapter-config'
+import { handleSupabaseError, createActionResult } from '@/lib/errors'
 import type { ActionResult } from '@/types/actions'
 import type {
   ResultInsert,
@@ -93,8 +94,11 @@ export async function createResult(data: CreateResultData): Promise<ActionResult
     .insert(insertData)
 
   if (error) {
-    console.error('Error creating result:', error)
-    return { success: false, error: 'Failed to create result' }
+    return handleSupabaseError(
+      error,
+      { operation: 'createResult' },
+      'Failed to create result'
+    )
   }
 
   revalidatePath(`/admin/events/${eventId}`)
@@ -102,7 +106,7 @@ export async function createResult(data: CreateResultData): Promise<ActionResult
   // Revalidate public results pages
   await revalidateResultsPages(eventId)
 
-  return { success: true }
+  return createActionResult()
 }
 
 export async function updateResult(resultId: string, data: UpdateResultData): Promise<ActionResult> {
@@ -121,8 +125,11 @@ export async function updateResult(resultId: string, data: UpdateResultData): Pr
     .eq('id', resultId)
 
   if (error) {
-    console.error('Error updating result:', error)
-    return { success: false, error: 'Failed to update result' }
+    return handleSupabaseError(
+      error,
+      { operation: 'updateResult' },
+      'Failed to update result'
+    )
   }
 
   // Revalidate admin pages (still use revalidatePath for admin routes)
@@ -142,7 +149,7 @@ export async function updateResult(resultId: string, data: UpdateResultData): Pr
     }
   }
 
-  return { success: true }
+  return createActionResult()
 }
 
 export async function deleteResult(resultId: string): Promise<ActionResult> {
@@ -161,8 +168,11 @@ export async function deleteResult(resultId: string): Promise<ActionResult> {
     .eq('id', resultId)
 
   if (error) {
-    console.error('Error deleting result:', error)
-    return { success: false, error: 'Failed to delete result' }
+    return handleSupabaseError(
+      error,
+      { operation: 'deleteResult' },
+      'Failed to delete result'
+    )
   }
 
   // Revalidate admin pages (still use revalidatePath for admin routes)
@@ -176,7 +186,7 @@ export async function deleteResult(resultId: string): Promise<ActionResult> {
     }
   }
 
-  return { success: true }
+  return createActionResult()
 }
 
 export async function createBulkResults(
@@ -209,8 +219,11 @@ export async function createBulkResults(
     .insert(insertData)
 
   if (error) {
-    console.error('Error creating bulk results:', error)
-    return { success: false, error: 'Failed to create results' }
+    return handleSupabaseError(
+      error,
+      { operation: 'createBulkResults' },
+      'Failed to create results'
+    )
   }
 
   revalidatePath(`/admin/events/${eventId}`)

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { closeHours, createTorontoDate } from '@/lib/brmTimes'
 import { createPendingResultsAndSendEmails } from '@/lib/events/complete-event'
+import { logError } from '@/lib/errors'
 import type { EventForCronCompletion, EventUpdate } from '@/types/queries'
 
 /**
@@ -40,7 +41,7 @@ export async function GET(request: Request) {
   const cronSecret = process.env.CRON_SECRET
 
   if (!cronSecret) {
-    console.error('CRON_SECRET environment variable not configured')
+    logError(new Error('CRON_SECRET environment variable not configured'), { operation: 'complete-events.auth' })
     return NextResponse.json(
       { error: 'Server configuration error' },
       { status: 500 }
@@ -65,7 +66,7 @@ export async function GET(request: Request) {
       .eq('status', 'scheduled')
 
     if (fetchError) {
-      console.error('Error fetching scheduled events:', fetchError)
+      logError(fetchError, { operation: 'complete-events.fetchEvents' })
       return NextResponse.json(
         { error: 'Failed to fetch events' },
         { status: 500 }
@@ -88,7 +89,7 @@ export async function GET(request: Request) {
           .eq('id', event.id)
 
         if (updateError) {
-          console.error(`Error updating event ${event.id}:`, updateError)
+          logError(updateError, { operation: 'complete-events.updateEvent', context: { eventId: event.id } })
           errors.push({ id: event.id, name: event.name, error: updateError.message })
           continue
         }
@@ -120,7 +121,7 @@ export async function GET(request: Request) {
       errors: errors.length > 0 ? errors : undefined,
     })
   } catch (error) {
-    console.error('Error in complete-events cron:', error)
+    logError(error, { operation: 'complete-events' })
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

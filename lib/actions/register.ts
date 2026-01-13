@@ -32,6 +32,7 @@ import { sendRegistrationConfirmationEmail } from '@/lib/email/send-registration
 import { formatEventType } from '@/lib/utils'
 import { format, parseISO } from 'date-fns'
 import { searchRiderCandidates, type RiderMatchCandidate } from './rider-match'
+import { handleActionError, handleSupabaseError, createActionResult, logError } from '@/lib/errors'
 import type {
   RiderInsert,
   RiderUpdate,
@@ -298,7 +299,11 @@ export async function registerForEvent(data: RegistrationData): Promise<Registra
     .single()
 
   if (eventError || !eventData) {
-    return { success: false, error: 'Event not found' }
+    return handleSupabaseError(
+      eventError,
+      { operation: 'registerForEvent.eventLookup' },
+      'Event not found'
+    )
   }
 
   const event = eventData as EventWithChapter
@@ -356,7 +361,7 @@ export async function registerForEvent(data: RegistrationData): Promise<Registra
       chapterSlug: chapter?.slug || '',
       notes: notes || undefined,
     }).catch((error) => {
-      console.error('🚨 Email sending failed:', error)
+      logError(error, { operation: 'registerForEvent.sendEmail', context: { eventId, email: normalizedEmail } })
     })
 
     // Revalidate cache tags for registration data
@@ -365,10 +370,9 @@ export async function registerForEvent(data: RegistrationData): Promise<Registra
     // Also revalidate the path for immediate UI update
     revalidatePath(`/register/${event.slug}`)
 
-    return { success: true }
+    return createActionResult()
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : 'Registration failed'
-    return { success: false, error: errorMessage }
+    return handleActionError(error, { operation: 'registerForEvent' }, 'Registration failed')
   }
 }
 
@@ -436,7 +440,11 @@ export async function registerForPermanent(data: PermanentRegistrationData): Pro
     .single()
 
   if (routeError || !routeData) {
-    return { success: false, error: 'Route not found or is not active' }
+    return handleSupabaseError(
+      routeError,
+      { operation: 'registerForPermanent.routeLookup' },
+      'Route not found or is not active'
+    )
   }
 
   const route = routeData as RouteWithChapter
@@ -553,7 +561,7 @@ export async function registerForPermanent(data: PermanentRegistrationData): Pro
       chapterSlug: chapter?.slug || '',
       notes: notes || undefined,
     }).catch((error) => {
-      console.error('🚨 Email sending failed:', error)
+      logError(error, { operation: 'registerForPermanent.sendEmail', context: { routeId, email: normalizedEmail } })
     })
 
     // Revalidate cache tags for registration data
@@ -565,10 +573,9 @@ export async function registerForPermanent(data: PermanentRegistrationData): Pro
     revalidatePath(`/register/${eventSlug}`)
     revalidatePath('/calendar/permanents')
 
-    return { success: true }
+    return createActionResult()
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : 'Registration failed'
-    return { success: false, error: errorMessage }
+    return handleActionError(error, { operation: 'registerForPermanent' }, 'Registration failed')
   }
 }
 

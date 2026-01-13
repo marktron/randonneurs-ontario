@@ -2,6 +2,7 @@
 
 import { redirect } from 'next/navigation'
 import { createSupabaseServerClient } from '@/lib/supabase-server-client'
+import { handleSupabaseError, createActionResult } from '@/lib/errors'
 import type { ActionResult } from '@/types/actions'
 
 export interface LoginResult {
@@ -18,6 +19,7 @@ export async function login(email: string, password: string): Promise<LoginResul
   })
 
   if (error) {
+    // Don't log auth errors to Sentry (security/privacy)
     return { success: false, error: error.message }
   }
 
@@ -78,10 +80,14 @@ export async function changePassword(
   })
 
   if (updateError) {
-    return { success: false, error: updateError.message }
+    return handleSupabaseError(
+      updateError,
+      { operation: 'changePassword', skipSentry: true }, // Don't log password errors
+      'Failed to update password'
+    )
   }
 
-  return { success: true }
+  return createActionResult()
 }
 
 export async function updateProfile(
@@ -113,8 +119,12 @@ export async function updateProfile(
     .eq('id', user.id)
 
   if (error) {
-    return { success: false, error: error.message }
+    return handleSupabaseError(
+      error,
+      { operation: 'updateProfile' },
+      'Failed to update profile'
+    )
   }
 
-  return { success: true }
+  return createActionResult()
 }

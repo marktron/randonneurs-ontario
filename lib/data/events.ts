@@ -20,6 +20,7 @@
 import { unstable_cache } from 'next/cache'
 import { getSupabase } from '@/lib/supabase'
 import { formatEventType } from '@/lib/utils'
+import { handleDataError } from '@/lib/errors'
 import type { Event } from '@/components/event-card'
 import {
   getChapterInfo,
@@ -74,8 +75,11 @@ export async function getEventsByChapter(urlSlug: string): Promise<Event[]> {
         .order('distance_km', { ascending: false })
 
       if (eventsError) {
-        console.error('Error fetching events:', eventsError)
-        return []
+        return handleDataError(
+          eventsError,
+          { operation: 'getEventsByChapter', context: { urlSlug } },
+          []
+        )
       }
 
       // Transform to Event type
@@ -118,8 +122,11 @@ export async function getPermanentEvents(): Promise<Event[]> {
         .order('distance_km', { ascending: false })
 
       if (error) {
-        console.error('Error fetching permanent events:', error)
-        return []
+        return handleDataError(
+          error,
+          { operation: 'getPermanentEvents' },
+          []
+        )
       }
 
       // Transform to Event type

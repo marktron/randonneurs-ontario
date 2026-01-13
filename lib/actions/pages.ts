@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache"
 import { requireAdmin } from "@/lib/auth/get-admin"
+import { handleActionError, createActionResult, logError } from "@/lib/errors"
 
 interface SavePageInput {
   slug: string
@@ -125,7 +126,7 @@ ${content}
 
     if (!putResponse.ok) {
       const error = await putResponse.json()
-      console.error("GitHub API error:", error)
+      logError(error, { operation: 'savePage.github', context: { slug } })
       return { success: false, error: "Failed to save to GitHub" }
     }
 
@@ -134,10 +135,9 @@ ${content}
     revalidatePath(`/admin/pages/${slug}`)
     revalidatePath(`/${slug}`)
 
-    return { success: true }
+    return createActionResult()
   } catch (error) {
-    console.error("Error saving page:", error)
-    return { success: false, error: "An error occurred while saving" }
+    return handleActionError(error, { operation: 'savePage' }, "An error occurred while saving")
   }
 }
 
@@ -155,9 +155,8 @@ async function saveLocalFile(slug: string, content: string): Promise<SavePageRes
     revalidatePath(`/admin/pages/${slug}`)
     revalidatePath(`/${slug}`)
 
-    return { success: true }
+    return createActionResult()
   } catch (error) {
-    console.error("Error saving local file:", error)
-    return { success: false, error: "Failed to save file locally" }
+    return handleActionError(error, { operation: 'saveLocalFile' }, "Failed to save file locally")
   }
 }

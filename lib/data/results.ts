@@ -1,6 +1,7 @@
 import { unstable_cache } from 'next/cache'
 import { getSupabase } from '@/lib/supabase'
 import { formatFinishTime, formatStatus } from '@/lib/utils'
+import { handleDataError } from '@/lib/errors'
 import {
   getResultsChapterInfo,
   getAllResultsChapterSlugs,
@@ -195,8 +196,11 @@ export async function getChapterResults(urlSlug: string, year: number): Promise<
       }
 
       if (eventsError || !events) {
-        console.error('Error fetching events:', eventsError)
-        return []
+        return handleDataError(
+          eventsError || new Error('No events returned'),
+          { operation: 'getChapterResults', context: { urlSlug, year } },
+          []
+        )
       }
 
       // Transform to EventResult format
@@ -306,10 +310,11 @@ export async function getRiderResults(slug: string): Promise<RiderYearResults[]>
         .single()
 
       if (riderError || !rider) {
-        if (riderError) {
-          console.error('🚨 Error fetching rider:', riderError)
-        }
-        return []
+        return handleDataError(
+          riderError || new Error('Rider not found'),
+          { operation: 'getRiderResults', context: { slug } },
+          []
+        )
       }
 
       // Get all results for this rider with event info in a single query
@@ -334,8 +339,11 @@ export async function getRiderResults(slug: string): Promise<RiderYearResults[]>
         .order('season', { ascending: false })
 
       if (resultsError) {
-        console.error('🚨 Error fetching rider results:', resultsError)
-        return []
+        return handleDataError(
+          resultsError,
+          { operation: 'getRiderResults.results', context: { riderId: rider.id } },
+          []
+        )
       }
 
       if (!results) return []

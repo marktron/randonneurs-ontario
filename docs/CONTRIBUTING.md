@@ -191,8 +191,10 @@ export function InteractiveForm() {
 'use server'
 
 import { revalidatePath } from 'next/cache'
+import { handleSupabaseError, createActionResult } from '@/lib/errors'
+import type { ActionResult } from '@/types/actions'
 
-export async function createSomething(data: FormData) {
+export async function createSomething(data: FormData): Promise<ActionResult> {
   // 1. Validate input
   const name = data.get('name') as string
   if (!name?.trim()) {
@@ -205,15 +207,18 @@ export async function createSomething(data: FormData) {
     .insert({ name })
 
   if (error) {
-    console.error('Error creating thing:', error)
-    return { success: false, error: 'Failed to create' }
+    return handleSupabaseError(
+      error,
+      { operation: 'createThing' },
+      'Failed to create thing'
+    )
   }
 
   // 3. Revalidate cache
   revalidatePath('/things')
 
   // 4. Return success
-  return { success: true }
+  return createActionResult()
 }
 ```
 
@@ -248,17 +253,18 @@ import { getSupabase } from '@/lib/supabase'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 
 // For reads - use public client
+import { handleDataError } from '@/lib/errors'
+
 async function getEvents() {
   const { data, error } = await getSupabase()
     .from('events')
     .select('*')
 
   if (error) {
-    console.error('Error:', error)
-    return []
+    return handleDataError(error, { operation: 'getEvents' }, [])
   }
 
-  return data
+  return data || []
 }
 
 // For writes - use admin client
@@ -390,6 +396,7 @@ This project uses documentation to help developers understand the codebase:
 | [ARCHITECTURE.md](./ARCHITECTURE.md) | System overview |
 | [GETTING_STARTED.md](./GETTING_STARTED.md) | Setup guide |
 | [DATA_LAYER.md](./DATA_LAYER.md) | Database patterns |
+| [ERROR_HANDLING.md](./ERROR_HANDLING.md) | Error handling patterns |
 | [database-schema-plan.md](./database-schema-plan.md) | Schema design |
 | [database-setup.md](./database-setup.md) | Database setup |
 | [style_guide.md](./style_guide.md) | UI/UX guidelines |

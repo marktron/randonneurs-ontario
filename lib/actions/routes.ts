@@ -5,6 +5,7 @@ import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { requireAdmin } from '@/lib/auth/get-admin'
 import { createSlug } from '@/lib/utils'
 import { getUrlSlugFromDbSlug } from '@/lib/chapter-config'
+import { handleActionError, handleSupabaseError, createActionResult, logError } from '@/lib/errors'
 import type { ActionResult, MergeResult } from '@/types/actions'
 import type {
   ChapterSlugOnly,
@@ -127,11 +128,11 @@ export async function createRoute(data: RouteData): Promise<ActionResult> {
     .insert(insertData)
 
   if (error) {
-    console.error('Error creating route:', error)
-    if (error.code === '23505') {
-      return { success: false, error: 'A route with this slug already exists' }
-    }
-    return { success: false, error: 'Failed to create route' }
+    return handleSupabaseError(
+      error,
+      { operation: 'createRoute', userMessage: 'A route with this slug already exists' },
+      'Failed to create route'
+    )
   }
 
   // Revalidate admin pages (still use revalidatePath for admin routes)
@@ -142,7 +143,7 @@ export async function createRoute(data: RouteData): Promise<ActionResult> {
     await revalidateRoutesTags(chapterId, slug)
   }
 
-  return { success: true }
+  return createActionResult()
 }
 
 export async function updateRoute(routeId: string, data: Partial<RouteData>): Promise<ActionResult> {
@@ -189,11 +190,11 @@ export async function updateRoute(routeId: string, data: Partial<RouteData>): Pr
     .eq('id', routeId)
 
   if (error) {
-    console.error('Error updating route:', error)
-    if (error.code === '23505') {
-      return { success: false, error: 'A route with this slug already exists' }
-    }
-    return { success: false, error: 'Failed to update route' }
+    return handleSupabaseError(
+      error,
+      { operation: 'updateRoute', userMessage: 'A route with this slug already exists' },
+      'Failed to update route'
+    )
   }
 
   // Revalidate admin pages (still use revalidatePath for admin routes)
@@ -247,8 +248,11 @@ export async function deleteRoute(routeId: string): Promise<ActionResult> {
     .eq('id', routeId)
 
   if (error) {
-    console.error('Error deleting route:', error)
-    return { success: false, error: 'Failed to delete route' }
+    return handleSupabaseError(
+      error,
+      { operation: 'deleteRoute' },
+      'Failed to delete route'
+    )
   }
 
   // Revalidate admin pages (still use revalidatePath for admin routes)
@@ -262,7 +266,7 @@ export async function deleteRoute(routeId: string): Promise<ActionResult> {
     }
   }
 
-  return { success: true }
+  return createActionResult()
 }
 
 export async function toggleRouteActive(routeId: string, isActive: boolean): Promise<ActionResult> {
@@ -275,8 +279,11 @@ export async function toggleRouteActive(routeId: string, isActive: boolean): Pro
     .eq('id', routeId)
 
   if (error) {
-    console.error('Error toggling route active status:', error)
-    return { success: false, error: 'Failed to update route status' }
+    return handleSupabaseError(
+      error,
+      { operation: 'toggleRouteActive' },
+      'Failed to update route status'
+    )
   }
 
   // Revalidate admin pages (still use revalidatePath for admin routes)
@@ -296,7 +303,7 @@ export async function toggleRouteActive(routeId: string, isActive: boolean): Pro
     }
   }
 
-  return { success: true }
+  return createActionResult()
 }
 
 export interface MergeRoutesData {
@@ -333,8 +340,11 @@ export async function mergeRoutes(data: MergeRoutesData): Promise<MergeResult> {
       .select('id')
 
     if (updateEventsError) {
-      console.error('Error updating events:', updateEventsError)
-      return { success: false, error: 'Failed to update events' }
+      return handleSupabaseError(
+        updateEventsError,
+        { operation: 'mergeRoutes.updateEvents' },
+        'Failed to update events'
+      )
     }
 
     const updatedEventsCount = updatedEvents?.length || 0
@@ -346,8 +356,11 @@ export async function mergeRoutes(data: MergeRoutesData): Promise<MergeResult> {
       .in('id', routesToDelete)
 
     if (deleteError) {
-      console.error('Error deleting old routes:', deleteError)
-      return { success: false, error: 'Failed to delete old routes' }
+      return handleSupabaseError(
+        deleteError,
+        { operation: 'mergeRoutes.deleteRoutes' },
+        'Failed to delete old routes'
+      )
     }
 
     // Step 3: Update the target route with new properties
@@ -372,11 +385,11 @@ export async function mergeRoutes(data: MergeRoutesData): Promise<MergeResult> {
       .eq('id', targetRouteId)
 
     if (updateRouteError) {
-      console.error('Error updating target route:', updateRouteError)
-      if (updateRouteError.code === '23505') {
-        return { success: false, error: 'A route with this slug already exists' }
-      }
-      return { success: false, error: 'Failed to update merged route' }
+      return handleSupabaseError(
+        updateRouteError,
+        { operation: 'mergeRoutes.updateRoute', userMessage: 'A route with this slug already exists' },
+        'Failed to update merged route'
+      )
     }
 
     revalidatePath('/admin/routes')
@@ -388,8 +401,7 @@ export async function mergeRoutes(data: MergeRoutesData): Promise<MergeResult> {
       deletedRoutesCount: routesToDelete.length,
     }
   } catch (err) {
-    console.error('Error merging routes:', err)
-    return { success: false, error: 'An unexpected error occurred while merging routes' }
+    return handleActionError(err, { operation: 'mergeRoutes' }, 'An unexpected error occurred while merging routes')
   }
 }
 
@@ -400,7 +412,7 @@ export async function getRouteEventCounts(routeIds: string[]): Promise<Record<st
     .in('route_id', routeIds)
 
   if (error) {
-    console.error('Error fetching event counts:', error)
+    logError(error, { operation: 'getRouteEventCounts' })
     return {}
   }
 

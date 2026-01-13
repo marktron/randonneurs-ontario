@@ -4,6 +4,7 @@ import { createEvents, type EventAttributes } from 'ics'
 import { getSupabase } from '@/lib/supabase'
 import { getDbSlug, getChapterInfo, getAllChapterSlugs } from '@/lib/chapter-config'
 import { formatEventType } from '@/lib/utils'
+import { logError } from '@/lib/errors'
 import type { ChapterId, EventForCalendar } from '@/types/queries'
 
 // Revalidate the calendar feed every hour
@@ -133,7 +134,7 @@ export async function GET(request: Request, { params }: RouteParams) {
         .order('event_date', { ascending: true })
 
       if (eventsError) {
-        console.error('Error fetching events:', eventsError)
+        logError(eventsError, { operation: 'calendar.fetchEvents', context: { chapter: urlSlug } })
         return null
       }
 
@@ -220,7 +221,7 @@ export async function GET(request: Request, { params }: RouteParams) {
   })
 
   if (icsError || !icsContent) {
-    console.error('Error generating iCal:', icsError)
+    logError(icsError || new Error('iCal generation returned no content'), { operation: 'calendar.generateICS', context: { chapter: urlSlug } })
     return NextResponse.json(
       { error: 'Failed to generate calendar' },
       { status: 500 }

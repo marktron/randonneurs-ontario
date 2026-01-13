@@ -7,6 +7,11 @@ import { sendgrid } from '@/lib/email/sendgrid'
 import { parseLocalDate, createSlug } from '@/lib/utils'
 import { getUrlSlugFromDbSlug } from '@/lib/chapter-config'
 import { createPendingResultsAndSendEmails } from '@/lib/events/complete-event'
+import {
+  handleActionError,
+  handleSupabaseError,
+  createActionResult,
+} from '@/lib/errors'
 import type { ActionResult } from '@/types/actions'
 import type {
   ChapterSlugOnly,
@@ -115,15 +120,19 @@ export async function createEvent(data: CreateEventData): Promise<ActionResult<{
       .single()
 
     if (error) {
-      console.error('Error creating event:', error)
-      if (error.code === '23505') {
-        return { success: false, error: 'An event with this slug already exists' }
-      }
-      return { success: false, error: 'Failed to create event' }
+      return handleSupabaseError(
+        error,
+        { operation: 'createEvent', userMessage: 'An event with this slug already exists' },
+        'Failed to create event'
+      )
     }
 
     if (!newEvent) {
-      return { success: false, error: 'Failed to create event' }
+      return handleActionError(
+        new Error('Event creation returned no data'),
+        { operation: 'createEvent' },
+        'Failed to create event'
+      )
     }
 
     const typedNewEvent = newEvent as EventIdOnly
@@ -135,10 +144,9 @@ export async function createEvent(data: CreateEventData): Promise<ActionResult<{
     // Revalidate cache tags for calendar pages
     await revalidateCalendarTags(chapterId, eventType)
 
-    return { success: true, data: { id: typedNewEvent.id } }
+    return createActionResult({ id: typedNewEvent.id })
   } catch (error) {
-    console.error('Error in createEvent:', error)
-    return { success: false, error: 'An unexpected error occurred' }
+    return handleActionError(error, { operation: 'createEvent' }, 'Failed to create event')
   }
 }
 
@@ -204,8 +212,11 @@ export async function updateEvent(
       .eq('id', eventId)
 
     if (error) {
-      console.error('Error updating event:', error)
-      return { success: false, error: 'Failed to update event' }
+      return handleSupabaseError(
+        error,
+        { operation: 'updateEvent' },
+        'Failed to update event'
+      )
     }
 
     // Revalidate admin pages (still use revalidatePath for admin routes)
@@ -224,10 +235,9 @@ export async function updateEvent(
       await revalidateCalendarTags(event.chapter_id, event.event_type, event.slug)
     }
 
-    return { success: true }
+    return createActionResult()
   } catch (error) {
-    console.error('Error in updateEvent:', error)
-    return { success: false, error: 'An unexpected error occurred' }
+    return handleActionError(error, { operation: 'updateEvent' }, 'Failed to update event')
   }
 }
 
@@ -261,8 +271,11 @@ export async function deleteEvent(eventId: string): Promise<ActionResult> {
       .eq('event_id', eventId)
 
     if (regDeleteError) {
-      console.error('Error deleting registrations:', regDeleteError)
-      return { success: false, error: 'Failed to delete event registrations' }
+      return handleSupabaseError(
+        regDeleteError,
+        { operation: 'deleteEvent.registrations' },
+        'Failed to delete event registrations'
+      )
     }
 
     // Delete results for this event (shouldn't exist for future events, but just in case)
@@ -272,8 +285,11 @@ export async function deleteEvent(eventId: string): Promise<ActionResult> {
       .eq('event_id', eventId)
 
     if (resultsDeleteError) {
-      console.error('Error deleting results:', resultsDeleteError)
-      return { success: false, error: 'Failed to delete event results' }
+      return handleSupabaseError(
+        resultsDeleteError,
+        { operation: 'deleteEvent.results' },
+        'Failed to delete event results'
+      )
     }
 
     // Delete the event
@@ -283,8 +299,11 @@ export async function deleteEvent(eventId: string): Promise<ActionResult> {
       .eq('id', eventId)
 
     if (deleteError) {
-      console.error('Error deleting event:', deleteError)
-      return { success: false, error: 'Failed to delete event' }
+      return handleSupabaseError(
+        deleteError,
+        { operation: 'deleteEvent' },
+        'Failed to delete event'
+      )
     }
 
     // Revalidate admin pages (still use revalidatePath for admin routes)
@@ -294,10 +313,9 @@ export async function deleteEvent(eventId: string): Promise<ActionResult> {
     // Revalidate cache tags for calendar pages
     await revalidateCalendarTags(typedEvent.chapter_id, typedEvent.event_type)
 
-    return { success: true }
+    return createActionResult()
   } catch (error) {
-    console.error('Error in deleteEvent:', error)
-    return { success: false, error: 'An unexpected error occurred' }
+    return handleActionError(error, { operation: 'deleteEvent' }, 'Failed to delete event')
   }
 }
 

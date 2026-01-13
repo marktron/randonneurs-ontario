@@ -3,6 +3,12 @@
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { requireAdmin } from '@/lib/auth/get-admin'
 import { applyRiderSearchFilter } from '@/lib/utils/rider-search'
+import {
+  handleActionError,
+  handleSupabaseError,
+  handleDataError,
+  createActionResult,
+} from '@/lib/errors'
 import type { ActionResult } from '@/types/actions'
 import type {
   RiderInsert,
@@ -39,8 +45,11 @@ export async function searchRiders(query: string): Promise<RiderSearchResult[]> 
     .limit(20)
 
   if (error) {
-    console.error('Error searching riders:', error)
-    return []
+    return handleDataError(
+      error,
+      { operation: 'searchRiders', context: { query } },
+      []
+    )
   }
 
   return data as RiderSearchResult[]
@@ -92,12 +101,19 @@ export async function createRider(data: CreateRiderData): Promise<CreateRiderRes
     .single()
 
   if (error) {
-    console.error('Error creating rider:', error)
-    return { success: false, error: 'Failed to create rider' }
+    return handleSupabaseError(
+      error,
+      { operation: 'createRider' },
+      'Failed to create rider'
+    )
   }
 
   if (!newRider) {
-    return { success: false, error: 'Failed to create rider' }
+    return handleActionError(
+      new Error('Rider creation returned no data'),
+      { operation: 'createRider' },
+      'Failed to create rider'
+    )
   }
 
   const typedNewRider = newRider as RiderIdOnly

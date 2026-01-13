@@ -1,6 +1,7 @@
 import { sendgrid, fromEmail } from './sendgrid'
 import { buildRegistrationConfirmationEmail, type RegistrationEmailData } from './templates'
 import { getVpEmail } from './vp-emails'
+import { logError } from '@/lib/errors'
 
 export interface SendEmailResult {
   success: boolean
@@ -32,7 +33,7 @@ export async function sendRegistrationConfirmationEmail(
     console.log(`Registration email sent to ${data.registrantEmail}${vpEmail ? ` (cc: ${vpEmail})` : ''}`)
     return { success: true }
   } catch (error) {
-    console.error('Failed to send registration email:', error)
+    logError(error, { operation: 'sendRegistrationConfirmationEmail', context: { email: data.registrantEmail } })
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Unknown email error',

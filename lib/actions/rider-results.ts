@@ -1,6 +1,7 @@
 'use server'
 
 import { getSupabaseAdmin } from '@/lib/supabase-server'
+import { handleSupabaseError, createActionResult, logError } from '@/lib/errors'
 import type { ActionResult } from '@/types/actions'
 import type {
   ResultForSubmission,
@@ -184,11 +185,14 @@ export async function submitRiderResult(
     .eq('submission_token', token)
 
   if (updateError) {
-    console.error('Error updating result:', updateError)
-    return { success: false, error: 'Failed to submit result' }
+    return handleSupabaseError(
+      updateError,
+      { operation: 'submitResult' },
+      'Failed to submit result'
+    )
   }
 
-  return { success: true }
+  return createActionResult()
 }
 
 /**
@@ -258,8 +262,11 @@ export async function uploadResultFile(
     })
 
   if (uploadError) {
-    console.error('Error uploading file:', uploadError)
-    return { success: false, error: 'Failed to upload file' }
+    return handleSupabaseError(
+      uploadError,
+      { operation: 'uploadResultFile.storage' },
+      'Failed to upload file'
+    )
   }
 
   // Get public URL
@@ -279,10 +286,13 @@ export async function uploadResultFile(
     .eq('submission_token', token)
 
   if (updateError) {
-    console.error('Error updating result with file path:', updateError)
     // Try to clean up the uploaded file
     await supabase.storage.from(BUCKET_NAME).remove([filePath])
-    return { success: false, error: 'Failed to save file reference' }
+    return handleSupabaseError(
+      updateError,
+      { operation: 'uploadResultFile.database' },
+      'Failed to save file reference'
+    )
   }
 
   return {
@@ -336,7 +346,7 @@ export async function deleteResultFile(
   const { error: deleteError } = await supabase.storage.from(BUCKET_NAME).remove([filePath])
 
   if (deleteError) {
-    console.error('Error deleting file:', deleteError)
+    logError(deleteError, { operation: 'deleteResultFile.storage', context: { filePath } })
     // Continue anyway to clear the reference
   }
 
@@ -348,9 +358,12 @@ export async function deleteResultFile(
     .eq('submission_token', token)
 
   if (updateError) {
-    console.error('Error clearing file path:', updateError)
-    return { success: false, error: 'Failed to clear file reference' }
+    return handleSupabaseError(
+      updateError,
+      { operation: 'deleteResultFile.database' },
+      'Failed to clear file reference'
+    )
   }
 
-  return { success: true }
+  return createActionResult()
 }

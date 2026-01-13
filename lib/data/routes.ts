@@ -3,6 +3,7 @@ import { getSupabase } from '@/lib/supabase'
 import type { RouteCollection } from '@/components/routes-page'
 import { getChapterInfo, getAllChapterSlugs, getDbSlug, getUrlSlugFromDbSlug } from '@/lib/chapter-config'
 import { formatFinishTime, formatStatus } from '@/lib/utils'
+import { handleDataError } from '@/lib/errors'
 import type {
   ChapterId,
   RouteId,
@@ -88,8 +89,11 @@ export async function getRouteResults(routeSlug: string): Promise<RouteResultEve
         .order('event_date', { ascending: false })
 
       if (error) {
-        console.error('🚨 Error fetching route results:', error)
-        return []
+        return handleDataError(
+          error,
+          { operation: 'getRouteResults', context: { routeSlug } },
+          []
+        )
       }
 
       if (!events) return []
@@ -243,8 +247,11 @@ export async function getActiveRoutes(): Promise<ActiveRoute[]> {
         .order('name', { ascending: true })
 
       if (error || !routes) {
-        console.error('Error fetching active routes:', error)
-        return []
+        return handleDataError(
+          error || new Error('No routes returned'),
+          { operation: 'getActiveRoutes' },
+          []
+        )
       }
 
       return (routes as RouteWithChapterName[]).map((route) => ({

@@ -2,6 +2,7 @@
 
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { requireAdmin } from '@/lib/auth/get-admin'
+import { handleActionError, handleSupabaseError, createActionResult } from '@/lib/errors'
 import type { ActionResult } from '@/types/actions'
 
 const BUCKET_NAME = 'images'
@@ -72,8 +73,11 @@ export async function uploadImage(
       })
 
     if (uploadError) {
-      console.error('Storage upload error:', uploadError)
-      return { success: false, error: 'Failed to upload image' }
+      return handleSupabaseError(
+        uploadError,
+        { operation: 'uploadImage.storage' },
+        'Failed to upload image'
+      )
     }
 
     // Get public URL
@@ -96,26 +100,25 @@ export async function uploadImage(
       .single()
 
     if (dbError) {
-      console.error('Database insert error:', dbError)
       // Try to clean up the uploaded file
       await supabase.storage.from(BUCKET_NAME).remove([storagePath])
-      return { success: false, error: 'Failed to save image metadata' }
+      return handleSupabaseError(
+        dbError,
+        { operation: 'uploadImage.database' },
+        'Failed to save image metadata'
+      )
     }
 
-    return {
-      success: true,
-      data: {
-        id: imageRecord.id,
-        url: urlData.publicUrl,
-        storagePath,
-        filename: file.name,
-        altText: altText || null,
-        contentType: file.type,
-        sizeBytes: file.size,
-      },
-    }
+    return createActionResult({
+      id: imageRecord.id,
+      url: urlData.publicUrl,
+      storagePath,
+      filename: file.name,
+      altText: altText || null,
+      contentType: file.type,
+      sizeBytes: file.size,
+    })
   } catch (error) {
-    console.error('Error in uploadImage:', error)
-    return { success: false, error: 'An unexpected error occurred' }
+    return handleActionError(error, { operation: 'uploadImage' }, 'An unexpected error occurred')
   }
 }
