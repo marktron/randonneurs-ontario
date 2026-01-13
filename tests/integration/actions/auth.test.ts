@@ -101,7 +101,7 @@ describe('changePassword', () => {
       const result = await changePassword('currentpass', 'newpassword123')
 
       expect(result.success).toBe(false)
-      expect(result.error).toBe('Update failed')
+      expect(result.error).toBe('Failed to update password')
     })
   })
 })

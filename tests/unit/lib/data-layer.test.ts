@@ -86,7 +86,7 @@ describe('Data Layer - Permanent Event Filtering', () => {
       expect(neqCall?.args).toEqual(['event_type', 'permanent'])
     })
 
-    it('filters by chapter_id', async () => {
+    it('filters by chapter slug using join', async () => {
       await getEventsByChapter('toronto')
 
       const eventsFromIndex = queryCalls.findIndex(
@@ -94,10 +94,10 @@ describe('Data Layer - Permanent Event Filtering', () => {
       )
       const callsAfterEvents = queryCalls.slice(eventsFromIndex + 1)
 
-      // Verify .eq('chapter_id', ...) was called
+      // Verify .eq('chapters.slug', ...) was called (join-based filtering)
       const eqCalls = callsAfterEvents.filter(c => c.method === 'eq')
-      const chapterIdCall = eqCalls.find(c => c.args[0] === 'chapter_id')
-      expect(chapterIdCall).toBeDefined()
+      const chapterSlugCall = eqCalls.find(c => c.args[0] === 'chapters.slug')
+      expect(chapterSlugCall).toBeDefined()
     })
   })
 

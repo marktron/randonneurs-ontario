@@ -301,7 +301,7 @@ export async function registerForEvent(data: RegistrationData): Promise<Registra
   if (eventError || !eventData) {
     return handleSupabaseError(
       eventError,
-      { operation: 'registerForEvent.eventLookup' },
+      { operation: 'registerForEvent.eventLookup', userMessage: 'Event not found' },
       'Event not found'
     )
   }
