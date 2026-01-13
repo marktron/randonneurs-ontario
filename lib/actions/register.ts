@@ -105,6 +105,161 @@ function formatEventTime(timeStr: string | null): string {
   return `${hour12}:${minutes} ${ampm}`
 }
 
+/**
+ * Result type for findOrCreateRider helper
+ */
+interface FindOrCreateRiderResult {
+  success: true
+  riderId: string
+}
+
+interface FindOrCreateRiderMatchResult {
+  success: false
+  needsRiderMatch: true
+  matchCandidates: RiderMatchCandidate[]
+}
+
+type FindOrCreateRiderReturn = FindOrCreateRiderResult | FindOrCreateRiderMatchResult
+
+/**
+ * Find an existing rider by email or create a new one.
+ * If no rider exists and fuzzy name matches are found, returns match candidates.
+ *
+ * @param email - Normalized email address
+ * @param firstName - First name
+ * @param lastName - Last name
+ * @param gender - Optional gender (M, F, or X)
+ * @param emergencyContactName - Optional emergency contact name
+ * @param emergencyContactPhone - Optional emergency contact phone
+ * @returns Either a riderId or match candidates for user selection
+ */
+async function findOrCreateRider(
+  email: string,
+  firstName: string,
+  lastName: string,
+  gender?: string,
+  emergencyContactName?: string,
+  emergencyContactPhone?: string
+): Promise<FindOrCreateRiderReturn> {
+  const trimmedFirstName = firstName.trim()
+  const trimmedLastName = lastName.trim()
+  const normalizedEmail = email.toLowerCase().trim()
+  const parsedGender = gender === 'M' || gender === 'F' || gender === 'X' ? gender : null
+
+  // Find existing rider by email
+  const { data: existingRider } = await getSupabaseAdmin()
+    .from('riders')
+    .select('id')
+    .eq('email', normalizedEmail)
+    .single()
+
+  if (existingRider) {
+    const typedRider = existingRider as RiderIdOnly
+    const riderId = typedRider.id
+
+    // Update rider info if they provided more details
+    const updateData: RiderUpdate = {
+      first_name: trimmedFirstName,
+      last_name: trimmedLastName,
+      gender: parsedGender,
+      emergency_contact_name: emergencyContactName || null,
+      emergency_contact_phone: emergencyContactPhone || null,
+    }
+    await getSupabaseAdmin().from('riders').update(updateData).eq('id', riderId)
+
+    return { success: true, riderId }
+  }
+
+  // Email not found - search for fuzzy name matches among riders without email
+  const { candidates } = await searchRiderCandidates(trimmedFirstName, trimmedLastName)
+
+  // If there are potential matches, return them for user selection
+  if (candidates.length > 0) {
+    return {
+      success: false,
+      needsRiderMatch: true,
+      matchCandidates: candidates,
+    }
+  }
+
+  // No matches found - create new rider
+  const insertRider: RiderInsert = {
+    slug: createRiderSlug(normalizedEmail),
+    first_name: trimmedFirstName,
+    last_name: trimmedLastName,
+    email: normalizedEmail,
+    gender: parsedGender,
+    emergency_contact_name: emergencyContactName || null,
+    emergency_contact_phone: emergencyContactPhone || null,
+  }
+  const { data: newRider, error: riderError } = await getSupabaseAdmin()
+    .from('riders')
+    .insert(insertRider)
+    .select('id')
+    .single()
+
+  if (riderError || !newRider) {
+    console.error('🚨 Error creating rider:', riderError)
+    throw new Error('Failed to create rider profile')
+  }
+
+  const typedNewRider = newRider as RiderIdOnly
+  return { success: true, riderId: typedNewRider.id }
+}
+
+/**
+ * Check if a rider is already registered for an event.
+ *
+ * @param eventId - Event ID
+ * @param riderId - Rider ID
+ * @returns true if already registered, false otherwise
+ */
+async function checkDuplicateRegistration(
+  eventId: string,
+  riderId: string
+): Promise<boolean> {
+  const { data: existingRegistration } = await getSupabaseAdmin()
+    .from('registrations')
+    .select('id')
+    .eq('event_id', eventId)
+    .eq('rider_id', riderId)
+    .single()
+
+  return existingRegistration !== null
+}
+
+/**
+ * Create a registration record for a rider and event.
+ *
+ * @param eventId - Event ID
+ * @param riderId - Rider ID
+ * @param shareRegistration - Whether to share registration publicly
+ * @param notes - Optional registration notes
+ * @throws Error if registration creation fails
+ */
+async function createRegistrationRecord(
+  eventId: string,
+  riderId: string,
+  shareRegistration: boolean,
+  notes?: string
+): Promise<void> {
+  const insertRegistration: RegistrationInsert = {
+    event_id: eventId,
+    rider_id: riderId,
+    status: 'registered',
+    share_registration: shareRegistration,
+    notes: notes || null,
+  }
+  const { error: registrationError } = await getSupabaseAdmin()
+    .from('registrations')
+    .insert(insertRegistration)
+
+  if (registrationError) {
+    console.error('🚨 Error creating registration:', registrationError)
+    throw new Error('Failed to complete registration')
+  }
+}
+
 // ============================================================================
 // SERVER ACTIONS
 // ============================================================================
@@ -153,123 +308,68 @@ export async function registerForEvent(data: RegistrationData): Promise<Registra
   }
 
   // Find or create rider
-  let riderId: string
+  try {
+    const riderResult = await findOrCreateRider(
+      email,
+      firstName,
+      lastName,
+      gender,
+      emergencyContactName,
+      emergencyContactPhone
+    )
 
-  const { data: existingRider } = await getSupabaseAdmin()
-    .from('riders')
-    .select('id')
-    .eq('email', normalizedEmail)
-    .single()
-
-  const parsedGender = gender === 'M' || gender === 'F' || gender === 'X' ? gender : null
-
-  if (existingRider) {
-    const typedRider = existingRider as RiderIdOnly
-    riderId = typedRider.id
-
-    // Update rider info if they provided more details
-    const updateData: RiderUpdate = {
-      first_name: trimmedFirstName,
-      last_name: trimmedLastName,
-      gender: parsedGender,
-      emergency_contact_name: emergencyContactName || null,
-      emergency_contact_phone: emergencyContactPhone || null,
-    }
-    await getSupabaseAdmin().from('riders').update(updateData).eq('id', riderId)
-  } else {
-    // Email not found - search for fuzzy name matches among riders without email
-    const { candidates } = await searchRiderCandidates(trimmedFirstName, trimmedLastName)
-
-    // If there are potential matches, return them for user selection
-    if (candidates.length > 0) {
+    if (!riderResult.success) {
+      // TypeScript type narrowing: when success is false, it's FindOrCreateRiderMatchResult
+      const matchResult = riderResult as FindOrCreateRiderMatchResult
       return {
         success: false,
         needsRiderMatch: true,
-        matchCandidates: candidates,
+        matchCandidates: matchResult.matchCandidates,
         pendingData: data,
       }
     }
 
-    // No matches found - create new rider
-    const insertRider: RiderInsert = {
-      slug: createRiderSlug(normalizedEmail),
-      first_name: trimmedFirstName,
-      last_name: trimmedLastName,
-      email: normalizedEmail,
-      gender: parsedGender,
-      emergency_contact_name: emergencyContactName || null,
-      emergency_contact_phone: emergencyContactPhone || null,
-    }
-    const { data: newRider, error: riderError } = await getSupabaseAdmin()
-      .from('riders')
-      .insert(insertRider)
-      .select('id')
-      .single()
+    const riderId = riderResult.riderId
 
-    if (riderError || !newRider) {
-      console.error('Error creating rider:', riderError)
-      return { success: false, error: 'Failed to create rider profile' }
+    // Check if already registered
+    const isDuplicate = await checkDuplicateRegistration(eventId, riderId)
+    if (isDuplicate) {
+      return { success: false, error: 'You are already registered for this event' }
     }
 
-    const typedNewRider = newRider as RiderIdOnly
-    riderId = typedNewRider.id
+    // Create registration
+    await createRegistrationRecord(eventId, riderId, shareRegistration, notes)
+
+    // Send confirmation email (fire-and-forget - don't block registration on email)
+    const chapter = event.chapters
+    const fullName = `${trimmedFirstName} ${trimmedLastName}`
+    sendRegistrationConfirmationEmail({
+      registrantName: fullName,
+      registrantEmail: normalizedEmail,
+      eventName: event.name,
+      eventDate: formatEventDate(event.event_date),
+      eventTime: formatEventTime(event.start_time),
+      eventLocation: event.start_location || 'TBD',
+      eventDistance: event.distance_km,
+      eventType: formatEventType(event.event_type),
+      chapterName: chapter?.name || '',
+      chapterSlug: chapter?.slug || '',
+      notes: notes || undefined,
+    }).catch((error) => {
+      console.error('🚨 Email sending failed:', error)
+    })
+
+    // Revalidate cache tags for registration data
+    revalidateTag('registrations')
+    revalidateTag(`event-${event.slug}`)
+    // Also revalidate the path for immediate UI update
+    revalidatePath(`/register/${event.slug}`)
+
+    return { success: true }
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Registration failed'
+    return { success: false, error: errorMessage }
   }
-
-  // Check if already registered
-  const { data: existingRegistration } = await getSupabaseAdmin()
-    .from('registrations')
-    .select('id')
-    .eq('event_id', eventId)
-    .eq('rider_id', riderId)
-    .single()
-
-  if (existingRegistration) {
-    return { success: false, error: 'You are already registered for this event' }
-  }
-
-  // Create registration
-  const insertRegistration: RegistrationInsert = {
-    event_id: eventId,
-    rider_id: riderId,
-    status: 'registered',
-    share_registration: shareRegistration,
-    notes: notes || null,
-  }
-  const { error: registrationError } = await getSupabaseAdmin()
-    .from('registrations')
-    .insert(insertRegistration)
-
-  if (registrationError) {
-    console.error('Error creating registration:', registrationError)
-    return { success: false, error: 'Failed to complete registration' }
-  }
-
-  // Send confirmation email (fire-and-forget - don't block registration on email)
-  const chapter = event.chapters
-  const fullName = `${trimmedFirstName} ${trimmedLastName}`
-  sendRegistrationConfirmationEmail({
-    registrantName: fullName,
-    registrantEmail: normalizedEmail,
-    eventName: event.name,
-    eventDate: formatEventDate(event.event_date),
-    eventTime: formatEventTime(event.start_time),
-    eventLocation: event.start_location || 'TBD',
-    eventDistance: event.distance_km,
-    eventType: formatEventType(event.event_type),
-    chapterName: chapter?.name || '',
-    chapterSlug: chapter?.slug || '',
-    notes: notes || undefined,
-  }).catch((error) => {
-    console.error('Email sending failed:', error)
-  })
-
-  // Revalidate cache tags for registration data
-  revalidateTag('registrations')
-  revalidateTag(`event-${event.slug}`)
-  // Also revalidate the path for immediate UI update
-  revalidatePath(`/register/${event.slug}`)
-
-  return { success: true }
 }
 
 export interface PermanentRegistrationData {
@@ -392,42 +492,26 @@ export async function registerForPermanent(data: PermanentRegistrationData): Pro
     eventId = typedNewEvent.id
   }
 
-  // Find or create rider (reusing same logic as registerForEvent)
+  // Find or create rider
   const normalizedEmail = email.toLowerCase().trim()
 
-  let riderId: string
+  try {
+    const riderResult = await findOrCreateRider(
+      email,
+      firstName,
+      lastName,
+      gender,
+      emergencyContactName,
+      emergencyContactPhone
+    )
 
-  const { data: existingRider } = await getSupabaseAdmin()
-    .from('riders')
-    .select('id')
-    .eq('email', normalizedEmail)
-    .single()
-
-  const parsedGender = gender === 'M' || gender === 'F' || gender === 'X' ? gender : null
-
-  if (existingRider) {
-    const typedRider = existingRider as RiderIdOnly
-    riderId = typedRider.id
-
-    // Update rider info if they provided more details
-    const updateData: RiderUpdate = {
-      first_name: trimmedFirstName,
-      last_name: trimmedLastName,
-      gender: parsedGender,
-      emergency_contact_name: emergencyContactName || null,
-      emergency_contact_phone: emergencyContactPhone || null,
-    }
-    await getSupabaseAdmin().from('riders').update(updateData).eq('id', riderId)
-  } else {
-    // Email not found - search for fuzzy name matches among riders without email
-    const { candidates } = await searchRiderCandidates(trimmedFirstName, trimmedLastName)
-
-    // If there are potential matches, return them for user selection
-    if (candidates.length > 0) {
+    if (!riderResult.success) {
+      // TypeScript type narrowing: when success is false, it's FindOrCreateRiderMatchResult
+      const matchResult = riderResult as FindOrCreateRiderMatchResult
       return {
         success: false,
         needsRiderMatch: true,
-        matchCandidates: candidates,
+        matchCandidates: matchResult.matchCandidates,
         pendingData: {
           eventId, // Event has already been created/found at this point
           firstName: trimmedFirstName,
@@ -442,86 +526,50 @@ export async function registerForPermanent(data: PermanentRegistrationData): Pro
       }
     }
 
-    // No matches found - create new rider
-    const insertRider: RiderInsert = {
-      slug: createRiderSlug(normalizedEmail),
-      first_name: trimmedFirstName,
-      last_name: trimmedLastName,
-      email: normalizedEmail,
-      gender: parsedGender,
-      emergency_contact_name: emergencyContactName || null,
-      emergency_contact_phone: emergencyContactPhone || null,
-    }
-    const { data: newRider, error: riderError } = await getSupabaseAdmin()
-      .from('riders')
-      .insert(insertRider)
-      .select('id')
-      .single()
+    const riderId = riderResult.riderId
 
-    if (riderError || !newRider) {
-      console.error('Error creating rider:', riderError)
-      return { success: false, error: 'Failed to create rider profile' }
+    // Check if already registered
+    const isDuplicate = await checkDuplicateRegistration(eventId, riderId)
+    if (isDuplicate) {
+      return { success: false, error: 'You are already registered for this permanent ride' }
     }
 
-    const typedNewRider = newRider as RiderIdOnly
-    riderId = typedNewRider.id
+    // Create registration
+    await createRegistrationRecord(eventId, riderId, shareRegistration, notes)
+
+    // Send confirmation email (fire-and-forget)
+    const chapter = route.chapters
+    const fullName = `${trimmedFirstName} ${trimmedLastName}`
+    sendRegistrationConfirmationEmail({
+      registrantName: fullName,
+      registrantEmail: normalizedEmail,
+      eventName: eventName,
+      eventDate: formatEventDate(eventDate),
+      eventTime: formatEventTime(startTime),
+      eventLocation: startLocation?.trim() || 'Start control per route',
+      eventDistance: route.distance_km || 0,
+      eventType: 'Permanent',
+      chapterName: chapter?.name || '',
+      chapterSlug: chapter?.slug || '',
+      notes: notes || undefined,
+    }).catch((error) => {
+      console.error('🚨 Email sending failed:', error)
+    })
+
+    // Revalidate cache tags for registration data
+    revalidateTag('registrations')
+    revalidateTag('events') // Revalidate events cache (used by getPermanentEvents)
+    revalidateTag('permanents') // Revalidate permanents calendar cache
+    revalidateTag(`event-${eventSlug}`)
+    // Also revalidate the paths for immediate UI update
+    revalidatePath(`/register/${eventSlug}`)
+    revalidatePath('/calendar/permanents')
+
+    return { success: true }
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Registration failed'
+    return { success: false, error: errorMessage }
   }
-
-  // Check if already registered
-  const { data: existingRegistration } = await getSupabaseAdmin()
-    .from('registrations')
-    .select('id')
-    .eq('event_id', eventId)
-    .eq('rider_id', riderId)
-    .single()
-
-  if (existingRegistration) {
-    return { success: false, error: 'You are already registered for this permanent ride' }
-  }
-
-  // Create registration
-  const insertRegistration: RegistrationInsert = {
-    event_id: eventId,
-    rider_id: riderId,
-    status: 'registered',
-    share_registration: shareRegistration,
-    notes: notes || null,
-  }
-  const { error: registrationError } = await getSupabaseAdmin()
-    .from('registrations')
-    .insert(insertRegistration)
-
-  if (registrationError) {
-    console.error('Error creating registration:', registrationError)
-    return { success: false, error: 'Failed to complete registration' }
-  }
-
-  // Send confirmation email (fire-and-forget)
-  const chapter = route.chapters
-  const fullName = `${trimmedFirstName} ${trimmedLastName}`
-  sendRegistrationConfirmationEmail({
-    registrantName: fullName,
-    registrantEmail: normalizedEmail,
-    eventName: eventName,
-    eventDate: formatEventDate(eventDate),
-    eventTime: formatEventTime(startTime),
-    eventLocation: startLocation?.trim() || 'Start control per route',
-    eventDistance: route.distance_km || 0,
-    eventType: 'Permanent',
-    chapterName: chapter?.name || '',
-    chapterSlug: chapter?.slug || '',
-    notes: notes || undefined,
-  }).catch((error) => {
-    console.error('Email sending failed:', error)
-  })
-
-  // Revalidate cache tags for registration data
-  revalidateTag('registrations')
-  revalidateTag(`event-${eventSlug}`)
-  // Also revalidate the path for immediate UI update
-  revalidatePath(`/register/${eventSlug}`)
-
-  return { success: true }
 }
 
 // ============================================================================
@@ -658,32 +706,17 @@ export async function completeRegistrationWithRider(
   }
 
   // Check if already registered
-  const { data: existingRegistration } = await getSupabaseAdmin()
-    .from('registrations')
-    .select('id')
-    .eq('event_id', eventId)
-    .eq('rider_id', riderId)
-    .single()
-
-  if (existingRegistration) {
+  const isDuplicate = await checkDuplicateRegistration(eventId, riderId)
+  if (isDuplicate) {
     return { success: false, error: 'You are already registered for this event' }
   }
 
   // Create registration
-  const insertRegistration: RegistrationInsert = {
-    event_id: eventId,
-    rider_id: riderId,
-    status: 'registered',
-    share_registration: shareRegistration,
-    notes: notes || null,
-  }
-  const { error: registrationError } = await getSupabaseAdmin()
-    .from('registrations')
-    .insert(insertRegistration)
-
-  if (registrationError) {
-    console.error('Error creating registration:', registrationError)
-    return { success: false, error: 'Failed to complete registration' }
+  try {
+    await createRegistrationRecord(eventId, riderId, shareRegistration, notes)
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Failed to complete registration'
+    return { success: false, error: errorMessage }
   }
 
   // Send confirmation email (fire-and-forget)
@@ -702,7 +735,7 @@ export async function completeRegistrationWithRider(
     chapterSlug: chapter?.slug || '',
     notes: notes || undefined,
   }).catch((error) => {
-    console.error('Email sending failed:', error)
+    console.error('🚨 Email sending failed:', error)
   })
 
   // Revalidate cache tags for registration data
