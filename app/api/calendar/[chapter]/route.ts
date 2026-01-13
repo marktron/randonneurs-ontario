@@ -132,7 +132,7 @@ export async function GET(request: Request, { params }: RouteParams) {
   // Convert events to iCal format
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://randonneurs.to'
   const siteHostname = siteUrl.replace(/^https?:\/\//, '').replace(/\/$/, '')
-  
+
   const icsEvents: EventAttributes[] = (events || []).map((event: {
     id: string
     slug: string
@@ -144,9 +144,23 @@ export async function GET(request: Request, { params }: RouteParams) {
     event_type: string
     description: string | null
   }) => {
-    // Parse date and time
+    // Parse date and time in Toronto timezone, then convert to UTC
     const [year, month, day] = event.event_date.split('-').map(Number)
     const [hour, minute] = (event.start_time || '08:00').split(':').map(Number)
+
+    // Get the UTC time by using Intl to find Toronto's offset on this date
+    const torontoFormatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/Toronto',
+      hour: 'numeric',
+      hour12: false,
+    })
+    // At noon UTC, what hour is it in Toronto?
+    const refDate = new Date(Date.UTC(year, month - 1, day, 12, 0, 0))
+    const torontoHourAtNoonUTC = parseInt(torontoFormatter.format(refDate), 10)
+    const offsetHours = 12 - torontoHourAtNoonUTC // Toronto's offset from UTC
+
+    // Create the actual UTC date for this Toronto local time
+    const utcDate = new Date(Date.UTC(year, month - 1, day, hour + offsetHours, minute))
 
     // Calculate duration based on event type and distance
     const durationHours = getEventDurationHours(event.distance_km, event.event_type)
@@ -166,7 +180,15 @@ export async function GET(request: Request, { params }: RouteParams) {
     return {
       uid: `${event.id}@${siteHostname}`,
       title,
-      start: [year, month, day, hour, minute] as [number, number, number, number, number],
+      start: [
+        utcDate.getUTCFullYear(),
+        utcDate.getUTCMonth() + 1,
+        utcDate.getUTCDate(),
+        utcDate.getUTCHours(),
+        utcDate.getUTCMinutes(),
+      ] as [number, number, number, number, number],
+      startInputType: 'utc' as const,
+      startOutputType: 'utc' as const,
       duration: { hours: durationHours },
       location: event.start_location || undefined,
       description: descriptionParts.join('\n'),

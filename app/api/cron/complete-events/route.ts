@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
-import { closeHours } from '@/lib/brmTimes'
+import { closeHours, createTorontoDate } from '@/lib/brmTimes'
 import { createPendingResultsAndSendEmails } from '@/lib/events/complete-event'
 
 /**
@@ -8,8 +8,9 @@ import { createPendingResultsAndSendEmails } from '@/lib/events/complete-event'
  * closing time has passed, and send result submission emails to riders.
  *
  * Closing time is calculated as: event_date + start_time + closeHours(distance)
+ * All times are interpreted as Toronto timezone (America/Toronto).
  *
- * This endpoint is called by Vercel Cron (configured in vercel.json).
+ * This endpoint is called by GitHub Actions (see .github/workflows/complete-events.yml).
  * It requires the CRON_SECRET environment variable for authentication.
  */
 
@@ -31,8 +32,8 @@ function calculateClosingTime(event: ScheduledEvent): Date {
   const [year, month, day] = event_date.split('-').map(Number)
   const [hours, minutes] = (start_time || DEFAULT_START_TIME).split(':').map(Number)
 
-  // Create start datetime
-  const startDate = new Date(year, month - 1, day, hours, minutes)
+  // Create start datetime in Toronto timezone (handles EST/EDT correctly)
+  const startDate = createTorontoDate(year, month - 1, day, hours, minutes)
 
   // Calculate closing time by adding closeHours to start time
   const closingMinutes = closeHours(distance_km) * 60
