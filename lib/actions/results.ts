@@ -25,15 +25,15 @@ async function revalidateResultsTags(eventId: string) {
   if (event) {
     const typedEvent = event as EventForResultsRevalidation
     // Revalidate general results cache
-    revalidateTag('results')
-    
+    revalidateTag('results', 'max')
+
     if (typedEvent.season && typedEvent.chapters?.slug) {
       const urlSlug = getUrlSlugFromDbSlug(typedEvent.chapters.slug)
       if (urlSlug) {
         // Revalidate chapter-specific results cache
-        revalidateTag(`chapter-${urlSlug}`)
+        revalidateTag(`chapter-${urlSlug}`, 'max')
         // Revalidate year-specific results cache
-        revalidateTag(`year-${typedEvent.season}`)
+        revalidateTag(`year-${typedEvent.season}`, 'max')
         // Also revalidate the path for immediate UI update
         revalidatePath(`/results/${typedEvent.season}/${urlSlug}`)
       }
@@ -104,7 +104,7 @@ export async function createResult(data: CreateResultData): Promise<ActionResult
   revalidatePath(`/admin/events/${eventId}`)
 
   // Revalidate public results pages
-  await revalidateResultsPages(eventId)
+  await revalidateResultsTags(eventId)
 
   return createActionResult()
 }
@@ -229,7 +229,7 @@ export async function createBulkResults(
   revalidatePath(`/admin/events/${eventId}`)
 
   // Revalidate public results pages
-  await revalidateResultsPages(eventId)
+  await revalidateResultsTags(eventId)
 
   return { success: true }
 }

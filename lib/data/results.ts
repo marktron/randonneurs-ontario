@@ -33,7 +33,7 @@ import type {
 
 export interface RiderResult {
   name: string
-  slug: string
+  slug: string | null
   time: string | 'DNF' | 'DNS' | 'OTL'
 }
 
@@ -228,7 +228,7 @@ const getChapterResultsInner = cache(async (urlSlug: string, year: number): Prom
     const riders: RiderResult[] = eventResultsList.map((result) => {
       const name = `${result.first_name} ${result.last_name}`.trim() || 'Unknown'
       const slug = result.rider_slug
-      const statusStr = formatStatus(result.status)
+      const statusStr = formatStatus(result.status ?? 'pending')
       // Show status (DNF/DNS/OTL/DQ) if not finished, otherwise show finish time
       const time = statusStr ?? formatFinishTime(result.finish_time) ?? ''
 
@@ -275,7 +275,7 @@ export interface RiderEventResult {
   eventName: string
   distanceKm: number
   time: string | null
-  status: string
+  status: string | null
   note: string | null
   chapterSlug: string | null
   eventType: string
@@ -326,7 +326,7 @@ const getRiderResultsInner = cache(async (slug: string): Promise<RiderYearResult
     .eq('slug', slug)
     .single()
 
-  if (riderError || !rider) {
+  if (riderError || !rider || !rider.id) {
     return handleDataError(
       riderError || new Error('Rider not found'),
       { operation: 'getRiderResults', context: { slug } },

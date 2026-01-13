@@ -103,7 +103,7 @@ export async function getResultByToken(
       chapterName: event.chapters?.name || 'Randonneurs Ontario',
       riderName: `${rider.first_name} ${rider.last_name}`,
       riderEmail: rider.email || '',
-      currentStatus: typedResult.status,
+      currentStatus: typedResult.status ?? 'pending',
       finishTime: typedResult.finish_time,
       gpxUrl: typedResult.gpx_url,
       gpxFilePath: typedResult.gpx_file_path,

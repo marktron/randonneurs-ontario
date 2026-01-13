@@ -32,14 +32,14 @@ async function getRoute(id: string): Promise<RouteOption | null> {
     id: route.id,
     name: route.name,
     slug: route.slug,
-    chapterId: route.chapter_id,
-    distanceKm: route.distance_km,
+    chapter_id: route.chapter_id,
+    distance_km: route.distance_km,
     collection: route.collection,
     description: route.description,
-    rwgpsUrl: route.rwgps_id ? `https://ridewithgps.com/routes/${route.rwgps_id}` : null,
-    cueSheetUrl: route.cue_sheet_url,
+    rwgps_id: route.rwgps_id,
+    cue_sheet_url: route.cue_sheet_url,
     notes: route.notes,
-    isActive: route.is_active,
+    is_active: route.is_active,
   }
 }
 

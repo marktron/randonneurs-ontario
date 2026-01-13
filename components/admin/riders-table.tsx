@@ -25,9 +25,9 @@ interface RiderWithStats {
   last_name: string
   email: string | null
   gender: string | null
-  created_at: string
-  registrations: { count: number }[]
-  results: { count: number }[]
+  created_at: string | null
+  registrations: { count: number }[] | null
+  results: { count: number }[] | null
 }
 
 interface RidersTableProps {
@@ -225,11 +225,11 @@ export function RidersTable({ riders, searchQuery }: RidersTableProps) {
                       )}
                     </TableCell>
                     <TableCell>
-                      {new Date(rider.created_at).toLocaleDateString('en-CA', {
+                      {rider.created_at ? new Date(rider.created_at).toLocaleDateString('en-CA', {
                         month: 'short',
                         day: 'numeric',
                         year: 'numeric',
-                      })}
+                      }) : '—'}
                     </TableCell>
                     <TableCell>
                       <Button variant="ghost" size="icon-sm" asChild>

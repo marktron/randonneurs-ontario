@@ -170,7 +170,7 @@ export default async function AdminResultsPage({ searchParams }: AdminResultsPag
                       '—'
                     )}
                   </TableCell>
-                  <TableCell>{getStatusBadge(result.status)}</TableCell>
+                  <TableCell>{getStatusBadge(result.status ?? 'pending')}</TableCell>
                   <TableCell>
                     <Button variant="ghost" size="icon-sm" asChild>
                       <Link href={`/admin/events/${result.events.id}`}>

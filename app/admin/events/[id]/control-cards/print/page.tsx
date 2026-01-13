@@ -146,10 +146,10 @@ export default async function PrintPage({ params, searchParams }: PrintPageProps
 
   // Format riders - if no registrations, create two blank entries
   // Also add any extra blank cards requested
-  const registeredRiders: CardRider[] = registrations.map((r) => ({
-    id: r.riders.id,
-    firstName: r.riders.first_name,
-    lastName: r.riders.last_name,
+  const registeredRiders: CardRider[] = registrations.filter((r) => r.riders).map((r) => ({
+    id: r.riders!.id,
+    firstName: r.riders!.first_name,
+    lastName: r.riders!.last_name,
   }))
 
   // Create extra blank cards

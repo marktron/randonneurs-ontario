@@ -41,7 +41,7 @@ export interface RouteDetail {
 
 export interface RouteResultRider {
   name: string
-  slug: string
+  slug: string | null
   time: string
 }
 
@@ -122,7 +122,7 @@ const getRouteResultsInner = cache(async (routeSlug: string): Promise<RouteResul
       .map(r => ({
         name: `${r.first_name} ${r.last_name}`.trim() || 'Unknown',
         slug: r.rider_slug,
-        time: formatStatus(r.status) ?? formatFinishTime(r.finish_time) ?? '',
+        time: formatStatus(r.status ?? 'pending') ?? formatFinishTime(r.finish_time) ?? '',
       }))
 
     // Sort by last name

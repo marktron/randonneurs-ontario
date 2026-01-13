@@ -69,7 +69,7 @@ export async function createPendingResultsAndSendEmails(
     return { resultsCreated: 0, emailsSent: 0, errors }
   }
 
-  const typedExistingResults = (existingResults || []) as ResultWithRiderId
+  const typedExistingResults = (existingResults || []) as ResultWithRiderId[]
   const existingRiderIds = new Set(typedExistingResults.map((r) => r.rider_id))
 
   // Filter registrations that don't have results yet and have email

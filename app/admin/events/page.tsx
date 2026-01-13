@@ -152,7 +152,7 @@ export default async function AdminEventsPage({ searchParams }: AdminEventsPageP
                     })}
                   </TableCell>
                   <TableCell>{event.distance_km} km</TableCell>
-                  <TableCell>{getStatusBadge(event.status)}</TableCell>
+                  <TableCell>{getStatusBadge(event.status ?? 'scheduled')}</TableCell>
                 </ClickableTableRow>
               ))
             )}

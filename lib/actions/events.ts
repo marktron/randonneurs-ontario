@@ -15,6 +15,7 @@ import {
 import type { ActionResult } from '@/types/actions'
 import type {
   ChapterSlugOnly,
+  Event,
   EventInsert,
   EventUpdate,
   EventIdOnly,
@@ -37,22 +38,22 @@ async function revalidateCalendarTags(chapterId: string, eventType: string, even
       const urlSlug = getUrlSlugFromDbSlug(typedChapter.slug)
       if (urlSlug) {
         // Revalidate chapter-specific events cache
-        revalidateTag(`chapter-${urlSlug}`)
+        revalidateTag(`chapter-${urlSlug}`, 'max')
       }
     }
   }
 
   // Revalidate general events cache
-  revalidateTag('events')
+  revalidateTag('events', 'max')
 
   // Revalidate specific event if slug provided
   if (eventSlug) {
-    revalidateTag(`event-${eventSlug}`)
+    revalidateTag(`event-${eventSlug}`, 'max')
   }
 
   // Also revalidate permanents cache if it's a permanent event
   if (eventType === 'permanent') {
-    revalidateTag('permanents')
+    revalidateTag('permanents', 'max')
   }
 }
 
@@ -413,6 +414,7 @@ interface EventForSubmission {
   id: string
   name: string
   event_date: string
+  status: string | null
   chapters: {
     name: string
   } | null

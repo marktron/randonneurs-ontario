@@ -188,14 +188,14 @@ export default async function RiderDetailPage({ params }: RiderPageProps) {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {results.map((result) => (
+                  {results.filter((result) => result.events).map((result) => (
                     <TableRow key={result.id}>
                       <TableCell>
                         <Link
-                          href={`/admin/events/${result.events.id}`}
+                          href={`/admin/events/${result.events!.id}`}
                           className="font-medium hover:underline"
                         >
-                          {result.events.name}
+                          {result.events!.name}
                         </Link>
                         {result.team_name && (
                           <p className="text-sm text-muted-foreground">
@@ -204,7 +204,7 @@ export default async function RiderDetailPage({ params }: RiderPageProps) {
                         )}
                       </TableCell>
                       <TableCell>
-                        {parseLocalDate(result.events.event_date).toLocaleDateString('en-CA', {
+                        {parseLocalDate(result.events!.event_date).toLocaleDateString('en-CA', {
                           month: 'short',
                           day: 'numeric',
                           year: 'numeric',
@@ -221,7 +221,7 @@ export default async function RiderDetailPage({ params }: RiderPageProps) {
                           '—'
                         )}
                       </TableCell>
-                      <TableCell>{getStatusBadge(result.status)}</TableCell>
+                      <TableCell>{getStatusBadge(result.status ?? 'pending')}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -253,32 +253,32 @@ export default async function RiderDetailPage({ params }: RiderPageProps) {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {registrations.map((reg) => (
+                  {registrations.filter((reg) => reg.events).map((reg) => (
                     <TableRow key={reg.id}>
                       <TableCell>
                         <Link
-                          href={`/admin/events/${reg.events.id}`}
+                          href={`/admin/events/${reg.events!.id}`}
                           className="font-medium hover:underline"
                         >
-                          {reg.events.name}
+                          {reg.events!.name}
                         </Link>
                       </TableCell>
                       <TableCell>
-                        {parseLocalDate(reg.events.event_date).toLocaleDateString('en-CA', {
+                        {parseLocalDate(reg.events!.event_date).toLocaleDateString('en-CA', {
                           month: 'short',
                           day: 'numeric',
                           year: 'numeric',
                         })}
                       </TableCell>
-                      <TableCell>{reg.events.distance_km} km</TableCell>
+                      <TableCell>{reg.events!.distance_km} km</TableCell>
                       <TableCell>
-                        {new Date(reg.registered_at).toLocaleDateString('en-CA', {
+                        {reg.registered_at ? new Date(reg.registered_at).toLocaleDateString('en-CA', {
                           month: 'short',
                           day: 'numeric',
                           year: 'numeric',
-                        })}
+                        }) : '—'}
                       </TableCell>
-                      <TableCell>{getStatusBadge(reg.status)}</TableCell>
+                      <TableCell>{getStatusBadge(reg.status ?? 'registered')}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>

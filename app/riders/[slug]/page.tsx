@@ -101,7 +101,7 @@ function ResultCard({ result, year }: { result: RiderEventResult; year: number }
         <span className={`font-mono text-sm shrink-0 ${
           result.status !== 'finished' ? 'text-muted-foreground' : ''
         }`}>
-          {formatTime(result.time, result.status)}
+          {formatTime(result.time, result.status ?? 'pending')}
         </span>
       </div>
     </div>
@@ -169,7 +169,7 @@ function YearSection({ yearData }: { yearData: RiderYearResults }) {
                 <TableCell className={`font-mono ${
                   result.status !== 'finished' ? 'text-muted-foreground' : ''
                 }`}>
-                  {formatTime(result.time, result.status)}
+                  {formatTime(result.time, result.status ?? 'pending')}
                 </TableCell>
                 <TableCell className="text-muted-foreground">
                   {getDisplayNote(result) || ''}

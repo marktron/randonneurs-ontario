@@ -103,7 +103,8 @@ export async function searchRiderCandidates(
       for (const result of rider.results) {
         riderStats[rider.id].totalRides++
         if (result.season !== null) {
-          if (riderStats[rider.id].firstSeason === null || result.season < riderStats[rider.id].firstSeason) {
+          const currentFirst = riderStats[rider.id].firstSeason
+          if (currentFirst === null || result.season < currentFirst) {
             riderStats[rider.id].firstSeason = result.season
           }
         }

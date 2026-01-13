@@ -99,10 +99,10 @@ export default async function ControlCardsPage({ params }: ControlCardsPageProps
           chapter: event.chapters?.name || 'Randonneurs Ontario',
           rwgpsId: event.routes?.rwgps_id || null,
         }}
-        riders={registrations.map((r) => ({
-          id: r.riders.id,
-          firstName: r.riders.first_name,
-          lastName: r.riders.last_name,
+        riders={registrations.filter((r) => r.riders).map((r) => ({
+          id: r.riders!.id,
+          firstName: r.riders!.first_name,
+          lastName: r.riders!.last_name,
         }))}
         organizer={{
           name: admin.name,

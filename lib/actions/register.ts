@@ -365,8 +365,8 @@ export async function registerForEvent(data: RegistrationData): Promise<Registra
     })
 
     // Revalidate cache tags for registration data
-    revalidateTag('registrations')
-    revalidateTag(`event-${event.slug}`)
+    revalidateTag('registrations', 'max')
+    revalidateTag(`event-${event.slug}`, 'max')
     // Also revalidate the path for immediate UI update
     revalidatePath(`/register/${event.slug}`)
 
@@ -565,10 +565,10 @@ export async function registerForPermanent(data: PermanentRegistrationData): Pro
     })
 
     // Revalidate cache tags for registration data
-    revalidateTag('registrations')
-    revalidateTag('events') // Revalidate events cache (used by getPermanentEvents)
-    revalidateTag('permanents') // Revalidate permanents calendar cache
-    revalidateTag(`event-${eventSlug}`)
+    revalidateTag('registrations', 'max')
+    revalidateTag('events', 'max') // Revalidate events cache (used by getPermanentEvents)
+    revalidateTag('permanents', 'max') // Revalidate permanents calendar cache
+    revalidateTag(`event-${eventSlug}`, 'max')
     // Also revalidate the paths for immediate UI update
     revalidatePath(`/register/${eventSlug}`)
     revalidatePath('/calendar/permanents')
@@ -746,8 +746,8 @@ export async function completeRegistrationWithRider(
   })
 
   // Revalidate cache tags for registration data
-  revalidateTag('registrations')
-  revalidateTag(`event-${event.slug}`)
+  revalidateTag('registrations', 'max')
+  revalidateTag(`event-${event.slug}`, 'max')
   // Also revalidate the path for immediate UI update
   revalidatePath(`/register/${event.slug}`)
 

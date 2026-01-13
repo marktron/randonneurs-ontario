@@ -24,8 +24,8 @@ import { toast } from 'sonner'
 interface Registration {
   id: string
   rider_id: string
-  registered_at: string
-  status: string
+  registered_at: string | null
+  status: string | null
   notes: string | null
   riders: {
     id: string
@@ -34,14 +34,14 @@ interface Registration {
     email: string | null
     emergency_contact_name: string | null
     emergency_contact_phone: string | null
-  }
+  } | null
 }
 
 interface Result {
   id: string
   rider_id: string
   finish_time: string | null
-  status: string
+  status: string | null
   team_name: string | null
   note: string | null
   // Rider submission fields
@@ -56,7 +56,7 @@ interface Result {
     first_name: string
     last_name: string
     email: string | null
-  }
+  } | null
 }
 
 // Unified participant - either from registration or result-only
@@ -75,9 +75,9 @@ interface Participant {
 interface EventResultsManagerProps {
   eventId: string
   eventName: string
-  eventStatus: string
+  eventStatus: string | null
   isPastEvent: boolean
-  season: number
+  season: number | null
   distanceKm: number
   registrations: Registration[]
   results: Result[]
@@ -96,7 +96,7 @@ interface RiderRowProps {
   participant: Participant
   result: Result | null
   eventId: string
-  season: number
+  season: number | null
   distanceKm: number
 }
 
@@ -142,7 +142,7 @@ function RiderRow({ participant, result, eventId, season, distanceKm }: RiderRow
           finishTime: newStatus === 'finished' ? localTime || null : null,
           teamName: null,
           note: null,
-          season,
+          season: season ?? new Date().getFullYear(),
           distanceKm,
         })
         if (res.success) {
@@ -329,26 +329,28 @@ export function EventResultsManager({
   // Build unified participants list: registrations + results-only riders
   const registeredRiderIds = new Set(registrations.map((r) => r.rider_id))
 
-  const participantsFromRegistrations: Participant[] = registrations.map((reg) => ({
-    id: reg.id,
-    riderId: reg.rider_id,
-    firstName: reg.riders.first_name,
-    lastName: reg.riders.last_name,
-    email: reg.riders.email,
-    emergencyContactName: reg.riders.emergency_contact_name,
-    emergencyContactPhone: reg.riders.emergency_contact_phone,
-    registrationNotes: reg.notes,
-    hasRegistration: true,
-  }))
+  const participantsFromRegistrations: Participant[] = registrations
+    .filter((reg) => reg.riders)
+    .map((reg) => ({
+      id: reg.id,
+      riderId: reg.rider_id,
+      firstName: reg.riders!.first_name,
+      lastName: reg.riders!.last_name,
+      email: reg.riders!.email,
+      emergencyContactName: reg.riders!.emergency_contact_name,
+      emergencyContactPhone: reg.riders!.emergency_contact_phone,
+      registrationNotes: reg.notes,
+      hasRegistration: true,
+    }))
 
   const participantsFromResultsOnly: Participant[] = results
-    .filter((result) => !registeredRiderIds.has(result.rider_id))
+    .filter((result) => !registeredRiderIds.has(result.rider_id) && result.riders)
     .map((result) => ({
       id: `result-${result.id}`,
       riderId: result.rider_id,
-      firstName: result.riders.first_name,
-      lastName: result.riders.last_name,
-      email: result.riders.email,
+      firstName: result.riders!.first_name,
+      lastName: result.riders!.last_name,
+      email: result.riders!.email,
       emergencyContactName: null,
       emergencyContactPhone: null,
       registrationNotes: null,

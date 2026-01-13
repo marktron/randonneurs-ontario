@@ -23,7 +23,7 @@ interface AddRiderDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   eventId: string
-  season: number
+  season: number | null
   distanceKm: number
   existingRiderIds: Set<string>
 }
@@ -97,7 +97,7 @@ export function AddRiderDialog({
         eventId,
         riderId: selectedRider.id,
         status: 'pending',
-        season,
+        season: season ?? new Date().getFullYear(),
         distanceKm,
       })
 
@@ -135,7 +135,7 @@ export function AddRiderDialog({
         eventId,
         riderId: createRes.riderId,
         status: 'pending',
-        season,
+        season: season ?? new Date().getFullYear(),
         distanceKm,
       })
 

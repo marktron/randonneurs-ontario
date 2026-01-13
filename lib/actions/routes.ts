@@ -9,6 +9,7 @@ import { handleActionError, handleSupabaseError, createActionResult, logError } 
 import type { ActionResult, MergeResult } from '@/types/actions'
 import type {
   ChapterSlugOnly,
+  Event,
   RouteInsert,
   RouteUpdate,
   RouteWithChapterId,
@@ -18,11 +19,11 @@ import type {
 // Helper to revalidate cache tags for routes pages
 async function revalidateRoutesTags(chapterId: string | null, routeSlug?: string) {
   // Revalidate general routes cache
-  revalidateTag('routes')
-  
+  revalidateTag('routes', 'max')
+
   if (routeSlug) {
     // Revalidate specific route cache
-    revalidateTag(`route-${routeSlug}`)
+    revalidateTag(`route-${routeSlug}`, 'max')
   }
 
   if (!chapterId) return
@@ -40,7 +41,7 @@ async function revalidateRoutesTags(chapterId: string | null, routeSlug?: string
       const urlSlug = getUrlSlugFromDbSlug(typedChapter.slug)
       if (urlSlug) {
         // Revalidate chapter-specific routes cache
-        revalidateTag(`chapter-${urlSlug}`)
+        revalidateTag(`chapter-${urlSlug}`, 'max')
         // Also revalidate the path for immediate UI update
         revalidatePath(`/routes/${urlSlug}`)
       }

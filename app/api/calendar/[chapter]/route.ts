@@ -134,7 +134,7 @@ export async function GET(request: Request, { params }: RouteParams) {
         .order('event_date', { ascending: true })
 
       if (eventsError) {
-        logError(eventsError, { operation: 'calendar.fetchEvents', context: { chapter: urlSlug } })
+        logError(eventsError, { operation: 'calendar.fetchEvents', context: { chapter } })
         return null
       }
 
@@ -221,7 +221,7 @@ export async function GET(request: Request, { params }: RouteParams) {
   })
 
   if (icsError || !icsContent) {
-    logError(icsError || new Error('iCal generation returned no content'), { operation: 'calendar.generateICS', context: { chapter: urlSlug } })
+    logError(icsError || new Error('iCal generation returned no content'), { operation: 'calendar.generateICS', context: { chapter } })
     return NextResponse.json(
       { error: 'Failed to generate calendar' },
       { status: 500 }

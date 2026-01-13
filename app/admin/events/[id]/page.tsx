@@ -74,7 +74,7 @@ async function getResults(eventId: string): Promise<ResultWithRiderForAdmin[]> {
     .eq('event_id', eventId)
     .order('finish_time', { ascending: true, nullsFirst: false })
 
-  return (data as Result[]) ?? []
+  return (data as ResultWithRiderForAdmin[]) ?? []
 }
 
 interface EventPageProps {
