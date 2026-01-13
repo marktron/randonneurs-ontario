@@ -188,6 +188,12 @@ export function Navbar() {
                       Paris-Brest-Paris
                     </Link>
                   </li>
+                  <li className="border-t border-border my-1" />
+                  <li>
+                    <Link href="/riders" className={dropdownLinkStyles}>
+                      Rider Directory
+                    </Link>
+                  </li>
                 </ul>
               </NavigationMenuContent>
             </NavigationMenuItem>
@@ -344,6 +350,14 @@ export function Navbar() {
                   className="block px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors"
                 >
                   Paris-Brest-Paris
+                </Link>
+                <div className="border-t border-border my-1" />
+                <Link
+                  href="/riders"
+                  onClick={() => setOpen(false)}
+                  className="block px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors"
+                >
+                  Rider Directory
                 </Link>
               </MobileNavSection>
 
