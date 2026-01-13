@@ -58,24 +58,12 @@ export async function getEventsByChapter(urlSlug: string): Promise<Event[]> {
   const dbSlug = getDbSlug(urlSlug)
   if (!dbSlug) return []
 
-  // First get the chapter ID
-  const { data: chapter, error: chapterError } = await getSupabase()
-    .from('chapters')
-    .select('id')
-    .eq('slug', dbSlug)
-    .single()
-
-  if (chapterError || !chapter) {
-    console.error('Error fetching chapter:', chapterError)
-    return []
-  }
-
-  // Fetch upcoming events for this chapter, ordered by date
+  // Fetch upcoming events for this chapter using a join, ordered by date
   const today = new Date().toISOString().split('T')[0]
   const { data: events, error: eventsError } = await getSupabase()
     .from('events')
-    .select('*, registrations(count)')
-    .eq('chapter_id', chapter.id)
+    .select('*, registrations(count), chapters!inner(slug)')
+    .eq('chapters.slug', dbSlug)
     .eq('status', 'scheduled')
     .neq('event_type', 'permanent')
     .gte('event_date', today)

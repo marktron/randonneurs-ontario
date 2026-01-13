@@ -71,28 +71,22 @@ export async function getAvailableYears(urlSlug: string): Promise<number[]> {
       .limit(2000)
     events = data
   } else {
-    // Chapter-based query
-    const { data: chapter } = await getSupabase()
-      .from('chapters')
-      .select('id')
-      .eq('slug', dbSlug)
-      .single()
-
-    if (!chapter) return []
-
-    const typedChapter = chapter as ChapterId
-
+    // Chapter-based query using a join
     let query = getSupabase()
       .from('events')
-      .select('id, season, results(season)')
-      .eq('chapter_id', typedChapter.id)
+      .select('id, season, results(season), chapters!inner(slug)')
+      .eq('chapters.slug', dbSlug)
 
     // Filter for PBP events if requested
     if (urlSlug === 'pbp') {
       query = query.eq('name', 'Paris-Brest-Paris')
     }
 
-    const { data } = await query.limit(2000)
+    const { data, error } = await query.limit(2000)
+    if (error) {
+      console.error('🚨 Error fetching available years:', error)
+      return []
+    }
     events = data
   }
 
@@ -163,27 +157,18 @@ export async function getChapterResults(urlSlug: string, year: number): Promise<
     events = result.data
     eventsError = result.error
   } else {
-    // Chapter-based query
-    const { data: chapter } = await getSupabase()
-      .from('chapters')
-      .select('id')
-      .eq('slug', dbSlug)
-      .single()
-
-    if (!chapter) return []
-
-    const typedChapter = chapter as ChapterId
-
+    // Chapter-based query using a join
     let query = getSupabase()
       .from('events')
       .select(`
         id, name, event_date, distance_km,
         routes (slug),
+        chapters!inner(slug),
         public_results (
           finish_time, status, team_name, rider_slug, first_name, last_name
         )
       `)
-      .eq('chapter_id', typedChapter.id)
+      .eq('chapters.slug', dbSlug)
       .neq('event_type', 'permanent')
       .gte('event_date', `${year}-01-01`)
       .lte('event_date', `${year}-12-31`)
@@ -285,19 +270,23 @@ export async function getRiderBySlug(slug: string): Promise<RiderInfo | null> {
 }
 
 export async function getRiderResults(slug: string): Promise<RiderYearResults[]> {
-  // Get rider ID from slug (use public_riders view)
-  const { data: rider } = await getSupabase()
+  // Get rider ID first (using public_riders view for RLS safety)
+  // Note: We can't join through views, so we need this lookup first
+  const { data: rider, error: riderError } = await getSupabase()
     .from('public_riders')
     .select('id')
     .eq('slug', slug)
     .single()
 
-  if (!rider) return []
+  if (riderError || !rider) {
+    if (riderError) {
+      console.error('🚨 Error fetching rider:', riderError)
+    }
+    return []
+  }
 
-  const typedRider = rider as Pick<PublicRider, 'id'>
-
-  // Get all results for this rider with event info
-  const { data: results, error } = await getSupabase()
+  // Get all results for this rider with event info in a single query
+  const { data: results, error: resultsError } = await getSupabase()
     .from('results')
     .select(`
       finish_time,
@@ -314,10 +303,15 @@ export async function getRiderResults(slug: string): Promise<RiderYearResults[]>
         )
       )
     `)
-    .eq('rider_id', typedRider.id ?? '')
+    .eq('rider_id', rider.id)
     .order('season', { ascending: false })
 
-  if (error || !results) return []
+  if (resultsError) {
+    console.error('🚨 Error fetching rider results:', resultsError)
+    return []
+  }
+
+  if (!results) return []
 
   // Group by year
   const yearMap = new Map<number, RiderEventResult[]>()

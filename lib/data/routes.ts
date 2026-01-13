@@ -63,30 +63,25 @@ export async function getRouteBySlug(slug: string): Promise<RouteDetail | null> 
 }
 
 export async function getRouteResults(routeSlug: string): Promise<RouteResultEvent[]> {
-  // Get the route ID first
-  const { data: route } = await getSupabase()
-    .from('routes')
-    .select('id')
-    .eq('slug', routeSlug)
-    .single()
-
-  if (!route) return []
-
-  const typedRoute = route as RouteId
-
-  // Get all events that used this route, with their results
+  // Get all events that used this route, with their results, using a join
   const { data: events, error } = await getSupabase()
     .from('events')
     .select(`
       name, event_date,
+      routes!inner(slug),
       public_results (
         finish_time, status, rider_slug, first_name, last_name
       )
     `)
-    .eq('route_id', typedRoute.id)
+    .eq('routes.slug', routeSlug)
     .order('event_date', { ascending: false })
 
-  if (error || !events) return []
+  if (error) {
+    console.error('🚨 Error fetching route results:', error)
+    return []
+  }
+
+  if (!events) return []
 
   const results: RouteResultEvent[] = []
 
@@ -146,25 +141,11 @@ export async function getRoutesByChapter(urlSlug: string): Promise<RouteCollecti
   const dbSlug = getDbSlug(urlSlug)
   if (!dbSlug) return []
 
-  // Get the chapter ID
-  const { data: chapter, error: chapterError } = await getSupabase()
-    .from('chapters')
-    .select('id')
-    .eq('slug', dbSlug)
-    .single()
-
-  if (chapterError || !chapter) {
-    console.error('Error fetching chapter:', chapterError)
-    return []
-  }
-
-  const typedChapter = chapter as ChapterId
-
-  // Fetch routes for this chapter that have rwgps_id and are active
+  // Fetch routes for this chapter using a join, that have rwgps_id and are active
   const { data: routes, error: routesError } = await getSupabase()
     .from('routes')
-    .select('name, distance_km, rwgps_id')
-    .eq('chapter_id', typedChapter.id)
+    .select('name, distance_km, rwgps_id, chapters!inner(slug)')
+    .eq('chapters.slug', dbSlug)
     .eq('is_active', true)
     .not('rwgps_id', 'is', null)
 
