@@ -412,21 +412,34 @@ export async function getRiderResults(slug: string): Promise<RiderYearResults[]>
 }
 
 export async function getAllChaptersWithYears(): Promise<Array<{ slug: string; name: string; years: number[] }>> {
-  const chapters = getAllChapterSlugs()
-  const result: Array<{ slug: string; name: string; years: number[] }> = []
+  return unstable_cache(
+    async () => {
+      const chapters = getAllChapterSlugs()
+      
+      // Parallelize all async calls instead of sequential await in loop
+      const chapterData = await Promise.all(
+        chapters.map(async (slug) => {
+          const meta = getChapterMeta(slug)
+          const years = await getAvailableYears(slug)
+          
+          if (meta && years.length > 0) {
+            return {
+              slug,
+              name: meta.name,
+              years,
+            }
+          }
+          return null
+        })
+      )
 
-  for (const slug of chapters) {
-    const meta = getChapterMeta(slug)
-    const years = await getAvailableYears(slug)
-
-    if (meta && years.length > 0) {
-      result.push({
-        slug,
-        name: meta.name,
-        years,
-      })
+      // Filter out null entries and return
+      return chapterData.filter((item): item is { slug: string; name: string; years: number[] } => item !== null)
+    },
+    ['all-chapters-with-years'],
+    {
+      revalidate: 3600, // Cache for 1 hour
+      tags: ['results', 'chapters'],
     }
-  }
-
-  return result
+  )()
 }
