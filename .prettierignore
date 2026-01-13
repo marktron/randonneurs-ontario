@@ -1,0 +1,8 @@
+.next
+node_modules
+build
+out
+coverage
+*.min.js
+pnpm-lock.yaml
+package-lock.json

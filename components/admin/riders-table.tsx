@@ -2,7 +2,6 @@
 
 import { useState, useMemo } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
 import {
   Table,
   TableBody,
@@ -49,34 +48,33 @@ function getGenderBadge(gender: string | null) {
 }
 
 export function RidersTable({ riders, searchQuery }: RidersTableProps) {
-  const router = useRouter()
   const [localSearch, setLocalSearch] = useState(searchQuery)
   const [selectedRiderIds, setSelectedRiderIds] = useState<Set<string>>(new Set())
   const [mergeDialogOpen, setMergeDialogOpen] = useState(false)
 
-  const selectedRiders: RiderForMerge[] = useMemo(() =>
-    riders
-      .filter(rider => selectedRiderIds.has(rider.id))
-      .map(rider => ({
-        id: rider.id,
-        first_name: rider.first_name,
-        last_name: rider.last_name,
-        email: rider.email,
-        gender: rider.gender,
-      })),
+  const selectedRiders: RiderForMerge[] = useMemo(
+    () =>
+      riders
+        .filter((rider) => selectedRiderIds.has(rider.id))
+        .map((rider) => ({
+          id: rider.id,
+          first_name: rider.first_name,
+          last_name: rider.last_name,
+          email: rider.email,
+          gender: rider.gender,
+        })),
     [riders, selectedRiderIds]
   )
 
-  const allSelected = riders.length > 0 &&
-    riders.every(rider => selectedRiderIds.has(rider.id))
+  const allSelected = riders.length > 0 && riders.every((rider) => selectedRiderIds.has(rider.id))
 
-  const someSelected = riders.some(rider => selectedRiderIds.has(rider.id))
+  const someSelected = riders.some((rider) => selectedRiderIds.has(rider.id))
 
   const toggleSelectAll = () => {
     if (allSelected) {
       setSelectedRiderIds(new Set())
     } else {
-      setSelectedRiderIds(new Set(riders.map(r => r.id)))
+      setSelectedRiderIds(new Set(riders.map((r) => r.id)))
     }
   }
 
@@ -121,6 +119,7 @@ export function RidersTable({ riders, searchQuery }: RidersTableProps) {
             </Button>
           </div>
           <button
+            type="button"
             onClick={clearSelection}
             className="ml-auto text-sm text-muted-foreground hover:text-foreground flex items-center gap-1"
           >
@@ -131,15 +130,16 @@ export function RidersTable({ riders, searchQuery }: RidersTableProps) {
       )}
 
       {/* Search */}
-      <form className="flex items-center gap-2 max-w-md mb-4">
+      <form className="flex items-center gap-2 max-w-md mb-4" role="search">
         <InputGroup className="flex-1">
           <InputGroupAddon>
-            <Search className="h-4 w-4" />
+            <Search className="h-4 w-4" aria-hidden="true" />
           </InputGroupAddon>
           <InputGroupInput
             type="search"
             name="q"
             placeholder="Search by name or email..."
+            aria-label="Search riders by name or email"
             value={localSearch}
             onChange={(e) => setLocalSearch(e.target.value)}
           />
@@ -163,7 +163,8 @@ export function RidersTable({ riders, searchQuery }: RidersTableProps) {
                   checked={allSelected}
                   ref={(el) => {
                     if (el) {
-                      (el as unknown as HTMLInputElement).indeterminate = !allSelected && someSelected
+                      ;(el as unknown as HTMLInputElement).indeterminate =
+                        !allSelected && someSelected
                     }
                   }}
                   onCheckedChange={toggleSelectAll}
@@ -206,9 +207,7 @@ export function RidersTable({ riders, searchQuery }: RidersTableProps) {
                     <TableCell className="font-medium">
                       {rider.first_name} {rider.last_name}
                     </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {rider.email || '—'}
-                    </TableCell>
+                    <TableCell className="text-muted-foreground">{rider.email || '—'}</TableCell>
                     <TableCell>{getGenderBadge(rider.gender)}</TableCell>
                     <TableCell className="text-center">
                       {regCount > 0 ? (
@@ -225,11 +224,13 @@ export function RidersTable({ riders, searchQuery }: RidersTableProps) {
                       )}
                     </TableCell>
                     <TableCell>
-                      {rider.created_at ? new Date(rider.created_at).toLocaleDateString('en-CA', {
-                        month: 'short',
-                        day: 'numeric',
-                        year: 'numeric',
-                      }) : '—'}
+                      {rider.created_at
+                        ? new Date(rider.created_at).toLocaleDateString('en-CA', {
+                            month: 'short',
+                            day: 'numeric',
+                            year: 'numeric',
+                          })
+                        : '—'}
                     </TableCell>
                     <TableCell>
                       <Button variant="ghost" size="icon-sm" asChild>

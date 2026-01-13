@@ -7,7 +7,6 @@ import {
   handleDataError,
   createActionResult,
 } from '@/lib/errors'
-import type { ActionResult } from '@/types/actions'
 
 // Mock Sentry
 vi.mock('@sentry/nextjs', () => ({
@@ -30,10 +29,7 @@ describe('lib/errors', () => {
       const error = new Error('Test error')
       logError(error, { operation: 'testOperation' })
 
-      expect(console.error).toHaveBeenCalledWith(
-        expect.stringContaining('🚨'),
-        expect.anything()
-      )
+      expect(console.error).toHaveBeenCalledWith(expect.stringContaining('🚨'), expect.anything())
     })
 
     it('should log to Sentry by default', () => {
@@ -116,8 +112,8 @@ describe('lib/errors', () => {
     })
 
     it('should handle database constraint violations', () => {
-      const error = new Error('Duplicate key')
-      ;(error as any).code = '23505'
+      const error = new Error('Duplicate key') as Error & { code: string }
+      error.code = '23505'
       const result = handleActionError(error, { operation: 'testOperation' })
 
       expect(result).toEqual({
@@ -148,11 +144,7 @@ describe('lib/errors', () => {
 
     it('should handle duplicate key error (23505)', () => {
       const error = { code: '23505', message: 'Duplicate key' }
-      const result = handleSupabaseError(
-        error,
-        { operation: 'testOperation' },
-        'Default message'
-      )
+      const result = handleSupabaseError(error, { operation: 'testOperation' }, 'Default message')
 
       expect(result).toEqual({
         success: false,
@@ -220,11 +212,7 @@ describe('lib/errors', () => {
 
     it('should return custom fallback value', () => {
       const error = new Error('Test error')
-      const result = handleDataError(
-        error,
-        { operation: 'testOperation' },
-        null
-      )
+      const result = handleDataError(error, { operation: 'testOperation' }, null)
 
       expect(result).toBeNull()
     })

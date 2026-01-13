@@ -52,37 +52,41 @@ export function RoutesTable({ routes, chapters, defaultChapterId }: RoutesTableP
   const [selectedRouteIds, setSelectedRouteIds] = useState<Set<string>>(new Set())
   const [mergeDialogOpen, setMergeDialogOpen] = useState(false)
 
-  const filteredRoutes = useMemo(() => routes.filter((route) => {
-    const matchesSearch = route.name.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesChapter = chapterFilter === 'all' || route.chapters?.id === chapterFilter
-    const matchesStatus =
-      statusFilter === 'all' ||
-      (statusFilter === 'active' && route.is_active) ||
-      (statusFilter === 'inactive' && !route.is_active)
+  const filteredRoutes = useMemo(
+    () =>
+      routes.filter((route) => {
+        const matchesSearch = route.name.toLowerCase().includes(searchTerm.toLowerCase())
+        const matchesChapter = chapterFilter === 'all' || route.chapters?.id === chapterFilter
+        const matchesStatus =
+          statusFilter === 'all' ||
+          (statusFilter === 'active' && route.is_active) ||
+          (statusFilter === 'inactive' && !route.is_active)
 
-    return matchesSearch && matchesChapter && matchesStatus
-  }), [routes, searchTerm, chapterFilter, statusFilter])
+        return matchesSearch && matchesChapter && matchesStatus
+      }),
+    [routes, searchTerm, chapterFilter, statusFilter]
+  )
 
-  const selectedRoutes = useMemo(() =>
-    filteredRoutes.filter(route => selectedRouteIds.has(route.id)),
+  const selectedRoutes = useMemo(
+    () => filteredRoutes.filter((route) => selectedRouteIds.has(route.id)),
     [filteredRoutes, selectedRouteIds]
   )
 
-  const allFilteredSelected = filteredRoutes.length > 0 &&
-    filteredRoutes.every(route => selectedRouteIds.has(route.id))
+  const allFilteredSelected =
+    filteredRoutes.length > 0 && filteredRoutes.every((route) => selectedRouteIds.has(route.id))
 
-  const someFilteredSelected = filteredRoutes.some(route => selectedRouteIds.has(route.id))
+  const someFilteredSelected = filteredRoutes.some((route) => selectedRouteIds.has(route.id))
 
   const toggleSelectAll = () => {
     if (allFilteredSelected) {
       // Deselect all filtered routes
       const newSelected = new Set(selectedRouteIds)
-      filteredRoutes.forEach(route => newSelected.delete(route.id))
+      filteredRoutes.forEach((route) => newSelected.delete(route.id))
       setSelectedRouteIds(newSelected)
     } else {
       // Select all filtered routes
       const newSelected = new Set(selectedRouteIds)
-      filteredRoutes.forEach(route => newSelected.add(route.id))
+      filteredRoutes.forEach((route) => newSelected.add(route.id))
       setSelectedRouteIds(newSelected)
     }
   }
@@ -149,6 +153,7 @@ export function RoutesTable({ routes, chapters, defaultChapterId }: RoutesTableP
             </Button>
           </div>
           <button
+            type="button"
             onClick={clearSelection}
             className="ml-auto text-sm text-muted-foreground hover:text-foreground flex items-center gap-1"
           >
@@ -161,6 +166,7 @@ export function RoutesTable({ routes, chapters, defaultChapterId }: RoutesTableP
       <div className="flex flex-col sm:flex-row gap-4 mb-4">
         <Input
           placeholder="Search routes..."
+          aria-label="Search routes"
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           className="sm:max-w-xs"
@@ -199,7 +205,8 @@ export function RoutesTable({ routes, chapters, defaultChapterId }: RoutesTableP
                   checked={allFilteredSelected}
                   ref={(el) => {
                     if (el) {
-                      (el as unknown as HTMLInputElement).indeterminate = !allFilteredSelected && someFilteredSelected
+                      ;(el as unknown as HTMLInputElement).indeterminate =
+                        !allFilteredSelected && someFilteredSelected
                     }
                   }}
                   onCheckedChange={toggleSelectAll}
@@ -240,9 +247,7 @@ export function RoutesTable({ routes, chapters, defaultChapterId }: RoutesTableP
                     <p className="text-xs text-muted-foreground">{route.slug}</p>
                   </TableCell>
                   <TableCell>{route.chapters?.name || '—'}</TableCell>
-                  <TableCell>
-                    {route.distance_km ? `${route.distance_km} km` : '—'}
-                  </TableCell>
+                  <TableCell>{route.distance_km ? `${route.distance_km} km` : '—'}</TableCell>
                   <TableCell>{route.collection || '—'}</TableCell>
                   <TableCell>
                     {route.rwgps_id ? (
@@ -306,8 +311,8 @@ export function RoutesTable({ routes, chapters, defaultChapterId }: RoutesTableP
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Route</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete this route? This action cannot be undone.
-              Routes that are used by events cannot be deleted.
+              Are you sure you want to delete this route? This action cannot be undone. Routes that
+              are used by events cannot be deleted.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

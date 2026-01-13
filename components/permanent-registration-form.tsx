@@ -1,27 +1,23 @@
-"use client";
+'use client'
 
-import { useState, useTransition, useEffect, useMemo } from "react";
-import { useRouter } from "next/navigation";
-import { ChevronDownIcon } from "lucide-react";
-import { format, addDays, isBefore, startOfDay } from "date-fns";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Button } from "@/components/ui/button";
-import { Calendar } from "@/components/ui/calendar";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
+import { useState, useTransition, useEffect, useMemo } from 'react'
+import { useRouter } from 'next/navigation'
+import { ChevronDownIcon } from 'lucide-react'
+import { format, addDays, isBefore, startOfDay } from 'date-fns'
+import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
+import { Label } from '@/components/ui/label'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Button } from '@/components/ui/button'
+import { Calendar } from '@/components/ui/calendar'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from '@/components/ui/select'
 import {
   Command,
   CommandEmpty,
@@ -29,127 +25,127 @@ import {
   CommandInput,
   CommandItem,
   CommandList,
-} from "@/components/ui/command";
-import { registerForPermanent, completeRegistrationWithRider } from "@/lib/actions/register";
-import { RiderMatchDialog } from "@/components/rider-match-dialog";
-import type { RiderMatchCandidate } from "@/lib/actions/rider-match";
-import type { ActiveRoute } from "@/lib/data/routes";
+} from '@/components/ui/command'
+import { registerForPermanent, completeRegistrationWithRider } from '@/lib/actions/register'
+import { RiderMatchDialog } from '@/components/rider-match-dialog'
+import type { RiderMatchCandidate } from '@/lib/actions/rider-match'
+import type { ActiveRoute } from '@/lib/data/routes'
 
-const STORAGE_KEY = "ro-registration";
+const STORAGE_KEY = 'ro-registration'
 
 interface SavedRegistrationData {
-  firstName: string;
-  lastName: string;
-  email: string;
-  gender: string;
-  shareRegistration: boolean;
-  emergencyContactName: string;
-  emergencyContactPhone: string;
+  firstName: string
+  lastName: string
+  email: string
+  gender: string
+  shareRegistration: boolean
+  emergencyContactName: string
+  emergencyContactPhone: string
 }
 
 function getSavedData(): SavedRegistrationData | null {
-  if (typeof window === "undefined") return null;
+  if (typeof window === 'undefined') return null
   try {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    return saved ? JSON.parse(saved) : null;
+    const saved = localStorage.getItem(STORAGE_KEY)
+    return saved ? JSON.parse(saved) : null
   } catch {
-    return null;
+    return null
   }
 }
 
 function saveData(data: SavedRegistrationData): void {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
   } catch {
     // Ignore storage errors
   }
 }
 
 // Minimum date is 2 weeks from today
-const minDate = addDays(startOfDay(new Date()), 14);
+const minDate = addDays(startOfDay(new Date()), 14)
 
 interface PermanentRegistrationFormProps {
-  routes: ActiveRoute[];
+  routes: ActiveRoute[]
 }
 
 export function PermanentRegistrationForm({ routes }: PermanentRegistrationFormProps) {
-  const router = useRouter();
-  const [isPending, startTransition] = useTransition();
+  const router = useRouter()
+  const [isPending, startTransition] = useTransition()
 
   // Route/schedule fields
-  const [routeId, setRouteId] = useState<string>("");
-  const [routePickerOpen, setRoutePickerOpen] = useState(false);
-  const [eventDate, setEventDate] = useState<Date | undefined>(undefined);
-  const [datePickerOpen, setDatePickerOpen] = useState(false);
-  const [startTime, setStartTime] = useState<string>("08:00");
-  const [startLocation, setStartLocation] = useState<string>("");
-  const [direction, setDirection] = useState<"as_posted" | "reversed">("as_posted");
+  const [routeId, setRouteId] = useState<string>('')
+  const [routePickerOpen, setRoutePickerOpen] = useState(false)
+  const [eventDate, setEventDate] = useState<Date | undefined>(undefined)
+  const [datePickerOpen, setDatePickerOpen] = useState(false)
+  const [startTime, setStartTime] = useState<string>('08:00')
+  const [startLocation, setStartLocation] = useState<string>('')
+  const [direction, setDirection] = useState<'as_posted' | 'reversed'>('as_posted')
 
   // Rider fields
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
-  const [email, setEmail] = useState("");
-  const [shareRegistration, setShareRegistration] = useState(false);
-  const [gender, setGender] = useState<string>("");
-  const [emergencyContactName, setEmergencyContactName] = useState("");
-  const [emergencyContactPhone, setEmergencyContactPhone] = useState("");
-  const [notes, setNotes] = useState("");
+  const [firstName, setFirstName] = useState('')
+  const [lastName, setLastName] = useState('')
+  const [email, setEmail] = useState('')
+  const [shareRegistration, setShareRegistration] = useState(false)
+  const [gender, setGender] = useState<string>('')
+  const [emergencyContactName, setEmergencyContactName] = useState('')
+  const [emergencyContactPhone, setEmergencyContactPhone] = useState('')
+  const [notes, setNotes] = useState('')
 
   // UI state
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
+  const [error, setError] = useState<string | null>(null)
+  const [success, setSuccess] = useState(false)
 
   // Fuzzy matching state
-  const [matchDialogOpen, setMatchDialogOpen] = useState(false);
-  const [matchCandidates, setMatchCandidates] = useState<RiderMatchCandidate[]>([]);
-  const [pendingEventId, setPendingEventId] = useState<string>("");
+  const [matchDialogOpen, setMatchDialogOpen] = useState(false)
+  const [matchCandidates, setMatchCandidates] = useState<RiderMatchCandidate[]>([])
+  const [pendingEventId, setPendingEventId] = useState<string>('')
 
   // Group routes by chapter
   const routesByChapter = useMemo(() => {
-    const grouped: Record<string, ActiveRoute[]> = {};
+    const grouped: Record<string, ActiveRoute[]> = {}
     for (const route of routes) {
-      const chapter = route.chapterName || "Other";
+      const chapter = route.chapterName || 'Other'
       if (!grouped[chapter]) {
-        grouped[chapter] = [];
+        grouped[chapter] = []
       }
-      grouped[chapter].push(route);
+      grouped[chapter].push(route)
     }
     // Sort chapters alphabetically
-    return Object.entries(grouped).sort(([a], [b]) => a.localeCompare(b));
-  }, [routes]);
+    return Object.entries(grouped).sort(([a], [b]) => a.localeCompare(b))
+  }, [routes])
 
   // Load saved data on mount
   useEffect(() => {
-    const saved = getSavedData();
+    const saved = getSavedData()
     if (saved) {
-      setFirstName(saved.firstName);
-      setLastName(saved.lastName);
-      setEmail(saved.email);
-      setGender(saved.gender);
-      setShareRegistration(saved.shareRegistration);
-      setEmergencyContactName(saved.emergencyContactName || "");
-      setEmergencyContactPhone(saved.emergencyContactPhone || "");
+      setFirstName(saved.firstName)
+      setLastName(saved.lastName)
+      setEmail(saved.email)
+      setGender(saved.gender)
+      setShareRegistration(saved.shareRegistration)
+      setEmergencyContactName(saved.emergencyContactName || '')
+      setEmergencyContactPhone(saved.emergencyContactPhone || '')
     }
-  }, []);
+  }, [])
 
-  const selectedRoute = routes.find((r) => r.id === routeId);
+  const selectedRoute = routes.find((r) => r.id === routeId)
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    setError(null);
+    e.preventDefault()
+    setError(null)
 
     if (!routeId) {
-      setError("Please select a route");
-      return;
+      setError('Please select a route')
+      return
     }
 
     if (!eventDate) {
-      setError("Please select a date");
-      return;
+      setError('Please select a date')
+      return
     }
 
     // Format date as YYYY-MM-DD for the server
-    const formattedDate = format(eventDate, "yyyy-MM-dd");
+    const formattedDate = format(eventDate, 'yyyy-MM-dd')
 
     startTransition(async () => {
       const result = await registerForPermanent({
@@ -166,22 +162,30 @@ export function PermanentRegistrationForm({ routes }: PermanentRegistrationFormP
         notes: notes || undefined,
         emergencyContactName,
         emergencyContactPhone,
-      });
+      })
 
       if (result.success) {
         // Save form data to localStorage for next registration
-        saveData({ firstName, lastName, email, gender, shareRegistration, emergencyContactName, emergencyContactPhone });
-        setSuccess(true);
-        router.refresh();
+        saveData({
+          firstName,
+          lastName,
+          email,
+          gender,
+          shareRegistration,
+          emergencyContactName,
+          emergencyContactPhone,
+        })
+        setSuccess(true)
+        router.refresh()
       } else if (result.needsRiderMatch && result.matchCandidates && result.pendingData) {
         // Show fuzzy matching dialog
-        setMatchCandidates(result.matchCandidates);
-        setPendingEventId(result.pendingData.eventId);
-        setMatchDialogOpen(true);
+        setMatchCandidates(result.matchCandidates)
+        setPendingEventId(result.pendingData.eventId)
+        setMatchDialogOpen(true)
       } else {
-        setError(result.error || "Registration failed");
+        setError(result.error || 'Registration failed')
       }
-    });
+    })
   }
 
   async function handleRiderSelection(riderId: string | null) {
@@ -197,18 +201,26 @@ export function PermanentRegistrationForm({ routes }: PermanentRegistrationFormP
         notes: notes || undefined,
         emergencyContactName,
         emergencyContactPhone,
-      });
+      })
 
       if (result.success) {
-        setMatchDialogOpen(false);
-        saveData({ firstName, lastName, email, gender, shareRegistration, emergencyContactName, emergencyContactPhone });
-        setSuccess(true);
-        router.refresh();
+        setMatchDialogOpen(false)
+        saveData({
+          firstName,
+          lastName,
+          email,
+          gender,
+          shareRegistration,
+          emergencyContactName,
+          emergencyContactPhone,
+        })
+        setSuccess(true)
+        router.refresh()
       } else {
-        setMatchDialogOpen(false);
-        setError(result.error || "Registration failed");
+        setMatchDialogOpen(false)
+        setError(result.error || 'Registration failed')
       }
-    });
+    })
   }
 
   if (success) {
@@ -216,17 +228,28 @@ export function PermanentRegistrationForm({ routes }: PermanentRegistrationFormP
       <div className="rounded-2xl border border-border bg-card p-6 md:p-8">
         <div className="text-center py-8">
           <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-green-100 dark:bg-green-900/30 mb-4">
-            <svg className="w-6 h-6 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+            <svg
+              className="w-6 h-6 text-green-600 dark:text-green-400"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M5 13l4 4L19 7"
+              />
             </svg>
           </div>
           <h2 className="font-serif text-2xl mb-2">You&apos;re registered!</h2>
           <p className="text-sm text-muted-foreground">
-            Your permanent ride has been scheduled. You&apos;ll receive a confirmation email shortly.
+            Your permanent ride has been scheduled. You&apos;ll receive a confirmation email
+            shortly.
           </p>
         </div>
       </div>
-    );
+    )
   }
 
   return (
@@ -235,7 +258,7 @@ export function PermanentRegistrationForm({ routes }: PermanentRegistrationFormP
 
       <form className="space-y-6" onSubmit={handleSubmit}>
         {error && (
-          <div className="p-3 rounded-lg bg-destructive/10 text-destructive text-sm">
+          <div role="alert" className="p-3 rounded-lg bg-destructive/10 text-destructive text-sm">
             {error}
           </div>
         )}
@@ -263,7 +286,7 @@ export function PermanentRegistrationForm({ routes }: PermanentRegistrationFormP
                       {selectedRoute.name} ({selectedRoute.distanceKm} km)
                     </span>
                   ) : (
-                    "Search routes..."
+                    'Search routes...'
                   )}
                   <ChevronDownIcon className="h-4 w-4 opacity-50" />
                 </Button>
@@ -280,8 +303,8 @@ export function PermanentRegistrationForm({ routes }: PermanentRegistrationFormP
                             key={route.id}
                             value={`${route.name} ${route.chapterName} ${route.distanceKm}`}
                             onSelect={() => {
-                              setRouteId(route.id);
-                              setRoutePickerOpen(false);
+                              setRouteId(route.id)
+                              setRoutePickerOpen(false)
                             }}
                             data-checked={routeId === route.id}
                           >
@@ -300,9 +323,7 @@ export function PermanentRegistrationForm({ routes }: PermanentRegistrationFormP
               </PopoverContent>
             </Popover>
             {selectedRoute && (
-              <p className="text-xs text-muted-foreground">
-                {selectedRoute.chapterName} Chapter
-              </p>
+              <p className="text-xs text-muted-foreground">{selectedRoute.chapterName} Chapter</p>
             )}
           </div>
 
@@ -317,7 +338,7 @@ export function PermanentRegistrationForm({ routes }: PermanentRegistrationFormP
                   disabled={isPending}
                   className="w-full justify-between font-normal"
                 >
-                  {eventDate ? format(eventDate, "EEEE, MMMM d, yyyy") : "Select date"}
+                  {eventDate ? format(eventDate, 'EEEE, MMMM d, yyyy') : 'Select date'}
                   <ChevronDownIcon className="h-4 w-4 opacity-50" />
                 </Button>
               </PopoverTrigger>
@@ -326,17 +347,15 @@ export function PermanentRegistrationForm({ routes }: PermanentRegistrationFormP
                   mode="single"
                   selected={eventDate}
                   onSelect={(date) => {
-                    setEventDate(date);
-                    setDatePickerOpen(false);
+                    setEventDate(date)
+                    setDatePickerOpen(false)
                   }}
                   disabled={(date) => isBefore(date, minDate)}
                   defaultMonth={minDate}
                 />
               </PopoverContent>
             </Popover>
-            <p className="text-xs text-muted-foreground">
-              Must be at least 2 weeks from today
-            </p>
+            <p className="text-xs text-muted-foreground">Must be at least 2 weeks from today</p>
           </div>
 
           {/* Time Picker */}
@@ -376,7 +395,7 @@ export function PermanentRegistrationForm({ routes }: PermanentRegistrationFormP
             <Label htmlFor="direction">Direction</Label>
             <Select
               value={direction}
-              onValueChange={(v) => setDirection(v as "as_posted" | "reversed")}
+              onValueChange={(v) => setDirection(v as 'as_posted' | 'reversed')}
               disabled={isPending}
             >
               <SelectTrigger id="direction" className="w-full">
@@ -450,7 +469,12 @@ export function PermanentRegistrationForm({ routes }: PermanentRegistrationFormP
               Gender
               <span className="text-muted-foreground font-normal ml-1">(optional)</span>
             </Label>
-            <Select key={gender || "empty"} value={gender} onValueChange={setGender} disabled={isPending}>
+            <Select
+              key={gender || 'empty'}
+              value={gender}
+              onValueChange={setGender}
+              disabled={isPending}
+            >
               <SelectTrigger id="gender" className="w-full">
                 <SelectValue placeholder="Select..." />
               </SelectTrigger>
@@ -480,7 +504,8 @@ export function PermanentRegistrationForm({ routes }: PermanentRegistrationFormP
                   Share my registration
                 </Label>
                 <p className="text-xs text-muted-foreground">
-                  Share your name with other riders before the event. All riders will appear on the results after the event.
+                  Share your name with other riders before the event. All riders will appear on the
+                  results after the event.
                 </p>
               </div>
             </div>
@@ -539,7 +564,7 @@ export function PermanentRegistrationForm({ routes }: PermanentRegistrationFormP
 
         {/* Submit */}
         <Button type="submit" className="w-full" size="lg" disabled={isPending}>
-          {isPending ? "Scheduling..." : "Schedule Permanent"}
+          {isPending ? 'Scheduling...' : 'Schedule Permanent'}
         </Button>
       </form>
 
@@ -554,5 +579,5 @@ export function PermanentRegistrationForm({ routes }: PermanentRegistrationFormP
         isPending={isPending}
       />
     </div>
-  );
+  )
 }

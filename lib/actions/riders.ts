@@ -3,12 +3,7 @@
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { requireAdmin } from '@/lib/auth/get-admin'
 import { applyRiderSearchFilter } from '@/lib/utils/rider-search'
-import {
-  handleActionError,
-  handleSupabaseError,
-  handleDataError,
-  createActionResult,
-} from '@/lib/errors'
+import { handleActionError, handleSupabaseError, handleDataError } from '@/lib/errors'
 import type { ActionResult } from '@/types/actions'
 import type {
   RiderInsert,
@@ -34,22 +29,14 @@ export async function searchRiders(query: string): Promise<RiderSearchResult[]> 
     return []
   }
 
-  let dbQuery = getSupabaseAdmin()
-    .from('riders')
-    .select('id, first_name, last_name, email')
+  let dbQuery = getSupabaseAdmin().from('riders').select('id, first_name, last_name, email')
 
   dbQuery = applyRiderSearchFilter(dbQuery, query)
 
-  const { data, error } = await dbQuery
-    .order('last_name', { ascending: true })
-    .limit(20)
+  const { data, error } = await dbQuery.order('last_name', { ascending: true }).limit(20)
 
   if (error) {
-    return handleDataError(
-      error,
-      { operation: 'searchRiders', context: { query } },
-      []
-    )
+    return handleDataError(error, { operation: 'searchRiders', context: { query } }, [])
   }
 
   return data as RiderSearchResult[]
@@ -101,11 +88,7 @@ export async function createRider(data: CreateRiderData): Promise<CreateRiderRes
     .single()
 
   if (error) {
-    return handleSupabaseError(
-      error,
-      { operation: 'createRider' },
-      'Failed to create rider'
-    )
+    return handleSupabaseError(error, { operation: 'createRider' }, 'Failed to create rider')
   }
 
   if (!newRider) {
@@ -155,7 +138,7 @@ export async function mergeRiders(data: MergeRidersData): Promise<MergeRidersRes
   }
 
   // Riders to delete (all except target)
-  const ridersToDelete = sourceRiderIds.filter(id => id !== targetRiderId)
+  const ridersToDelete = sourceRiderIds.filter((id) => id !== targetRiderId)
 
   try {
     // Step 1: Update all registrations to use target rider
@@ -196,9 +179,10 @@ export async function mergeRiders(data: MergeRidersData): Promise<MergeRidersRes
     }
 
     // Step 4: Update the target rider with new properties
-    const parsedGender = riderData.gender === 'M' || riderData.gender === 'F' || riderData.gender === 'X'
-      ? riderData.gender
-      : null
+    const parsedGender =
+      riderData.gender === 'M' || riderData.gender === 'F' || riderData.gender === 'X'
+        ? riderData.gender
+        : null
 
     const riderUpdateData: RiderUpdate = {
       first_name: riderData.firstName.trim(),
@@ -229,7 +213,9 @@ export async function mergeRiders(data: MergeRidersData): Promise<MergeRidersRes
   }
 }
 
-export async function getRiderCounts(riderIds: string[]): Promise<Record<string, { registrations: number; results: number }>> {
+export async function getRiderCounts(
+  riderIds: string[]
+): Promise<Record<string, { registrations: number; results: number }>> {
   // Get registration counts
   const { data: regs } = await getSupabaseAdmin()
     .from('registrations')

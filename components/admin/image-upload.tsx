@@ -50,40 +50,43 @@ export function ImageUpload({
     return null
   }
 
-  const handleUpload = async (file: File) => {
-    const validationError = validateFile(file)
-    if (validationError) {
-      setError(validationError)
-      return
-    }
-
-    setError(null)
-    setIsUploading(true)
-
-    try {
-      const formData = new FormData()
-      formData.append('file', file)
-      formData.append('folder', folder)
-      if (altText) {
-        formData.append('altText', altText)
+  const handleUpload = useCallback(
+    async (file: File) => {
+      const validationError = validateFile(file)
+      if (validationError) {
+        setError(validationError)
+        return
       }
 
-      const result = await uploadImage(formData)
+      setError(null)
+      setIsUploading(true)
 
-      if (result.success && result.data) {
-        onChange(result.data.url)
-        setAltText('')
-        toast.success('Image uploaded successfully')
-      } else {
-        setError(result.error || 'Failed to upload image')
+      try {
+        const formData = new FormData()
+        formData.append('file', file)
+        formData.append('folder', folder)
+        if (altText) {
+          formData.append('altText', altText)
+        }
+
+        const result = await uploadImage(formData)
+
+        if (result.success && result.data) {
+          onChange(result.data.url)
+          setAltText('')
+          toast.success('Image uploaded successfully')
+        } else {
+          setError(result.error || 'Failed to upload image')
+        }
+      } catch (err) {
+        console.error('Upload error:', err)
+        setError('An unexpected error occurred')
+      } finally {
+        setIsUploading(false)
       }
-    } catch (err) {
-      console.error('Upload error:', err)
-      setError('An unexpected error occurred')
-    } finally {
-      setIsUploading(false)
-    }
-  }
+    },
+    [folder, altText, onChange]
+  )
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -94,13 +97,16 @@ export function ImageUpload({
     e.target.value = ''
   }
 
-  const handleDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault()
-    e.stopPropagation()
-    if (!disabled && !isUploading) {
-      setIsDragging(true)
-    }
-  }, [disabled, isUploading])
+  const handleDragOver = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault()
+      e.stopPropagation()
+      if (!disabled && !isUploading) {
+        setIsDragging(true)
+      }
+    },
+    [disabled, isUploading]
+  )
 
   const handleDragLeave = useCallback((e: React.DragEvent) => {
     e.preventDefault()
@@ -108,19 +114,21 @@ export function ImageUpload({
     setIsDragging(false)
   }, [])
 
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault()
-    e.stopPropagation()
-    setIsDragging(false)
+  const handleDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault()
+      e.stopPropagation()
+      setIsDragging(false)
 
-    if (disabled || isUploading) return
+      if (disabled || isUploading) return
 
-    const file = e.dataTransfer.files?.[0]
-    if (file) {
-      handleUpload(file)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [disabled, isUploading])
+      const file = e.dataTransfer.files?.[0]
+      if (file) {
+        handleUpload(file)
+      }
+    },
+    [disabled, isUploading, handleUpload]
+  )
 
   const handleClear = () => {
     onChange(null)
@@ -176,6 +184,9 @@ export function ImageUpload({
 
       {/* Drag and drop zone */}
       <div
+        role="button"
+        tabIndex={disabled || isUploading ? -1 : 0}
+        aria-label="Upload image. Drop an image here or click to browse."
         className={cn(
           'relative rounded-lg border-2 border-dashed transition-colors',
           isDragging && 'border-primary bg-primary/5',
@@ -187,6 +198,12 @@ export function ImageUpload({
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
         onClick={!disabled && !isUploading ? handleBrowseClick : undefined}
+        onKeyDown={(e) => {
+          if (!disabled && !isUploading && (e.key === 'Enter' || e.key === ' ')) {
+            e.preventDefault()
+            handleBrowseClick()
+          }
+        }}
       >
         <div className="flex flex-col items-center justify-center py-8 px-4">
           {isUploading ? (
@@ -204,9 +221,7 @@ export function ImageUpload({
               <p className="text-sm text-muted-foreground text-center mb-1">
                 {isDragging ? 'Drop image here' : 'Drag and drop an image, or click to browse'}
               </p>
-              <p className="text-xs text-muted-foreground">
-                JPEG, PNG, WebP, or GIF up to 5MB
-              </p>
+              <p className="text-xs text-muted-foreground">JPEG, PNG, WebP, or GIF up to 5MB</p>
             </>
           )}
         </div>

@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { requireAdmin } from '@/lib/auth/get-admin'
-import { handleActionError, handleSupabaseError, createActionResult, logError } from '@/lib/errors'
+import { handleSupabaseError, createActionResult, logError } from '@/lib/errors'
 import type { Database } from '@/types/supabase'
 import type { ActionResult } from '@/types/actions'
 import type { AdminInsert, AdminUpdate } from '@/types/queries'
@@ -63,9 +63,7 @@ export async function createAdminUser(data: AdminUserData): Promise<ActionResult
     chapter_id: role === 'chapter_admin' ? chapterId : null,
   }
 
-  const { error: adminError } = await getSupabaseAdmin()
-    .from('admins')
-    .insert(adminInsert)
+  const { error: adminError } = await getSupabaseAdmin().from('admins').insert(adminInsert)
 
   if (adminError) {
     // Rollback: delete the auth user
@@ -104,10 +102,7 @@ export async function updateAdminUser(
     chapter_id: role === 'chapter_admin' ? chapterId : null,
   }
 
-  const { error } = await getSupabaseAdmin()
-    .from('admins')
-    .update(updateData)
-    .eq('id', userId)
+  const { error } = await getSupabaseAdmin().from('admins').update(updateData).eq('id', userId)
 
   if (error) {
     return handleSupabaseError(
@@ -134,10 +129,7 @@ export async function deleteAdminUser(userId: string): Promise<ActionResult> {
   }
 
   // Delete admin record first
-  const { error: adminError } = await getSupabaseAdmin()
-    .from('admins')
-    .delete()
-    .eq('id', userId)
+  const { error: adminError } = await getSupabaseAdmin().from('admins').delete().eq('id', userId)
 
   if (adminError) {
     return handleSupabaseError(
@@ -164,7 +156,10 @@ export async function deleteAdminUser(userId: string): Promise<ActionResult> {
   return createActionResult()
 }
 
-export async function resetAdminPassword(userId: string, newPassword: string): Promise<ActionResult> {
+export async function resetAdminPassword(
+  userId: string,
+  newPassword: string
+): Promise<ActionResult> {
   const currentAdmin = await requireAdmin()
 
   if (currentAdmin.role !== 'admin') {
@@ -199,10 +194,12 @@ export async function getAdminUsers() {
 
   const { data, error } = await getSupabaseAdmin()
     .from('admins')
-    .select(`
+    .select(
+      `
       *,
       chapters (id, name)
-    `)
+    `
+    )
     .order('created_at', { ascending: false })
 
   if (error) {

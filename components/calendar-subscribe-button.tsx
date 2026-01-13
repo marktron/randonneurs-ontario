@@ -13,14 +13,12 @@ import {
 
 interface CalendarSubscribeButtonProps {
   chapter: string
-  chapterName: string
   variant?: 'default' | 'outline' | 'ghost'
   size?: 'default' | 'sm' | 'lg'
 }
 
 export function CalendarSubscribeButton({
   chapter,
-  chapterName,
   variant = 'outline',
   size = 'default',
 }: CalendarSubscribeButtonProps) {
@@ -29,9 +27,8 @@ export function CalendarSubscribeButton({
   // Build the calendar feed URL
   const feedPath = `/api/calendar/${chapter}.ics`
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://randonneurs.to'
-  const feedUrl = typeof window !== 'undefined'
-    ? `${window.location.origin}${feedPath}`
-    : `${siteUrl}${feedPath}`
+  const feedUrl =
+    typeof window !== 'undefined' ? `${window.location.origin}${feedPath}` : `${siteUrl}${feedPath}`
 
   // webcal:// protocol for native calendar apps
   const webcalUrl = feedUrl.replace(/^https?:/, 'webcal:')

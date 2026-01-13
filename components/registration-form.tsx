@@ -1,98 +1,103 @@
-"use client";
+'use client'
 
-import { useState, useTransition, useEffect } from "react";
-import { useRouter } from "next/navigation";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Button } from "@/components/ui/button";
+import { useState, useTransition, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
+import Link from 'next/link'
+import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
+import { Label } from '@/components/ui/label'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Button } from '@/components/ui/button'
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
-import { registerForEvent, completeRegistrationWithRider } from "@/lib/actions/register";
-import { RiderMatchDialog } from "@/components/rider-match-dialog";
-import type { RiderMatchCandidate } from "@/lib/actions/rider-match";
+} from '@/components/ui/select'
+import { registerForEvent, completeRegistrationWithRider } from '@/lib/actions/register'
+import { RiderMatchDialog } from '@/components/rider-match-dialog'
+import type { RiderMatchCandidate } from '@/lib/actions/rider-match'
 
-const STORAGE_KEY = "ro-registration";
+const STORAGE_KEY = 'ro-registration'
 
 interface SavedRegistrationData {
-  firstName: string;
-  lastName: string;
-  email: string;
-  gender: string;
-  shareRegistration: boolean;
-  emergencyContactName: string;
-  emergencyContactPhone: string;
+  firstName: string
+  lastName: string
+  email: string
+  gender: string
+  shareRegistration: boolean
+  emergencyContactName: string
+  emergencyContactPhone: string
 }
 
 function getSavedData(): SavedRegistrationData | null {
-  if (typeof window === "undefined") return null;
+  if (typeof window === 'undefined') return null
   try {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    return saved ? JSON.parse(saved) : null;
+    const saved = localStorage.getItem(STORAGE_KEY)
+    return saved ? JSON.parse(saved) : null
   } catch {
-    return null;
+    return null
   }
 }
 
 function saveData(data: SavedRegistrationData): void {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
   } catch {
     // Ignore storage errors
   }
 }
 
 interface RegistrationFormProps {
-  eventId: string;
-  isPermanent?: boolean;
+  eventId: string
+  isPermanent?: boolean
   /** "card" shows border/title container, "plain" for use in modals */
-  variant?: "card" | "plain";
+  variant?: 'card' | 'plain'
 }
 
-export function RegistrationForm({ eventId, isPermanent, variant = "card" }: RegistrationFormProps) {
-  const router = useRouter();
-  const [isPending, startTransition] = useTransition();
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
-  const [email, setEmail] = useState("");
-  const [shareRegistration, setShareRegistration] = useState(false);
-  const [gender, setGender] = useState<string>("");
-  const [emergencyContactName, setEmergencyContactName] = useState("");
-  const [emergencyContactPhone, setEmergencyContactPhone] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
+export function RegistrationForm({
+  eventId,
+  isPermanent,
+  variant = 'card',
+}: RegistrationFormProps) {
+  const router = useRouter()
+  const [isPending, startTransition] = useTransition()
+  const [firstName, setFirstName] = useState('')
+  const [lastName, setLastName] = useState('')
+  const [email, setEmail] = useState('')
+  const [shareRegistration, setShareRegistration] = useState(false)
+  const [gender, setGender] = useState<string>('')
+  const [emergencyContactName, setEmergencyContactName] = useState('')
+  const [emergencyContactPhone, setEmergencyContactPhone] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const [success, setSuccess] = useState(false)
 
   // Fuzzy matching state
-  const [matchDialogOpen, setMatchDialogOpen] = useState(false);
-  const [matchCandidates, setMatchCandidates] = useState<RiderMatchCandidate[]>([]);
-  const [pendingNotes, setPendingNotes] = useState<string>("");
+  const [matchDialogOpen, setMatchDialogOpen] = useState(false)
+  const [matchCandidates, setMatchCandidates] = useState<RiderMatchCandidate[]>([])
+  const [pendingNotes, setPendingNotes] = useState<string>('')
 
   // Load saved data on mount
   useEffect(() => {
-    const saved = getSavedData();
+    const saved = getSavedData()
     if (saved) {
-      setFirstName(saved.firstName);
-      setLastName(saved.lastName);
-      setEmail(saved.email);
-      setGender(saved.gender);
-      setShareRegistration(saved.shareRegistration);
-      setEmergencyContactName(saved.emergencyContactName || "");
-      setEmergencyContactPhone(saved.emergencyContactPhone || "");
+      setFirstName(saved.firstName)
+      setLastName(saved.lastName)
+      setEmail(saved.email)
+      setGender(saved.gender)
+      setShareRegistration(saved.shareRegistration)
+      setEmergencyContactName(saved.emergencyContactName || '')
+      setEmergencyContactPhone(saved.emergencyContactPhone || '')
     }
-  }, []);
+  }, [])
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    setError(null);
+    e.preventDefault()
+    setError(null)
 
-    const formData = new FormData(e.currentTarget);
-    const notes = formData.get("notes") as string;
+    const formData = new FormData(e.currentTarget)
+    const notes = formData.get('notes') as string
 
     startTransition(async () => {
       const result = await registerForEvent({
@@ -105,22 +110,30 @@ export function RegistrationForm({ eventId, isPermanent, variant = "card" }: Reg
         notes: notes || undefined,
         emergencyContactName,
         emergencyContactPhone,
-      });
+      })
 
       if (result.success) {
         // Save form data to localStorage for next registration
-        saveData({ firstName, lastName, email, gender, shareRegistration, emergencyContactName, emergencyContactPhone });
-        setSuccess(true);
-        router.refresh();
+        saveData({
+          firstName,
+          lastName,
+          email,
+          gender,
+          shareRegistration,
+          emergencyContactName,
+          emergencyContactPhone,
+        })
+        setSuccess(true)
+        router.refresh()
       } else if (result.needsRiderMatch && result.matchCandidates) {
         // Show fuzzy matching dialog
-        setMatchCandidates(result.matchCandidates);
-        setPendingNotes(notes || "");
-        setMatchDialogOpen(true);
+        setMatchCandidates(result.matchCandidates)
+        setPendingNotes(notes || '')
+        setMatchDialogOpen(true)
       } else {
-        setError(result.error || "Registration failed");
+        setError(result.error || 'Registration failed')
       }
-    });
+    })
   }
 
   async function handleRiderSelection(riderId: string | null) {
@@ -136,61 +149,82 @@ export function RegistrationForm({ eventId, isPermanent, variant = "card" }: Reg
         notes: pendingNotes || undefined,
         emergencyContactName,
         emergencyContactPhone,
-      });
+      })
 
       if (result.success) {
-        setMatchDialogOpen(false);
-        saveData({ firstName, lastName, email, gender, shareRegistration, emergencyContactName, emergencyContactPhone });
-        setSuccess(true);
-        router.refresh();
+        setMatchDialogOpen(false)
+        saveData({
+          firstName,
+          lastName,
+          email,
+          gender,
+          shareRegistration,
+          emergencyContactName,
+          emergencyContactPhone,
+        })
+        setSuccess(true)
+        router.refresh()
       } else {
-        setMatchDialogOpen(false);
-        setError(result.error || "Registration failed");
+        setMatchDialogOpen(false)
+        setError(result.error || 'Registration failed')
       }
-    });
+    })
   }
 
-  const wrapperClassName = variant === "card"
-    ? "lg:sticky lg:top-24 rounded-2xl border border-border bg-card p-6 md:p-8"
-    : undefined;
+  const wrapperClassName =
+    variant === 'card'
+      ? 'lg:sticky lg:top-24 rounded-2xl border border-border bg-card p-6 md:p-8'
+      : undefined
 
   if (success) {
     return (
       <div className={wrapperClassName}>
         <div className="text-center py-8">
           <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-green-100 dark:bg-green-900/30 mb-4">
-            <svg className="w-6 h-6 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+            <svg
+              className="w-6 h-6 text-green-600 dark:text-green-400"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M5 13l4 4L19 7"
+              />
             </svg>
           </div>
           <h2 className="font-serif text-2xl tracking-tight mb-2">You&apos;re registered!</h2>
-          <p className="text-sm text-muted-foreground">
-            See you at the start line.
-          </p>
+          <p className="text-sm text-muted-foreground">See you at the start line.</p>
         </div>
       </div>
-    );
+    )
   }
 
   return (
     <div className={wrapperClassName}>
-      {variant === "card" && <h2 className="font-serif text-2xl tracking-tight mb-6">Register</h2>}
+      {variant === 'card' && <h2 className="font-serif text-2xl tracking-tight mb-6">Register</h2>}
 
       {isPermanent && (
         <div className="bg-muted/50 border border-border rounded-lg p-4 mb-6 text-sm">
           <p className="font-medium mb-1">This is a Permanent</p>
           <p className="text-muted-foreground">
-            Join this rider on their scheduled permanent ride, or{" "}
-            <a href="/register/permanent" className="text-primary hover:underline underline-offset-2">
+            Join this rider on their scheduled permanent ride, or{' '}
+            <Link
+              href="/register/permanent"
+              className="text-primary hover:underline underline-offset-2"
+            >
               schedule your own
-            </a>.
+            </Link>
+            .
           </p>
         </div>
       )}
 
       <form className="space-y-5" onSubmit={handleSubmit}>
         {error && (
-          <div className="p-3 rounded-lg bg-destructive/10 text-destructive text-sm">
+          <div role="alert" className="p-3 rounded-lg bg-destructive/10 text-destructive text-sm">
             {error}
           </div>
         )}
@@ -246,7 +280,12 @@ export function RegistrationForm({ eventId, isPermanent, variant = "card" }: Reg
             Gender
             <span className="text-muted-foreground font-normal ml-1">(optional)</span>
           </Label>
-          <Select key={gender || 'empty'} value={gender} onValueChange={setGender} disabled={isPending}>
+          <Select
+            key={gender || 'empty'}
+            value={gender}
+            onValueChange={setGender}
+            disabled={isPending}
+          >
             <SelectTrigger id="gender" className="w-full">
               <SelectValue placeholder="Select..." />
             </SelectTrigger>
@@ -276,7 +315,8 @@ export function RegistrationForm({ eventId, isPermanent, variant = "card" }: Reg
                 Share my registration
               </Label>
               <p className="text-xs text-muted-foreground">
-                Share your name with other riders before the event. All riders will appear on the results after the event.
+                Share your name with other riders before the event. All riders will appear on the
+                results after the event.
               </p>
             </div>
           </div>
@@ -332,7 +372,7 @@ export function RegistrationForm({ eventId, isPermanent, variant = "card" }: Reg
 
         {/* Submit */}
         <Button type="submit" className="w-full" size="lg" disabled={isPending}>
-          {isPending ? "Registering..." : "Register"}
+          {isPending ? 'Registering...' : 'Register'}
         </Button>
       </form>
 
@@ -347,5 +387,5 @@ export function RegistrationForm({ eventId, isPermanent, variant = "card" }: Reg
         isPending={isPending}
       />
     </div>
-  );
+  )
 }

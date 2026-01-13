@@ -87,7 +87,7 @@ export function ResultSubmissionForm({ token, initialData }: ResultSubmissionFor
     fileType: 'gpx' | 'control_card_front' | 'control_card_back',
     setState: React.Dispatch<React.SetStateAction<FileUploadState>>
   ) {
-    setState(prev => ({ ...prev, uploading: true, error: null }))
+    setState((prev) => ({ ...prev, uploading: true, error: null }))
 
     const formData = new FormData()
     formData.append('file', file)
@@ -102,7 +102,7 @@ export function ResultSubmissionForm({ token, initialData }: ResultSubmissionFor
         error: null,
       })
     } else {
-      setState(prev => ({
+      setState((prev) => ({
         ...prev,
         uploading: false,
         error: result.error || 'Upload failed',
@@ -115,7 +115,7 @@ export function ResultSubmissionForm({ token, initialData }: ResultSubmissionFor
     setState: React.Dispatch<React.SetStateAction<FileUploadState>>,
     inputRef: React.RefObject<HTMLInputElement | null>
   ) {
-    setState(prev => ({ ...prev, uploading: true, error: null }))
+    setState((prev) => ({ ...prev, uploading: true, error: null }))
 
     const result = await deleteResultFile(token, fileType)
 
@@ -125,7 +125,7 @@ export function ResultSubmissionForm({ token, initialData }: ResultSubmissionFor
         inputRef.current.value = ''
       }
     } else {
-      setState(prev => ({
+      setState((prev) => ({
         ...prev,
         uploading: false,
         error: result.error || 'Delete failed',
@@ -144,9 +144,10 @@ export function ResultSubmissionForm({ token, initialData }: ResultSubmissionFor
 
     startTransition(async () => {
       // Combine hours and minutes into HH:MM format
-      const finishTime = status === 'finished' && finishHours && finishMinutes
-        ? `${finishHours}:${finishMinutes.padStart(2, '0')}`
-        : null
+      const finishTime =
+        status === 'finished' && finishHours && finishMinutes
+          ? `${finishHours}:${finishMinutes.padStart(2, '0')}`
+          : null
 
       const result = await submitRiderResult({
         token,
@@ -170,8 +171,18 @@ export function ResultSubmissionForm({ token, initialData }: ResultSubmissionFor
       <div className="rounded-2xl border border-border bg-card p-6 md:p-8">
         <div className="text-center py-8">
           <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-amber-100 dark:bg-amber-900/30 mb-4">
-            <svg className="w-6 h-6 text-amber-600 dark:text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            <svg
+              className="w-6 h-6 text-amber-600 dark:text-amber-400"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+              />
             </svg>
           </div>
           <h2 className="font-serif text-2xl tracking-tight mb-2">Results Already Submitted</h2>
@@ -190,8 +201,18 @@ export function ResultSubmissionForm({ token, initialData }: ResultSubmissionFor
       <div className="rounded-2xl border border-border bg-card p-6 md:p-8">
         <div className="text-center py-8">
           <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-green-100 dark:bg-green-900/30 mb-4">
-            <svg className="w-6 h-6 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+            <svg
+              className="w-6 h-6 text-green-600 dark:text-green-400"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M5 13l4 4L19 7"
+              />
             </svg>
           </div>
           <h2 className="font-serif text-2xl tracking-tight mb-2">Result Submitted!</h2>
@@ -238,9 +259,7 @@ export function ResultSubmissionForm({ token, initialData }: ResultSubmissionFor
 
       <form className="space-y-6" onSubmit={handleSubmit}>
         {error && (
-          <div className="p-3 rounded-lg bg-destructive/10 text-destructive text-sm">
-            {error}
-          </div>
+          <div className="p-3 rounded-lg bg-destructive/10 text-destructive text-sm">{error}</div>
         )}
 
         {/* Status */}
@@ -362,7 +381,9 @@ export function ResultSubmissionForm({ token, initialData }: ResultSubmissionFor
               </p>
             )}
             {gpxFile.error && (
-              <p className="text-xs text-destructive">{gpxFile.error}</p>
+              <p role="alert" className="text-xs text-destructive">
+                {gpxFile.error}
+              </p>
             )}
           </div>
         )}
@@ -385,8 +406,12 @@ export function ResultSubmissionForm({ token, initialData }: ResultSubmissionFor
                   icon={<ImageIcon className="h-4 w-4" />}
                   label="Upload front"
                   disabled={isPending}
-                  onUpload={(file) => handleFileUpload(file, 'control_card_front', setControlCardFront)}
-                  onDelete={() => handleFileDelete('control_card_front', setControlCardFront, frontInputRef)}
+                  onUpload={(file) =>
+                    handleFileUpload(file, 'control_card_front', setControlCardFront)
+                  }
+                  onDelete={() =>
+                    handleFileDelete('control_card_front', setControlCardFront, frontInputRef)
+                  }
                 />
               </div>
 
@@ -399,8 +424,12 @@ export function ResultSubmissionForm({ token, initialData }: ResultSubmissionFor
                   icon={<ImageIcon className="h-4 w-4" />}
                   label="Upload back"
                   disabled={isPending}
-                  onUpload={(file) => handleFileUpload(file, 'control_card_back', setControlCardBack)}
-                  onDelete={() => handleFileDelete('control_card_back', setControlCardBack, backInputRef)}
+                  onUpload={(file) =>
+                    handleFileUpload(file, 'control_card_back', setControlCardBack)
+                  }
+                  onDelete={() =>
+                    handleFileDelete('control_card_back', setControlCardBack, backInputRef)
+                  }
                 />
               </div>
             </div>
@@ -519,7 +548,9 @@ function FileUploadField({
         )}
       </Button>
       {state.error && (
-        <p className="text-xs text-destructive mt-1">{state.error}</p>
+        <p role="alert" className="text-xs text-destructive mt-1">
+          {state.error}
+        </p>
       )}
     </div>
   )

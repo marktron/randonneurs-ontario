@@ -24,7 +24,6 @@ import {
   type ChapterInfo,
 } from '@/lib/chapter-config'
 import type {
-  ChapterId,
   EventWithSeasonAndResults,
   EventWithPublicResults,
   PublicRider,
@@ -61,7 +60,6 @@ export function getChapterMeta(urlSlug: string): ChapterMeta | null {
 export function getAllChapterSlugs(): string[] {
   return getAllResultsChapterSlugs()
 }
-
 
 const getAvailableYearsInner = cache(async (urlSlug: string): Promise<number[]> => {
   if (!getResultsChapterInfo(urlSlug)) return []
@@ -140,119 +138,127 @@ export async function getAvailableYears(urlSlug: string): Promise<number[]> {
   )()
 }
 
-const getChapterResultsInner = cache(async (urlSlug: string, year: number): Promise<EventResult[]> => {
-  if (!getResultsChapterInfo(urlSlug)) return []
-  const dbSlug = getDbSlug(urlSlug)
+const getChapterResultsInner = cache(
+  async (urlSlug: string, year: number): Promise<EventResult[]> => {
+    if (!getResultsChapterInfo(urlSlug)) return []
+    const dbSlug = getDbSlug(urlSlug)
 
-  let events: EventWithPublicResults[] | null = null
-  let eventsError: Error | null = null
+    let events: EventWithPublicResults[] | null = null
+    let eventsError: Error | null = null
 
-  // Collection-based query (e.g., granite-anvil)
-  if (dbSlug === null) {
-    const result = await getSupabase()
-      .from('events')
-      .select(`
+    // Collection-based query (e.g., granite-anvil)
+    if (dbSlug === null) {
+      const result = await getSupabase()
+        .from('events')
+        .select(
+          `
         id, name, event_date, distance_km,
         routes (slug),
         public_results (
           finish_time, status, team_name, rider_slug, first_name, last_name
         )
-      `)
-      .eq('collection', urlSlug)
-      .gte('event_date', `${year}-01-01`)
-      .lte('event_date', `${year}-12-31`)
-      .order('event_date', { ascending: true })
-    events = result.data
-    eventsError = result.error
-  } else if (urlSlug === 'permanent') {
-    // Permanent results: query by event_type instead of chapter
-    const result = await getSupabase()
-      .from('events')
-      .select(`
+      `
+        )
+        .eq('collection', urlSlug)
+        .gte('event_date', `${year}-01-01`)
+        .lte('event_date', `${year}-12-31`)
+        .order('event_date', { ascending: true })
+      events = result.data
+      eventsError = result.error
+    } else if (urlSlug === 'permanent') {
+      // Permanent results: query by event_type instead of chapter
+      const result = await getSupabase()
+        .from('events')
+        .select(
+          `
         id, name, event_date, distance_km,
         routes (slug),
         public_results (
           finish_time, status, team_name, rider_slug, first_name, last_name
         )
-      `)
-      .eq('event_type', 'permanent')
-      .gte('event_date', `${year}-01-01`)
-      .lte('event_date', `${year}-12-31`)
-      .order('event_date', { ascending: true })
-    events = result.data
-    eventsError = result.error
-  } else {
-    // Chapter-based query using a join
-    let query = getSupabase()
-      .from('events')
-      .select(`
+      `
+        )
+        .eq('event_type', 'permanent')
+        .gte('event_date', `${year}-01-01`)
+        .lte('event_date', `${year}-12-31`)
+        .order('event_date', { ascending: true })
+      events = result.data
+      eventsError = result.error
+    } else {
+      // Chapter-based query using a join
+      let query = getSupabase()
+        .from('events')
+        .select(
+          `
         id, name, event_date, distance_km,
         routes (slug),
         chapters!inner(slug),
         public_results (
           finish_time, status, team_name, rider_slug, first_name, last_name
         )
-      `)
-      .eq('chapters.slug', dbSlug)
-      .neq('event_type', 'permanent')
-      .gte('event_date', `${year}-01-01`)
-      .lte('event_date', `${year}-12-31`)
+      `
+        )
+        .eq('chapters.slug', dbSlug)
+        .neq('event_type', 'permanent')
+        .gte('event_date', `${year}-01-01`)
+        .lte('event_date', `${year}-12-31`)
 
-    // Filter for PBP events if requested
-    if (urlSlug === 'pbp') {
-      query = query.eq('name', 'Paris-Brest-Paris')
+      // Filter for PBP events if requested
+      if (urlSlug === 'pbp') {
+        query = query.eq('name', 'Paris-Brest-Paris')
+      }
+
+      const result = await query.order('event_date', { ascending: true })
+      events = result.data
+      eventsError = result.error
     }
 
-    const result = await query.order('event_date', { ascending: true })
-    events = result.data
-    eventsError = result.error
+    if (eventsError || !events) {
+      return handleDataError(
+        eventsError || new Error('No events returned'),
+        { operation: 'getChapterResults', context: { urlSlug, year } },
+        []
+      )
+    }
+
+    // Transform to EventResult format
+    const eventResults: EventResult[] = []
+
+    for (const event of events) {
+      const eventResultsList = event.public_results
+
+      // Skip events with no results
+      if (!eventResultsList || eventResultsList.length === 0) continue
+
+      const riders: RiderResult[] = eventResultsList.map((result) => {
+        const name = `${result.first_name} ${result.last_name}`.trim() || 'Unknown'
+        const slug = result.rider_slug
+        const statusStr = formatStatus(result.status ?? 'pending')
+        // Show status (DNF/DNS/OTL/DQ) if not finished, otherwise show finish time
+        const time = statusStr ?? formatFinishTime(result.finish_time) ?? ''
+
+        return { name, slug, time }
+      })
+
+      // Sort riders by last name A→Z
+      riders.sort((a, b) => {
+        const aLastName = a.name.split(' ').pop() || a.name
+        const bLastName = b.name.split(' ').pop() || b.name
+        return aLastName.localeCompare(bLastName)
+      })
+
+      eventResults.push({
+        date: event.event_date,
+        name: event.name,
+        distance: event.distance_km.toString(),
+        riders,
+        routeSlug: event.routes?.slug ?? null,
+      })
+    }
+
+    return eventResults
   }
-
-  if (eventsError || !events) {
-    return handleDataError(
-      eventsError || new Error('No events returned'),
-      { operation: 'getChapterResults', context: { urlSlug, year } },
-      []
-    )
-  }
-
-  // Transform to EventResult format
-  const eventResults: EventResult[] = []
-
-  for (const event of events) {
-    const eventResultsList = event.public_results
-
-    // Skip events with no results
-    if (!eventResultsList || eventResultsList.length === 0) continue
-
-    const riders: RiderResult[] = eventResultsList.map((result) => {
-      const name = `${result.first_name} ${result.last_name}`.trim() || 'Unknown'
-      const slug = result.rider_slug
-      const statusStr = formatStatus(result.status ?? 'pending')
-      // Show status (DNF/DNS/OTL/DQ) if not finished, otherwise show finish time
-      const time = statusStr ?? formatFinishTime(result.finish_time) ?? ''
-
-      return { name, slug, time }
-    })
-
-    // Sort riders by last name A→Z
-    riders.sort((a, b) => {
-      const aLastName = a.name.split(' ').pop() || a.name
-      const bLastName = b.name.split(' ').pop() || b.name
-      return aLastName.localeCompare(bLastName)
-    })
-
-    eventResults.push({
-      date: event.event_date,
-      name: event.name,
-      distance: event.distance_km.toString(),
-      riders,
-      routeSlug: event.routes?.slug ?? null,
-    })
-  }
-
-  return eventResults
-})
+)
 
 export async function getChapterResults(urlSlug: string, year: number): Promise<EventResult[]> {
   return unstable_cache(
@@ -308,13 +314,9 @@ const getRiderBySlugInner = cache(async (slug: string): Promise<RiderInfo | null
 })
 
 export async function getRiderBySlug(slug: string): Promise<RiderInfo | null> {
-  return unstable_cache(
-    async () => getRiderBySlugInner(slug),
-    [`rider-by-slug-${slug}`],
-    {
-      tags: ['riders', `rider-${slug}`],
-    }
-  )()
+  return unstable_cache(async () => getRiderBySlugInner(slug), [`rider-by-slug-${slug}`], {
+    tags: ['riders', `rider-${slug}`],
+  })()
 }
 
 const getRiderResultsInner = cache(async (slug: string): Promise<RiderYearResults[]> => {
@@ -337,7 +339,8 @@ const getRiderResultsInner = cache(async (slug: string): Promise<RiderYearResult
   // Get all results for this rider with event info in a single query
   const { data: results, error: resultsError } = await getSupabase()
     .from('results')
-    .select(`
+    .select(
+      `
       finish_time,
       status,
       note,
@@ -351,7 +354,8 @@ const getRiderResultsInner = cache(async (slug: string): Promise<RiderYearResult
           slug
         )
       )
-    `)
+    `
+    )
     .eq('rider_id', rider.id)
     .order('season', { ascending: false })
 
@@ -403,9 +407,9 @@ const getRiderResultsInner = cache(async (slug: string): Promise<RiderYearResult
     events.sort((a, b) => a.date.localeCompare(b.date))
 
     // Calculate stats (only count finished rides)
-    const completedCount = events.filter(e => e.status === 'finished').length
+    const completedCount = events.filter((e) => e.status === 'finished').length
     const totalDistanceKm = events
-      .filter(e => e.status === 'finished')
+      .filter((e) => e.status === 'finished')
       .reduce((sum, e) => sum + e.distanceKm, 0)
 
     yearResults.push({
@@ -423,46 +427,44 @@ const getRiderResultsInner = cache(async (slug: string): Promise<RiderYearResult
 })
 
 export async function getRiderResults(slug: string): Promise<RiderYearResults[]> {
-  return unstable_cache(
-    async () => getRiderResultsInner(slug),
-    [`rider-results-${slug}`],
-    {
-      tags: ['results', 'riders', `rider-${slug}`],
-    }
-  )()
+  return unstable_cache(async () => getRiderResultsInner(slug), [`rider-results-${slug}`], {
+    tags: ['results', 'riders', `rider-${slug}`],
+  })()
 }
 
-const getAllChaptersWithYearsInner = cache(async (): Promise<Array<{ slug: string; name: string; years: number[] }>> => {
-  const chapters = getAllChapterSlugs()
-  
-  // Parallelize all async calls instead of sequential await in loop
-  const chapterData = await Promise.all(
-    chapters.map(async (slug) => {
-      const meta = getChapterMeta(slug)
-      const years = await getAvailableYears(slug)
-      
-      if (meta && years.length > 0) {
-        return {
-          slug,
-          name: meta.name,
-          years,
+const getAllChaptersWithYearsInner = cache(
+  async (): Promise<Array<{ slug: string; name: string; years: number[] }>> => {
+    const chapters = getAllChapterSlugs()
+
+    // Parallelize all async calls instead of sequential await in loop
+    const chapterData = await Promise.all(
+      chapters.map(async (slug) => {
+        const meta = getChapterMeta(slug)
+        const years = await getAvailableYears(slug)
+
+        if (meta && years.length > 0) {
+          return {
+            slug,
+            name: meta.name,
+            years,
+          }
         }
-      }
-      return null
-    })
-  )
+        return null
+      })
+    )
 
-  // Filter out null entries and return
-  return chapterData.filter((item): item is { slug: string; name: string; years: number[] } => item !== null)
-})
+    // Filter out null entries and return
+    return chapterData.filter(
+      (item): item is { slug: string; name: string; years: number[] } => item !== null
+    )
+  }
+)
 
-export async function getAllChaptersWithYears(): Promise<Array<{ slug: string; name: string; years: number[] }>> {
-  return unstable_cache(
-    async () => getAllChaptersWithYearsInner(),
-    ['all-chapters-with-years'],
-    {
-      revalidate: 3600, // Cache for 1 hour
-      tags: ['results', 'chapters'],
-    }
-  )()
+export async function getAllChaptersWithYears(): Promise<
+  Array<{ slug: string; name: string; years: number[] }>
+> {
+  return unstable_cache(async () => getAllChaptersWithYearsInner(), ['all-chapters-with-years'], {
+    revalidate: 3600, // Cache for 1 hour
+    tags: ['results', 'chapters'],
+  })()
 }

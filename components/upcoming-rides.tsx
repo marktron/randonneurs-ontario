@@ -1,66 +1,136 @@
-import Link from "next/link";
+import Link from 'next/link'
 
 interface Ride {
-  date: string;
-  name: string;
-  distance: string;
-  slug: string;
+  date: string
+  name: string
+  distance: string
+  slug: string
 }
 
 interface Chapter {
-  name: string;
-  slug: string;
-  rides: Ride[];
+  name: string
+  slug: string
+  rides: Ride[]
 }
 
 const upcomingRides: Chapter[] = [
   {
-    name: "Huron",
-    slug: "huron",
+    name: 'Huron',
+    slug: 'huron',
     rides: [
-      { date: "2026-03-07", name: "Wiarton Willy", distance: "200", slug: "wiarton-willy-200km-2026-03-07" },
-      { date: "2026-03-14", name: "The Roaring Lion", distance: "200", slug: "the-roaring-lion-200km-2026-03-14" },
-      { date: "2026-03-28", name: "Wizard of Oz", distance: "200", slug: "wizard-of-oz-200km-2026-03-28" },
-      { date: "2026-04-04", name: "Windsor", distance: "62", slug: "windsor-62km-2026-04-04" },
+      {
+        date: '2026-03-07',
+        name: 'Wiarton Willy',
+        distance: '200',
+        slug: 'wiarton-willy-200km-2026-03-07',
+      },
+      {
+        date: '2026-03-14',
+        name: 'The Roaring Lion',
+        distance: '200',
+        slug: 'the-roaring-lion-200km-2026-03-14',
+      },
+      {
+        date: '2026-03-28',
+        name: 'Wizard of Oz',
+        distance: '200',
+        slug: 'wizard-of-oz-200km-2026-03-28',
+      },
+      { date: '2026-04-04', name: 'Windsor', distance: '62', slug: 'windsor-62km-2026-04-04' },
     ],
   },
   {
-    name: "Ottawa",
-    slug: "ottawa",
+    name: 'Ottawa',
+    slug: 'ottawa',
     rides: [
-      { date: "2026-03-21", name: "Carleton Place", distance: "40", slug: "carleton-place-40km-2026-03-21" },
-      { date: "2026-03-28", name: "Almonte", distance: "71", slug: "almonte-71km-2026-03-28" },
-      { date: "2026-04-11", name: "Maple Syrup", distance: "100", slug: "maple-syrup-100km-2026-04-11" },
-      { date: "2026-04-18", name: "Burnstown Cafe", distance: "200", slug: "burnstown-cafe-200km-2026-04-18" },
+      {
+        date: '2026-03-21',
+        name: 'Carleton Place',
+        distance: '40',
+        slug: 'carleton-place-40km-2026-03-21',
+      },
+      { date: '2026-03-28', name: 'Almonte', distance: '71', slug: 'almonte-71km-2026-03-28' },
+      {
+        date: '2026-04-11',
+        name: 'Maple Syrup',
+        distance: '100',
+        slug: 'maple-syrup-100km-2026-04-11',
+      },
+      {
+        date: '2026-04-18',
+        name: 'Burnstown Cafe',
+        distance: '200',
+        slug: 'burnstown-cafe-200km-2026-04-18',
+      },
     ],
   },
   {
-    name: "Simcoe-Muskoka",
-    slug: "simcoe-muskoka",
+    name: 'Simcoe-Muskoka',
+    slug: 'simcoe-muskoka',
     rides: [
-      { date: "2026-04-11", name: "Simcoe SW Warmup", distance: "100", slug: "simcoe-sw-warmup-100km-2026-04-11" },
-      { date: "2026-05-02", name: "Tour of the Headwaters", distance: "200", slug: "tour-of-the-headwaters-200km-2026-05-02" },
-      { date: "2026-05-16", name: "Fleche 2026", distance: "360+", slug: "fleche-2026-360km-2026-05-16" },
-      { date: "2026-06-06", name: "St Joseph Island", distance: "200", slug: "st-joseph-island-200km-2026-06-06" },
+      {
+        date: '2026-04-11',
+        name: 'Simcoe SW Warmup',
+        distance: '100',
+        slug: 'simcoe-sw-warmup-100km-2026-04-11',
+      },
+      {
+        date: '2026-05-02',
+        name: 'Tour of the Headwaters',
+        distance: '200',
+        slug: 'tour-of-the-headwaters-200km-2026-05-02',
+      },
+      {
+        date: '2026-05-16',
+        name: 'Fleche 2026',
+        distance: '360+',
+        slug: 'fleche-2026-360km-2026-05-16',
+      },
+      {
+        date: '2026-06-06',
+        name: 'St Joseph Island',
+        distance: '200',
+        slug: 'st-joseph-island-200km-2026-06-06',
+      },
     ],
   },
   {
-    name: "Toronto",
-    slug: "toronto",
+    name: 'Toronto',
+    slug: 'toronto',
     rides: [
-      { date: "2026-03-28", name: "Rouge Ramble", distance: "60", slug: "rouge-ramble-60km-2026-03-28" },
-      { date: "2026-04-04", name: "Concord Bradford", distance: "90", slug: "concord-bradford-90km-2026-04-04" },
-      { date: "2026-04-11", name: "Uxbridge Ice Classic", distance: "110", slug: "uxbridge-ice-classic-110km-2026-04-11" },
-      { date: "2026-04-18", name: "Gentle Start", distance: "120", slug: "gentle-start-120km-2026-04-18" },
+      {
+        date: '2026-03-28',
+        name: 'Rouge Ramble',
+        distance: '60',
+        slug: 'rouge-ramble-60km-2026-03-28',
+      },
+      {
+        date: '2026-04-04',
+        name: 'Concord Bradford',
+        distance: '90',
+        slug: 'concord-bradford-90km-2026-04-04',
+      },
+      {
+        date: '2026-04-11',
+        name: 'Uxbridge Ice Classic',
+        distance: '110',
+        slug: 'uxbridge-ice-classic-110km-2026-04-11',
+      },
+      {
+        date: '2026-04-18',
+        name: 'Gentle Start',
+        distance: '120',
+        slug: 'gentle-start-120km-2026-04-18',
+      },
     ],
   },
-];
+]
 
 function formatDate(dateString: string): { month: string; day: string } {
-  const date = new Date(dateString + "T00:00:00");
-  const month = date.toLocaleDateString("en-US", { month: "short" }).toUpperCase();
-  const day = date.getDate().toString();
-  return { month, day };
+  const date = new Date(dateString + 'T00:00:00')
+  const month = date.toLocaleDateString('en-US', { month: 'short' }).toUpperCase()
+  const day = date.getDate().toString()
+  return { month, day }
 }
 
 export function UpcomingRides() {
@@ -79,6 +149,7 @@ export function UpcomingRides() {
               <Link
                 href={`/calendar/${chapter.slug}`}
                 className="text-xs font-medium text-primary hover:underline underline-offset-2"
+                aria-label={`View all ${chapter.name} events`}
               >
                 View all
               </Link>
@@ -87,7 +158,7 @@ export function UpcomingRides() {
             {/* Rides list */}
             <ul className="space-y-1">
               {chapter.rides.map((ride, index) => {
-                const { month, day } = formatDate(ride.date);
+                const { month, day } = formatDate(ride.date)
                 return (
                   <li key={index}>
                     <Link
@@ -115,12 +186,12 @@ export function UpcomingRides() {
                       </div>
                     </Link>
                   </li>
-                );
+                )
               })}
             </ul>
           </div>
         ))}
       </div>
     </aside>
-  );
+  )
 }

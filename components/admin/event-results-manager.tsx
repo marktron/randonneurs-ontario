@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useTransition, useCallback } from 'react'
+import Image from 'next/image'
 import {
   Table,
   TableBody,
@@ -10,9 +11,22 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { Loader2, Check, Plus, CheckCircle2, Globe, FileText } from 'lucide-react'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { createResult, updateResult, type ResultStatus } from '@/lib/actions/results'
@@ -228,7 +242,11 @@ function RiderRow({ participant, result, eventId, season, distanceKm }: RiderRow
       </TableCell>
       <TableCell>
         {/* Evidence - Strava/GPX links, Control Card thumbnails */}
-        {result && (result.gpx_url || result.gpx_file_path || result.control_card_front_path || result.control_card_back_path) ? (
+        {result &&
+        (result.gpx_url ||
+          result.gpx_file_path ||
+          result.control_card_front_path ||
+          result.control_card_back_path) ? (
           <div className="flex items-center gap-1.5">
             {result.gpx_url && (
               <a
@@ -260,10 +278,13 @@ function RiderRow({ participant, result, eventId, season, distanceKm }: RiderRow
                 title="Control card front"
                 className="block"
               >
-                <img
+                <Image
                   src={`${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/rider-submissions/${result.control_card_front_path}`}
                   alt="Control card front"
-                  className="h-8 w-8 object-cover rounded border border-border hover:border-primary transition-colors"
+                  width={32}
+                  height={32}
+                  className="object-cover rounded border border-border hover:border-primary transition-colors"
+                  unoptimized
                 />
               </a>
             )}
@@ -275,10 +296,13 @@ function RiderRow({ participant, result, eventId, season, distanceKm }: RiderRow
                 title="Control card back"
                 className="block"
               >
-                <img
+                <Image
                   src={`${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/rider-submissions/${result.control_card_back_path}`}
                   alt="Control card back"
-                  className="h-8 w-8 object-cover rounded border border-border hover:border-primary transition-colors"
+                  width={32}
+                  height={32}
+                  className="object-cover rounded border border-border hover:border-primary transition-colors"
+                  unoptimized
                 />
               </a>
             )}
@@ -289,15 +313,9 @@ function RiderRow({ participant, result, eventId, season, distanceKm }: RiderRow
       </TableCell>
       <TableCell>
         {participant.registrationNotes && (
-          <p className="text-muted-foreground">
-            {participant.registrationNotes}
-          </p>
+          <p className="text-muted-foreground">{participant.registrationNotes}</p>
         )}
-        {result?.rider_notes && (
-          <p className="text-muted-foreground">
-            {result.rider_notes}
-          </p>
-        )}
+        {result?.rider_notes && <p className="text-muted-foreground">{result.rider_notes}</p>}
       </TableCell>
       <TableCell>
         {isPending ? (
@@ -394,7 +412,9 @@ export function EventResultsManager({
         {isSubmitted && (
           <Alert className="bg-green-50 border-green-200 dark:bg-green-950/30 dark:border-green-800">
             <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" />
-            <AlertTitle className="text-green-800 dark:text-green-300">Results Submitted</AlertTitle>
+            <AlertTitle className="text-green-800 dark:text-green-300">
+              Results Submitted
+            </AlertTitle>
             <AlertDescription className="text-green-700 dark:text-green-400">
               Results have been emailed to the VP of Brevet Administration for recording.
             </AlertDescription>

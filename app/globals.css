@@ -1,6 +1,6 @@
-@import "tailwindcss";
-@import "tw-animate-css";
-@import "shadcn/tailwind.css";
+@import 'tailwindcss';
+@import 'tw-animate-css';
+@import 'shadcn/tailwind.css';
 
 @custom-variant dark (&:is(.dark *));
 
@@ -124,14 +124,25 @@
   body {
     @apply bg-background text-foreground;
   }
-  h1, h2, h3 {
+
+  /* Respect user's motion preferences */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+  h1,
+  h2,
+  h3 {
     @apply font-serif;
   }
   .editorial-image {
-    filter:
-    saturate(0.9)
-    contrast(1.05)
-    sepia(0.04);
+    filter: saturate(0.9) contrast(1.05) sepia(0.04);
   }
   .eyebrow {
     @apply text-xs font-medium tracking-[0.2em] uppercase text-muted-foreground;

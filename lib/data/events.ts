@@ -35,7 +35,6 @@ import {
   type ChapterInfo,
 } from '@/lib/chapter-config'
 import type {
-  ChapterId,
   EventWithRegistrationCount,
   EventWithRelations,
   EventSlug,
@@ -127,11 +126,7 @@ const getPermanentEventsInner = cache(async (): Promise<Event[]> => {
     .order('distance_km', { ascending: false })
 
   if (error) {
-    return handleDataError(
-      error,
-      { operation: 'getPermanentEvents' },
-      []
-    )
+    return handleDataError(error, { operation: 'getPermanentEvents' }, [])
   }
 
   // Transform to Event type
@@ -148,13 +143,9 @@ const getPermanentEventsInner = cache(async (): Promise<Event[]> => {
 })
 
 export async function getPermanentEvents(): Promise<Event[]> {
-  return unstable_cache(
-    async () => getPermanentEventsInner(),
-    ['permanent-events'],
-    {
-      tags: ['events', 'permanents'],
-    }
-  )()
+  return unstable_cache(async () => getPermanentEventsInner(), ['permanent-events'], {
+    tags: ['events', 'permanents'],
+  })()
 }
 
 // ============================================================================
@@ -176,11 +167,11 @@ export interface EventDetails {
   type: 'Brevet' | 'Populaire' | 'Fleche' | 'Permanent'
   chapterName: string
   chapterSlug: string
-  rwgpsId: string | null      // RideWithGPS route ID for map embed
-  routeSlug: string | null    // For linking to route details page
-  cueSheetUrl: string | null  // PDF cue sheet download URL
-  description: string | null  // Optional markdown event description
-  imageUrl: string | null     // Optional event image URL
+  rwgpsId: string | null // RideWithGPS route ID for map embed
+  routeSlug: string | null // For linking to route details page
+  cueSheetUrl: string | null // PDF cue sheet download URL
+  description: string | null // Optional markdown event description
+  imageUrl: string | null // Optional event image URL
 }
 
 /**
@@ -188,7 +179,7 @@ export interface EventDetails {
  * Privacy-respecting: only shows first name and last initial.
  */
 export interface RegisteredRider {
-  name: string  // "John D." or "Anonymous" if share_registration is false
+  name: string // "John D." or "Anonymous" if share_registration is false
 }
 
 // ============================================================================
@@ -206,8 +197,9 @@ export interface RegisteredRider {
  * @returns Array of rider display names
  */
 const getRegisteredRidersInner = cache(async (eventId: string): Promise<RegisteredRider[]> => {
-  const { data: riders, error } = await getSupabase()
-    .rpc('get_registered_riders', { p_event_id: eventId })
+  const { data: riders, error } = await getSupabase().rpc('get_registered_riders', {
+    p_event_id: eventId,
+  })
 
   if (error) {
     console.error('Error fetching registered riders:', error)
@@ -221,7 +213,7 @@ const getRegisteredRidersInner = cache(async (eventId: string): Promise<Register
     const firstName = rider.first_name || ''
     const lastInitial = rider.last_name ? `${rider.last_name.charAt(0)}.` : ''
     return {
-      name: `${firstName} ${lastInitial}`.trim()
+      name: `${firstName} ${lastInitial}`.trim(),
     }
   })
 })
@@ -257,13 +249,9 @@ const getAllEventSlugsInner = cache(async (): Promise<string[]> => {
 })
 
 export async function getAllEventSlugs(): Promise<string[]> {
-  return unstable_cache(
-    async () => getAllEventSlugsInner(),
-    ['all-event-slugs'],
-    {
-      tags: ['events', 'slugs'],
-    }
-  )()
+  return unstable_cache(async () => getAllEventSlugsInner(), ['all-event-slugs'], {
+    tags: ['events', 'slugs'],
+  })()
 }
 
 /**
@@ -283,7 +271,8 @@ const getEventBySlugInner = cache(async (slug: string): Promise<EventDetails | n
   // Fetch event with joined chapter and route data
   const { data: event, error } = await getSupabase()
     .from('events')
-    .select(`
+    .select(
+      `
       id,
       slug,
       name,
@@ -296,7 +285,8 @@ const getEventBySlugInner = cache(async (slug: string): Promise<EventDetails | n
       image_url,
       chapters (name, slug),
       routes (slug, rwgps_id, cue_sheet_url)
-    `)
+    `
+    )
     .eq('slug', slug)
     .single()
 
@@ -328,11 +318,7 @@ const getEventBySlugInner = cache(async (slug: string): Promise<EventDetails | n
 })
 
 export async function getEventBySlug(slug: string): Promise<EventDetails | null> {
-  return unstable_cache(
-    async () => getEventBySlugInner(slug),
-    [`event-by-slug-${slug}`],
-    {
-      tags: ['events', `event-${slug}`],
-    }
-  )()
+  return unstable_cache(async () => getEventBySlugInner(slug), [`event-by-slug-${slug}`], {
+    tags: ['events', `event-${slug}`],
+  })()
 }

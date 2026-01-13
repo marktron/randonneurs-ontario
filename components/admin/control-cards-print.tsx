@@ -14,7 +14,8 @@ function BoldLabelText({ text }: { text: string }) {
 
   return (
     <>
-      <strong>{label}</strong>{content}
+      <strong>{label}</strong>
+      {content}
     </>
   )
 }
@@ -39,10 +40,7 @@ export function ControlCardsPrint({
   // Pair riders (2 per page), adding empty rider if odd number
   const riderPairs: (CardRider | null)[][] = []
   for (let i = 0; i < riders.length; i += 2) {
-    riderPairs.push([
-      riders[i],
-      riders[i + 1] || null,
-    ])
+    riderPairs.push([riders[i], riders[i + 1] || null])
   }
 
   // If no riders, show at least one blank card
@@ -52,7 +50,7 @@ export function ControlCardsPrint({
 
   return (
     <div className="control-cards-print">
-      {/* Load Noto Sans and Noto Serif with variable width axis */}
+      {/* eslint-disable-next-line @next/next/no-page-custom-font -- Print-only component requires custom fonts inline */}
       <link
         rel="stylesheet"
         href="https://fonts.googleapis.com/css2?family=Noto+Sans:wdth,wght@62.5..100,100..900&family=Noto+Serif:wdth,wght@62.5..100,100..900&display=swap"
@@ -64,7 +62,8 @@ export function ControlCardsPrint({
         }
 
         @media print {
-          html, body {
+          html,
+          body {
             margin: 0 !important;
             padding: 0 !important;
             -webkit-print-color-adjust: exact;
@@ -80,13 +79,13 @@ export function ControlCardsPrint({
           [data-sidebar],
           aside,
           nav,
-          [data-slot="sidebar"] {
+          [data-slot='sidebar'] {
             display: none !important;
             width: 0 !important;
           }
           /* Reset all layout containers */
           main,
-          [data-slot="sidebar-inset"],
+          [data-slot='sidebar-inset'],
           [data-sidebar-inset],
           .flex,
           body > div {
@@ -137,7 +136,7 @@ export function ControlCardsPrint({
           width: 8.5in;
           height: 5.5in;
           box-sizing: border-box;
-          border-bottom: 1px solid #D9D9D9;
+          border-bottom: 1px solid #d9d9d9;
           display: grid;
           grid-template-columns: 1fr 1fr 1fr;
         }
@@ -148,7 +147,7 @@ export function ControlCardsPrint({
 
         .card-column {
           padding: 0.2in;
-          border-right: 1px solid #D9D9D9;
+          border-right: 1px solid #d9d9d9;
           box-sizing: border-box;
           overflow: hidden;
         }
@@ -227,7 +226,6 @@ export function ControlCardsPrint({
           margin-bottom: 0.15in;
         }
 
-
         .card-title {
           font-size: 8pt;
           font-weight: 500;
@@ -259,7 +257,8 @@ export function ControlCardsPrint({
           font-size: 7pt;
         }
 
-        .rider-label, .organizer-label {
+        .rider-label,
+        .organizer-label {
           font-size: 7.5pt;
           text-transform: uppercase;
           color: #525252;
@@ -288,7 +287,7 @@ export function ControlCardsPrint({
         .organizer-section {
           margin-top: 0.12in;
           padding-top: 0.12in;
-          border-top: 1px solid #D9D9D9;
+          border-top: 1px solid #d9d9d9;
         }
 
         /* Back card styles */
@@ -325,14 +324,14 @@ export function ControlCardsPrint({
 
         .control-header > div:nth-child(2),
         .control-header > div:nth-child(3) {
-          border-left: 1px solid #D9D9D9;
+          border-left: 1px solid #d9d9d9;
         }
 
         .control-row {
           display: grid;
           grid-template-columns: 1fr 0.65in 0.85fr;
           min-height: 1in;
-          border-bottom: 1px solid #D9D9D9;
+          border-bottom: 1px solid #d9d9d9;
         }
 
         .control-info {
@@ -362,12 +361,12 @@ export function ControlCardsPrint({
         }
 
         .time-cell {
-          border-left: 1px solid #D9D9D9;
+          border-left: 1px solid #d9d9d9;
           padding: 0.04in 0 0.04in 0.06in;
         }
 
         .signature-cell {
-          border-left: 1px solid #D9D9D9;
+          border-left: 1px solid #d9d9d9;
           padding: 0.04in 0 0.04in 0.06in;
         }
 
@@ -378,7 +377,10 @@ export function ControlCardsPrint({
       `}</style>
 
       {/* Print button - hidden when printing */}
-      <div className="no-print" style={{ padding: '1rem', background: '#f5f5f5', borderBottom: '1px solid #ddd' }}>
+      <div
+        className="no-print"
+        style={{ padding: '1rem', background: '#f5f5f5', borderBottom: '1px solid #ddd' }}
+      >
         <button
           onClick={() => window.print()}
           style={{
@@ -394,7 +396,8 @@ export function ControlCardsPrint({
           Print Control Cards
         </button>
         <span style={{ marginLeft: '1rem', color: '#666' }}>
-          {riders.length} rider{riders.length !== 1 ? 's' : ''} &middot; {riderPairs.length} page{riderPairs.length !== 1 ? 's' : ''} (double-sided)
+          {riders.length} rider{riders.length !== 1 ? 's' : ''} &middot; {riderPairs.length} page
+          {riderPairs.length !== 1 ? 's' : ''} (double-sided)
         </span>
       </div>
 
@@ -449,14 +452,26 @@ function CardFront({
     <div className="card-half">
       {/* Left column - Regulations */}
       <div className="card-column front-left">
-        <p><BoldLabelText text={REGULATIONS_TEXT.regulations} /></p>
+        <p>
+          <BoldLabelText text={REGULATIONS_TEXT.regulations} />
+        </p>
         <p className="bold-warning">{REGULATIONS_TEXT.sagWagon}</p>
-        <p><BoldLabelText text={REGULATIONS_TEXT.controlCard} /></p>
-        <p><BoldLabelText text={REGULATIONS_TEXT.conduct} /></p>
-        <p><BoldLabelText text={REGULATIONS_TEXT.cycle} /></p>
-        <p><BoldLabelText text={REGULATIONS_TEXT.assistance} /></p>
+        <p>
+          <BoldLabelText text={REGULATIONS_TEXT.controlCard} />
+        </p>
+        <p>
+          <BoldLabelText text={REGULATIONS_TEXT.conduct} />
+        </p>
+        <p>
+          <BoldLabelText text={REGULATIONS_TEXT.cycle} />
+        </p>
+        <p>
+          <BoldLabelText text={REGULATIONS_TEXT.assistance} />
+        </p>
         <div style={{ marginTop: 'auto', paddingTop: '0.2in' }}>
-          <div style={{ fontWeight: 600, marginBottom: '0.05in' }}>MACHINE EXAMINER&apos;S STAMP &amp; SIGNATURE</div>
+          <div style={{ fontWeight: 600, marginBottom: '0.05in' }}>
+            MACHINE EXAMINER&apos;S STAMP &amp; SIGNATURE
+          </div>
           <div style={{ border: '1px solid #000', height: '0.6in' }}></div>
         </div>
       </div>
@@ -465,7 +480,9 @@ function CardFront({
       <div className="card-column front-middle">
         <div className="field-row" style={{ alignItems: 'baseline' }}>
           <div className="field-label">Start:</div>
-          <div style={{ fontWeight: 600, fontSize: '9pt' }}>{event.startTime.slice(0, 5)} &middot; {formattedDate}</div>
+          <div style={{ fontWeight: 600, fontSize: '9pt' }}>
+            {event.startTime.slice(0, 5)} &middot; {formattedDate}
+          </div>
         </div>
 
         <div className="field-row" style={{ marginTop: '0.08in' }}>
@@ -480,12 +497,16 @@ function CardFront({
         </div>
 
         <div style={{ marginTop: '0.12in' }}>
-          <div className="field-label" style={{ marginBottom: '0.04in' }}>Total Allowable Time</div>
+          <div className="field-label" style={{ marginBottom: '0.04in' }}>
+            Total Allowable Time
+          </div>
           <div style={{ display: 'flex', gap: '0.1in', alignItems: 'baseline' }}>
             <span>HRS.</span>
             <span style={{ fontWeight: 700, fontSize: '10pt' }}>{totalAllowableTime.hours}</span>
             <span>MIN.</span>
-            <span style={{ fontWeight: 700, fontSize: '10pt' }}>{String(totalAllowableTime.minutes).padStart(2, '0')}</span>
+            <span style={{ fontWeight: 700, fontSize: '10pt' }}>
+              {String(totalAllowableTime.minutes).padStart(2, '0')}
+            </span>
           </div>
         </div>
 
@@ -527,13 +548,13 @@ function CardFront({
 
         <div className="card-title">Control Card</div>
         <div className="route-name">{event.routeName}</div>
-        <div className="distance-date">{event.distance} km &middot; {formattedDate}</div>
+        <div className="distance-date">
+          {event.distance} km &middot; {formattedDate}
+        </div>
 
         <div className="rider-info">
           <div className="rider-label">Rider</div>
-          <div className="rider-name">
-            {rider ? `${rider.firstName} ${rider.lastName}` : ''}
-          </div>
+          <div className="rider-name">{rider ? `${rider.firstName} ${rider.lastName}` : ''}</div>
         </div>
 
         <div className="event-info">
@@ -562,9 +583,8 @@ function CardBack({
   formattedDate: string
   rider: CardRider | null
 }) {
-  const riderName = rider?.firstName || rider?.lastName
-    ? `${rider.firstName} ${rider.lastName}`.trim()
-    : ''
+  const riderName =
+    rider?.firstName || rider?.lastName ? `${rider.firstName} ${rider.lastName}`.trim() : ''
   // Fill each column completely before moving to the next
   const maxPerColumn = 4
   const column1 = controls.slice(0, maxPerColumn)
@@ -578,7 +598,10 @@ function CardBack({
           {/* Header only on first column or if it's the start of controls */}
           {colIndex === 0 && (
             <div className="back-header">
-              <div className="back-header-left" style={{ display: 'flex', alignItems: 'center', gap: '0.1in' }}>
+              <div
+                className="back-header-left"
+                style={{ display: 'flex', alignItems: 'center', gap: '0.1in' }}
+              >
                 <Image
                   src="/logo-gray.png"
                   alt=""
@@ -592,14 +615,21 @@ function CardBack({
             </div>
           )}
           {colIndex === 1 && (
-            <div className="back-header" style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <div style={{ fontWeight: 700 }}>{event.routeName} {event.distance} km</div>
+            <div
+              className="back-header"
+              style={{ display: 'flex', justifyContent: 'space-between' }}
+            >
+              <div style={{ fontWeight: 700 }}>
+                {event.routeName} {event.distance} km
+              </div>
               <div>{formattedDate}</div>
             </div>
           )}
           {colIndex === 2 && (
             <div className="back-header">
-              <div className="back-header-left" style={{ fontWeight: 700 }}>{riderName || '\u00A0'}</div>
+              <div className="back-header-left" style={{ fontWeight: 700 }}>
+                {riderName || '\u00A0'}
+              </div>
             </div>
           )}
 
@@ -615,13 +645,13 @@ function CardBack({
                 <div className="control-name">{control.name}</div>
                 <div className="control-distance">{control.distance} km</div>
                 <div className="control-times">
-                  Open: {control.openTime}<br/>
+                  Open: {control.openTime}
+                  <br />
                   Close: {control.closeTime}
                 </div>
               </div>
               <div className="time-cell"></div>
-              <div className="signature-cell">
-              </div>
+              <div className="signature-cell"></div>
             </div>
           ))}
         </div>

@@ -14,12 +14,15 @@ import { cache } from 'react'
 import { unstable_cache } from 'next/cache'
 import { getSupabase } from '@/lib/supabase'
 import type { RouteCollection } from '@/components/routes-page'
-import { getChapterInfo, getAllChapterSlugs, getDbSlug, getUrlSlugFromDbSlug } from '@/lib/chapter-config'
+import {
+  getChapterInfo,
+  getAllChapterSlugs,
+  getDbSlug,
+  getUrlSlugFromDbSlug,
+} from '@/lib/chapter-config'
 import { formatFinishTime, formatStatus } from '@/lib/utils'
 import { handleDataError } from '@/lib/errors'
 import type {
-  ChapterId,
-  RouteId,
   RouteWithChapter,
   RouteWithChapterName,
   RouteBasic,
@@ -51,14 +54,15 @@ export interface RouteResultEvent {
   riders: RouteResultRider[]
 }
 
-
 const getRouteBySlugInner = cache(async (slug: string): Promise<RouteDetail | null> => {
   const { data: route, error } = await getSupabase()
     .from('routes')
-    .select(`
+    .select(
+      `
       slug, name, distance_km, description, rwgps_id,
       chapters (slug, name)
-    `)
+    `
+    )
     .eq('slug', slug)
     .single()
 
@@ -78,35 +82,29 @@ const getRouteBySlugInner = cache(async (slug: string): Promise<RouteDetail | nu
 })
 
 export async function getRouteBySlug(slug: string): Promise<RouteDetail | null> {
-  return unstable_cache(
-    async () => getRouteBySlugInner(slug),
-    [`route-by-slug-${slug}`],
-    {
-      tags: ['routes', `route-${slug}`],
-    }
-  )()
+  return unstable_cache(async () => getRouteBySlugInner(slug), [`route-by-slug-${slug}`], {
+    tags: ['routes', `route-${slug}`],
+  })()
 }
 
 const getRouteResultsInner = cache(async (routeSlug: string): Promise<RouteResultEvent[]> => {
   // Get all events that used this route, with their results, using a join
   const { data: events, error } = await getSupabase()
     .from('events')
-    .select(`
+    .select(
+      `
       name, event_date,
       routes!inner(slug),
       public_results (
         finish_time, status, rider_slug, first_name, last_name
       )
-    `)
+    `
+    )
     .eq('routes.slug', routeSlug)
     .order('event_date', { ascending: false })
 
   if (error) {
-    return handleDataError(
-      error,
-      { operation: 'getRouteResults', context: { routeSlug } },
-      []
-    )
+    return handleDataError(error, { operation: 'getRouteResults', context: { routeSlug } }, [])
   }
 
   if (!events) return []
@@ -118,8 +116,8 @@ const getRouteResultsInner = cache(async (routeSlug: string): Promise<RouteResul
     if (!eventResults || eventResults.length === 0) continue
 
     const riders: RouteResultRider[] = eventResults
-      .filter(r => r.status !== 'dns') // Exclude DNS
-      .map(r => ({
+      .filter((r) => r.status !== 'dns') // Exclude DNS
+      .map((r) => ({
         name: `${r.first_name} ${r.last_name}`.trim() || 'Unknown',
         slug: r.rider_slug,
         time: formatStatus(r.status ?? 'pending') ?? formatFinishTime(r.finish_time) ?? '',
@@ -152,7 +150,6 @@ export async function getRouteResults(routeSlug: string): Promise<RouteResultEve
   )()
 }
 
-
 // Distance categories in display order
 const DISTANCE_CATEGORIES = [
   { name: 'Populaires', min: 0, max: 199 },
@@ -164,9 +161,7 @@ const DISTANCE_CATEGORIES = [
 ] as const
 
 function getCategoryForDistance(distance: number): string {
-  const category = DISTANCE_CATEGORIES.find(
-    cat => distance >= cat.min && distance <= cat.max
-  )
+  const category = DISTANCE_CATEGORIES.find((cat) => distance >= cat.min && distance <= cat.max)
   return category?.name ?? 'Populaires'
 }
 
@@ -218,7 +213,7 @@ const getRoutesByChapterInner = cache(async (urlSlug: string): Promise<RouteColl
     if (categoryRoutes && categoryRoutes.length > 0) {
       collections.push({
         name: category.name,
-        routes: categoryRoutes.map(route => ({
+        routes: categoryRoutes.map((route) => ({
           name: route.name,
           distance: route.distance_km!.toString(),
           url: buildRwgpsUrl(route.rwgps_id!),
@@ -252,14 +247,16 @@ export interface ActiveRoute {
 const getActiveRoutesInner = cache(async (): Promise<ActiveRoute[]> => {
   const { data: routes, error } = await getSupabase()
     .from('routes')
-    .select(`
+    .select(
+      `
       id,
       name,
       slug,
       distance_km,
       chapter_id,
       chapters (name)
-    `)
+    `
+    )
     .eq('is_active', true)
     .order('name', { ascending: true })
 
@@ -282,11 +279,7 @@ const getActiveRoutesInner = cache(async (): Promise<ActiveRoute[]> => {
 })
 
 export async function getActiveRoutes(): Promise<ActiveRoute[]> {
-  return unstable_cache(
-    async () => getActiveRoutesInner(),
-    ['active-routes'],
-    {
-      tags: ['routes'],
-    }
-  )()
+  return unstable_cache(async () => getActiveRoutesInner(), ['active-routes'], {
+    tags: ['routes'],
+  })()
 }

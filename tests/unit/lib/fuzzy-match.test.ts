@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
   levenshteinDistance,
-  similarityScore,
   fuzzyNameScore,
   findFuzzyNameMatches,
   getNameVariants,
@@ -58,7 +57,7 @@ describe('fuzzyNameScore', () => {
     expect(fuzzyNameScore('Tim', 'Smith', 'Tim', 'Smith')).toBe(1.0)
   })
 
-  it('handles special characters (O\'Callahan vs Ocallahan)', () => {
+  it("handles special characters (O'Callahan vs Ocallahan)", () => {
     const score = fuzzyNameScore('Tim', 'Ocallahan', 'Tim', "O'Callahan")
     expect(score).toBe(1.0)
   })
@@ -107,13 +106,13 @@ describe('findFuzzyNameMatches', () => {
     { id: '4', first: 'Jane', last: 'Doe' },
   ]
 
-  it('finds Tim O\'Callahan when searching Tim Ocallahan', () => {
+  it("finds Tim O'Callahan when searching Tim Ocallahan", () => {
     const matches = findFuzzyNameMatches(
       'Tim',
       'Ocallahan',
       candidates,
-      c => c.first,
-      c => c.last,
+      (c) => c.first,
+      (c) => c.last,
       { threshold: 0.4 }
     )
 
@@ -127,13 +126,13 @@ describe('findFuzzyNameMatches', () => {
       'Tim',
       'Smith',
       candidates,
-      c => c.first,
-      c => c.last,
+      (c) => c.first,
+      (c) => c.last,
       { threshold: 0.9 }
     )
 
     // Only exact or near-exact matches should pass
-    expect(matches.every(m => m.score >= 0.9)).toBe(true)
+    expect(matches.every((m) => m.score >= 0.9)).toBe(true)
   })
 
   it('respects maxResults', () => {
@@ -141,8 +140,8 @@ describe('findFuzzyNameMatches', () => {
       'T',
       'S',
       candidates,
-      c => c.first,
-      c => c.last,
+      (c) => c.first,
+      (c) => c.last,
       { threshold: 0.1, maxResults: 2 }
     )
 

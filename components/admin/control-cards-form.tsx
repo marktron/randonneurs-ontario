@@ -64,22 +64,23 @@ export function ControlCardsForm({ event, riders, organizer }: ControlCardsFormP
   }, [])
 
   const updateControl = useCallback((id: string, field: 'name' | 'distance', value: string) => {
-    setControls((prev) =>
-      prev.map((c) => (c.id === id ? { ...c, [field]: value } : c))
-    )
+    setControls((prev) => prev.map((c) => (c.id === id ? { ...c, [field]: value } : c)))
   }, [])
 
-  const moveControl = useCallback((fromIndex: number, direction: 'up' | 'down') => {
-    const toIndex = direction === 'up' ? fromIndex - 1 : fromIndex + 1
-    if (toIndex < 0 || toIndex >= controls.length) return
+  const moveControl = useCallback(
+    (fromIndex: number, direction: 'up' | 'down') => {
+      const toIndex = direction === 'up' ? fromIndex - 1 : fromIndex + 1
+      if (toIndex < 0 || toIndex >= controls.length) return
 
-    setControls((prev) => {
-      const newControls = [...prev]
-      const [moved] = newControls.splice(fromIndex, 1)
-      newControls.splice(toIndex, 0, moved)
-      return newControls
-    })
-  }, [controls.length])
+      setControls((prev) => {
+        const newControls = [...prev]
+        const [moved] = newControls.splice(fromIndex, 1)
+        newControls.splice(toIndex, 0, moved)
+        return newControls
+      })
+    },
+    [controls.length]
+  )
 
   const [isLoadingRwgps, setIsLoadingRwgps] = useState(false)
   const [rwgpsError, setRwgpsError] = useState<string | null>(null)
@@ -110,9 +111,7 @@ export function ControlCardsForm({ event, riders, organizer }: ControlCardsFormP
 
       // Extract controls from course_points where type is "Control"
       const coursePoints = route.course_points || []
-      const controlPoints = coursePoints.filter(
-        (cp: { t?: string }) => cp.t === 'Control'
-      )
+      const controlPoints = coursePoints.filter((cp: { t?: string }) => cp.t === 'Control')
       console.log('[RWGPS] Control points found in course_points:', controlPoints.length)
       console.log('[RWGPS] Control points:', controlPoints)
 
@@ -125,45 +124,61 @@ export function ControlCardsForm({ event, riders, organizer }: ControlCardsFormP
         console.log('[RWGPS] POI controls found:', poiControls.length)
 
         if (poiControls.length === 0) {
-          setRwgpsError('No control points found in the RWGPS route. Add controls with type "Control" in the RideWithGPS route editor.')
+          setRwgpsError(
+            'No control points found in the RWGPS route. Add controls with type "Control" in the RideWithGPS route editor.'
+          )
           return
         }
 
         // Use POI controls (distance needs to be calculated differently - they have lat/lng but no distance)
         // For now, show error suggesting to use course points instead
-        setRwgpsError('Found POI controls but they lack distance data. Please add controls as Course Points with type "Control" in RideWithGPS.')
+        setRwgpsError(
+          'Found POI controls but they lack distance data. Please add controls as Course Points with type "Control" in RideWithGPS.'
+        )
         return
       }
 
       // Map course_points to control inputs
       // d is distance in meters from route start
-      const newControls: ControlInput[] = controlPoints.map((cp: { n?: string; d?: number; description?: string }) => {
-        // Clean up control name by removing common prefixes like "CTL", "CTRL", "CONTROL"
-        let name = cp.n || 'Control'
-        const prefixesToRemove = ['CTL - ', 'CTL-', 'CTL ', 'CTRL - ', 'CTRL-', 'CTRL ', 'CONTROL - ', 'CONTROL-', 'CONTROL ']
-        for (const prefix of prefixesToRemove) {
-          if (name.toUpperCase().startsWith(prefix)) {
-            name = name.substring(prefix.length).trim()
-            break
+      const newControls: ControlInput[] = controlPoints.map(
+        (cp: { n?: string; d?: number; description?: string }) => {
+          // Clean up control name by removing common prefixes like "CTL", "CTRL", "CONTROL"
+          let name = cp.n || 'Control'
+          const prefixesToRemove = [
+            'CTL - ',
+            'CTL-',
+            'CTL ',
+            'CTRL - ',
+            'CTRL-',
+            'CTRL ',
+            'CONTROL - ',
+            'CONTROL-',
+            'CONTROL ',
+          ]
+          for (const prefix of prefixesToRemove) {
+            if (name.toUpperCase().startsWith(prefix)) {
+              name = name.substring(prefix.length).trim()
+              break
+            }
+          }
+          // Also remove any leading "- " that might remain
+          if (name.startsWith('- ')) {
+            name = name.substring(2).trim()
+          } else if (name.startsWith('-')) {
+            name = name.substring(1).trim()
+          }
+
+          const distanceMeters = cp.d ?? 0
+          const distanceKm = (distanceMeters / 1000).toFixed(1)
+          console.log(`[RWGPS] Control: "${name}" at ${distanceKm}km (${distanceMeters}m)`)
+
+          return {
+            id: crypto.randomUUID(),
+            name,
+            distance: distanceKm,
           }
         }
-        // Also remove any leading "- " that might remain
-        if (name.startsWith('- ')) {
-          name = name.substring(2).trim()
-        } else if (name.startsWith('-')) {
-          name = name.substring(1).trim()
-        }
-
-        const distanceMeters = cp.d ?? 0
-        const distanceKm = (distanceMeters / 1000).toFixed(1)
-        console.log(`[RWGPS] Control: "${name}" at ${distanceKm}km (${distanceMeters}m)`)
-
-        return {
-          id: crypto.randomUUID(),
-          name,
-          distance: distanceKm,
-        }
-      })
+      )
 
       // Sort by distance
       newControls.sort((a, b) => parseFloat(a.distance) - parseFloat(b.distance))
@@ -195,10 +210,15 @@ export function ControlCardsForm({ event, riders, organizer }: ControlCardsFormP
     const sortedControls = [...controls].sort(
       (a, b) => parseFloat(a.distance || '0') - parseFloat(b.distance || '0')
     )
-    params.set('controls', JSON.stringify(sortedControls.map((c) => ({
-      name: c.name,
-      distance: parseFloat(c.distance || '0'),
-    }))))
+    params.set(
+      'controls',
+      JSON.stringify(
+        sortedControls.map((c) => ({
+          name: c.name,
+          distance: parseFloat(c.distance || '0'),
+        }))
+      )
+    )
 
     if (extraBlankCards > 0) {
       params.set('extraBlank', String(extraBlankCards))
@@ -207,7 +227,10 @@ export function ControlCardsForm({ event, riders, organizer }: ControlCardsFormP
     return `/admin/events/${event.id}/control-cards/print?${params.toString()}`
   }, [event.id, organizerName, organizerPhone, organizerEmail, controls, extraBlankCards])
 
-  const isFormValid = organizerName && organizerPhone && organizerEmail &&
+  const isFormValid =
+    organizerName &&
+    organizerPhone &&
+    organizerEmail &&
     controls.every((c) => c.name && c.distance !== '')
 
   return (
@@ -216,9 +239,7 @@ export function ControlCardsForm({ event, riders, organizer }: ControlCardsFormP
       <Card>
         <CardHeader>
           <CardTitle>Ride Organizer Details</CardTitle>
-          <CardDescription>
-            Contact information displayed on the control cards
-          </CardDescription>
+          <CardDescription>Contact information displayed on the control cards</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid gap-4 md:grid-cols-3">
@@ -259,7 +280,8 @@ export function ControlCardsForm({ event, riders, organizer }: ControlCardsFormP
         <CardHeader>
           <CardTitle>Control Points</CardTitle>
           <CardDescription>
-            Define control checkpoints along the route. Times will be calculated automatically based on BRM rules.
+            Define control checkpoints along the route. Times will be calculated automatically based
+            on BRM rules.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -275,7 +297,13 @@ export function ControlCardsForm({ event, riders, organizer }: ControlCardsFormP
                       disabled={index === 0}
                       className="h-3 hover:text-foreground disabled:opacity-30"
                     >
-                      <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <svg
+                        className="h-3 w-3"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                      >
                         <polyline points="18 15 12 9 6 15" />
                       </svg>
                     </button>
@@ -285,7 +313,13 @@ export function ControlCardsForm({ event, riders, organizer }: ControlCardsFormP
                       disabled={index === controls.length - 1}
                       className="h-3 hover:text-foreground disabled:opacity-30"
                     >
-                      <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <svg
+                        className="h-3 w-3"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                      >
                         <polyline points="6 9 12 15 18 9" />
                       </svg>
                     </button>
@@ -318,17 +352,13 @@ export function ControlCardsForm({ event, riders, organizer }: ControlCardsFormP
                   className="text-muted-foreground hover:text-destructive"
                 >
                   <Trash2 className="h-4 w-4" />
+                  <span className="sr-only">Remove control</span>
                 </Button>
               </div>
             ))}
           </div>
           <div className="flex gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={addControl}
-            >
+            <Button type="button" variant="outline" size="sm" onClick={addControl}>
               <Plus className="h-4 w-4 mr-1" />
               Add Control
             </Button>
@@ -349,9 +379,7 @@ export function ControlCardsForm({ event, riders, organizer }: ControlCardsFormP
               </Button>
             )}
           </div>
-          {rwgpsError && (
-            <p className="text-sm text-destructive">{rwgpsError}</p>
-          )}
+          {rwgpsError && <p className="text-sm text-destructive">{rwgpsError}</p>}
           {!event.rwgpsId && (
             <p className="text-sm text-muted-foreground">
               No RWGPS route linked to this event. Add control points manually or link a route.
@@ -372,7 +400,9 @@ export function ControlCardsForm({ event, riders, organizer }: ControlCardsFormP
         </CardHeader>
         <CardContent className="space-y-4">
           {riders.length === 0 ? (
-            <p className="text-muted-foreground text-sm">Two blank control cards will be printed for manual entry.</p>
+            <p className="text-muted-foreground text-sm">
+              Two blank control cards will be printed for manual entry.
+            </p>
           ) : (
             <div className="grid gap-1 md:grid-cols-3">
               {riders.map((rider) => (
@@ -395,19 +425,14 @@ export function ControlCardsForm({ event, riders, organizer }: ControlCardsFormP
               onChange={(e) => setExtraBlankCards(Math.max(0, parseInt(e.target.value) || 0))}
               className="w-20"
             />
-            <span className="text-sm text-muted-foreground">
-              for day-of registrations
-            </span>
+            <span className="text-sm text-muted-foreground">for day-of registrations</span>
           </div>
         </CardContent>
       </Card>
 
       {/* Actions */}
       <div className="flex gap-4 items-center">
-        <Button
-          asChild
-          disabled={!isFormValid}
-        >
+        <Button asChild disabled={!isFormValid}>
           <a
             href={isFormValid ? generatePrintUrl() : '#'}
             target="_blank"

@@ -7,10 +7,7 @@ import { join } from 'path'
 const UUID_NAMESPACE = '6ba7b810-9dad-11d1-80b4-00c04fd430c8' // URL namespace
 
 // Local Supabase connection with service role key (bypasses RLS)
-const supabase = createClient(
-  'http://127.0.0.1:54321',
-  'sb_secret_N7UND0UgjKTVK-Uodkm0Hg_xSvEMPvz'
-)
+const supabase = createClient('http://127.0.0.1:54321', 'sb_secret_N7UND0UgjKTVK-Uodkm0Hg_xSvEMPvz')
 
 // SQLite database
 const dbPath = join(process.cwd(), 'docs', 'ro-stats.sqlite')
@@ -18,13 +15,13 @@ const sqlite = new Database(dbPath, { readonly: true })
 
 // Chapter slug mapping
 const chapterSlugMap: Record<string, string> = {
-  'Toronto': 'toronto',
-  'Ottawa': 'ottawa',
-  'Huron': 'huron',
+  Toronto: 'toronto',
+  Ottawa: 'ottawa',
+  Huron: 'huron',
   'Simcoe-Muskoka': 'simcoe',
-  'Niagara': 'niagara',
-  'Other': 'other',
-  'Permanent': 'permanent',
+  Niagara: 'niagara',
+  Other: 'other',
+  Permanent: 'permanent',
 }
 
 // Generate deterministic UUID from original ID
@@ -55,9 +52,14 @@ function mapStatus(status: string | null): 'finished' | 'dnf' | 'dns' | 'otl' | 
 }
 
 // Derive event type from chapter, distance, and title
-function deriveEventType(chapter: string, distance: number | null, title: string): 'brevet' | 'populaire' | 'permanent' | 'fleche' {
+function deriveEventType(
+  chapter: string,
+  distance: number | null,
+  title: string
+): 'brevet' | 'populaire' | 'permanent' | 'fleche' {
   if (chapter === 'Permanent') return 'permanent'
-  if (title.toLowerCase().includes('flèche') || title.toLowerCase().includes('fleche')) return 'fleche'
+  if (title.toLowerCase().includes('flèche') || title.toLowerCase().includes('fleche'))
+    return 'fleche'
   if (!distance || distance < 200) return 'populaire'
   return 'brevet'
 }
@@ -70,37 +72,41 @@ function createSlug(text: string): string {
     .replace(/^-|-$/g, '')
 }
 
-interface ImportStats {
-  chapters: { inserted: number; skipped: number }
-  awards: { inserted: number; skipped: number }
-  riders: { inserted: number; skipped: number }
-  routes: { inserted: number; skipped: number }
-  events: { inserted: number; skipped: number }
-  results: { inserted: number; skipped: number }
-  resultAwards: { inserted: number; skipped: number }
-}
-
 async function importChapters(chapterIds: Map<string, string>): Promise<void> {
   console.log('\n--- Importing Chapters ---')
 
   // Get existing chapters
-  const { data: existing } = await supabase
-    .from('chapters')
-    .select('id, slug')
+  const { data: existing } = await supabase.from('chapters').select('id, slug')
 
-  const existingSlugs = new Set(existing?.map(c => c.slug) || [])
-  existing?.forEach(c => chapterIds.set(c.slug, c.id))
+  const existingSlugs = new Set(existing?.map((c) => c.slug) || [])
+  existing?.forEach((c) => chapterIds.set(c.slug, c.id))
 
   // Add all chapters (core + historical)
   const newChapters = [
-    { slug: 'toronto', name: 'Toronto', description: 'Brevets and populaires in the Greater Toronto Area' },
-    { slug: 'ottawa', name: 'Ottawa', description: 'Brevets and populaires in the Ottawa Valley region' },
-    { slug: 'simcoe', name: 'Simcoe-Muskoka', description: 'Brevets and populaires in Simcoe County and Muskoka' },
-    { slug: 'huron', name: 'Huron', description: 'Brevets and populaires along Lake Huron and Bruce County' },
+    {
+      slug: 'toronto',
+      name: 'Toronto',
+      description: 'Brevets and populaires in the Greater Toronto Area',
+    },
+    {
+      slug: 'ottawa',
+      name: 'Ottawa',
+      description: 'Brevets and populaires in the Ottawa Valley region',
+    },
+    {
+      slug: 'simcoe',
+      name: 'Simcoe-Muskoka',
+      description: 'Brevets and populaires in Simcoe County and Muskoka',
+    },
+    {
+      slug: 'huron',
+      name: 'Huron',
+      description: 'Brevets and populaires along Lake Huron and Bruce County',
+    },
     { slug: 'niagara', name: 'Niagara', description: 'Historical chapter (inactive)' },
     { slug: 'other', name: 'Other', description: 'Miscellaneous events' },
     { slug: 'permanent', name: 'Permanent', description: 'Permanent rides' },
-  ].filter(c => !existingSlugs.has(c.slug))
+  ].filter((c) => !existingSlugs.has(c.slug))
 
   if (newChapters.length > 0) {
     const { data: inserted, error } = await supabase
@@ -111,7 +117,7 @@ async function importChapters(chapterIds: Map<string, string>): Promise<void> {
     if (error) {
       console.error('Error inserting chapters:', error)
     } else {
-      inserted?.forEach(c => chapterIds.set(c.slug, c.id))
+      inserted?.forEach((c) => chapterIds.set(c.slug, c.id))
       console.log(`Inserted ${inserted?.length || 0} new chapters`)
     }
   } else {
@@ -121,7 +127,9 @@ async function importChapters(chapterIds: Map<string, string>): Promise<void> {
   console.log('Chapter IDs:', Object.fromEntries(chapterIds))
 }
 
-async function importAwards(awardIds: Map<string, string>): Promise<{ inserted: number; skipped: number }> {
+async function importAwards(
+  awardIds: Map<string, string>
+): Promise<{ inserted: number; skipped: number }> {
   console.log('\n--- Importing Awards ---')
 
   const sqliteAwards = sqlite.prepare('SELECT * FROM awards').all() as Array<{
@@ -137,17 +145,16 @@ async function importAwards(awardIds: Map<string, string>): Promise<{ inserted: 
     const uuid = generateUUID(award.id)
     awardIds.set(award.id, uuid)
 
-    const { error } = await supabase
-      .from('awards')
-      .insert({
-        id: uuid,
-        slug: createSlug(award.title),
-        title: award.title,
-        description: award.description,
-      })
+    const { error } = await supabase.from('awards').insert({
+      id: uuid,
+      slug: createSlug(award.title),
+      title: award.title,
+      description: award.description,
+    })
 
     if (error) {
-      if (error.code === '23505') { // Unique violation
+      if (error.code === '23505') {
+        // Unique violation
         skipped++
       } else {
         console.error(`Error inserting award ${award.title}:`, error.message)
@@ -161,7 +168,9 @@ async function importAwards(awardIds: Map<string, string>): Promise<{ inserted: 
   return { inserted, skipped }
 }
 
-async function importRiders(riderIds: Map<string, string>): Promise<{ inserted: number; skipped: number }> {
+async function importRiders(
+  riderIds: Map<string, string>
+): Promise<{ inserted: number; skipped: number }> {
   console.log('\n--- Importing Riders ---')
 
   const sqliteRiders = sqlite.prepare('SELECT * FROM riders').all() as Array<{
@@ -177,7 +186,7 @@ async function importRiders(riderIds: Map<string, string>): Promise<{ inserted: 
 
   for (let i = 0; i < sqliteRiders.length; i += batchSize) {
     const batch = sqliteRiders.slice(i, i + batchSize)
-    const ridersToInsert = batch.map(rider => {
+    const ridersToInsert = batch.map((rider) => {
       const uuid = generateUUID(rider.id)
       riderIds.set(rider.id, uuid)
       return {
@@ -233,23 +242,22 @@ async function importRoutes(
     const chapterSlug = route.chapter ? chapterSlugMap[route.chapter] : null
     const chapterId = chapterSlug ? chapterIds.get(chapterSlug) : null
 
-    const { error } = await supabase
-      .from('routes')
-      .insert({
-        id: uuid,
-        slug: route.slug,
-        name: route.name,
-        chapter_id: chapterId,
-        description: route.description,
-        notes: route.notes,
-        rwgps_id: null,
-        cue_sheet_url: null,
-        collection: null,
-        is_active: false, // Historical routes are inactive
-      })
+    const { error } = await supabase.from('routes').insert({
+      id: uuid,
+      slug: route.slug,
+      name: route.name,
+      chapter_id: chapterId,
+      description: route.description,
+      notes: route.notes,
+      rwgps_id: null,
+      cue_sheet_url: null,
+      collection: null,
+      is_active: false, // Historical routes are inactive
+    })
 
     if (error) {
-      if (error.code === '23505') { // Unique violation
+      if (error.code === '23505') {
+        // Unique violation
         skipped++
       } else {
         console.error(`Error inserting route ${route.name}:`, error.message)
@@ -284,7 +292,8 @@ async function importEvents(
 
   // Build distance map for results import (use 360 for flèche events)
   for (const brevet of sqliteBrevets) {
-    const isFlèche = brevet.title.toLowerCase().includes('flèche') || brevet.title.toLowerCase().includes('fleche')
+    const isFlèche =
+      brevet.title.toLowerCase().includes('flèche') || brevet.title.toLowerCase().includes('fleche')
     const distance = brevet.distance || (isFlèche ? 360 : 0)
     brevetDistances.set(brevet.id, distance)
   }
@@ -295,7 +304,7 @@ async function importEvents(
 
   for (let i = 0; i < sqliteBrevets.length; i += batchSize) {
     const batch = sqliteBrevets.slice(i, i + batchSize)
-    const eventsToInsert = batch.map(brevet => {
+    const eventsToInsert = batch.map((brevet) => {
       const uuid = generateUUID(brevet.id)
       eventIds.set(brevet.id, uuid)
 
@@ -304,7 +313,9 @@ async function importEvents(
       const routeId = brevet.route_ref ? routeIds.get(brevet.route_ref) : null
 
       // Use 360km for flèche events (minimum distance requirement)
-      const isFlèche = brevet.title.toLowerCase().includes('flèche') || brevet.title.toLowerCase().includes('fleche')
+      const isFlèche =
+        brevet.title.toLowerCase().includes('flèche') ||
+        brevet.title.toLowerCase().includes('fleche')
       const distance = brevet.distance || (isFlèche ? 360 : 0)
 
       return {
@@ -336,7 +347,9 @@ async function importEvents(
     }
 
     if ((i + batchSize) % 500 === 0 || i + batchSize >= sqliteBrevets.length) {
-      console.log(`  Processed ${Math.min(i + batchSize, sqliteBrevets.length)}/${sqliteBrevets.length} events`)
+      console.log(
+        `  Processed ${Math.min(i + batchSize, sqliteBrevets.length)}/${sqliteBrevets.length} events`
+      )
     }
   }
 
@@ -352,7 +365,9 @@ async function importResults(
 ): Promise<{ inserted: number; skipped: number }> {
   console.log('\n--- Importing Results ---')
 
-  const sqliteResults = sqlite.prepare("SELECT * FROM results WHERE id IS NOT NULL AND id != ''").all() as Array<{
+  const sqliteResults = sqlite
+    .prepare("SELECT * FROM results WHERE id IS NOT NULL AND id != ''")
+    .all() as Array<{
     id: string
     brevet_ref: string
     rider_ref: string
@@ -384,7 +399,9 @@ async function importResults(
     deduplicatedResults.push(result)
   }
 
-  console.log(`  De-duplicated: ${sqliteResults.length} → ${deduplicatedResults.length} (${duplicatesSkipped} duplicates removed)`)
+  console.log(
+    `  De-duplicated: ${sqliteResults.length} → ${deduplicatedResults.length} (${duplicatesSkipped} duplicates removed)`
+  )
 
   let inserted = 0
   let skipped = 0
@@ -433,10 +450,7 @@ async function importResults(
     }
 
     if (resultsToInsert.length > 0) {
-      const { data, error } = await supabase
-        .from('results')
-        .insert(resultsToInsert)
-        .select('id')
+      const { data, error } = await supabase.from('results').insert(resultsToInsert).select('id')
 
       if (error) {
         console.error(`Error inserting results batch:`, error.message)
@@ -447,11 +461,15 @@ async function importResults(
     }
 
     if ((i + batchSize) % 1000 === 0 || i + batchSize >= deduplicatedResults.length) {
-      console.log(`  Processed ${Math.min(i + batchSize, deduplicatedResults.length)}/${deduplicatedResults.length} results`)
+      console.log(
+        `  Processed ${Math.min(i + batchSize, deduplicatedResults.length)}/${deduplicatedResults.length} results`
+      )
     }
   }
 
-  console.log(`Results: ${inserted} inserted, ${skipped} skipped, ${duplicatesSkipped} duplicates removed`)
+  console.log(
+    `Results: ${inserted} inserted, ${skipped} skipped, ${duplicatesSkipped} duplicates removed`
+  )
   return { inserted, skipped }
 }
 
@@ -506,7 +524,9 @@ async function importResultAwards(
     }
 
     if ((i + batchSize) % 500 === 0 || i + batchSize >= sqliteResultAwards.length) {
-      console.log(`  Processed ${Math.min(i + batchSize, sqliteResultAwards.length)}/${sqliteResultAwards.length} result_awards`)
+      console.log(
+        `  Processed ${Math.min(i + batchSize, sqliteResultAwards.length)}/${sqliteResultAwards.length} result_awards`
+      )
     }
   }
 
@@ -521,7 +541,9 @@ async function main() {
   console.log(`Source: ${dbPath}`)
 
   // Verify SQLite connection
-  const tableCount = sqlite.prepare("SELECT COUNT(*) as count FROM sqlite_master WHERE type='table'").get() as { count: number }
+  const tableCount = sqlite
+    .prepare("SELECT COUNT(*) as count FROM sqlite_master WHERE type='table'")
+    .get() as { count: number }
   console.log(`Found ${tableCount.count} tables in SQLite database`)
 
   // ID mapping tables
@@ -548,11 +570,21 @@ async function main() {
   console.log('===========================================')
 
   // Verify final counts
-  const { count: ridersCount } = await supabase.from('riders').select('*', { count: 'exact', head: true })
-  const { count: routesCount } = await supabase.from('routes').select('*', { count: 'exact', head: true })
-  const { count: eventsCount } = await supabase.from('events').select('*', { count: 'exact', head: true })
-  const { count: resultsCount } = await supabase.from('results').select('*', { count: 'exact', head: true })
-  const { count: awardsCount } = await supabase.from('awards').select('*', { count: 'exact', head: true })
+  const { count: ridersCount } = await supabase
+    .from('riders')
+    .select('*', { count: 'exact', head: true })
+  const { count: routesCount } = await supabase
+    .from('routes')
+    .select('*', { count: 'exact', head: true })
+  const { count: eventsCount } = await supabase
+    .from('events')
+    .select('*', { count: 'exact', head: true })
+  const { count: resultsCount } = await supabase
+    .from('results')
+    .select('*', { count: 'exact', head: true })
+  const { count: awardsCount } = await supabase
+    .from('awards')
+    .select('*', { count: 'exact', head: true })
 
   console.log('\nFinal database counts:')
   console.log(`  Riders: ${ridersCount}`)

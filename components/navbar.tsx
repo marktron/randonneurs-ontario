@@ -1,42 +1,31 @@
-"use client";
+'use client'
 
-import Link from "next/link";
-import Image from "next/image";
-import { useState } from "react";
-import { MenuIcon, ChevronDownIcon } from "lucide-react";
+import Link from 'next/link'
+import Image from 'next/image'
+import { useState } from 'react'
+import { MenuIcon, ChevronDownIcon } from 'lucide-react'
 import {
   NavigationMenu,
   NavigationMenuContent,
   NavigationMenuItem,
   NavigationMenuList,
   NavigationMenuTrigger,
-} from "@/components/ui/navigation-menu";
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-} from "@/components/ui/sheet";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
-import { Button } from "@/components/ui/button";
+} from '@/components/ui/navigation-menu'
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
+import { Button } from '@/components/ui/button'
 
-const currentSeason = process.env.NEXT_PUBLIC_CURRENT_SEASON || "2026";
-const currentYear = new Date().getFullYear();
-const mostRecentPbpYear = currentYear - ((currentYear - 3) % 4); // PBP years: 2023, 2027, 2031...
-const mostRecentGraniteAnvilYear = 2025;
+const currentSeason = process.env.NEXT_PUBLIC_CURRENT_SEASON || '2026'
+const currentYear = new Date().getFullYear()
+const mostRecentPbpYear = currentYear - ((currentYear - 3) % 4) // PBP years: 2023, 2027, 2031...
+const mostRecentGraniteAnvilYear = 2025
 
-const chapters = ["Huron", "Ottawa", "Simcoe Muskoka", "Toronto"];
+const chapters = ['Huron', 'Ottawa', 'Simcoe-Muskoka', 'Toronto']
 
-const linkStyles = "bg-transparent hover:bg-muted/50 focus:bg-muted/50 rounded-lg px-4 py-2 text-sm font-medium transition-colors inline-flex items-center";
-const dropdownLinkStyles = "block rounded-md px-3 py-2 text-sm hover:bg-muted transition-colors";
+const dropdownLinkStyles = 'block rounded-md px-3 py-2 text-sm hover:bg-muted transition-colors'
 
 export function Navbar() {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(false)
 
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -114,7 +103,7 @@ export function Navbar() {
                   {chapters.map((chapter) => (
                     <li key={chapter}>
                       <Link
-                        href={`/routes/${chapter.toLowerCase().replace(" ", "-")}`}
+                        href={`/routes/${chapter.toLowerCase().replace(' ', '-')}`}
                         className={dropdownLinkStyles}
                       >
                         {chapter}
@@ -135,7 +124,7 @@ export function Navbar() {
                   {chapters.map((chapter) => (
                     <li key={chapter}>
                       <Link
-                        href={`/calendar/${chapter.toLowerCase().replace(" ", "-")}`}
+                        href={`/calendar/${chapter.toLowerCase().replace(' ', '-')}`}
                         className={dropdownLinkStyles}
                       >
                         {chapter}
@@ -144,18 +133,12 @@ export function Navbar() {
                   ))}
                   <li className="border-t border-border my-1" />
                   <li>
-                    <Link
-                      href="/calendar/permanents"
-                      className={dropdownLinkStyles}
-                    >
+                    <Link href="/calendar/permanents" className={dropdownLinkStyles}>
                       Permanents
                     </Link>
                   </li>
                   <li>
-                    <Link
-                      href="/devil-week-2026"
-                      className={dropdownLinkStyles}
-                    >
+                    <Link href="/devil-week-2026" className={dropdownLinkStyles}>
                       Devil Week 2026
                     </Link>
                   </li>
@@ -176,7 +159,7 @@ export function Navbar() {
                   {chapters.map((chapter) => (
                     <li key={chapter}>
                       <Link
-                        href={`/results/${currentSeason}/${chapter.toLowerCase().replace(" ", "-")}`}
+                        href={`/results/${currentSeason}/${chapter.toLowerCase().replace(' ', '-')}`}
                         className={dropdownLinkStyles}
                       >
                         {chapter}
@@ -201,10 +184,7 @@ export function Navbar() {
                     </Link>
                   </li>
                   <li>
-                    <Link
-                      href={`/results/${mostRecentPbpYear}/pbp`}
-                      className={dropdownLinkStyles}
-                    >
+                    <Link href={`/results/${mostRecentPbpYear}/pbp`} className={dropdownLinkStyles}>
                       Paris-Brest-Paris
                     </Link>
                   </li>
@@ -290,7 +270,7 @@ export function Navbar() {
                 {chapters.map((chapter) => (
                   <Link
                     key={chapter}
-                    href={`/routes/${chapter.toLowerCase().replace(" ", "-")}`}
+                    href={`/routes/${chapter.toLowerCase().replace(' ', '-')}`}
                     onClick={() => setOpen(false)}
                     className="block px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors"
                   >
@@ -304,7 +284,7 @@ export function Navbar() {
                 {chapters.map((chapter) => (
                   <Link
                     key={chapter}
-                    href={`/calendar/${chapter.toLowerCase().replace(" ", "-")}`}
+                    href={`/calendar/${chapter.toLowerCase().replace(' ', '-')}`}
                     onClick={() => setOpen(false)}
                     className="block px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors"
                   >
@@ -336,7 +316,7 @@ export function Navbar() {
                 {chapters.map((chapter) => (
                   <Link
                     key={chapter}
-                    href={`/results/${currentSeason}/${chapter.toLowerCase().replace(" ", "-")}`}
+                    href={`/results/${currentSeason}/${chapter.toLowerCase().replace(' ', '-')}`}
                     onClick={() => setOpen(false)}
                     className="block px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors"
                   >
@@ -380,25 +360,17 @@ export function Navbar() {
         </Sheet>
       </div>
     </header>
-  );
+  )
 }
 
-function MobileNavSection({
-  title,
-  children,
-}: {
-  title: string;
-  children: React.ReactNode;
-}) {
+function MobileNavSection({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <Collapsible>
       <CollapsibleTrigger className="flex w-full items-center justify-between px-3 py-2.5 text-sm font-medium rounded-lg hover:bg-muted transition-colors">
         {title}
         <ChevronDownIcon className="h-4 w-4 text-muted-foreground transition-transform duration-200 [[data-state=open]>&]:rotate-180" />
       </CollapsibleTrigger>
-      <CollapsibleContent className="pl-3 mt-1 space-y-1">
-        {children}
-      </CollapsibleContent>
+      <CollapsibleContent className="pl-3 mt-1 space-y-1">{children}</CollapsibleContent>
     </Collapsible>
-  );
+  )
 }

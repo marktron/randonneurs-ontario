@@ -7,11 +7,7 @@ import { sendgrid } from '@/lib/email/sendgrid'
 import { parseLocalDate, createSlug } from '@/lib/utils'
 import { getUrlSlugFromDbSlug } from '@/lib/chapter-config'
 import { createPendingResultsAndSendEmails } from '@/lib/events/complete-event'
-import {
-  handleActionError,
-  handleSupabaseError,
-  createActionResult,
-} from '@/lib/errors'
+import { handleActionError, handleSupabaseError, createActionResult } from '@/lib/errors'
 import type { ActionResult } from '@/types/actions'
 import type {
   ChapterSlugOnly,
@@ -19,7 +15,6 @@ import type {
   EventInsert,
   EventUpdate,
   EventIdOnly,
-  EventForStatusUpdate,
   EventWithChapterName,
 } from '@/types/queries'
 
@@ -66,11 +61,11 @@ export interface CreateEventData {
   routeId?: string | null
   eventType: EventType
   distanceKm: number
-  eventDate: string  // YYYY-MM-DD
-  startTime?: string | null  // HH:MM
+  eventDate: string // YYYY-MM-DD
+  startTime?: string | null // HH:MM
   startLocation?: string | null
-  description?: string | null  // Markdown-formatted description
-  imageUrl?: string | null  // URL to event image from Supabase Storage
+  description?: string | null // Markdown-formatted description
+  imageUrl?: string | null // URL to event image from Supabase Storage
 }
 
 export async function createEvent(data: CreateEventData): Promise<ActionResult<{ id: string }>> {
@@ -157,17 +152,14 @@ export interface UpdateEventData {
   routeId?: string | null
   eventType?: EventType
   distanceKm?: number
-  eventDate?: string  // YYYY-MM-DD
-  startTime?: string | null  // HH:MM
+  eventDate?: string // YYYY-MM-DD
+  startTime?: string | null // HH:MM
   startLocation?: string | null
-  description?: string | null  // Markdown-formatted description
-  imageUrl?: string | null  // URL to event image from Supabase Storage
+  description?: string | null // Markdown-formatted description
+  imageUrl?: string | null // URL to event image from Supabase Storage
 }
 
-export async function updateEvent(
-  eventId: string,
-  data: UpdateEventData
-): Promise<ActionResult> {
+export async function updateEvent(eventId: string, data: UpdateEventData): Promise<ActionResult> {
   try {
     await requireAdmin()
 
@@ -213,11 +205,7 @@ export async function updateEvent(
       .eq('id', eventId)
 
     if (error) {
-      return handleSupabaseError(
-        error,
-        { operation: 'updateEvent' },
-        'Failed to update event'
-      )
+      return handleSupabaseError(error, { operation: 'updateEvent' }, 'Failed to update event')
     }
 
     // Revalidate admin pages (still use revalidatePath for admin routes)
@@ -355,10 +343,7 @@ export async function updateEventStatus(
     const typedEvent = event as EventWithChapterName
 
     const updateData: EventUpdate = { status }
-    const { error } = await getSupabaseAdmin()
-      .from('events')
-      .update(updateData)
-      .eq('id', eventId)
+    const { error } = await getSupabaseAdmin().from('events').update(updateData).eq('id', eventId)
 
     if (error) {
       console.error('Error updating event status:', error)
@@ -375,7 +360,9 @@ export async function updateEventStatus(
         chapters: typedEvent.chapters,
       })
 
-      console.log(`Event ${typedEvent.name} completed: ${resultsCreated} results created, ${emailsSent} emails sent`)
+      console.log(
+        `Event ${typedEvent.name} completed: ${resultsCreated} results created, ${emailsSent} emails sent`
+      )
 
       if (errors.length > 0) {
         console.error('Errors during completion:', errors)
@@ -427,13 +414,15 @@ export async function submitEventResults(eventId: string): Promise<ActionResult>
     // Fetch event details
     const { data: event, error: eventError } = await getSupabaseAdmin()
       .from('events')
-      .select(`
+      .select(
+        `
         id,
         name,
         event_date,
         status,
         chapters (name)
-      `)
+      `
+      )
       .eq('id', eventId)
       .single()
 
@@ -454,12 +443,14 @@ export async function submitEventResults(eventId: string): Promise<ActionResult>
     // Fetch all results for this event
     const { data: results, error: resultsError } = await getSupabaseAdmin()
       .from('results')
-      .select(`
+      .select(
+        `
         riders (first_name, last_name),
         status,
         finish_time,
         note
-      `)
+      `
+      )
       .eq('event_id', eventId)
       .order('finish_time', { ascending: true, nullsFirst: false })
 
