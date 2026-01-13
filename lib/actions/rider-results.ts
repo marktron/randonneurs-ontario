@@ -2,6 +2,12 @@
 
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import type { ActionResult } from '@/types/actions'
+import type {
+  ResultForSubmission,
+  ResultWithEventStatus,
+  ResultForFileUpload,
+  ResultUpdate,
+} from '@/types/queries'
 
 const BUCKET_NAME = 'rider-submissions'
 const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
@@ -40,8 +46,8 @@ export async function getResultByToken(
   const supabase = getSupabaseAdmin()
 
   // Fetch result with event and rider details
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: result, error } = await (supabase.from('results') as any)
+  const { data: result, error } = await supabase
+    .from('results')
     .select(`
       id,
       event_id,
@@ -75,8 +81,9 @@ export async function getResultByToken(
     return { success: false, error: 'Result not found or invalid token' }
   }
 
-  const event = result.events
-  const rider = result.riders
+  const typedResult = result as ResultForSubmission
+  const event = typedResult.events
+  const rider = typedResult.riders
 
   if (!event || !rider) {
     return { success: false, error: 'Invalid result data' }
@@ -95,14 +102,14 @@ export async function getResultByToken(
       chapterName: event.chapters?.name || 'Randonneurs Ontario',
       riderName: `${rider.first_name} ${rider.last_name}`,
       riderEmail: rider.email || '',
-      currentStatus: result.status,
-      finishTime: result.finish_time,
-      gpxUrl: result.gpx_url,
-      gpxFilePath: result.gpx_file_path,
-      controlCardFrontPath: result.control_card_front_path,
-      controlCardBackPath: result.control_card_back_path,
-      riderNotes: result.rider_notes,
-      submittedAt: result.submitted_at,
+      currentStatus: typedResult.status,
+      finishTime: typedResult.finish_time,
+      gpxUrl: typedResult.gpx_url,
+      gpxFilePath: typedResult.gpx_file_path,
+      controlCardFrontPath: typedResult.control_card_front_path,
+      controlCardBackPath: typedResult.control_card_back_path,
+      riderNotes: typedResult.rider_notes,
+      submittedAt: typedResult.submitted_at,
       canSubmit,
     },
   }
@@ -146,8 +153,8 @@ export async function submitRiderResult(
   const supabase = getSupabaseAdmin()
 
   // First, verify the token and check event status
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: result, error: fetchError } = await (supabase.from('results') as any)
+  const { data: result, error: fetchError } = await supabase
+    .from('results')
     .select('id, events(status)')
     .eq('submission_token', token)
     .single()
@@ -156,20 +163,24 @@ export async function submitRiderResult(
     return { success: false, error: 'Result not found or invalid token' }
   }
 
-  if (result.events?.status === 'submitted') {
+  const typedResult = result as ResultWithEventStatus
+
+  if (typedResult.events?.status === 'submitted') {
     return { success: false, error: 'Results have already been submitted to ACP. Contact your chapter VP for changes.' }
   }
 
   // Update the result
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error: updateError } = await (supabase.from('results') as any)
-    .update({
-      status,
-      finish_time: status === 'finished' ? finishTime : null,
-      gpx_url: gpxUrl || null,
-      rider_notes: riderNotes || null,
-      submitted_at: new Date().toISOString(),
-    })
+  const updateData: ResultUpdate = {
+    status,
+    finish_time: status === 'finished' ? finishTime : null,
+    gpx_url: gpxUrl || null,
+    rider_notes: riderNotes || null,
+    submitted_at: new Date().toISOString(),
+  }
+
+  const { error: updateError } = await supabase
+    .from('results')
+    .update(updateData)
     .eq('submission_token', token)
 
   if (updateError) {
@@ -212,8 +223,8 @@ export async function uploadResultFile(
   const supabase = getSupabaseAdmin()
 
   // Verify the token and get result ID
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: result, error: fetchError } = await (supabase.from('results') as any)
+  const { data: result, error: fetchError } = await supabase
+    .from('results')
     .select('id, event_id, rider_id, events(status)')
     .eq('submission_token', token)
     .single()
@@ -222,7 +233,9 @@ export async function uploadResultFile(
     return { success: false, error: 'Result not found or invalid token' }
   }
 
-  if (result.events?.status === 'submitted') {
+  const typedResult = result as ResultForFileUpload
+
+  if (typedResult.events?.status === 'submitted') {
     return { success: false, error: 'Results have already been submitted. Contact your chapter VP for changes.' }
   }
 
@@ -230,7 +243,7 @@ export async function uploadResultFile(
   const timestamp = Date.now()
   const randomId = Math.random().toString(36).substring(2, 8)
   const ext = file.name.split('.').pop()?.toLowerCase() || (fileType === 'gpx' ? 'gpx' : 'jpg')
-  const filePath = `${result.event_id}/${result.rider_id}/${fileType}-${timestamp}-${randomId}.${ext}`
+  const filePath = `${typedResult.event_id}/${typedResult.rider_id}/${fileType}-${timestamp}-${randomId}.${ext}`
 
   // Convert File to ArrayBuffer for upload
   const arrayBuffer = await file.arrayBuffer()
@@ -254,14 +267,14 @@ export async function uploadResultFile(
   const publicUrl = urlData.publicUrl
 
   // Update the result with the file path
-  const updateField = fileType === 'gpx'
+  const updateField: ResultUpdate = fileType === 'gpx'
     ? { gpx_file_path: filePath }
     : fileType === 'control_card_front'
       ? { control_card_front_path: filePath }
       : { control_card_back_path: filePath }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error: updateError } = await (supabase.from('results') as any)
+  const { error: updateError } = await supabase
+    .from('results')
     .update(updateField)
     .eq('submission_token', token)
 
@@ -298,8 +311,8 @@ export async function deleteResultFile(
       ? 'control_card_front_path'
       : 'control_card_back_path'
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: result, error: fetchError } = await (supabase.from('results') as any)
+  const { data: result, error: fetchError } = await supabase
+    .from('results')
     .select(`id, ${pathField}, events(status)`)
     .eq('submission_token', token)
     .single()
@@ -308,11 +321,13 @@ export async function deleteResultFile(
     return { success: false, error: 'Result not found or invalid token' }
   }
 
-  if (result.events?.status === 'submitted') {
+  const typedResult = result as ResultForFileUpload
+
+  if (typedResult.events?.status === 'submitted') {
     return { success: false, error: 'Results have already been submitted. Contact your chapter VP for changes.' }
   }
 
-  const filePath = result[pathField]
+  const filePath = typedResult[pathField as keyof ResultForFileUpload] as string | null
   if (!filePath) {
     return { success: true } // No file to delete
   }
@@ -326,9 +341,10 @@ export async function deleteResultFile(
   }
 
   // Clear the file path in the database
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error: updateError } = await (supabase.from('results') as any)
-    .update({ [pathField]: null })
+  const updateData: ResultUpdate = { [pathField]: null } as ResultUpdate
+  const { error: updateError } = await supabase
+    .from('results')
+    .update(updateData)
     .eq('submission_token', token)
 
   if (updateError) {

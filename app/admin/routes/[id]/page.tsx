@@ -4,16 +4,32 @@ import { notFound } from 'next/navigation'
 import { RouteForm } from '@/components/admin/route-form'
 import Link from 'next/link'
 import { ChevronLeft } from 'lucide-react'
+import type { Route } from '@/types/queries'
 import type { RouteOption } from '@/types/ui'
 
-async function getRoute(id: string) {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data } = await (getSupabaseAdmin().from('routes') as any)
+async function getRoute(id: string): Promise<RouteOption | null> {
+  const { data } = await getSupabaseAdmin()
+    .from('routes')
     .select('*')
     .eq('id', id)
     .single()
 
-  return data as RouteOption | null
+  if (!data) return null
+
+  const route = data as Route
+  return {
+    id: route.id,
+    name: route.name,
+    slug: route.slug,
+    chapterId: route.chapter_id,
+    distanceKm: route.distance_km,
+    collection: route.collection,
+    description: route.description,
+    rwgpsUrl: route.rwgps_id ? `https://ridewithgps.com/routes/${route.rwgps_id}` : null,
+    cueSheetUrl: route.cue_sheet_url,
+    notes: route.notes,
+    isActive: route.is_active,
+  }
 }
 
 async function getChapters() {

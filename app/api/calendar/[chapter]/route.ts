@@ -3,6 +3,7 @@ import { createEvents, type EventAttributes } from 'ics'
 import { getSupabase } from '@/lib/supabase'
 import { getDbSlug, getChapterInfo, getAllChapterSlugs } from '@/lib/chapter-config'
 import { formatEventType } from '@/lib/utils'
+import type { ChapterId, EventForCalendar } from '@/types/queries'
 
 // Revalidate the calendar feed every hour
 export const revalidate = 3600
@@ -101,8 +102,8 @@ export async function GET(request: Request, { params }: RouteParams) {
   }
 
   // Get chapter ID
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: chapterData, error: chapterError } = await (getSupabase().from('chapters') as any)
+  const { data: chapterData, error: chapterError } = await getSupabase()
+    .from('chapters')
     .select('id')
     .eq('slug', dbSlug)
     .single()
@@ -114,12 +115,14 @@ export async function GET(request: Request, { params }: RouteParams) {
     )
   }
 
+  const typedChapter = chapterData as ChapterId
+
   // Fetch upcoming events for this chapter
   const today = new Date().toISOString().split('T')[0]
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: events, error: eventsError } = await (getSupabase().from('events') as any)
+  const { data: events, error: eventsError } = await getSupabase()
+    .from('events')
     .select('id, slug, name, event_date, start_time, start_location, distance_km, event_type, description')
-    .eq('chapter_id', chapterData.id)
+    .eq('chapter_id', typedChapter.id)
     .eq('status', 'scheduled')
     .neq('event_type', 'permanent')
     .gte('event_date', today)
@@ -137,17 +140,8 @@ export async function GET(request: Request, { params }: RouteParams) {
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://randonneursontario.ca'
   const siteHostname = siteUrl.replace(/^https?:\/\//, '').replace(/\/$/, '')
 
-  const icsEvents: EventAttributes[] = (events || []).map((event: {
-    id: string
-    slug: string
-    name: string
-    event_date: string
-    start_time: string | null
-    start_location: string | null
-    distance_km: number
-    event_type: string
-    description: string | null
-  }) => {
+  const typedEvents = (events || []) as EventForCalendar[]
+  const icsEvents: EventAttributes[] = typedEvents.map((event) => {
     // Parse date and time in Toronto timezone, then convert to UTC
     const [year, month, day] = event.event_date.split('-').map(Number)
     const [hour, minute] = (event.start_time || '08:00').split(':').map(Number)

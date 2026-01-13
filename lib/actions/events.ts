@@ -8,20 +8,31 @@ import { parseLocalDate, createSlug } from '@/lib/utils'
 import { getUrlSlugFromDbSlug } from '@/lib/chapter-config'
 import { createPendingResultsAndSendEmails } from '@/lib/events/complete-event'
 import type { ActionResult } from '@/types/actions'
+import type {
+  ChapterSlugOnly,
+  EventInsert,
+  EventUpdate,
+  EventIdOnly,
+  EventForStatusUpdate,
+  EventWithChapterName,
+} from '@/types/queries'
 
 // Helper to revalidate public calendar pages
 async function revalidateCalendarPages(chapterId: string, eventType: string) {
   // Get chapter slug
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: chapter } = await (getSupabaseAdmin().from('chapters') as any)
+  const { data: chapter } = await getSupabaseAdmin()
+    .from('chapters')
     .select('slug')
     .eq('id', chapterId)
     .single()
 
-  if (chapter?.slug) {
-    const urlSlug = getUrlSlugFromDbSlug(chapter.slug)
-    if (urlSlug) {
-      revalidatePath(`/calendar/${urlSlug}`)
+  if (chapter) {
+    const typedChapter = chapter as ChapterSlugOnly
+    if (typedChapter.slug) {
+      const urlSlug = getUrlSlugFromDbSlug(typedChapter.slug)
+      if (urlSlug) {
+        revalidatePath(`/calendar/${urlSlug}`)
+      }
     }
   }
 
@@ -72,23 +83,25 @@ export async function createEvent(data: CreateEventData): Promise<ActionResult<{
     // Generate slug from name, distance, and date
     const slug = createSlug(`${name}-${distanceKm}-${eventDate}`)
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: newEvent, error } = await (getSupabaseAdmin().from('events') as any)
-      .insert({
-        slug,
-        name: name.trim(),
-        chapter_id: chapterId,
-        route_id: routeId || null,
-        event_type: eventType,
-        distance_km: distanceKm,
-        event_date: eventDate,
-        start_time: startTime || null,
-        start_location: startLocation || null,
-        description: description || null,
-        image_url: imageUrl || null,
-        status: 'scheduled',
-        // Note: season is a generated column computed from event_date
-      })
+    const insertData: EventInsert = {
+      slug,
+      name: name.trim(),
+      chapter_id: chapterId,
+      route_id: routeId || null,
+      event_type: eventType,
+      distance_km: distanceKm,
+      event_date: eventDate,
+      start_time: startTime || null,
+      start_location: startLocation || null,
+      description: description || null,
+      image_url: imageUrl || null,
+      status: 'scheduled',
+      // Note: season is a generated column computed from event_date
+    }
+
+    const { data: newEvent, error } = await getSupabaseAdmin()
+      .from('events')
+      .insert(insertData)
       .select('id')
       .single()
 
@@ -100,13 +113,19 @@ export async function createEvent(data: CreateEventData): Promise<ActionResult<{
       return { success: false, error: 'Failed to create event' }
     }
 
+    if (!newEvent) {
+      return { success: false, error: 'Failed to create event' }
+    }
+
+    const typedNewEvent = newEvent as EventIdOnly
+
     revalidatePath('/admin/events')
     revalidatePath('/admin')
 
     // Revalidate public calendar pages
     await revalidateCalendarPages(chapterId, eventType)
 
-    return { success: true, data: { id: newEvent.id } }
+    return { success: true, data: { id: typedNewEvent.id } }
   } catch (error) {
     console.error('Error in createEvent:', error)
     return { success: false, error: 'An unexpected error occurred' }
@@ -167,9 +186,11 @@ export async function updateEvent(
       updateData.image_url = data.imageUrl || null
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error } = await (getSupabaseAdmin().from('events') as any)
-      .update(updateData)
+    const typedUpdateData: EventUpdate = updateData
+
+    const { error } = await getSupabaseAdmin()
+      .from('events')
+      .update(typedUpdateData)
       .eq('id', eventId)
 
     if (error) {
@@ -182,8 +203,8 @@ export async function updateEvent(
     revalidatePath('/admin')
 
     // Fetch event to get chapter and type for calendar revalidation
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: event } = await (getSupabaseAdmin().from('events') as any)
+    const { data: event } = await getSupabaseAdmin()
+      .from('events')
       .select('chapter_id, event_type')
       .eq('id', eventId)
       .single()
@@ -204,8 +225,8 @@ export async function deleteEvent(eventId: string): Promise<ActionResult> {
     await requireAdmin()
 
     // Fetch the event to check the date and get chapter info for revalidation
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: event, error: fetchError } = await (getSupabaseAdmin().from('events') as any)
+    const { data: event, error: fetchError } = await getSupabaseAdmin()
+      .from('events')
       .select('id, event_date, chapter_id, event_type')
       .eq('id', eventId)
       .single()
@@ -214,15 +235,17 @@ export async function deleteEvent(eventId: string): Promise<ActionResult> {
       return { success: false, error: 'Event not found' }
     }
 
+    const typedEvent = event as Pick<Event, 'id' | 'event_date' | 'chapter_id' | 'event_type'>
+
     // Check if event is in the past
     const today = new Date().toISOString().split('T')[0]
-    if (event.event_date < today) {
+    if (typedEvent.event_date < today) {
       return { success: false, error: 'Cannot delete past events' }
     }
 
     // Delete registrations for this event first
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error: regDeleteError } = await (getSupabaseAdmin().from('registrations') as any)
+    const { error: regDeleteError } = await getSupabaseAdmin()
+      .from('registrations')
       .delete()
       .eq('event_id', eventId)
 
@@ -232,8 +255,8 @@ export async function deleteEvent(eventId: string): Promise<ActionResult> {
     }
 
     // Delete results for this event (shouldn't exist for future events, but just in case)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error: resultsDeleteError } = await (getSupabaseAdmin().from('results') as any)
+    const { error: resultsDeleteError } = await getSupabaseAdmin()
+      .from('results')
       .delete()
       .eq('event_id', eventId)
 
@@ -243,8 +266,8 @@ export async function deleteEvent(eventId: string): Promise<ActionResult> {
     }
 
     // Delete the event
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error: deleteError } = await (getSupabaseAdmin().from('events') as any)
+    const { error: deleteError } = await getSupabaseAdmin()
+      .from('events')
       .delete()
       .eq('id', eventId)
 
@@ -257,7 +280,7 @@ export async function deleteEvent(eventId: string): Promise<ActionResult> {
     revalidatePath('/admin')
 
     // Revalidate public calendar pages
-    await revalidateCalendarPages(event.chapter_id, event.event_type)
+    await revalidateCalendarPages(typedEvent.chapter_id, typedEvent.event_type)
 
     return { success: true }
   } catch (error) {
@@ -275,8 +298,8 @@ export async function updateEventStatus(
 
     // If cancelling, delete all results for this event first
     if (status === 'cancelled') {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { error: deleteError } = await (getSupabaseAdmin().from('results') as any)
+      const { error: deleteError } = await getSupabaseAdmin()
+        .from('results')
         .delete()
         .eq('event_id', eventId)
 
@@ -287,8 +310,8 @@ export async function updateEventStatus(
     }
 
     // Fetch event details before updating (needed for completion emails)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: event, error: fetchError } = await (getSupabaseAdmin().from('events') as any)
+    const { data: event, error: fetchError } = await getSupabaseAdmin()
+      .from('events')
       .select('id, name, event_date, distance_km, chapter_id, event_type, status, chapters(name)')
       .eq('id', eventId)
       .single()
@@ -298,9 +321,12 @@ export async function updateEventStatus(
       return { success: false, error: 'Event not found' }
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error } = await (getSupabaseAdmin().from('events') as any)
-      .update({ status })
+    const typedEvent = event as EventWithChapterName
+
+    const updateData: EventUpdate = { status }
+    const { error } = await getSupabaseAdmin()
+      .from('events')
+      .update(updateData)
       .eq('id', eventId)
 
     if (error) {
@@ -309,16 +335,16 @@ export async function updateEventStatus(
     }
 
     // If transitioning to "completed", create pending results and send emails
-    if (status === 'completed' && event.status === 'scheduled') {
+    if (status === 'completed' && typedEvent.status === 'scheduled') {
       const { resultsCreated, emailsSent, errors } = await createPendingResultsAndSendEmails({
-        id: event.id,
-        name: event.name,
-        event_date: event.event_date,
-        distance_km: event.distance_km,
-        chapters: event.chapters,
+        id: typedEvent.id,
+        name: typedEvent.name,
+        event_date: typedEvent.event_date,
+        distance_km: typedEvent.distance_km,
+        chapters: typedEvent.chapters,
       })
 
-      console.log(`Event ${event.name} completed: ${resultsCreated} results created, ${emailsSent} emails sent`)
+      console.log(`Event ${typedEvent.name} completed: ${resultsCreated} results created, ${emailsSent} emails sent`)
 
       if (errors.length > 0) {
         console.error('Errors during completion:', errors)
@@ -365,8 +391,8 @@ export async function submitEventResults(eventId: string): Promise<ActionResult>
     const admin = await requireAdmin()
 
     // Fetch event details
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: event, error: eventError } = await (getSupabaseAdmin().from('events') as any)
+    const { data: event, error: eventError } = await getSupabaseAdmin()
+      .from('events')
       .select(`
         id,
         name,
@@ -381,17 +407,19 @@ export async function submitEventResults(eventId: string): Promise<ActionResult>
       return { success: false, error: 'Event not found' }
     }
 
-    if (event.status === 'submitted') {
+    const typedEvent = event as EventForSubmission
+
+    if (typedEvent.status === 'submitted') {
       return { success: false, error: 'Results have already been submitted' }
     }
 
-    if (event.status !== 'completed') {
+    if (typedEvent.status !== 'completed') {
       return { success: false, error: 'Only completed events can have results submitted' }
     }
 
     // Fetch all results for this event
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: results, error: resultsError } = await (getSupabaseAdmin().from('results') as any)
+    const { data: results, error: resultsError } = await getSupabaseAdmin()
+      .from('results')
       .select(`
         riders (first_name, last_name),
         status,
@@ -405,7 +433,6 @@ export async function submitEventResults(eventId: string): Promise<ActionResult>
       return { success: false, error: 'Failed to fetch results' }
     }
 
-    const typedEvent = event as EventForSubmission
     const typedResults = (results || []) as ResultForEmail[]
 
     // Build email content
@@ -461,9 +488,10 @@ This email was sent from the Randonneurs Ontario admin system.
     }
 
     // Update event status to submitted
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error: updateError } = await (getSupabaseAdmin().from('events') as any)
-      .update({ status: 'submitted' })
+    const updateData: EventUpdate = { status: 'submitted' }
+    const { error: updateError } = await getSupabaseAdmin()
+      .from('events')
+      .update(updateData)
       .eq('id', eventId)
 
     if (updateError) {

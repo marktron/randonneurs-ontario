@@ -5,6 +5,7 @@ import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { requireAdmin } from '@/lib/auth/get-admin'
 import type { Database } from '@/types/supabase'
 import type { ActionResult } from '@/types/actions'
+import type { AdminInsert, AdminUpdate } from '@/types/queries'
 
 type AdminRole = Database['public']['Tables']['admins']['Row']['role']
 
@@ -49,15 +50,18 @@ export async function createAdminUser(data: AdminUserData): Promise<ActionResult
   }
 
   // Create admin record
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error: adminError } = await (getSupabaseAdmin().from('admins') as any).insert({
+  const adminInsert: AdminInsert = {
     id: authData.user.id,
     email,
     name,
     phone,
     role,
     chapter_id: role === 'chapter_admin' ? chapterId : null,
-  })
+  }
+
+  const { error: adminError } = await getSupabaseAdmin()
+    .from('admins')
+    .insert(adminInsert)
 
   if (adminError) {
     // Rollback: delete the auth user
@@ -86,14 +90,16 @@ export async function updateAdminUser(
     return { success: false, error: 'Chapter admins must have a chapter assigned' }
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error } = await (getSupabaseAdmin().from('admins') as any)
-    .update({
-      name,
-      phone,
-      role,
-      chapter_id: role === 'chapter_admin' ? chapterId : null,
-    })
+  const updateData: AdminUpdate = {
+    name,
+    phone,
+    role,
+    chapter_id: role === 'chapter_admin' ? chapterId : null,
+  }
+
+  const { error } = await getSupabaseAdmin()
+    .from('admins')
+    .update(updateData)
     .eq('id', userId)
 
   if (error) {

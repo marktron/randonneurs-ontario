@@ -14,31 +14,15 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Eye, Clock } from 'lucide-react'
 import { ResultsFilters } from '@/components/admin/results-filters'
+import type {
+  ResultForAdminList,
+  GetDistinctSeasonsResult,
+  ChapterForAdmin,
+} from '@/types/queries'
 
-interface ResultWithDetails {
-  id: string
-  finish_time: string | null
-  status: string
-  team_name: string | null
-  season: number
-  distance_km: number
-  created_at: string
-  riders: {
-    id: string
-    first_name: string
-    last_name: string
-  }
-  events: {
-    id: string
-    name: string
-    event_date: string
-    chapters: { name: string } | null
-  }
-}
-
-async function getResults(season: number | null, chapterId: string | null) {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let query = (getSupabaseAdmin().from('results') as any)
+async function getResults(season: number | null, chapterId: string | null): Promise<ResultForAdminList[]> {
+  let query = getSupabaseAdmin()
+    .from('results')
     .select(`
       id,
       finish_time,
@@ -63,32 +47,25 @@ async function getResults(season: number | null, chapterId: string | null) {
     .order('events(event_date)', { ascending: false })
     .limit(500)
 
-  return (data as ResultWithDetails[]) ?? []
+  return (data as ResultForAdminList[]) ?? []
 }
 
-async function getSeasons() {
+async function getSeasons(): Promise<number[]> {
   // Use RPC function to efficiently get distinct seasons
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data } = await (getSupabaseAdmin() as any).rpc('get_distinct_seasons')
+  const { data } = await getSupabaseAdmin().rpc('get_distinct_seasons')
 
   if (!data) return []
 
-  return (data as { season: number }[]).map(r => r.season)
+  return (data as GetDistinctSeasonsResult[]).map(r => r.season)
 }
 
-interface Chapter {
-  id: string
-  name: string
-  slug: string
-}
-
-async function getChapters(): Promise<Chapter[]> {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data } = await (getSupabaseAdmin().from('chapters') as any)
+async function getChapters(): Promise<ChapterForAdmin[]> {
+  const { data } = await getSupabaseAdmin()
+    .from('chapters')
     .select('id, name, slug')
     .order('name', { ascending: true })
 
-  return (data as Chapter[]) ?? []
+  return (data as ChapterForAdmin[]) ?? []
 }
 
 function getStatusBadge(status: string) {

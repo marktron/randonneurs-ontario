@@ -9,60 +9,15 @@ import { EventResultsManager } from '@/components/admin/event-results-manager'
 import { EventStatusSelect } from '@/components/admin/event-status-select'
 import { EventDeleteButton } from '@/components/admin/event-delete-button'
 import type { EventStatus } from '@/lib/actions/events'
+import type {
+  EventDetailForAdmin,
+  RegistrationWithRiderForAdmin,
+  ResultWithRiderForAdmin,
+} from '@/types/queries'
 
-interface EventDetail {
-  id: string
-  name: string
-  event_date: string
-  start_time: string | null
-  distance_km: number
-  event_type: string
-  status: string
-  season: number
-  chapters: { id: string; name: string } | null
-}
-
-interface Registration {
-  id: string
-  rider_id: string
-  registered_at: string
-  status: string
-  notes: string | null
-  riders: {
-    id: string
-    first_name: string
-    last_name: string
-    email: string | null
-    emergency_contact_name: string | null
-    emergency_contact_phone: string | null
-  }
-}
-
-interface Result {
-  id: string
-  rider_id: string
-  finish_time: string | null
-  status: string
-  team_name: string | null
-  note: string | null
-  // Rider submission fields
-  gpx_url: string | null
-  gpx_file_path: string | null
-  control_card_front_path: string | null
-  control_card_back_path: string | null
-  rider_notes: string | null
-  submitted_at: string | null
-  riders: {
-    id: string
-    first_name: string
-    last_name: string
-    email: string | null
-  }
-}
-
-async function getEventDetails(eventId: string) {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: event } = await (getSupabaseAdmin().from('events') as any)
+async function getEventDetails(eventId: string): Promise<EventDetailForAdmin | null> {
+  const { data: event } = await getSupabaseAdmin()
+    .from('events')
     .select(`
       id,
       name,
@@ -77,12 +32,12 @@ async function getEventDetails(eventId: string) {
     .eq('id', eventId)
     .single()
 
-  return event as EventDetail | null
+  return event as EventDetailForAdmin | null
 }
 
-async function getRegistrations(eventId: string) {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data } = await (getSupabaseAdmin().from('registrations') as any)
+async function getRegistrations(eventId: string): Promise<RegistrationWithRiderForAdmin[]> {
+  const { data } = await getSupabaseAdmin()
+    .from('registrations')
     .select(`
       id,
       rider_id,
@@ -95,12 +50,12 @@ async function getRegistrations(eventId: string) {
     .eq('status', 'registered')
     .order('registered_at', { ascending: true })
 
-  return (data as Registration[]) ?? []
+  return (data as RegistrationWithRiderForAdmin[]) ?? []
 }
 
-async function getResults(eventId: string) {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data } = await (getSupabaseAdmin().from('results') as any)
+async function getResults(eventId: string): Promise<ResultWithRiderForAdmin[]> {
+  const { data } = await getSupabaseAdmin()
+    .from('results')
     .select(`
       id,
       rider_id,

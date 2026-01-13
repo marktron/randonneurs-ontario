@@ -6,22 +6,32 @@ import { requireAdmin } from '@/lib/auth/get-admin'
 import { createSlug } from '@/lib/utils'
 import { getUrlSlugFromDbSlug } from '@/lib/chapter-config'
 import type { ActionResult, MergeResult } from '@/types/actions'
+import type {
+  ChapterSlugOnly,
+  RouteInsert,
+  RouteUpdate,
+  RouteWithChapterId,
+  EventUpdate,
+} from '@/types/queries'
 
 // Helper to revalidate public routes pages
 async function revalidateRoutesPages(chapterId: string | null) {
   if (!chapterId) return
 
   // Get chapter slug
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: chapter } = await (getSupabaseAdmin().from('chapters') as any)
+  const { data: chapter } = await getSupabaseAdmin()
+    .from('chapters')
     .select('slug')
     .eq('id', chapterId)
     .single()
 
-  if (chapter?.slug) {
-    const urlSlug = getUrlSlugFromDbSlug(chapter.slug)
-    if (urlSlug) {
-      revalidatePath(`/routes/${urlSlug}`)
+  if (chapter) {
+    const typedChapter = chapter as ChapterSlugOnly
+    if (typedChapter.slug) {
+      const urlSlug = getUrlSlugFromDbSlug(typedChapter.slug)
+      if (urlSlug) {
+        revalidatePath(`/routes/${urlSlug}`)
+      }
     }
   }
 }
@@ -88,8 +98,7 @@ export async function createRoute(data: RouteData): Promise<ActionResult> {
   const slug = data.slug || createSlug(name)
   const rwgpsId = extractRwgpsId(rwgpsUrl)
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error } = await (getSupabaseAdmin().from('routes') as any).insert({
+  const insertData: RouteInsert = {
     name: name.trim(),
     slug,
     chapter_id: chapterId || null,
@@ -100,7 +109,11 @@ export async function createRoute(data: RouteData): Promise<ActionResult> {
     cue_sheet_url: cueSheetUrl || null,
     notes: notes || null,
     is_active: isActive ?? true,
-  })
+  }
+
+  const { error } = await getSupabaseAdmin()
+    .from('routes')
+    .insert(insertData)
 
   if (error) {
     console.error('Error creating route:', error)
@@ -156,9 +169,11 @@ export async function updateRoute(routeId: string, data: Partial<RouteData>): Pr
     updateData.is_active = data.isActive
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error } = await (getSupabaseAdmin().from('routes') as any)
-    .update(updateData)
+  const typedUpdateData: RouteUpdate = updateData
+
+  const { error } = await getSupabaseAdmin()
+    .from('routes')
+    .update(typedUpdateData)
     .eq('id', routeId)
 
   if (error) {
@@ -173,14 +188,17 @@ export async function updateRoute(routeId: string, data: Partial<RouteData>): Pr
   revalidatePath(`/admin/routes/${routeId}`)
 
   // Fetch route to get chapter for routes page revalidation
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: route } = await (getSupabaseAdmin().from('routes') as any)
+  const { data: route } = await getSupabaseAdmin()
+    .from('routes')
     .select('chapter_id')
     .eq('id', routeId)
     .single()
 
-  if (route?.chapter_id) {
-    await revalidateRoutesPages(route.chapter_id)
+  if (route) {
+    const typedRoute = route as RouteWithChapterId
+    if (typedRoute.chapter_id) {
+      await revalidateRoutesPages(typedRoute.chapter_id)
+    }
   }
 
   return { success: true }
@@ -190,8 +208,8 @@ export async function deleteRoute(routeId: string): Promise<ActionResult> {
   await requireAdmin()
 
   // Fetch route to get chapter info before deleting
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: route } = await (getSupabaseAdmin().from('routes') as any)
+  const { data: route } = await getSupabaseAdmin()
+    .from('routes')
     .select('chapter_id')
     .eq('id', routeId)
     .single()
@@ -223,8 +241,11 @@ export async function deleteRoute(routeId: string): Promise<ActionResult> {
   revalidatePath('/admin/routes')
 
   // Revalidate public routes pages
-  if (route?.chapter_id) {
-    await revalidateRoutesPages(route.chapter_id)
+  if (route) {
+    const typedRoute = route as RouteWithChapterId
+    if (typedRoute.chapter_id) {
+      await revalidateRoutesPages(typedRoute.chapter_id)
+    }
   }
 
   return { success: true }
@@ -233,9 +254,10 @@ export async function deleteRoute(routeId: string): Promise<ActionResult> {
 export async function toggleRouteActive(routeId: string, isActive: boolean): Promise<ActionResult> {
   await requireAdmin()
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error } = await (getSupabaseAdmin().from('routes') as any)
-    .update({ is_active: isActive })
+  const updateData: RouteUpdate = { is_active: isActive }
+  const { error } = await getSupabaseAdmin()
+    .from('routes')
+    .update(updateData)
     .eq('id', routeId)
 
   if (error) {
@@ -246,14 +268,17 @@ export async function toggleRouteActive(routeId: string, isActive: boolean): Pro
   revalidatePath('/admin/routes')
 
   // Fetch route to get chapter for routes page revalidation
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: route } = await (getSupabaseAdmin().from('routes') as any)
+  const { data: route } = await getSupabaseAdmin()
+    .from('routes')
     .select('chapter_id')
     .eq('id', routeId)
     .single()
 
-  if (route?.chapter_id) {
-    await revalidateRoutesPages(route.chapter_id)
+  if (route) {
+    const typedRoute = route as RouteWithChapterId
+    if (typedRoute.chapter_id) {
+      await revalidateRoutesPages(typedRoute.chapter_id)
+    }
   }
 
   return { success: true }
@@ -285,9 +310,10 @@ export async function mergeRoutes(data: MergeRoutesData): Promise<MergeResult> {
 
   try {
     // Step 1: Update all events that reference any of the source routes to use target route
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: updatedEvents, error: updateEventsError } = await (getSupabaseAdmin().from('events') as any)
-      .update({ route_id: targetRouteId })
+    const eventUpdateData: EventUpdate = { route_id: targetRouteId }
+    const { data: updatedEvents, error: updateEventsError } = await getSupabaseAdmin()
+      .from('events')
+      .update(eventUpdateData)
       .in('route_id', routesToDelete)
       .select('id')
 
@@ -312,20 +338,22 @@ export async function mergeRoutes(data: MergeRoutesData): Promise<MergeResult> {
     // Step 3: Update the target route with new properties
     const rwgpsId = extractRwgpsId(routeData.rwgpsUrl)
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error: updateRouteError } = await (getSupabaseAdmin().from('routes') as any)
-      .update({
-        name: routeData.name.trim(),
-        slug: routeData.slug,
-        chapter_id: routeData.chapterId || null,
-        distance_km: routeData.distanceKm || null,
-        collection: routeData.collection || null,
-        description: routeData.description || null,
-        rwgps_id: rwgpsId,
-        cue_sheet_url: routeData.cueSheetUrl || null,
-        notes: routeData.notes || null,
-        is_active: routeData.isActive ?? true,
-      })
+    const routeUpdateData: RouteUpdate = {
+      name: routeData.name.trim(),
+      slug: routeData.slug,
+      chapter_id: routeData.chapterId || null,
+      distance_km: routeData.distanceKm || null,
+      collection: routeData.collection || null,
+      description: routeData.description || null,
+      rwgps_id: rwgpsId,
+      cue_sheet_url: routeData.cueSheetUrl || null,
+      notes: routeData.notes || null,
+      is_active: routeData.isActive ?? true,
+    }
+
+    const { error: updateRouteError } = await getSupabaseAdmin()
+      .from('routes')
+      .update(routeUpdateData)
       .eq('id', targetRouteId)
 
     if (updateRouteError) {
@@ -351,8 +379,8 @@ export async function mergeRoutes(data: MergeRoutesData): Promise<MergeResult> {
 }
 
 export async function getRouteEventCounts(routeIds: string[]): Promise<Record<string, number>> {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data, error } = await (getSupabaseAdmin().from('events') as any)
+  const { data, error } = await getSupabaseAdmin()
+    .from('events')
     .select('route_id')
     .in('route_id', routeIds)
 
@@ -363,7 +391,8 @@ export async function getRouteEventCounts(routeIds: string[]): Promise<Record<st
 
   // Count events per route
   const counts: Record<string, number> = {}
-  for (const event of (data as { route_id: string | null }[]) || []) {
+  const typedData = (data as Pick<Event, 'route_id'>[]) || []
+  for (const event of typedData) {
     if (event.route_id) {
       counts[event.route_id] = (counts[event.route_id] || 0) + 1
     }

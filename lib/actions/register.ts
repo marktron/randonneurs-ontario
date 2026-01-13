@@ -31,27 +31,18 @@ import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { sendRegistrationConfirmationEmail } from '@/lib/email/send-registration-email'
 import { formatEventType } from '@/lib/utils'
 import { format, parseISO } from 'date-fns'
-import type { Database } from '@/types/supabase'
 import { searchRiderCandidates, type RiderMatchCandidate } from './rider-match'
-
-// Type aliases for database operations - makes code more readable
-type RidersUpdate = Database['public']['Tables']['riders']['Update']
-type RidersInsert = Database['public']['Tables']['riders']['Insert']
-type RegistrationsInsert = Database['public']['Tables']['registrations']['Insert']
-type EventsInsert = Database['public']['Tables']['events']['Insert']
-
-interface EventWithChapter {
-  id: string
-  slug: string
-  status: string
-  name: string
-  event_date: string
-  start_time: string | null
-  start_location: string | null
-  distance_km: number
-  event_type: string
-  chapters: { slug: string; name: string } | null
-}
+import type {
+  RiderInsert,
+  RiderUpdate,
+  RegistrationInsert,
+  EventInsert,
+  EventWithChapter,
+  RouteWithChapter,
+  RiderIdOnly,
+  EventIdOnly,
+  RiderMergeInsert,
+} from '@/types/queries'
 
 export interface RegistrationData {
   eventId: string
@@ -141,8 +132,8 @@ export async function registerForEvent(data: RegistrationData): Promise<Registra
   const normalizedEmail = email.toLowerCase().trim()
 
   // Check if event exists and is scheduled (fetch details for confirmation email)
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: eventData, error: eventError } = await (getSupabaseAdmin().from('events') as any)
+  const { data: eventData, error: eventError } = await getSupabaseAdmin()
+    .from('events')
     .select(`
       id, slug, status, name, event_date, start_time,
       start_location, distance_km, event_type,
@@ -173,18 +164,18 @@ export async function registerForEvent(data: RegistrationData): Promise<Registra
   const parsedGender = gender === 'M' || gender === 'F' || gender === 'X' ? gender : null
 
   if (existingRider) {
-    riderId = (existingRider as { id: string }).id
+    const typedRider = existingRider as RiderIdOnly
+    riderId = typedRider.id
 
     // Update rider info if they provided more details
-    const updateData = {
+    const updateData: RiderUpdate = {
       first_name: trimmedFirstName,
       last_name: trimmedLastName,
       gender: parsedGender,
       emergency_contact_name: emergencyContactName || null,
       emergency_contact_phone: emergencyContactPhone || null,
     }
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (getSupabaseAdmin().from('riders') as any).update(updateData).eq('id', riderId)
+    await getSupabaseAdmin().from('riders').update(updateData).eq('id', riderId)
   } else {
     // Email not found - search for fuzzy name matches among riders without email
     const { candidates } = await searchRiderCandidates(trimmedFirstName, trimmedLastName)
@@ -200,7 +191,7 @@ export async function registerForEvent(data: RegistrationData): Promise<Registra
     }
 
     // No matches found - create new rider
-    const insertRider = {
+    const insertRider: RiderInsert = {
       slug: createRiderSlug(normalizedEmail),
       first_name: trimmedFirstName,
       last_name: trimmedLastName,
@@ -209,8 +200,8 @@ export async function registerForEvent(data: RegistrationData): Promise<Registra
       emergency_contact_name: emergencyContactName || null,
       emergency_contact_phone: emergencyContactPhone || null,
     }
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: newRider, error: riderError } = await (getSupabaseAdmin().from('riders') as any)
+    const { data: newRider, error: riderError } = await getSupabaseAdmin()
+      .from('riders')
       .insert(insertRider)
       .select('id')
       .single()
@@ -220,7 +211,8 @@ export async function registerForEvent(data: RegistrationData): Promise<Registra
       return { success: false, error: 'Failed to create rider profile' }
     }
 
-    riderId = (newRider as { id: string }).id
+    const typedNewRider = newRider as RiderIdOnly
+    riderId = typedNewRider.id
   }
 
   // Check if already registered
@@ -236,15 +228,15 @@ export async function registerForEvent(data: RegistrationData): Promise<Registra
   }
 
   // Create registration
-  const insertRegistration: RegistrationsInsert = {
+  const insertRegistration: RegistrationInsert = {
     event_id: eventId,
     rider_id: riderId,
     status: 'registered',
     share_registration: shareRegistration,
     notes: notes || null,
   }
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error: registrationError } = await (getSupabaseAdmin().from('registrations') as any)
+  const { error: registrationError } = await getSupabaseAdmin()
+    .from('registrations')
     .insert(insertRegistration)
 
   if (registrationError) {
@@ -293,14 +285,6 @@ export interface PermanentRegistrationData {
   emergencyContactPhone: string
 }
 
-interface RouteWithChapter {
-  id: string
-  name: string
-  slug: string
-  distance_km: number | null
-  chapter_id: string | null
-  chapters: { slug: string; name: string } | null
-}
 
 export async function registerForPermanent(data: PermanentRegistrationData): Promise<RegistrationResult> {
   const {
@@ -338,8 +322,8 @@ export async function registerForPermanent(data: PermanentRegistrationData): Pro
   }
 
   // Fetch route details
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: routeData, error: routeError } = await (getSupabaseAdmin().from('routes') as any)
+  const { data: routeData, error: routeError } = await getSupabaseAdmin()
+    .from('routes')
     .select(`
       id, name, slug, distance_km, chapter_id,
       chapters (slug, name)
@@ -373,10 +357,11 @@ export async function registerForPermanent(data: PermanentRegistrationData): Pro
 
   if (existingEvent) {
     // Use existing event (another rider might have created it for the same route/date)
-    eventId = (existingEvent as { id: string }).id
+    const typedExistingEvent = existingEvent as EventIdOnly
+    eventId = typedExistingEvent.id
   } else {
     // Create new event
-    const insertEvent: EventsInsert = {
+    const insertEvent: EventInsert = {
       slug: eventSlug,
       name: eventName,
       event_type: 'permanent',
@@ -389,8 +374,8 @@ export async function registerForPermanent(data: PermanentRegistrationData): Pro
       start_location: startLocation?.trim() || null,
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: newEvent, error: eventError } = await (getSupabaseAdmin().from('events') as any)
+    const { data: newEvent, error: eventError } = await getSupabaseAdmin()
+      .from('events')
       .insert(insertEvent)
       .select('id')
       .single()
@@ -400,7 +385,8 @@ export async function registerForPermanent(data: PermanentRegistrationData): Pro
       return { success: false, error: 'Failed to create permanent ride event' }
     }
 
-    eventId = (newEvent as { id: string }).id
+    const typedNewEvent = newEvent as EventIdOnly
+    eventId = typedNewEvent.id
   }
 
   // Find or create rider (reusing same logic as registerForEvent)
@@ -417,18 +403,18 @@ export async function registerForPermanent(data: PermanentRegistrationData): Pro
   const parsedGender = gender === 'M' || gender === 'F' || gender === 'X' ? gender : null
 
   if (existingRider) {
-    riderId = (existingRider as { id: string }).id
+    const typedRider = existingRider as RiderIdOnly
+    riderId = typedRider.id
 
     // Update rider info if they provided more details
-    const updateData = {
+    const updateData: RiderUpdate = {
       first_name: trimmedFirstName,
       last_name: trimmedLastName,
       gender: parsedGender,
       emergency_contact_name: emergencyContactName || null,
       emergency_contact_phone: emergencyContactPhone || null,
     }
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (getSupabaseAdmin().from('riders') as any).update(updateData).eq('id', riderId)
+    await getSupabaseAdmin().from('riders').update(updateData).eq('id', riderId)
   } else {
     // Email not found - search for fuzzy name matches among riders without email
     const { candidates } = await searchRiderCandidates(trimmedFirstName, trimmedLastName)
@@ -454,7 +440,7 @@ export async function registerForPermanent(data: PermanentRegistrationData): Pro
     }
 
     // No matches found - create new rider
-    const insertRider = {
+    const insertRider: RiderInsert = {
       slug: createRiderSlug(normalizedEmail),
       first_name: trimmedFirstName,
       last_name: trimmedLastName,
@@ -463,8 +449,8 @@ export async function registerForPermanent(data: PermanentRegistrationData): Pro
       emergency_contact_name: emergencyContactName || null,
       emergency_contact_phone: emergencyContactPhone || null,
     }
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: newRider, error: riderError } = await (getSupabaseAdmin().from('riders') as any)
+    const { data: newRider, error: riderError } = await getSupabaseAdmin()
+      .from('riders')
       .insert(insertRider)
       .select('id')
       .single()
@@ -474,7 +460,8 @@ export async function registerForPermanent(data: PermanentRegistrationData): Pro
       return { success: false, error: 'Failed to create rider profile' }
     }
 
-    riderId = (newRider as { id: string }).id
+    const typedNewRider = newRider as RiderIdOnly
+    riderId = typedNewRider.id
   }
 
   // Check if already registered
@@ -490,15 +477,15 @@ export async function registerForPermanent(data: PermanentRegistrationData): Pro
   }
 
   // Create registration
-  const insertRegistration: RegistrationsInsert = {
+  const insertRegistration: RegistrationInsert = {
     event_id: eventId,
     rider_id: riderId,
     status: 'registered',
     share_registration: shareRegistration,
     notes: notes || null,
   }
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error: registrationError } = await (getSupabaseAdmin().from('registrations') as any)
+  const { error: registrationError } = await getSupabaseAdmin()
+    .from('registrations')
     .insert(insertRegistration)
 
   if (registrationError) {
@@ -576,8 +563,8 @@ export async function completeRegistrationWithRider(
   const parsedGender = gender === 'M' || gender === 'F' || gender === 'X' ? gender : null
 
   // Check if event exists and is scheduled
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: eventData, error: eventError } = await (getSupabaseAdmin().from('events') as any)
+  const { data: eventData, error: eventError } = await getSupabaseAdmin()
+    .from('events')
     .select(`
       id, slug, status, name, event_date, start_time,
       start_location, distance_km, event_type,
@@ -616,8 +603,7 @@ export async function completeRegistrationWithRider(
     const rider = currentRider as { first_name: string; last_name: string; email: string | null }
 
     // Create audit log entry in rider_merges table
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (getSupabaseAdmin() as any).from('rider_merges').insert({
+    const mergeInsert: RiderMergeInsert = {
       rider_id: selectedRiderId,
       submitted_first_name: trimmedFirstName,
       submitted_last_name: trimmedLastName,
@@ -626,10 +612,11 @@ export async function completeRegistrationWithRider(
       previous_last_name: rider.last_name,
       previous_email: rider.email,
       merge_source: 'registration',
-    })
+    }
+    await getSupabaseAdmin().from('rider_merges').insert(mergeInsert)
 
     // Update rider with new email and info
-    const updateData = {
+    const updateData: RiderUpdate = {
       first_name: trimmedFirstName,
       last_name: trimmedLastName,
       email: normalizedEmail,
@@ -637,11 +624,10 @@ export async function completeRegistrationWithRider(
       emergency_contact_name: emergencyContactName || null,
       emergency_contact_phone: emergencyContactPhone || null,
     }
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (getSupabaseAdmin().from('riders') as any).update(updateData).eq('id', selectedRiderId)
+    await getSupabaseAdmin().from('riders').update(updateData).eq('id', selectedRiderId)
   } else {
     // User confirmed they're a new rider - create new rider record
-    const insertRider = {
+    const insertRider: RiderInsert = {
       slug: createRiderSlug(normalizedEmail),
       first_name: trimmedFirstName,
       last_name: trimmedLastName,
@@ -650,8 +636,8 @@ export async function completeRegistrationWithRider(
       emergency_contact_name: emergencyContactName || null,
       emergency_contact_phone: emergencyContactPhone || null,
     }
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: newRider, error: riderError } = await (getSupabaseAdmin().from('riders') as any)
+    const { data: newRider, error: riderError } = await getSupabaseAdmin()
+      .from('riders')
       .insert(insertRider)
       .select('id')
       .single()
@@ -661,7 +647,8 @@ export async function completeRegistrationWithRider(
       return { success: false, error: 'Failed to create rider profile' }
     }
 
-    riderId = (newRider as { id: string }).id
+    const typedNewRider = newRider as RiderIdOnly
+    riderId = typedNewRider.id
   }
 
   // Check if already registered
@@ -677,15 +664,15 @@ export async function completeRegistrationWithRider(
   }
 
   // Create registration
-  const insertRegistration: RegistrationsInsert = {
+  const insertRegistration: RegistrationInsert = {
     event_id: eventId,
     rider_id: riderId,
     status: 'registered',
     share_registration: shareRegistration,
     notes: notes || null,
   }
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error: registrationError } = await (getSupabaseAdmin().from('registrations') as any)
+  const { error: registrationError } = await getSupabaseAdmin()
+    .from('registrations')
     .insert(insertRegistration)
 
   if (registrationError) {

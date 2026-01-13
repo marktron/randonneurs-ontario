@@ -2,6 +2,12 @@ import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { sendgrid, fromEmail } from '@/lib/email/sendgrid'
 import { buildResultSubmissionRequestEmail } from '@/lib/email/templates'
 import { format } from 'date-fns'
+import type {
+  RegistrationWithRider,
+  ResultWithRiderId,
+  ResultInsert,
+  ResultWithSubmissionToken,
+} from '@/types/queries'
 
 interface EventForCompletion {
   id: string
@@ -9,17 +15,6 @@ interface EventForCompletion {
   event_date: string
   distance_km: number
   chapters: { name: string } | null
-}
-
-interface Registration {
-  id: string
-  rider_id: string
-  riders: {
-    id: string
-    first_name: string
-    last_name: string
-    email: string | null
-  }
 }
 
 interface CreatedResult {
@@ -52,8 +47,8 @@ export async function createPendingResultsAndSendEmails(
   let emailsSent = 0
 
   // Get registrations for this event
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: registrations, error: regError } = await (supabase.from('registrations') as any)
+  const { data: registrations, error: regError } = await supabase
+    .from('registrations')
     .select('id, rider_id, riders(id, first_name, last_name, email)')
     .eq('event_id', event.id)
     .eq('status', 'registered')
@@ -64,8 +59,8 @@ export async function createPendingResultsAndSendEmails(
   }
 
   // Get existing results to avoid duplicates
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: existingResults, error: resError } = await (supabase.from('results') as any)
+  const { data: existingResults, error: resError } = await supabase
+    .from('results')
     .select('rider_id')
     .eq('event_id', event.id)
 
@@ -74,10 +69,12 @@ export async function createPendingResultsAndSendEmails(
     return { resultsCreated: 0, emailsSent: 0, errors }
   }
 
-  const existingRiderIds = new Set((existingResults || []).map((r: { rider_id: string }) => r.rider_id))
+  const typedExistingResults = (existingResults || []) as ResultWithRiderId
+  const existingRiderIds = new Set(typedExistingResults.map((r) => r.rider_id))
 
   // Filter registrations that don't have results yet and have email
-  const registrationsNeedingResults = ((registrations || []) as Registration[]).filter(
+  const typedRegistrations = (registrations || []) as RegistrationWithRider[]
+  const registrationsNeedingResults = typedRegistrations.filter(
     reg => !existingRiderIds.has(reg.rider_id) && reg.riders?.email
   )
 
@@ -86,28 +83,38 @@ export async function createPendingResultsAndSendEmails(
 
   // Create pending results for each registration
   for (const reg of registrationsNeedingResults) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: result, error: createError } = await (supabase.from('results') as any)
-      .insert({
-        event_id: event.id,
-        rider_id: reg.rider_id,
-        status: 'pending',
-        season: eventYear,
-        distance_km: event.distance_km,
-      })
+    const insertData: ResultInsert = {
+      event_id: event.id,
+      rider_id: reg.rider_id,
+      status: 'pending',
+      season: eventYear,
+      distance_km: event.distance_km,
+    }
+
+    const { data: result, error: createError } = await supabase
+      .from('results')
+      .insert(insertData)
       .select('submission_token')
       .single()
 
-    if (createError) {
-      errors.push(`Failed to create result for ${reg.riders.first_name} ${reg.riders.last_name}: ${createError.message}`)
+    if (createError || !result) {
+      const riderName = reg.riders ? `${reg.riders.first_name} ${reg.riders.last_name}` : 'Unknown'
+      errors.push(`Failed to create result for ${riderName}: ${createError?.message || 'Unknown error'}`)
+      continue
+    }
+
+    const typedResult = result as ResultWithSubmissionToken
+    const rider = reg.riders
+
+    if (!rider || !rider.email) {
       continue
     }
 
     created.push({
       riderId: reg.rider_id,
-      riderName: `${reg.riders.first_name} ${reg.riders.last_name}`,
-      riderEmail: reg.riders.email!,
-      submissionToken: result.submission_token,
+      riderName: `${rider.first_name} ${rider.last_name}`,
+      riderEmail: rider.email,
+      submissionToken: typedResult.submission_token || '',
     })
   }
 

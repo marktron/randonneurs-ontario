@@ -5,6 +5,7 @@ import { EventForm, type EventFormData } from '@/components/admin/event-form'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { ChevronLeft } from 'lucide-react'
+import type { EventDetailForEdit } from '@/types/queries'
 
 async function getChapters() {
   const { data } = await getSupabaseAdmin()
@@ -15,23 +16,9 @@ async function getChapters() {
   return data ?? []
 }
 
-interface EventDetailForEdit {
-  id: string
-  name: string
-  chapter_id: string | null
-  route_id: string | null
-  event_type: string
-  distance_km: number
-  event_date: string
-  start_time: string | null
-  start_location: string | null
-  description: string | null
-  image_url: string | null
-}
-
 async function getEvent(eventId: string): Promise<EventFormData | null> {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: event } = await (getSupabaseAdmin().from('events') as any)
+  const { data: event } = await getSupabaseAdmin()
+    .from('events')
     .select(`
       id,
       name,

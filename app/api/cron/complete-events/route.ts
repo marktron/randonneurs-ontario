@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { closeHours, createTorontoDate } from '@/lib/brmTimes'
 import { createPendingResultsAndSendEmails } from '@/lib/events/complete-event'
+import type { EventForCronCompletion, EventUpdate } from '@/types/queries'
 
 /**
  * Cron endpoint to automatically mark events as 'completed' once their
@@ -16,16 +17,7 @@ import { createPendingResultsAndSendEmails } from '@/lib/events/complete-event'
 
 const DEFAULT_START_TIME = '08:00' // 8am default if no start time specified
 
-interface ScheduledEvent {
-  id: string
-  name: string
-  event_date: string // YYYY-MM-DD
-  start_time: string | null // HH:MM
-  distance_km: number
-  chapters: { name: string } | null
-}
-
-function calculateClosingTime(event: ScheduledEvent): Date {
+function calculateClosingTime(event: EventForCronCompletion): Date {
   const { event_date, start_time, distance_km } = event
 
   // Parse event date and start time
@@ -67,8 +59,8 @@ export async function GET(request: Request) {
     const now = new Date()
 
     // Fetch all scheduled events (exclude cancelled and already completed/submitted)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: events, error: fetchError } = await (supabase.from('events') as any)
+    const { data: events, error: fetchError } = await supabase
+      .from('events')
       .select('id, name, event_date, start_time, distance_km, chapters(name)')
       .eq('status', 'scheduled')
 
@@ -80,7 +72,7 @@ export async function GET(request: Request) {
       )
     }
 
-    const scheduledEvents = (events || []) as ScheduledEvent[]
+    const scheduledEvents = (events || []) as EventForCronCompletion[]
     const completedEvents: { id: string; name: string; resultsCreated: number; emailsSent: number }[] = []
     const errors: { id: string; name: string; error: string }[] = []
 
@@ -89,9 +81,10 @@ export async function GET(request: Request) {
       const closingTime = calculateClosingTime(event)
 
       if (now > closingTime) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const { error: updateError } = await (supabase.from('events') as any)
-          .update({ status: 'completed' })
+        const updateData: EventUpdate = { status: 'completed' }
+        const { error: updateError } = await supabase
+          .from('events')
+          .update(updateData)
           .eq('id', event.id)
 
         if (updateError) {

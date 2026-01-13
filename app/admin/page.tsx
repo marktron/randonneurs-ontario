@@ -6,6 +6,12 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { ClickableTableRow } from '@/components/admin/clickable-table-row'
 import { Calendar, Users, Route, Trophy, ArrowRight } from 'lucide-react'
 import Link from 'next/link'
+import type {
+  EventForDashboard,
+  UpcomingEventForDashboard,
+  RegistrationForCounting,
+  ResultForCounting,
+} from '@/types/queries'
 
 async function getStats() {
   const [eventsResult, ridersResult, routesResult, resultsResult] = await Promise.all([
@@ -23,20 +29,11 @@ async function getStats() {
   }
 }
 
-interface EventNeedingResults {
-  id: string
-  name: string
-  event_date: string
-  distance_km: number
-  event_type: string
-  chapters: { name: string } | null
-}
-
-async function getEventsNeedingResults(chapterId: string | null): Promise<EventNeedingResults[]> {
+async function getEventsNeedingResults(chapterId: string | null): Promise<EventForDashboard[]> {
   const today = new Date().toISOString().split('T')[0]
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let query = (getSupabaseAdmin().from('events') as any)
+  let query = getSupabaseAdmin()
+    .from('events')
     .select(`
       id,
       name,
@@ -55,7 +52,7 @@ async function getEventsNeedingResults(chapterId: string | null): Promise<EventN
   }
 
   const { data } = await query
-  return (data as EventNeedingResults[]) ?? []
+  return (data as EventForDashboard[]) ?? []
 }
 
 async function getEventRiderCounts(eventIds: string[]): Promise<Record<string, number>> {
@@ -80,15 +77,17 @@ async function getEventRiderCounts(eventIds: string[]): Promise<Record<string, n
   }
 
   // Add riders from registrations
-  for (const reg of (registrationsResult.data as { event_id: string; rider_id: string }[]) ?? []) {
-    if (counts[reg.event_id]) {
+  const typedRegs = (registrationsResult.data as RegistrationForCounting[]) ?? []
+  for (const reg of typedRegs) {
+    if (reg.event_id && reg.rider_id && counts[reg.event_id]) {
       counts[reg.event_id].add(reg.rider_id)
     }
   }
 
   // Add riders from results
-  for (const res of (resultsResult.data as { event_id: string; rider_id: string }[]) ?? []) {
-    if (counts[res.event_id]) {
+  const typedResults = (resultsResult.data as ResultForCounting[]) ?? []
+  for (const res of typedResults) {
+    if (res.event_id && res.rider_id && counts[res.event_id]) {
       counts[res.event_id].add(res.rider_id)
     }
   }
@@ -101,21 +100,11 @@ async function getEventRiderCounts(eventIds: string[]): Promise<Record<string, n
   return result
 }
 
-interface UpcomingEvent {
-  id: string
-  name: string
-  event_date: string
-  start_time: string | null
-  distance_km: number
-  event_type: string
-  chapters: { name: string } | null
-}
-
-async function getUpcomingEvents(chapterId: string | null): Promise<UpcomingEvent[]> {
+async function getUpcomingEvents(chapterId: string | null): Promise<UpcomingEventForDashboard[]> {
   const today = new Date().toISOString().split('T')[0]
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let query = (getSupabaseAdmin().from('events') as any)
+  let query = getSupabaseAdmin()
+    .from('events')
     .select(`
       id,
       name,
@@ -135,7 +124,7 @@ async function getUpcomingEvents(chapterId: string | null): Promise<UpcomingEven
   }
 
   const { data } = await query
-  return (data as UpcomingEvent[]) ?? []
+  return (data as UpcomingEventForDashboard[]) ?? []
 }
 
 export default async function AdminDashboardPage() {

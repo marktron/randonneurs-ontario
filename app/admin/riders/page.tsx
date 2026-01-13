@@ -3,22 +3,11 @@ import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { applyRiderSearchFilter } from '@/lib/utils/rider-search'
 import { redirect } from 'next/navigation'
 import { RidersTable } from '@/components/admin/riders-table'
+import type { RiderWithStats } from '@/types/queries'
 
-interface RiderWithStats {
-  id: string
-  slug: string
-  first_name: string
-  last_name: string
-  email: string | null
-  gender: string | null
-  created_at: string
-  registrations: { count: number }[]
-  results: { count: number }[]
-}
-
-async function getRiders(search?: string) {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let query = (getSupabaseAdmin().from('riders') as any)
+async function getRiders(search?: string): Promise<RiderWithStats[]> {
+  let query = getSupabaseAdmin()
+    .from('riders')
     .select(`
       id,
       slug,

@@ -8,6 +8,13 @@ import {
   getUrlSlugFromDbSlug,
   type ChapterInfo,
 } from '@/lib/chapter-config'
+import type {
+  ChapterId,
+  EventWithSeasonAndResults,
+  EventWithPublicResults,
+  PublicRider,
+  ResultWithEvent,
+} from '@/types/queries'
 
 export interface RiderResult {
   name: string
@@ -45,40 +52,49 @@ export async function getAvailableYears(urlSlug: string): Promise<number[]> {
   if (!getResultsChapterInfo(urlSlug)) return []
   const dbSlug = getDbSlug(urlSlug)
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let eventsQuery: any
+  let events: EventWithSeasonAndResults[] | null = null
 
   // Collection-based query (e.g., granite-anvil)
   if (dbSlug === null) {
-    eventsQuery = (getSupabase().from('events') as any)
+    const { data } = await getSupabase()
+      .from('events')
       .select('id, season, results(season)')
       .eq('collection', urlSlug)
+      .limit(2000)
+    events = data
   } else if (urlSlug === 'permanent') {
     // Permanent results: query by event_type instead of chapter
-    eventsQuery = (getSupabase().from('events') as any)
+    const { data } = await getSupabase()
+      .from('events')
       .select('id, season, results(season)')
       .eq('event_type', 'permanent')
+      .limit(2000)
+    events = data
   } else {
     // Chapter-based query
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: chapter } = await (getSupabase().from('chapters') as any)
+    const { data: chapter } = await getSupabase()
+      .from('chapters')
       .select('id')
       .eq('slug', dbSlug)
       .single()
 
     if (!chapter) return []
 
-    eventsQuery = (getSupabase().from('events') as any)
+    const typedChapter = chapter as ChapterId
+
+    let query = getSupabase()
+      .from('events')
       .select('id, season, results(season)')
-      .eq('chapter_id', chapter.id)
+      .eq('chapter_id', typedChapter.id)
 
     // Filter for PBP events if requested
     if (urlSlug === 'pbp') {
-      eventsQuery = eventsQuery.eq('name', 'Paris-Brest-Paris')
+      query = query.eq('name', 'Paris-Brest-Paris')
     }
-  }
 
-  const { data: events } = await eventsQuery.limit(2000)
+    const { data } = await query.limit(2000)
+    events = data
+  }
 
   if (!events || events.length === 0) return []
 
@@ -86,16 +102,14 @@ export async function getAvailableYears(urlSlug: string): Promise<number[]> {
   // 1. Events with results (historical data)
   // 2. Scheduled events (current/future seasons without results yet)
   const allSeasons = new Set<number>()
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  for (const event of events as any[]) {
+  for (const event of events) {
     // Add the event's season (for scheduled events without results)
     if (event.season) {
       allSeasons.add(event.season)
     }
     // Add seasons from results
     if (event.results && Array.isArray(event.results)) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      for (const result of event.results as any[]) {
+      for (const result of event.results) {
         if (result.season) {
           allSeasons.add(result.season)
         }
@@ -107,26 +121,17 @@ export async function getAvailableYears(urlSlug: string): Promise<number[]> {
   return [...allSeasons].sort((a, b) => b - a)
 }
 
-interface PublicResultRow {
-  event_id: string
-  finish_time: string | null
-  status: string
-  team_name: string | null
-  rider_slug: string
-  first_name: string
-  last_name: string
-}
-
 export async function getChapterResults(urlSlug: string, year: number): Promise<EventResult[]> {
   if (!getResultsChapterInfo(urlSlug)) return []
   const dbSlug = getDbSlug(urlSlug)
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let eventsQuery: any
+  let events: EventWithPublicResults[] | null = null
+  let eventsError: Error | null = null
 
   // Collection-based query (e.g., granite-anvil)
   if (dbSlug === null) {
-    eventsQuery = (getSupabase().from('events') as any)
+    const result = await getSupabase()
+      .from('events')
       .select(`
         id, name, event_date, distance_km,
         routes (slug),
@@ -137,9 +142,13 @@ export async function getChapterResults(urlSlug: string, year: number): Promise<
       .eq('collection', urlSlug)
       .gte('event_date', `${year}-01-01`)
       .lte('event_date', `${year}-12-31`)
+      .order('event_date', { ascending: true })
+    events = result.data
+    eventsError = result.error
   } else if (urlSlug === 'permanent') {
     // Permanent results: query by event_type instead of chapter
-    eventsQuery = (getSupabase().from('events') as any)
+    const result = await getSupabase()
+      .from('events')
       .select(`
         id, name, event_date, distance_km,
         routes (slug),
@@ -150,17 +159,23 @@ export async function getChapterResults(urlSlug: string, year: number): Promise<
       .eq('event_type', 'permanent')
       .gte('event_date', `${year}-01-01`)
       .lte('event_date', `${year}-12-31`)
+      .order('event_date', { ascending: true })
+    events = result.data
+    eventsError = result.error
   } else {
     // Chapter-based query
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: chapter } = await (getSupabase().from('chapters') as any)
+    const { data: chapter } = await getSupabase()
+      .from('chapters')
       .select('id')
       .eq('slug', dbSlug)
       .single()
 
     if (!chapter) return []
 
-    eventsQuery = (getSupabase().from('events') as any)
+    const typedChapter = chapter as ChapterId
+
+    let query = getSupabase()
+      .from('events')
       .select(`
         id, name, event_date, distance_km,
         routes (slug),
@@ -168,18 +183,20 @@ export async function getChapterResults(urlSlug: string, year: number): Promise<
           finish_time, status, team_name, rider_slug, first_name, last_name
         )
       `)
-      .eq('chapter_id', chapter.id)
+      .eq('chapter_id', typedChapter.id)
       .neq('event_type', 'permanent')
       .gte('event_date', `${year}-01-01`)
       .lte('event_date', `${year}-12-31`)
 
     // Filter for PBP events if requested
     if (urlSlug === 'pbp') {
-      eventsQuery = eventsQuery.eq('name', 'Paris-Brest-Paris')
+      query = query.eq('name', 'Paris-Brest-Paris')
     }
-  }
 
-  const { data: events, error: eventsError } = await eventsQuery.order('event_date', { ascending: true })
+    const result = await query.order('event_date', { ascending: true })
+    events = result.data
+    eventsError = result.error
+  }
 
   if (eventsError || !events) {
     console.error('Error fetching events:', eventsError)
@@ -189,9 +206,8 @@ export async function getChapterResults(urlSlug: string, year: number): Promise<
   // Transform to EventResult format
   const eventResults: EventResult[] = []
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  for (const event of events as any[]) {
-    const eventResultsList = event.public_results as PublicResultRow[] | null
+  for (const event of events) {
+    const eventResultsList = event.public_results
 
     // Skip events with no results
     if (!eventResultsList || eventResultsList.length === 0) continue
@@ -251,34 +267,38 @@ export interface RiderYearResults {
 
 export async function getRiderBySlug(slug: string): Promise<RiderInfo | null> {
   // Use public_riders view (riders table is restricted to protect emails)
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data, error } = await (getSupabase().from('public_riders') as any)
+  const { data, error } = await getSupabase()
+    .from('public_riders')
     .select('slug, first_name, last_name')
     .eq('slug', slug)
     .single()
 
   if (error || !data) return null
 
+  const typedRider = data as Pick<PublicRider, 'slug' | 'first_name' | 'last_name'>
+
   return {
-    slug: data.slug,
-    firstName: data.first_name,
-    lastName: data.last_name,
+    slug: typedRider.slug ?? '',
+    firstName: typedRider.first_name ?? '',
+    lastName: typedRider.last_name ?? '',
   }
 }
 
 export async function getRiderResults(slug: string): Promise<RiderYearResults[]> {
   // Get rider ID from slug (use public_riders view)
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: rider } = await (getSupabase().from('public_riders') as any)
+  const { data: rider } = await getSupabase()
+    .from('public_riders')
     .select('id')
     .eq('slug', slug)
     .single()
 
   if (!rider) return []
 
+  const typedRider = rider as Pick<PublicRider, 'id'>
+
   // Get all results for this rider with event info
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: results, error } = await (getSupabase().from('results') as any)
+  const { data: results, error } = await getSupabase()
+    .from('results')
     .select(`
       finish_time,
       status,
@@ -294,7 +314,7 @@ export async function getRiderResults(slug: string): Promise<RiderYearResults[]>
         )
       )
     `)
-    .eq('rider_id', rider.id)
+    .eq('rider_id', typedRider.id ?? '')
     .order('season', { ascending: false })
 
   if (error || !results) return []
@@ -302,8 +322,7 @@ export async function getRiderResults(slug: string): Promise<RiderYearResults[]>
   // Group by year
   const yearMap = new Map<number, RiderEventResult[]>()
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  for (const result of results as any[]) {
+  for (const result of results as ResultWithEvent[]) {
     const year = result.season
     const event = result.events
 

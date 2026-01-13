@@ -5,20 +5,29 @@ import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { requireAdmin } from '@/lib/auth/get-admin'
 import { getUrlSlugFromDbSlug } from '@/lib/chapter-config'
 import type { ActionResult } from '@/types/actions'
+import type {
+  ResultInsert,
+  ResultUpdate,
+  ResultWithEventId,
+  EventForResultsRevalidation,
+} from '@/types/queries'
 
 // Helper to revalidate public results pages
 async function revalidateResultsPages(eventId: string) {
   // Get event info including season and chapter
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: event } = await (getSupabaseAdmin().from('events') as any)
+  const { data: event } = await getSupabaseAdmin()
+    .from('events')
     .select('season, chapters (slug)')
     .eq('id', eventId)
     .single()
 
-  if (event?.season && event?.chapters?.slug) {
-    const urlSlug = getUrlSlugFromDbSlug(event.chapters.slug)
-    if (urlSlug) {
-      revalidatePath(`/results/${event.season}/${urlSlug}`)
+  if (event) {
+    const typedEvent = event as EventForResultsRevalidation
+    if (typedEvent.season && typedEvent.chapters?.slug) {
+      const urlSlug = getUrlSlugFromDbSlug(typedEvent.chapters.slug)
+      if (urlSlug) {
+        revalidatePath(`/results/${typedEvent.season}/${urlSlug}`)
+      }
     }
   }
 }
@@ -60,8 +69,7 @@ export async function createResult(data: CreateResultData): Promise<ActionResult
     return { success: false, error: 'A result already exists for this rider in this event' }
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error } = await (getSupabaseAdmin().from('results') as any).insert({
+  const insertData: ResultInsert = {
     event_id: eventId,
     rider_id: riderId,
     finish_time: finishTime || null,
@@ -70,7 +78,11 @@ export async function createResult(data: CreateResultData): Promise<ActionResult
     note: note || null,
     season,
     distance_km: distanceKm,
-  })
+  }
+
+  const { error } = await getSupabaseAdmin()
+    .from('results')
+    .insert(insertData)
 
   if (error) {
     console.error('Error creating result:', error)
@@ -88,14 +100,16 @@ export async function createResult(data: CreateResultData): Promise<ActionResult
 export async function updateResult(resultId: string, data: UpdateResultData): Promise<ActionResult> {
   await requireAdmin()
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error } = await (getSupabaseAdmin().from('results') as any)
-    .update({
-      finish_time: data.finishTime,
-      status: data.status,
-      team_name: data.teamName,
-      note: data.note,
-    })
+  const updateData: ResultUpdate = {
+    finish_time: data.finishTime,
+    status: data.status,
+    team_name: data.teamName,
+    note: data.note,
+  }
+
+  const { error } = await getSupabaseAdmin()
+    .from('results')
+    .update(updateData)
     .eq('id', resultId)
 
   if (error) {
@@ -106,14 +120,17 @@ export async function updateResult(resultId: string, data: UpdateResultData): Pr
   revalidatePath('/admin/events')
 
   // Get the event_id to revalidate results pages
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: result } = await (getSupabaseAdmin().from('results') as any)
+  const { data: result } = await getSupabaseAdmin()
+    .from('results')
     .select('event_id')
     .eq('id', resultId)
     .single()
 
-  if (result?.event_id) {
-    await revalidateResultsPages(result.event_id)
+  if (result) {
+    const typedResult = result as ResultWithEventId
+    if (typedResult.event_id) {
+      await revalidateResultsPages(typedResult.event_id)
+    }
   }
 
   return { success: true }
@@ -123,8 +140,8 @@ export async function deleteResult(resultId: string): Promise<ActionResult> {
   await requireAdmin()
 
   // Fetch event_id before deleting for revalidation
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: result } = await (getSupabaseAdmin().from('results') as any)
+  const { data: result } = await getSupabaseAdmin()
+    .from('results')
     .select('event_id')
     .eq('id', resultId)
     .single()
@@ -142,8 +159,11 @@ export async function deleteResult(resultId: string): Promise<ActionResult> {
   revalidatePath('/admin/events')
 
   // Revalidate public results pages
-  if (result?.event_id) {
-    await revalidateResultsPages(result.event_id)
+  if (result) {
+    const typedResult = result as ResultWithEventId
+    if (typedResult.event_id) {
+      await revalidateResultsPages(typedResult.event_id)
+    }
   }
 
   return { success: true }
@@ -163,7 +183,7 @@ export async function createBulkResults(
 ): Promise<ActionResult> {
   await requireAdmin()
 
-  const insertData = results.map((r) => ({
+  const insertData: ResultInsert[] = results.map((r) => ({
     event_id: eventId,
     rider_id: r.riderId,
     finish_time: r.finishTime || null,
@@ -174,8 +194,9 @@ export async function createBulkResults(
     distance_km: distanceKm,
   }))
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error } = await (getSupabaseAdmin().from('results') as any).insert(insertData)
+  const { error } = await getSupabaseAdmin()
+    .from('results')
+    .insert(insertData)
 
   if (error) {
     console.error('Error creating bulk results:', error)

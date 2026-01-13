@@ -4,11 +4,11 @@ import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Plus } from 'lucide-react'
 import { RoutesTable } from '@/components/admin/routes-table'
-import type { RouteWithChapter } from '@/types/ui'
+import type { RouteWithChapterForAdmin } from '@/types/queries'
 
-async function getRoutes() {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data } = await (getSupabaseAdmin().from('routes') as any)
+async function getRoutes(): Promise<RouteWithChapterForAdmin[]> {
+  const { data } = await getSupabaseAdmin()
+    .from('routes')
     .select(`
       id,
       name,
@@ -25,7 +25,7 @@ async function getRoutes() {
     `)
     .order('name', { ascending: true })
 
-  return (data as RouteWithChapter[]) ?? []
+  return (data as RouteWithChapterForAdmin[]) ?? []
 }
 
 async function getChapters() {

@@ -14,46 +14,15 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import type {
+  RiderDetail,
+  RegistrationWithEvent,
+  ResultWithEventForRider,
+} from '@/types/queries'
 
-interface RiderDetail {
-  id: string
-  slug: string
-  first_name: string
-  last_name: string
-  email: string | null
-  gender: string | null
-  created_at: string
-}
-
-interface Registration {
-  id: string
-  registered_at: string
-  status: string
-  events: {
-    id: string
-    name: string
-    event_date: string
-    distance_km: number
-  }
-}
-
-interface Result {
-  id: string
-  finish_time: string | null
-  status: string
-  team_name: string | null
-  season: number
-  distance_km: number
-  events: {
-    id: string
-    name: string
-    event_date: string
-  }
-}
-
-async function getRiderDetails(riderId: string) {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: rider } = await (getSupabaseAdmin().from('riders') as any)
+async function getRiderDetails(riderId: string): Promise<RiderDetail | null> {
+  const { data: rider } = await getSupabaseAdmin()
+    .from('riders')
     .select('*')
     .eq('id', riderId)
     .single()
@@ -61,9 +30,9 @@ async function getRiderDetails(riderId: string) {
   return rider as RiderDetail | null
 }
 
-async function getRiderRegistrations(riderId: string) {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data } = await (getSupabaseAdmin().from('registrations') as any)
+async function getRiderRegistrations(riderId: string): Promise<RegistrationWithEvent[]> {
+  const { data } = await getSupabaseAdmin()
+    .from('registrations')
     .select(`
       id,
       registered_at,
@@ -73,12 +42,12 @@ async function getRiderRegistrations(riderId: string) {
     .eq('rider_id', riderId)
     .order('registered_at', { ascending: false })
 
-  return (data as Registration[]) ?? []
+  return (data as RegistrationWithEvent[]) ?? []
 }
 
-async function getRiderResults(riderId: string) {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data } = await (getSupabaseAdmin().from('results') as any)
+async function getRiderResults(riderId: string): Promise<ResultWithEventForRider[]> {
+  const { data } = await getSupabaseAdmin()
+    .from('results')
     .select(`
       id,
       finish_time,
@@ -91,7 +60,7 @@ async function getRiderResults(riderId: string) {
     .eq('rider_id', riderId)
     .order('created_at', { ascending: false })
 
-  return (data as Result[]) ?? []
+  return (data as ResultWithEventForRider[]) ?? []
 }
 
 function getStatusBadge(status: string) {

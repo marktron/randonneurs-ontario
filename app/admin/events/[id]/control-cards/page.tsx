@@ -5,32 +5,14 @@ import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { ChevronLeft } from 'lucide-react'
 import { ControlCardsForm } from '@/components/admin/control-cards-form'
+import type {
+  EventForControlCards,
+  RegistrationForControlCards,
+} from '@/types/queries'
 
-interface EventDetail {
-  id: string
-  name: string
-  event_date: string
-  start_time: string | null
-  start_location: string | null
-  distance_km: number
-  event_type: string
-  chapters: { id: string; name: string } | null
-  routes: { id: string; name: string; rwgps_id: string | null } | null
-}
-
-interface Registration {
-  id: string
-  rider_id: string
-  riders: {
-    id: string
-    first_name: string
-    last_name: string
-  }
-}
-
-async function getEventDetails(eventId: string) {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: event } = await (getSupabaseAdmin().from('events') as any)
+async function getEventDetails(eventId: string): Promise<EventForControlCards | null> {
+  const { data: event } = await getSupabaseAdmin()
+    .from('events')
     .select(`
       id,
       name,
@@ -45,12 +27,12 @@ async function getEventDetails(eventId: string) {
     .eq('id', eventId)
     .single()
 
-  return event as EventDetail | null
+  return event as EventForControlCards | null
 }
 
-async function getRegistrations(eventId: string) {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data } = await (getSupabaseAdmin().from('registrations') as any)
+async function getRegistrations(eventId: string): Promise<RegistrationForControlCards[]> {
+  const { data } = await getSupabaseAdmin()
+    .from('registrations')
     .select(`
       id,
       rider_id,
@@ -60,7 +42,7 @@ async function getRegistrations(eventId: string) {
     .eq('status', 'registered')
     .order('registered_at', { ascending: true })
 
-  return (data as Registration[]) ?? []
+  return (data as RegistrationForControlCards[]) ?? []
 }
 
 interface ControlCardsPageProps {

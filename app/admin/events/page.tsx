@@ -16,15 +16,15 @@ import { Button } from '@/components/ui/button'
 import { EventFilters } from '@/components/admin/event-filters'
 import { Plus } from 'lucide-react'
 import Link from 'next/link'
-import type { EventWithChapter } from '@/types/ui'
+import type { EventForAdminList } from '@/types/queries'
 
 type TimeFilter = 'all' | 'upcoming' | 'past'
 
-async function getEvents(filter: TimeFilter, chapterId?: string) {
+async function getEvents(filter: TimeFilter, chapterId?: string): Promise<EventForAdminList[]> {
   const today = new Date().toISOString().split('T')[0]
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let query = (getSupabaseAdmin().from('events') as any)
+  let query = getSupabaseAdmin()
+    .from('events')
     .select(`
       id,
       name,
@@ -53,7 +53,7 @@ async function getEvents(filter: TimeFilter, chapterId?: string) {
 
   const { data } = await query.limit(200)
 
-  return (data as EventWithChapter[]) ?? []
+  return (data as EventForAdminList[]) ?? []
 }
 
 interface AdminEventsPageProps {

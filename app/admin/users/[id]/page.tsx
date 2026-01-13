@@ -6,7 +6,7 @@ import { UserForm } from '@/components/admin/user-form'
 import { ResetPasswordForm } from '@/components/admin/reset-password-form'
 import Link from 'next/link'
 import { ChevronLeft } from 'lucide-react'
-import type { Admin } from '@/types/supabase'
+import type { AdminUser } from '@/types/queries'
 
 interface EditUserPageProps {
   params: Promise<{ id: string }>
@@ -20,15 +20,16 @@ export default async function EditUserPage({ params }: EditUserPageProps) {
     redirect('/admin')
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [{ data: user }, chapters] = await Promise.all([
-    (getSupabaseAdmin().from('admins') as any).select('*').eq('id', id).single() as Promise<{ data: Admin | null }>,
+    getSupabaseAdmin().from('admins').select('*').eq('id', id).single(),
     getChapters(),
   ])
 
   if (!user) {
     notFound()
   }
+
+  const typedUser = user as AdminUser
 
   return (
     <div className="space-y-6">
@@ -44,12 +45,12 @@ export default async function EditUserPage({ params }: EditUserPageProps) {
         <UserForm
           chapters={chapters}
           user={{
-            ...user,
-            role: (user.role as 'admin' | 'chapter_admin') || 'chapter_admin',
+            ...typedUser,
+            role: (typedUser.role as 'admin' | 'chapter_admin') || 'chapter_admin',
           }}
           mode="edit"
         />
-        <ResetPasswordForm userId={user.id} />
+        <ResetPasswordForm userId={typedUser.id} />
       </div>
     </div>
   )

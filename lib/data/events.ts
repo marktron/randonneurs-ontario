@@ -27,6 +27,13 @@ import {
   getUrlSlugFromDbSlug,
   type ChapterInfo,
 } from '@/lib/chapter-config'
+import type {
+  ChapterId,
+  EventWithRegistrationCount,
+  EventWithRelations,
+  EventSlug,
+  GetRegisteredRidersResult,
+} from '@/types/queries'
 
 // Re-export chapter utilities for convenience (avoids extra imports)
 export { getChapterInfo, getAllChapterSlugs, type ChapterInfo }
@@ -52,8 +59,8 @@ export async function getEventsByChapter(urlSlug: string): Promise<Event[]> {
   if (!dbSlug) return []
 
   // First get the chapter ID
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: chapter, error: chapterError } = await (getSupabase().from('chapters') as any)
+  const { data: chapter, error: chapterError } = await getSupabase()
+    .from('chapters')
     .select('id')
     .eq('slug', dbSlug)
     .single()
@@ -65,8 +72,8 @@ export async function getEventsByChapter(urlSlug: string): Promise<Event[]> {
 
   // Fetch upcoming events for this chapter, ordered by date
   const today = new Date().toISOString().split('T')[0]
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: events, error: eventsError } = await (getSupabase().from('events') as any)
+  const { data: events, error: eventsError } = await getSupabase()
+    .from('events')
     .select('*, registrations(count)')
     .eq('chapter_id', chapter.id)
     .eq('status', 'scheduled')
@@ -81,8 +88,7 @@ export async function getEventsByChapter(urlSlug: string): Promise<Event[]> {
   }
 
   // Transform to Event type
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return (events as any[]).map((event: any) => ({
+  return (events as EventWithRegistrationCount[]).map((event) => ({
     slug: event.slug,
     date: event.event_date,
     name: event.name,
@@ -103,8 +109,8 @@ export async function getEventsByChapter(urlSlug: string): Promise<Event[]> {
 export async function getPermanentEvents(): Promise<Event[]> {
   // Fetch upcoming permanent events, ordered by date
   const today = new Date().toISOString().split('T')[0]
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: events, error } = await (getSupabase().from('events') as any)
+  const { data: events, error } = await getSupabase()
+    .from('events')
     .select('*, registrations(count)')
     .eq('event_type', 'permanent')
     .eq('status', 'scheduled')
@@ -118,8 +124,7 @@ export async function getPermanentEvents(): Promise<Event[]> {
   }
 
   // Transform to Event type
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return (events as any[]).map((event: any) => ({
+  return (events as EventWithRegistrationCount[]).map((event) => ({
     slug: event.slug,
     date: event.event_date,
     name: event.name,
@@ -180,8 +185,7 @@ export interface RegisteredRider {
  * @returns Array of rider display names
  */
 export async function getRegisteredRiders(eventId: string): Promise<RegisteredRider[]> {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: riders, error } = await (getSupabase() as any)
+  const { data: riders, error } = await getSupabase()
     .rpc('get_registered_riders', { p_event_id: eventId })
 
   if (error) {
@@ -189,7 +193,7 @@ export async function getRegisteredRiders(eventId: string): Promise<RegisteredRi
     return []
   }
 
-  return (riders || []).map((rider: { first_name: string; last_name: string; share_registration: boolean }) => {
+  return (riders || []).map((rider: GetRegisteredRidersResult) => {
     if (!rider.share_registration) {
       return { name: 'Anonymous' }
     }
@@ -208,8 +212,8 @@ export async function getRegisteredRiders(eventId: string): Promise<RegisteredRi
  * @returns Array of event slug strings
  */
 export async function getAllEventSlugs(): Promise<string[]> {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: events, error } = await (getSupabase().from('events') as any)
+  const { data: events, error } = await getSupabase()
+    .from('events')
     .select('slug')
     .eq('status', 'scheduled')
 
@@ -218,8 +222,7 @@ export async function getAllEventSlugs(): Promise<string[]> {
     return []
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return (events as any[]).map((e: any) => e.slug)
+  return (events as EventSlug[]).map((e) => e.slug)
 }
 
 /**
@@ -237,8 +240,8 @@ export async function getAllEventSlugs(): Promise<string[]> {
  */
 export async function getEventBySlug(slug: string): Promise<EventDetails | null> {
   // Fetch event with joined chapter and route data
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: event, error } = await (getSupabase().from('events') as any)
+  const { data: event, error } = await getSupabase()
+    .from('events')
     .select(`
       id,
       slug,
@@ -261,22 +264,24 @@ export async function getEventBySlug(slug: string): Promise<EventDetails | null>
     return null
   }
 
-  const dbChapterSlug = event.chapters?.slug
+  // Type assertion for the query result with joins
+  const typedEvent = event as EventWithRelations
+  const dbChapterSlug = typedEvent.chapters?.slug
   return {
-    id: event.id,
-    slug: event.slug,
-    name: event.name,
-    date: event.event_date,
-    startTime: event.start_time || '08:00',
-    startLocation: event.start_location || '',
-    distance: event.distance_km,
-    type: formatEventType(event.event_type),
-    chapterName: event.chapters?.name || '',
+    id: typedEvent.id,
+    slug: typedEvent.slug,
+    name: typedEvent.name,
+    date: typedEvent.event_date,
+    startTime: typedEvent.start_time || '08:00',
+    startLocation: typedEvent.start_location || '',
+    distance: typedEvent.distance_km,
+    type: formatEventType(typedEvent.event_type),
+    chapterName: typedEvent.chapters?.name || '',
     chapterSlug: dbChapterSlug ? getUrlSlugFromDbSlug(dbChapterSlug) : '',
-    rwgpsId: event.routes?.rwgps_id || null,
-    routeSlug: event.routes?.slug || null,
-    cueSheetUrl: event.routes?.cue_sheet_url || null,
-    description: event.description || null,
-    imageUrl: event.image_url || null,
+    rwgpsId: typedEvent.routes?.rwgps_id || null,
+    routeSlug: typedEvent.routes?.slug || null,
+    cueSheetUrl: typedEvent.routes?.cue_sheet_url || null,
+    description: typedEvent.description || null,
+    imageUrl: typedEvent.image_url || null,
   }
 }
