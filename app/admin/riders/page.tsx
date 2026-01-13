@@ -2,8 +2,18 @@ import { requireAdmin } from '@/lib/auth/get-admin'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { applyRiderSearchFilter } from '@/lib/utils/rider-search'
 import { redirect } from 'next/navigation'
-import { RidersTable } from '@/components/admin/riders-table'
+import dynamic from 'next/dynamic'
 import type { RiderWithStats } from '@/types/queries'
+
+// Lazy-load RidersTable (large table component)
+const RidersTable = dynamic(() => import('@/components/admin/riders-table').then(mod => ({ default: mod.RidersTable })), {
+  loading: () => (
+    <div className="space-y-4">
+      <div className="h-10 bg-muted animate-pulse rounded" />
+      <div className="h-96 bg-muted animate-pulse rounded" />
+    </div>
+  ),
+})
 
 async function getRiders(search?: string): Promise<RiderWithStats[]> {
   let query = getSupabaseAdmin()

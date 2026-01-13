@@ -1,8 +1,19 @@
 import { requireAdmin } from '@/lib/auth/get-admin'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
-import { RouteForm } from '@/components/admin/route-form'
+import dynamic from 'next/dynamic'
 import Link from 'next/link'
 import { ChevronLeft } from 'lucide-react'
+
+// Lazy-load RouteForm (complex form component)
+const RouteForm = dynamic(() => import('@/components/admin/route-form').then(mod => ({ default: mod.RouteForm })), {
+  loading: () => (
+    <div className="space-y-6">
+      <div className="h-10 bg-muted animate-pulse rounded" />
+      <div className="h-10 bg-muted animate-pulse rounded" />
+      <div className="h-32 bg-muted animate-pulse rounded" />
+    </div>
+  ),
+})
 
 async function getChapters() {
   const { data } = await getSupabaseAdmin()

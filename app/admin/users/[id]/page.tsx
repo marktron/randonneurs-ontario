@@ -2,11 +2,22 @@ import { requireAdmin } from '@/lib/auth/get-admin'
 import { getChapters } from '@/lib/actions/admin-users'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { redirect, notFound } from 'next/navigation'
-import { UserForm } from '@/components/admin/user-form'
+import dynamic from 'next/dynamic'
 import { ResetPasswordForm } from '@/components/admin/reset-password-form'
 import Link from 'next/link'
 import { ChevronLeft } from 'lucide-react'
 import type { AdminUser } from '@/types/queries'
+
+// Lazy-load UserForm (form component)
+const UserForm = dynamic(() => import('@/components/admin/user-form').then(mod => ({ default: mod.UserForm })), {
+  loading: () => (
+    <div className="space-y-6">
+      <div className="h-10 bg-muted animate-pulse rounded" />
+      <div className="h-10 bg-muted animate-pulse rounded" />
+      <div className="h-32 bg-muted animate-pulse rounded" />
+    </div>
+  ),
+})
 
 interface EditUserPageProps {
   params: Promise<{ id: string }>

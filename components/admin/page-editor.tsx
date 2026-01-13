@@ -2,14 +2,21 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
+import dynamic from "next/dynamic"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { MarkdownEditor } from "./markdown-editor"
 import { HeaderImagePicker } from "./header-image-picker"
 import { savePage } from "@/lib/actions/pages"
 import { toast } from "sonner"
 import { Loader2, Save } from "lucide-react"
+
+// Lazy-load MarkdownEditor (includes react-markdown and remark-gfm)
+const MarkdownEditor = dynamic(() => import("./markdown-editor").then(mod => ({ default: mod.MarkdownEditor })), {
+  loading: () => (
+    <div className="h-[500px] rounded-md border bg-muted animate-pulse" />
+  ),
+})
 
 interface PageEditorProps {
   initialSlug?: string

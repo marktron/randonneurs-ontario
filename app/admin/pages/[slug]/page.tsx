@@ -1,10 +1,21 @@
 import { requireAdmin } from '@/lib/auth/get-admin'
 import { getPage } from '@/lib/content'
-import { PageEditor } from '@/components/admin/page-editor'
+import dynamic from 'next/dynamic'
 import { notFound } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import Link from 'next/link'
 import { ArrowLeft, ExternalLink } from 'lucide-react'
+
+// Lazy-load PageEditor (includes MarkdownEditor and react-markdown)
+const PageEditor = dynamic(() => import('@/components/admin/page-editor').then(mod => ({ default: mod.PageEditor })), {
+  loading: () => (
+    <div className="space-y-6 max-w-4xl">
+      <div className="h-10 bg-muted animate-pulse rounded" />
+      <div className="h-10 bg-muted animate-pulse rounded" />
+      <div className="h-[500px] bg-muted animate-pulse rounded" />
+    </div>
+  ),
+})
 
 interface PageProps {
   params: Promise<{ slug: string }>

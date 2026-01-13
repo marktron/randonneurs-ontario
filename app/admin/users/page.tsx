@@ -1,10 +1,20 @@
 import { requireAdmin } from '@/lib/auth/get-admin'
 import { getAdminUsers } from '@/lib/actions/admin-users'
 import { redirect } from 'next/navigation'
-import { AdminUsersTable } from '@/components/admin/users-table'
+import dynamic from 'next/dynamic'
 import { Button } from '@/components/ui/button'
 import { Plus } from 'lucide-react'
 import Link from 'next/link'
+
+// Lazy-load AdminUsersTable (large table component)
+const AdminUsersTable = dynamic(() => import('@/components/admin/users-table').then(mod => ({ default: mod.AdminUsersTable })), {
+  loading: () => (
+    <div className="space-y-4">
+      <div className="h-10 bg-muted animate-pulse rounded" />
+      <div className="h-96 bg-muted animate-pulse rounded" />
+    </div>
+  ),
+})
 
 export default async function AdminUsersPage() {
   const admin = await requireAdmin()

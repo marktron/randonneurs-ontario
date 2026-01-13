@@ -1,11 +1,23 @@
 import { requireAdmin } from '@/lib/auth/get-admin'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { getActiveRoutes } from '@/lib/data/routes'
-import { EventForm, type EventFormData } from '@/components/admin/event-form'
+import dynamic from 'next/dynamic'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { ChevronLeft } from 'lucide-react'
 import type { EventDetailForEdit } from '@/types/queries'
+import type { EventFormData } from '@/components/admin/event-form'
+
+// Lazy-load EventForm (complex form component)
+const EventForm = dynamic(() => import('@/components/admin/event-form').then(mod => ({ default: mod.EventForm })), {
+  loading: () => (
+    <div className="space-y-6">
+      <div className="h-10 bg-muted animate-pulse rounded" />
+      <div className="h-10 bg-muted animate-pulse rounded" />
+      <div className="h-32 bg-muted animate-pulse rounded" />
+    </div>
+  ),
+})
 
 async function getChapters() {
   const { data } = await getSupabaseAdmin()

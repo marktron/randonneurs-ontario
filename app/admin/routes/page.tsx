@@ -1,10 +1,20 @@
 import { requireAdmin } from '@/lib/auth/get-admin'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
+import dynamic from 'next/dynamic'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Plus } from 'lucide-react'
-import { RoutesTable } from '@/components/admin/routes-table'
 import type { RouteWithChapterForAdmin } from '@/types/queries'
+
+// Lazy-load RoutesTable (large table component)
+const RoutesTable = dynamic(() => import('@/components/admin/routes-table').then(mod => ({ default: mod.RoutesTable })), {
+  loading: () => (
+    <div className="space-y-4">
+      <div className="h-10 bg-muted animate-pulse rounded" />
+      <div className="h-96 bg-muted animate-pulse rounded" />
+    </div>
+  ),
+})
 
 async function getRoutes(): Promise<RouteWithChapterForAdmin[]> {
   const { data } = await getSupabaseAdmin()
