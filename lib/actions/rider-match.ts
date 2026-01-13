@@ -32,6 +32,14 @@ interface RiderWithStats {
   total_rides: number
 }
 
+interface RiderWithResults {
+  id: string
+  first_name: string
+  last_name: string
+  full_name: string | null
+  results: Array<{ rider_id: string; season: number | null }> | null
+}
+
 /**
  * Search for potential rider matches based on name.
  * Only searches riders WITHOUT email (historical records).
@@ -61,11 +69,17 @@ export async function searchRiderCandidates(
     .map(variant => `first_name.ilike.%${variant}%`)
     .join(',')
 
-  // Query riders without email
-  // Search broadly by first name variants - the fuzzy scoring will filter results
+  // Query riders without email, with their results joined in a single query
+  // This reduces round trips by fetching rider data and results together
   const { data: riders, error } = await getSupabaseAdmin()
     .from('riders')
-    .select('id, first_name, last_name, full_name')
+    .select(`
+      id,
+      first_name,
+      last_name,
+      full_name,
+      results (rider_id, season)
+    `)
     .is('email', null)
     .or(orFilters)
     .limit(100)
@@ -79,29 +93,18 @@ export async function searchRiderCandidates(
     return { candidates: [] }
   }
 
-  // Get rider IDs for stats lookup
-  const riderIds = riders.map(r => r.id)
-
-  // Get ride statistics for these riders
-  const { data: resultsData } = await getSupabaseAdmin()
-    .from('results')
-    .select('rider_id, season')
-    .in('rider_id', riderIds)
-
-  // Calculate stats per rider
+  // Calculate stats per rider from joined results
   const riderStats: Record<string, { firstSeason: number | null; totalRides: number }> = {}
-  for (const id of riderIds) {
-    riderStats[id] = { firstSeason: null, totalRides: 0 }
-  }
-
-  if (resultsData) {
-    for (const result of resultsData) {
-      const stats = riderStats[result.rider_id]
-      if (stats) {
-        stats.totalRides++
+  for (const rider of riders) {
+    riderStats[rider.id] = { firstSeason: null, totalRides: 0 }
+    
+    // Aggregate stats from joined results
+    if (rider.results && Array.isArray(rider.results)) {
+      for (const result of rider.results) {
+        riderStats[rider.id].totalRides++
         if (result.season !== null) {
-          if (stats.firstSeason === null || result.season < stats.firstSeason) {
-            stats.firstSeason = result.season
+          if (riderStats[rider.id].firstSeason === null || result.season < riderStats[rider.id].firstSeason) {
+            riderStats[rider.id].firstSeason = result.season
           }
         }
       }
@@ -109,7 +112,7 @@ export async function searchRiderCandidates(
   }
 
   // Combine rider info with stats
-  const ridersWithStats: RiderWithStats[] = riders.map(r => ({
+  const ridersWithStats: RiderWithStats[] = (riders as RiderWithResults[]).map(r => ({
     id: r.id,
     first_name: r.first_name,
     last_name: r.last_name,
