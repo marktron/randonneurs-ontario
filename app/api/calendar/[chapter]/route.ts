@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { unstable_cache } from 'next/cache'
 import { createEvents, type EventAttributes } from 'ics'
 import { getSupabase } from '@/lib/supabase'
 import { getDbSlug, getChapterInfo, getAllChapterSlugs } from '@/lib/chapter-config'
@@ -116,20 +117,35 @@ export async function GET(request: Request, { params }: RouteParams) {
   }
 
   const typedChapter = chapterData as ChapterId
+  const chapterId = typedChapter.id
 
-  // Fetch upcoming events for this chapter
-  const today = new Date().toISOString().split('T')[0]
-  const { data: events, error: eventsError } = await getSupabase()
-    .from('events')
-    .select('id, slug, name, event_date, start_time, start_location, distance_km, event_type, description')
-    .eq('chapter_id', typedChapter.id)
-    .eq('status', 'scheduled')
-    .neq('event_type', 'permanent')
-    .gte('event_date', today)
-    .order('event_date', { ascending: true })
+  // Fetch upcoming events for this chapter (with cache tags)
+  const events = await unstable_cache(
+    async () => {
+      const today = new Date().toISOString().split('T')[0]
+      const { data: events, error: eventsError } = await getSupabase()
+        .from('events')
+        .select('id, slug, name, event_date, start_time, start_location, distance_km, event_type, description')
+        .eq('chapter_id', chapterId)
+        .eq('status', 'scheduled')
+        .neq('event_type', 'permanent')
+        .gte('event_date', today)
+        .order('event_date', { ascending: true })
 
-  if (eventsError) {
-    console.error('Error fetching events:', eventsError)
+      if (eventsError) {
+        console.error('Error fetching events:', eventsError)
+        return null
+      }
+
+      return events
+    },
+    [`calendar-events-${chapter}`],
+    {
+      tags: ['events', `chapter-${chapter}`],
+    }
+  )()
+
+  if (!events) {
     return NextResponse.json(
       { error: 'Failed to fetch events' },
       { status: 500 }

@@ -1,6 +1,6 @@
 'use server'
 
-import { revalidatePath } from 'next/cache'
+import { revalidatePath, revalidateTag } from 'next/cache'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { requireAdmin } from '@/lib/auth/get-admin'
 import { getUrlSlugFromDbSlug } from '@/lib/chapter-config'
@@ -12,8 +12,8 @@ import type {
   EventForResultsRevalidation,
 } from '@/types/queries'
 
-// Helper to revalidate public results pages
-async function revalidateResultsPages(eventId: string) {
+// Helper to revalidate cache tags for results pages
+async function revalidateResultsTags(eventId: string) {
   // Get event info including season and chapter
   const { data: event } = await getSupabaseAdmin()
     .from('events')
@@ -23,9 +23,17 @@ async function revalidateResultsPages(eventId: string) {
 
   if (event) {
     const typedEvent = event as EventForResultsRevalidation
+    // Revalidate general results cache
+    revalidateTag('results')
+    
     if (typedEvent.season && typedEvent.chapters?.slug) {
       const urlSlug = getUrlSlugFromDbSlug(typedEvent.chapters.slug)
       if (urlSlug) {
+        // Revalidate chapter-specific results cache
+        revalidateTag(`chapter-${urlSlug}`)
+        // Revalidate year-specific results cache
+        revalidateTag(`year-${typedEvent.season}`)
+        // Also revalidate the path for immediate UI update
         revalidatePath(`/results/${typedEvent.season}/${urlSlug}`)
       }
     }
@@ -117,9 +125,10 @@ export async function updateResult(resultId: string, data: UpdateResultData): Pr
     return { success: false, error: 'Failed to update result' }
   }
 
+  // Revalidate admin pages (still use revalidatePath for admin routes)
   revalidatePath('/admin/events')
 
-  // Get the event_id to revalidate results pages
+  // Get the event_id to revalidate results cache tags
   const { data: result } = await getSupabaseAdmin()
     .from('results')
     .select('event_id')
@@ -129,7 +138,7 @@ export async function updateResult(resultId: string, data: UpdateResultData): Pr
   if (result) {
     const typedResult = result as ResultWithEventId
     if (typedResult.event_id) {
-      await revalidateResultsPages(typedResult.event_id)
+      await revalidateResultsTags(typedResult.event_id)
     }
   }
 
@@ -156,13 +165,14 @@ export async function deleteResult(resultId: string): Promise<ActionResult> {
     return { success: false, error: 'Failed to delete result' }
   }
 
+  // Revalidate admin pages (still use revalidatePath for admin routes)
   revalidatePath('/admin/events')
 
-  // Revalidate public results pages
+  // Revalidate cache tags for results pages
   if (result) {
     const typedResult = result as ResultWithEventId
     if (typedResult.event_id) {
-      await revalidateResultsPages(typedResult.event_id)
+      await revalidateResultsTags(typedResult.event_id)
     }
   }
 

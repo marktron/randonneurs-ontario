@@ -1,6 +1,6 @@
 'use server'
 
-import { revalidatePath } from 'next/cache'
+import { revalidatePath, revalidateTag } from 'next/cache'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { requireAdmin } from '@/lib/auth/get-admin'
 import { createSlug } from '@/lib/utils'
@@ -14,8 +14,16 @@ import type {
   EventUpdate,
 } from '@/types/queries'
 
-// Helper to revalidate public routes pages
-async function revalidateRoutesPages(chapterId: string | null) {
+// Helper to revalidate cache tags for routes pages
+async function revalidateRoutesTags(chapterId: string | null, routeSlug?: string) {
+  // Revalidate general routes cache
+  revalidateTag('routes')
+  
+  if (routeSlug) {
+    // Revalidate specific route cache
+    revalidateTag(`route-${routeSlug}`)
+  }
+
   if (!chapterId) return
 
   // Get chapter slug
@@ -30,6 +38,9 @@ async function revalidateRoutesPages(chapterId: string | null) {
     if (typedChapter.slug) {
       const urlSlug = getUrlSlugFromDbSlug(typedChapter.slug)
       if (urlSlug) {
+        // Revalidate chapter-specific routes cache
+        revalidateTag(`chapter-${urlSlug}`)
+        // Also revalidate the path for immediate UI update
         revalidatePath(`/routes/${urlSlug}`)
       }
     }
@@ -123,11 +134,12 @@ export async function createRoute(data: RouteData): Promise<ActionResult> {
     return { success: false, error: 'Failed to create route' }
   }
 
+  // Revalidate admin pages (still use revalidatePath for admin routes)
   revalidatePath('/admin/routes')
 
-  // Revalidate public routes pages
+  // Revalidate cache tags for routes pages
   if (chapterId) {
-    await revalidateRoutesPages(chapterId)
+    await revalidateRoutesTags(chapterId, slug)
   }
 
   return { success: true }
@@ -184,20 +196,21 @@ export async function updateRoute(routeId: string, data: Partial<RouteData>): Pr
     return { success: false, error: 'Failed to update route' }
   }
 
+  // Revalidate admin pages (still use revalidatePath for admin routes)
   revalidatePath('/admin/routes')
   revalidatePath(`/admin/routes/${routeId}`)
 
-  // Fetch route to get chapter for routes page revalidation
+  // Fetch route to get chapter and slug for cache tag revalidation
   const { data: route } = await getSupabaseAdmin()
     .from('routes')
-    .select('chapter_id')
+    .select('chapter_id, slug')
     .eq('id', routeId)
     .single()
 
   if (route) {
-    const typedRoute = route as RouteWithChapterId
+    const typedRoute = route as RouteWithChapterId & { slug: string }
     if (typedRoute.chapter_id) {
-      await revalidateRoutesPages(typedRoute.chapter_id)
+      await revalidateRoutesTags(typedRoute.chapter_id, typedRoute.slug)
     }
   }
 
@@ -238,13 +251,14 @@ export async function deleteRoute(routeId: string): Promise<ActionResult> {
     return { success: false, error: 'Failed to delete route' }
   }
 
+  // Revalidate admin pages (still use revalidatePath for admin routes)
   revalidatePath('/admin/routes')
 
-  // Revalidate public routes pages
+  // Revalidate cache tags for routes pages
   if (route) {
     const typedRoute = route as RouteWithChapterId
     if (typedRoute.chapter_id) {
-      await revalidateRoutesPages(typedRoute.chapter_id)
+      await revalidateRoutesTags(typedRoute.chapter_id)
     }
   }
 
@@ -265,19 +279,20 @@ export async function toggleRouteActive(routeId: string, isActive: boolean): Pro
     return { success: false, error: 'Failed to update route status' }
   }
 
+  // Revalidate admin pages (still use revalidatePath for admin routes)
   revalidatePath('/admin/routes')
 
-  // Fetch route to get chapter for routes page revalidation
+  // Fetch route to get chapter and slug for cache tag revalidation
   const { data: route } = await getSupabaseAdmin()
     .from('routes')
-    .select('chapter_id')
+    .select('chapter_id, slug')
     .eq('id', routeId)
     .single()
 
   if (route) {
-    const typedRoute = route as RouteWithChapterId
+    const typedRoute = route as RouteWithChapterId & { slug: string }
     if (typedRoute.chapter_id) {
-      await revalidateRoutesPages(typedRoute.chapter_id)
+      await revalidateRoutesTags(typedRoute.chapter_id, typedRoute.slug)
     }
   }
 

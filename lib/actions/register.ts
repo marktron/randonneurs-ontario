@@ -26,7 +26,7 @@
  */
 'use server'
 
-import { revalidatePath } from 'next/cache'
+import { revalidatePath, revalidateTag } from 'next/cache'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { sendRegistrationConfirmationEmail } from '@/lib/email/send-registration-email'
 import { formatEventType } from '@/lib/utils'
@@ -263,7 +263,10 @@ export async function registerForEvent(data: RegistrationData): Promise<Registra
     console.error('Email sending failed:', error)
   })
 
-  // Revalidate the registration page to show the new registration
+  // Revalidate cache tags for registration data
+  revalidateTag('registrations')
+  revalidateTag(`event-${event.slug}`)
+  // Also revalidate the path for immediate UI update
   revalidatePath(`/register/${event.slug}`)
 
   return { success: true }
@@ -512,7 +515,10 @@ export async function registerForPermanent(data: PermanentRegistrationData): Pro
     console.error('Email sending failed:', error)
   })
 
-  // Revalidate the registration page to show the new registration
+  // Revalidate cache tags for registration data
+  revalidateTag('registrations')
+  revalidateTag(`event-${eventSlug}`)
+  // Also revalidate the path for immediate UI update
   revalidatePath(`/register/${eventSlug}`)
 
   return { success: true }
@@ -699,7 +705,10 @@ export async function completeRegistrationWithRider(
     console.error('Email sending failed:', error)
   })
 
-  // Revalidate the registration page
+  // Revalidate cache tags for registration data
+  revalidateTag('registrations')
+  revalidateTag(`event-${event.slug}`)
+  // Also revalidate the path for immediate UI update
   revalidatePath(`/register/${event.slug}`)
 
   return { success: true }

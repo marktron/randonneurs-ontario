@@ -1,6 +1,6 @@
 'use server'
 
-import { revalidatePath } from 'next/cache'
+import { revalidatePath, revalidateTag } from 'next/cache'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { requireAdmin } from '@/lib/auth/get-admin'
 import { sendgrid } from '@/lib/email/sendgrid'
@@ -17,8 +17,8 @@ import type {
   EventWithChapterName,
 } from '@/types/queries'
 
-// Helper to revalidate public calendar pages
-async function revalidateCalendarPages(chapterId: string, eventType: string) {
+// Helper to revalidate cache tags for calendar pages
+async function revalidateCalendarTags(chapterId: string, eventType: string, eventSlug?: string) {
   // Get chapter slug
   const { data: chapter } = await getSupabaseAdmin()
     .from('chapters')
@@ -31,14 +31,23 @@ async function revalidateCalendarPages(chapterId: string, eventType: string) {
     if (typedChapter.slug) {
       const urlSlug = getUrlSlugFromDbSlug(typedChapter.slug)
       if (urlSlug) {
-        revalidatePath(`/calendar/${urlSlug}`)
+        // Revalidate chapter-specific events cache
+        revalidateTag(`chapter-${urlSlug}`)
       }
     }
   }
 
-  // Also revalidate permanents page if it's a permanent event
+  // Revalidate general events cache
+  revalidateTag('events')
+
+  // Revalidate specific event if slug provided
+  if (eventSlug) {
+    revalidateTag(`event-${eventSlug}`)
+  }
+
+  // Also revalidate permanents cache if it's a permanent event
   if (eventType === 'permanent') {
-    revalidatePath('/calendar/permanents')
+    revalidateTag('permanents')
   }
 }
 
@@ -119,11 +128,12 @@ export async function createEvent(data: CreateEventData): Promise<ActionResult<{
 
     const typedNewEvent = newEvent as EventIdOnly
 
+    // Revalidate admin pages (still use revalidatePath for admin routes)
     revalidatePath('/admin/events')
     revalidatePath('/admin')
 
-    // Revalidate public calendar pages
-    await revalidateCalendarPages(chapterId, eventType)
+    // Revalidate cache tags for calendar pages
+    await revalidateCalendarTags(chapterId, eventType)
 
     return { success: true, data: { id: typedNewEvent.id } }
   } catch (error) {
@@ -198,19 +208,20 @@ export async function updateEvent(
       return { success: false, error: 'Failed to update event' }
     }
 
+    // Revalidate admin pages (still use revalidatePath for admin routes)
     revalidatePath(`/admin/events/${eventId}`)
     revalidatePath('/admin/events')
     revalidatePath('/admin')
 
-    // Fetch event to get chapter and type for calendar revalidation
+    // Fetch event to get chapter, type, and slug for cache tag revalidation
     const { data: event } = await getSupabaseAdmin()
       .from('events')
-      .select('chapter_id, event_type')
+      .select('chapter_id, event_type, slug')
       .eq('id', eventId)
       .single()
 
     if (event) {
-      await revalidateCalendarPages(event.chapter_id, event.event_type)
+      await revalidateCalendarTags(event.chapter_id, event.event_type, event.slug)
     }
 
     return { success: true }
@@ -276,11 +287,12 @@ export async function deleteEvent(eventId: string): Promise<ActionResult> {
       return { success: false, error: 'Failed to delete event' }
     }
 
+    // Revalidate admin pages (still use revalidatePath for admin routes)
     revalidatePath('/admin/events')
     revalidatePath('/admin')
 
-    // Revalidate public calendar pages
-    await revalidateCalendarPages(typedEvent.chapter_id, typedEvent.event_type)
+    // Revalidate cache tags for calendar pages
+    await revalidateCalendarTags(typedEvent.chapter_id, typedEvent.event_type)
 
     return { success: true }
   } catch (error) {
@@ -351,13 +363,15 @@ export async function updateEventStatus(
       }
     }
 
+    // Revalidate admin pages (still use revalidatePath for admin routes)
     revalidatePath(`/admin/events/${eventId}`)
     revalidatePath('/admin/events')
     revalidatePath('/admin')
     revalidatePath('/admin/results')
 
+    // Revalidate cache tags for calendar pages
     if (event) {
-      await revalidateCalendarPages(event.chapter_id, event.event_type)
+      await revalidateCalendarTags(event.chapter_id, event.event_type)
     }
 
     return { success: true }
@@ -499,6 +513,7 @@ This email was sent from the Randonneurs Ontario admin system.
       return { success: false, error: 'Email sent but failed to update event status' }
     }
 
+    // Revalidate admin pages (still use revalidatePath for admin routes)
     revalidatePath(`/admin/events/${eventId}`)
     revalidatePath('/admin/events')
     revalidatePath('/admin')
