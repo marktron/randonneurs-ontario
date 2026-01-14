@@ -24,6 +24,7 @@ docker exec "$CONTAINER" pg_dump -U postgres \
   --rows-per-insert=1 \
   --schema=public \
   --exclude-table=admins \
+  --exclude-table=images \
   postgres > "$SEED_FILE.tmp"
 
 # Clean up the file:

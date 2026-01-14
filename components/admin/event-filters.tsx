@@ -18,17 +18,20 @@ interface Chapter {
 }
 
 interface EventFiltersProps {
-  timeFilter: string
+  season: string
   chapterId: string | null
   chapters: Chapter[]
+  seasons: string[]
 }
 
 // Match the order used in the main site navbar
 const CHAPTER_ORDER = ['Huron', 'Ottawa', 'Simcoe-Muskoka', 'Toronto']
 
-function buildFilterUrl(timeFilter: string, chapterId: string | null, explicitAll: boolean = false) {
+const currentSeason = process.env.NEXT_PUBLIC_CURRENT_SEASON || '2026'
+
+function buildFilterUrl(season: string, chapterId: string | null, explicitAll: boolean = false) {
   const params = new URLSearchParams()
-  if (timeFilter !== 'all') params.set('filter', timeFilter)
+  if (season !== currentSeason) params.set('season', season)
   if (chapterId) {
     params.set('chapter', chapterId)
   } else if (explicitAll) {
@@ -39,44 +42,46 @@ function buildFilterUrl(timeFilter: string, chapterId: string | null, explicitAl
   return `/admin/events${qs ? `?${qs}` : ''}`
 }
 
-export function EventFilters({ timeFilter, chapterId, chapters }: EventFiltersProps) {
+export function EventFilters({ season, chapterId, chapters, seasons }: EventFiltersProps) {
   const router = useRouter()
 
   // Separate chapters into main chapters and others
-  const mainChapters = CHAPTER_ORDER
-    .map(name => chapters.find(c => c.name === name))
-    .filter((c): c is Chapter => c !== undefined)
+  const mainChapters = CHAPTER_ORDER.map((name) => chapters.find((c) => c.name === name)).filter(
+    (c): c is Chapter => c !== undefined
+  )
 
   const otherChapters = chapters
-    .filter(c => !CHAPTER_ORDER.includes(c.name))
+    .filter((c) => !CHAPTER_ORDER.includes(c.name))
     .sort((a, b) => a.name.localeCompare(b.name))
 
-  const handleTimeChange = (value: string) => {
+  const handleSeasonChange = (value: string) => {
     router.push(buildFilterUrl(value, chapterId))
   }
 
   const handleChapterChange = (value: string) => {
     const isAll = value === 'all'
-    router.push(buildFilterUrl(timeFilter, isAll ? null : value, isAll))
+    router.push(buildFilterUrl(season, isAll ? null : value, isAll))
   }
 
   // Find current chapter name for display
   const currentChapterName = chapterId
-    ? chapters.find(c => c.id === chapterId)?.name || 'Unknown'
+    ? chapters.find((c) => c.id === chapterId)?.name || 'Unknown'
     : 'All Chapters'
 
   return (
     <div className="flex items-center gap-4">
       <div className="flex items-center gap-2">
-        <span className="text-sm text-muted-foreground">Time:</span>
-        <Select value={timeFilter} onValueChange={handleTimeChange}>
-          <SelectTrigger className="w-[130px]">
+        <span className="text-sm text-muted-foreground">Season:</span>
+        <Select value={season} onValueChange={handleSeasonChange}>
+          <SelectTrigger className="w-[100px]">
             <SelectValue />
           </SelectTrigger>
           <SelectContent position="popper" sideOffset={4}>
-            <SelectItem value="all">All</SelectItem>
-            <SelectItem value="upcoming">Upcoming</SelectItem>
-            <SelectItem value="past">Past</SelectItem>
+            {seasons.map((year) => (
+              <SelectItem key={year} value={year}>
+                {year}
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
       </div>

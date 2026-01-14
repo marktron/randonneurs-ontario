@@ -8,6 +8,8 @@
  * All entries should be lowercase.
  */
 const NICKNAME_MAP: Record<string, string[]> = {
+  // Note: Parenthetical nicknames like "Xinhua (Luke)" are handled separately
+  // by extractParenthetical() - no need to add individual cases here
   alexander: ['alex', 'alec', 'al', 'sandy', 'xander'],
   alexandra: ['alex', 'alexa', 'sandy', 'lexi'],
   andrew: ['andy', 'drew'],
@@ -28,6 +30,7 @@ const NICKNAME_MAP: Record<string, string[]> = {
   frederick: ['fred', 'freddy', 'freddie'],
   geoffrey: ['geoff', 'jeff'],
   gerald: ['gerry', 'jerry'],
+  gordon: ['gord', 'gordie'],
   gregory: ['greg', 'gregg'],
   james: ['jim', 'jimmy', 'jamie', 'jem'],
   jeffrey: ['jeff', 'geoff'],
@@ -64,6 +67,7 @@ const NICKNAME_MAP: Record<string, string[]> = {
   theodore: ['ted', 'teddy', 'theo'],
   thomas: ['tom', 'tommy'],
   timothy: ['tim', 'timmy'],
+  tobias: ['toby'],
   victoria: ['vicky', 'vicki', 'tori'],
   william: ['bill', 'billy', 'will', 'willy', 'liam'],
 }
@@ -77,6 +81,76 @@ for (const [canonical, nicknames] of Object.entries(NICKNAME_MAP)) {
     }
     NICKNAME_REVERSE[nick].push(canonical)
   }
+}
+
+// Common surname prefixes that should be treated as part of the surname
+const SURNAME_PREFIXES = [
+  'de',
+  'van',
+  'von',
+  'der',
+  'den',
+  'la',
+  'le',
+  'du',
+  'da',
+  'dos',
+  'das',
+  'del',
+  'della',
+]
+
+/**
+ * Extract parenthetical nickname from a name.
+ * "Xinhua (Luke)" -> { primary: "Xinhua", alternate: "Luke" }
+ * "John" -> { primary: "John", alternate: null }
+ */
+function extractParenthetical(name: string): { primary: string; alternate: string | null } {
+  const match = name.match(/^(.+?)\s*\(([^)]+)\)\s*$/)
+  if (match) {
+    return { primary: match[1].trim(), alternate: match[2].trim() }
+  }
+  return { primary: name, alternate: null }
+}
+
+/**
+ * Extract first part of a hyphenated first name.
+ * "Jean-Pierre" -> ["Jean-Pierre", "Jean"]
+ * "Mary" -> ["Mary"]
+ */
+function getFirstNameVariants(name: string): string[] {
+  const variants = [name]
+  // If hyphenated, also try just the first part
+  if (name.includes('-')) {
+    const firstPart = name.split('-')[0]
+    if (firstPart.length >= 2) {
+      variants.push(firstPart)
+    }
+  }
+  return variants
+}
+
+/**
+ * Normalize a surname by removing common prefixes for comparison.
+ * "de Vries" -> "vries", "van der Berg" -> "berg"
+ * Returns both the normalized version and whether a prefix was removed.
+ */
+function normalizeSurname(surname: string): { normalized: string; withoutPrefix: string } {
+  const lower = surname.toLowerCase().replace(/[^a-z\s]/g, '')
+  const parts = lower.split(/\s+/)
+
+  // Remove leading surname prefixes
+  let withoutPrefix = lower.replace(/\s+/g, '')
+  for (let i = 0; i < parts.length; i++) {
+    if (SURNAME_PREFIXES.includes(parts[i])) {
+      continue
+    }
+    // Found a non-prefix part, use the rest as the core surname
+    withoutPrefix = parts.slice(i).join('')
+    break
+  }
+
+  return { normalized: lower.replace(/\s+/g, ''), withoutPrefix }
 }
 
 /**
@@ -127,7 +201,7 @@ function areNicknameEquivalent(name1: string, name2: string): boolean {
   // n2 is canonical, n1 is its nickname
   if (NICKNAME_MAP[n2]?.includes(n1)) return true
   // Both are nicknames of the same canonical name
-  if (n1Canonical.some(c => n2Canonical.includes(c))) return true
+  if (n1Canonical.some((c) => n2Canonical.includes(c))) return true
   // n1 is a nickname, n2 is the canonical
   if (n1Canonical.includes(n2)) return true
   // n2 is a nickname, n1 is the canonical
@@ -167,8 +241,8 @@ export function levenshteinDistance(a: string, b: string): number {
     for (let j = 1; j <= bLower.length; j++) {
       const cost = aLower[i - 1] === bLower[j - 1] ? 0 : 1
       matrix[i][j] = Math.min(
-        matrix[i - 1][j] + 1,      // deletion
-        matrix[i][j - 1] + 1,      // insertion
+        matrix[i - 1][j] + 1, // deletion
+        matrix[i][j - 1] + 1, // insertion
         matrix[i - 1][j - 1] + cost // substitution
       )
     }
@@ -193,7 +267,10 @@ export function similarityScore(a: string, b: string): number {
  * "O'Callahan" -> "ocallahan"
  */
 function normalizeForComparison(s: string): string {
-  return s.trim().toLowerCase().replace(/[^a-z]/g, '')
+  return s
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z]/g, '')
 }
 
 /**
@@ -204,6 +281,9 @@ function normalizeForComparison(s: string): string {
  * - Missing middle names
  * - Special characters (O'Callahan vs Ocallahan)
  * - Common nicknames (Bob vs Robert, Dave vs David)
+ * - Parenthetical nicknames: "Xinhua (Luke)" matches "Luke"
+ * - Hyphenated first names: "Jean-Pierre" matches "Jean"
+ * - Surname prefixes: "de Vries" matches "Vries"
  */
 export function fuzzyNameScore(
   searchFirst: string,
@@ -211,26 +291,94 @@ export function fuzzyNameScore(
   candidateFirst: string,
   candidateLast: string
 ): number {
-  // Normalize inputs - strip special characters for comparison
-  const sf = normalizeForComparison(searchFirst)
-  const sl = normalizeForComparison(searchLast)
-  const cf = normalizeForComparison(candidateFirst)
-  const cl = normalizeForComparison(candidateLast)
+  // Extract parenthetical nicknames from first names
+  const searchFirstParsed = extractParenthetical(searchFirst)
+  const candidateFirstParsed = extractParenthetical(candidateFirst)
+
+  // Get all first name variants to try (primary + alternate if exists)
+  // Also include hyphenated variants (Jean-Pierre -> Jean)
+  const searchFirstNames: string[] = []
+  for (const name of [searchFirstParsed.primary, searchFirstParsed.alternate].filter(
+    Boolean
+  ) as string[]) {
+    searchFirstNames.push(...getFirstNameVariants(name))
+  }
+
+  const candidateFirstNames: string[] = []
+  for (const name of [candidateFirstParsed.primary, candidateFirstParsed.alternate].filter(
+    Boolean
+  ) as string[]) {
+    candidateFirstNames.push(...getFirstNameVariants(name))
+  }
+
+  // Normalize surnames and get versions with/without prefixes
+  const searchLastNorm = normalizeSurname(searchLast)
+  const candidateLastNorm = normalizeSurname(candidateLast)
+
+  // Try all combinations of first names and find best score
+  let bestScore = 0
+
+  for (const sf of searchFirstNames) {
+    for (const cf of candidateFirstNames) {
+      const score = calculateNamePairScore(
+        normalizeForComparison(sf),
+        searchLastNorm,
+        normalizeForComparison(cf),
+        candidateLastNorm
+      )
+      bestScore = Math.max(bestScore, score)
+    }
+  }
+
+  return bestScore
+}
+
+/**
+ * Calculate score for a specific first/last name pair.
+ */
+function calculateNamePairScore(
+  sf: string,
+  slNorm: { normalized: string; withoutPrefix: string },
+  cf: string,
+  clNorm: { normalized: string; withoutPrefix: string }
+): number {
+  const sl = slNorm.normalized
+  const cl = clNorm.normalized
 
   // Exact match (after normalization)
   if (sf === cf && sl === cl) return 1.0
 
+  // Check surname match with prefix handling
+  // "de Vries" should match "Vries" and "deVries"
+  const lastExactMatch =
+    sl === cl ||
+    slNorm.withoutPrefix === clNorm.withoutPrefix ||
+    slNorm.normalized === clNorm.withoutPrefix ||
+    slNorm.withoutPrefix === clNorm.normalized
+
   // Check nickname equivalence for first names
   const firstNicknameMatch = areNicknameEquivalent(sf, cf)
-  const lastNicknameMatch = areNicknameEquivalent(sl, cl)
+  const lastNicknameMatch = lastExactMatch || areNicknameEquivalent(sl, cl)
 
   // If both first and last are nickname matches, treat as exact match
-  if (firstNicknameMatch && (sl === cl || lastNicknameMatch)) return 1.0
+  if (firstNicknameMatch && lastNicknameMatch) return 1.0
 
   // Score direct comparison
-  // Use 1.0 for nickname matches, otherwise use Levenshtein similarity
+  // Use 1.0 for nickname/exact matches, otherwise use Levenshtein similarity
   const directFirstScore = firstNicknameMatch ? 1.0 : similarityScore(sf, cf)
-  const directLastScore = lastNicknameMatch ? 1.0 : similarityScore(sl, cl)
+
+  // For last name, also consider prefix-stripped versions
+  let directLastScore: number
+  if (lastNicknameMatch) {
+    directLastScore = 1.0
+  } else {
+    // Try matching with and without prefixes
+    directLastScore = Math.max(
+      similarityScore(sl, cl),
+      similarityScore(slNorm.withoutPrefix, clNorm.withoutPrefix)
+    )
+  }
+
   const directScore = (directFirstScore + directLastScore) / 2
 
   // Score swapped comparison (in case names are in wrong order)
@@ -264,16 +412,11 @@ export function findFuzzyNameMatches<T>(
   const { threshold = 0.5, maxResults = 10 } = options
 
   const scored = candidates
-    .map(item => ({
+    .map((item) => ({
       item,
-      score: fuzzyNameScore(
-        searchFirst,
-        searchLast,
-        getFirstName(item),
-        getLastName(item)
-      ),
+      score: fuzzyNameScore(searchFirst, searchLast, getFirstName(item), getLastName(item)),
     }))
-    .filter(result => result.score >= threshold)
+    .filter((result) => result.score >= threshold)
     .sort((a, b) => b.score - a.score)
 
   return scored.slice(0, maxResults)

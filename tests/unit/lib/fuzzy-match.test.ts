@@ -96,6 +96,41 @@ describe('fuzzyNameScore', () => {
     const score = fuzzyNameScore('Mike', 'Brown', 'Michael', 'Brown')
     expect(score).toBe(1.0)
   })
+
+  it('handles Toby vs Tobias (nicknames)', () => {
+    const score = fuzzyNameScore('Toby', 'Whitfield', 'Tobias', 'Whitfield')
+    expect(score).toBe(1.0)
+  })
+
+  it('handles parenthetical nicknames - Xinhua (Luke) vs Luke', () => {
+    const score = fuzzyNameScore('Luke', 'Luo', 'Xinhua (Luke)', 'Luo')
+    expect(score).toBe(1.0)
+  })
+
+  it('handles parenthetical nicknames - Xinhua (Luke) vs Xinhua', () => {
+    const score = fuzzyNameScore('Xinhua', 'Luo', 'Xinhua (Luke)', 'Luo')
+    expect(score).toBe(1.0)
+  })
+
+  it('handles surname prefixes - de Vries vs Vries', () => {
+    const score = fuzzyNameScore('Philip', 'Vries', 'Philip', 'de Vries')
+    expect(score).toBe(1.0)
+  })
+
+  it('handles surname prefixes - van der Berg vs Berg', () => {
+    const score = fuzzyNameScore('Jan', 'Berg', 'Jan', 'van der Berg')
+    expect(score).toBe(1.0)
+  })
+
+  it('handles surname prefixes - deVries (no space) vs de Vries', () => {
+    const score = fuzzyNameScore('Philip', 'deVries', 'Philip', 'de Vries')
+    expect(score).toBe(1.0)
+  })
+
+  it('handles hyphenated first names - Jean-Pierre vs Jean', () => {
+    const score = fuzzyNameScore('Jean', 'Malherbe', 'Jean-Pierre', 'Malherbe')
+    expect(score).toBe(1.0)
+  })
 })
 
 describe('findFuzzyNameMatches', () => {

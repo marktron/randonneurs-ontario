@@ -18,7 +18,8 @@ import type {
 async function getEventDetails(eventId: string): Promise<EventDetailForAdmin | null> {
   const { data: event } = await getSupabaseAdmin()
     .from('events')
-    .select(`
+    .select(
+      `
       id,
       name,
       event_date,
@@ -28,7 +29,8 @@ async function getEventDetails(eventId: string): Promise<EventDetailForAdmin | n
       status,
       season,
       chapters (id, name)
-    `)
+    `
+    )
     .eq('id', eventId)
     .single()
 
@@ -38,14 +40,16 @@ async function getEventDetails(eventId: string): Promise<EventDetailForAdmin | n
 async function getRegistrations(eventId: string): Promise<RegistrationWithRiderForAdmin[]> {
   const { data } = await getSupabaseAdmin()
     .from('registrations')
-    .select(`
+    .select(
+      `
       id,
       rider_id,
       registered_at,
       status,
       notes,
       riders (id, first_name, last_name, email, emergency_contact_name, emergency_contact_phone)
-    `)
+    `
+    )
     .eq('event_id', eventId)
     .eq('status', 'registered')
     .order('registered_at', { ascending: true })
@@ -56,7 +60,8 @@ async function getRegistrations(eventId: string): Promise<RegistrationWithRiderF
 async function getResults(eventId: string): Promise<ResultWithRiderForAdmin[]> {
   const { data } = await getSupabaseAdmin()
     .from('results')
-    .select(`
+    .select(
+      `
       id,
       rider_id,
       finish_time,
@@ -70,7 +75,8 @@ async function getResults(eventId: string): Promise<ResultWithRiderForAdmin[]> {
       rider_notes,
       submitted_at,
       riders (id, first_name, last_name, email)
-    `)
+    `
+    )
     .eq('event_id', eventId)
     .order('finish_time', { ascending: true, nullsFirst: false })
 
@@ -79,11 +85,21 @@ async function getResults(eventId: string): Promise<ResultWithRiderForAdmin[]> {
 
 interface EventPageProps {
   params: Promise<{ id: string }>
+  searchParams: Promise<{ from_season?: string; from_chapter?: string }>
 }
 
-export default async function EventDetailPage({ params }: EventPageProps) {
-  const { id } = await params
+function buildBackUrl(fromSeason?: string, fromChapter?: string): string {
+  const params = new URLSearchParams()
+  if (fromSeason) params.set('season', fromSeason)
+  if (fromChapter) params.set('chapter', fromChapter)
+  const qs = params.toString()
+  return `/admin/events${qs ? `?${qs}` : ''}`
+}
+
+export default async function EventDetailPage({ params, searchParams }: EventPageProps) {
+  const [{ id }, search] = await Promise.all([params, searchParams])
   await requireAdmin()
+  const backUrl = buildBackUrl(search.from_season, search.from_chapter)
 
   const [event, registrations, results] = await Promise.all([
     getEventDetails(id),
@@ -98,7 +114,7 @@ export default async function EventDetailPage({ params }: EventPageProps) {
   return (
     <div className="space-y-6">
       <Link
-        href="/admin/events"
+        href={backUrl}
         className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground"
       >
         <ChevronLeft className="h-4 w-4 mr-1" />
@@ -159,8 +175,10 @@ export default async function EventDetailPage({ params }: EventPageProps) {
           <Users className="h-4 w-4" />
           <span>
             {(() => {
-              const registeredRiderIds = new Set(registrations.map(r => r.rider_id))
-              const resultsOnlyCount = results.filter(r => !registeredRiderIds.has(r.rider_id)).length
+              const registeredRiderIds = new Set(registrations.map((r) => r.rider_id))
+              const resultsOnlyCount = results.filter(
+                (r) => !registeredRiderIds.has(r.rider_id)
+              ).length
               const total = registrations.length + resultsOnlyCount
               return `${total} ${total === 1 ? 'rider' : 'riders'}`
             })()}
