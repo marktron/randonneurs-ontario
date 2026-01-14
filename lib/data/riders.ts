@@ -17,19 +17,31 @@ export interface RiderListItem {
 }
 
 const getAllRidersInner = cache(async (): Promise<RiderListItem[]> => {
-  const { data, error } = await getSupabase()
-    .from('public_riders')
-    .select('slug, first_name, last_name')
-    .order('last_name', { ascending: true })
-    .order('first_name', { ascending: true })
+  const BATCH_SIZE = 1000
+  let allData: Array<Pick<PublicRider, 'slug' | 'first_name' | 'last_name'>> = []
+  let from = 0
 
-  if (error) {
-    return handleDataError(error, { operation: 'getAllRiders' }, [])
+  while (true) {
+    const { data, error } = await getSupabase()
+      .from('public_riders')
+      .select('slug, first_name, last_name')
+      .order('last_name', { ascending: true })
+      .order('first_name', { ascending: true })
+      .range(from, from + BATCH_SIZE - 1)
+
+    if (error) {
+      return handleDataError(error, { operation: 'getAllRiders' }, [])
+    }
+
+    if (!data || data.length === 0) break
+
+    allData = allData.concat(data)
+
+    if (data.length < BATCH_SIZE) break
+    from += BATCH_SIZE
   }
 
-  if (!data) return []
-
-  return data.map((rider: Pick<PublicRider, 'slug' | 'first_name' | 'last_name'>) => ({
+  return allData.map((rider) => ({
     slug: rider.slug ?? '',
     firstName: rider.first_name ?? '',
     lastName: rider.last_name ?? '',

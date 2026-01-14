@@ -31,7 +31,7 @@ const createChainableMock = (finalData: unknown = null, finalError: unknown = nu
   }
 
   // Add all typical Supabase query methods
-  ;['select', 'order', 'eq', 'neq', 'limit'].forEach(addMethod)
+  ;['select', 'order', 'eq', 'neq', 'limit', 'range'].forEach(addMethod)
 
   // Make chainable thenable for direct await
   chainable.then = (resolve: (value: { data: unknown; error: unknown }) => void) => {
