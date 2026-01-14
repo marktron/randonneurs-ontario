@@ -15,6 +15,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { AwardBadgeList, AwardSummary, aggregateAwards } from '@/components/award-badge'
 
 export const revalidate = 3600 // Revalidate every hour
 
@@ -76,16 +77,14 @@ function ResultCard({ result, year }: { result: RiderEventResult; year: number }
     ? `/results/${year}/${result.chapterSlug}#event-${result.date}`
     : null
   const displayNote = getDisplayNote(result)
+  const hasAwards = result.awards && result.awards.length > 0
 
   return (
     <div className="py-3 border-b border-border last:border-0">
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
           {eventLink ? (
-            <Link
-              href={eventLink}
-              className="font-medium hover:text-primary transition-colors"
-            >
+            <Link href={eventLink} className="font-medium hover:text-primary transition-colors">
               {result.eventName}
             </Link>
           ) : (
@@ -94,13 +93,18 @@ function ResultCard({ result, year }: { result: RiderEventResult; year: number }
           <p className="text-sm text-muted-foreground mt-0.5">
             {formatDate(result.date)} · {result.distanceKm} km
           </p>
-          {displayNote && (
-            <p className="text-sm text-muted-foreground mt-1">{displayNote}</p>
+          {displayNote && <p className="text-sm text-muted-foreground mt-1">{displayNote}</p>}
+          {hasAwards && (
+            <div className="mt-1.5">
+              <AwardBadgeList awards={result.awards} />
+            </div>
           )}
         </div>
-        <span className={`font-mono text-sm shrink-0 ${
-          result.status !== 'finished' ? 'text-muted-foreground' : ''
-        }`}>
+        <span
+          className={`font-mono text-sm shrink-0 ${
+            result.status !== 'finished' ? 'text-muted-foreground' : ''
+          }`}
+        >
           {formatTime(result.time, result.status ?? 'pending')}
         </span>
       </div>
@@ -112,13 +116,10 @@ function YearSection({ yearData }: { yearData: RiderYearResults }) {
   return (
     <section className="space-y-4">
       <header>
-        <h2 className="font-serif text-3xl md:text-4xl tracking-tight">
-          {yearData.year}
-        </h2>
+        <h2 className="font-serif text-3xl md:text-4xl tracking-tight">{yearData.year}</h2>
         <p className="text-muted-foreground mt-1">
-          {yearData.completedCount} completed ride{yearData.completedCount !== 1 ? 's' : ''}
-          {' '}&middot;{' '}
-          {yearData.totalDistanceKm.toLocaleString()} km
+          {yearData.completedCount} completed ride{yearData.completedCount !== 1 ? 's' : ''}{' '}
+          &middot; {yearData.totalDistanceKm.toLocaleString()} km
         </p>
       </header>
 
@@ -148,9 +149,7 @@ function YearSection({ yearData }: { yearData: RiderYearResults }) {
           <TableBody>
             {yearData.results.map((result, index) => (
               <TableRow key={`${result.date}-${result.eventName}-${index}`}>
-                <TableCell className="text-muted-foreground">
-                  {formatDate(result.date)}
-                </TableCell>
+                <TableCell className="text-muted-foreground">{formatDate(result.date)}</TableCell>
                 <TableCell className="font-medium">
                   {result.chapterSlug ? (
                     <Link
@@ -163,16 +162,23 @@ function YearSection({ yearData }: { yearData: RiderYearResults }) {
                     result.eventName
                   )}
                 </TableCell>
-                <TableCell>
-                  {result.distanceKm} km
-                </TableCell>
-                <TableCell className={`font-mono ${
-                  result.status !== 'finished' ? 'text-muted-foreground' : ''
-                }`}>
+                <TableCell>{result.distanceKm} km</TableCell>
+                <TableCell
+                  className={`font-mono ${
+                    result.status !== 'finished' ? 'text-muted-foreground' : ''
+                  }`}
+                >
                   {formatTime(result.time, result.status ?? 'pending')}
                 </TableCell>
-                <TableCell className="text-muted-foreground">
-                  {getDisplayNote(result) || ''}
+                <TableCell>
+                  <div className="space-y-1">
+                    {getDisplayNote(result) && (
+                      <span className="text-muted-foreground">{getDisplayNote(result)}</span>
+                    )}
+                    {result.awards && result.awards.length > 0 && (
+                      <AwardBadgeList awards={result.awards} />
+                    )}
+                  </div>
                 </TableCell>
               </TableRow>
             ))}
@@ -186,10 +192,7 @@ function YearSection({ yearData }: { yearData: RiderYearResults }) {
 export default async function RiderPage({ params }: RiderPageProps) {
   const { slug } = await params
 
-  const [rider, yearResults] = await Promise.all([
-    getRiderBySlug(slug),
-    getRiderResults(slug),
-  ])
+  const [rider, yearResults] = await Promise.all([getRiderBySlug(slug), getRiderResults(slug)])
 
   if (!rider) {
     notFound()
@@ -198,6 +201,24 @@ export default async function RiderPage({ params }: RiderPageProps) {
   // Calculate totals across all years
   const totalCompletedRides = yearResults.reduce((sum, y) => sum + y.completedCount, 0)
   const totalDistanceKm = yearResults.reduce((sum, y) => sum + y.totalDistanceKm, 0)
+
+  // Aggregate all awards across all results (excluding First Brevet from header)
+  // Devil Week only counts once per year
+  const devilWeekYears = new Set<number>()
+  const allAwards = yearResults.flatMap((year) =>
+    year.results.flatMap((result) =>
+      (result.awards ?? []).filter((award) => {
+        if (award.title === 'Completed Devil Week') {
+          if (devilWeekYears.has(year.year)) return false
+          devilWeekYears.add(year.year)
+        }
+        return true
+      })
+    )
+  )
+  const aggregatedAwards = aggregateAwards(allAwards).filter(
+    (award) => award.title !== 'First Brevet'
+  )
 
   return (
     <PageShell>
@@ -210,12 +231,13 @@ export default async function RiderPage({ params }: RiderPageProps) {
           </h1>
           {yearResults.length > 0 && (
             <p className="text-muted-foreground mt-3 text-lg">
-              {yearResults.length} season{yearResults.length !== 1 ? 's' : ''}
-              {' '}&middot;{' '}
-              {totalCompletedRides} completed ride{totalCompletedRides !== 1 ? 's' : ''}
-              {' '}&middot;{' '}
+              {yearResults.length} season{yearResults.length !== 1 ? 's' : ''} &middot;{' '}
+              {totalCompletedRides} completed ride{totalCompletedRides !== 1 ? 's' : ''} &middot;{' '}
               {totalDistanceKm.toLocaleString()} km total
             </p>
+          )}
+          {aggregatedAwards.length > 0 && (
+            <AwardSummary awards={aggregatedAwards} className="mt-4" />
           )}
         </div>
       </div>

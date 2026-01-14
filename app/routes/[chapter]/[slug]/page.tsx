@@ -3,6 +3,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { PageShell } from '@/components/page-shell'
 import { getRouteBySlug, getRouteResults, getChapterInfo } from '@/lib/data/routes'
+import { AwardBadge } from '@/components/award-badge'
 
 interface PageProps {
   params: Promise<{ chapter: string; slug: string }>
@@ -38,10 +39,7 @@ export default async function RouteDetailPage({ params }: PageProps) {
     notFound()
   }
 
-  const [route, results] = await Promise.all([
-    getRouteBySlug(slug),
-    getRouteResults(slug),
-  ])
+  const [route, results] = await Promise.all([getRouteBySlug(slug), getRouteResults(slug)])
 
   if (!route) {
     notFound()
@@ -50,7 +48,7 @@ export default async function RouteDetailPage({ params }: PageProps) {
   // Calculate stats
   const totalEvents = results.length
   const totalFinishers = results.reduce((acc, event) => {
-    return acc + event.riders.filter(r => !['DNF', 'OTL', 'DQ'].includes(r.time)).length
+    return acc + event.riders.filter((r) => !['DNF', 'OTL', 'DQ'].includes(r.time)).length
   }, 0)
 
   return (
@@ -66,9 +64,7 @@ export default async function RouteDetailPage({ params }: PageProps) {
         />
         <div className="absolute inset-0 bg-gradient-to-t from-neutral-900/80 via-neutral-900/40 to-neutral-900/20" />
         <div className="relative mx-auto max-w-5xl px-6 py-28 md:py-36">
-          <p className="eyebrow-hero text-neutral-300 text-shadow-lg">
-            Route History
-          </p>
+          <p className="eyebrow-hero text-neutral-300 text-shadow-lg">Route History</p>
           <h1 className="font-serif text-5xl md:text-6xl lg:text-7xl tracking-tight mt-2 text-white text-shadow-lg">
             {route.name}
           </h1>
@@ -112,7 +108,12 @@ export default async function RouteDetailPage({ params }: PageProps) {
               >
                 View on RideWithGPS
                 <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+                  />
                 </svg>
               </a>
             )}
@@ -145,14 +146,19 @@ export default async function RouteDetailPage({ params }: PageProps) {
                   {event.riders.map((rider, index) => (
                     <div
                       key={`${rider.slug}-${index}`}
-                      className="flex items-baseline justify-between py-1.5 border-b border-border/50"
+                      className="flex items-center justify-between py-1.5 border-b border-border/50 gap-2"
                     >
-                      <Link
-                        href={`/riders/${rider.slug}`}
-                        className="text-sm hover:text-primary transition-colors truncate pr-4"
-                      >
-                        {rider.name}
-                      </Link>
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <Link
+                          href={`/riders/${rider.slug}`}
+                          className="text-sm hover:text-primary transition-colors truncate"
+                        >
+                          {rider.name}
+                        </Link>
+                        {rider.isFirstBrevet && (
+                          <AwardBadge award={{ title: 'First Brevet' }} className="shrink-0" />
+                        )}
+                      </div>
                       <span
                         className={`text-sm tabular-nums shrink-0 ${
                           rider.time === 'DNF' || rider.time === 'OTL'

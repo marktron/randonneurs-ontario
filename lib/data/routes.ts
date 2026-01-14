@@ -22,12 +22,7 @@ import {
 } from '@/lib/chapter-config'
 import { formatFinishTime, formatStatus } from '@/lib/utils'
 import { handleDataError } from '@/lib/errors'
-import type {
-  RouteWithChapter,
-  RouteWithChapterName,
-  RouteBasic,
-  EventWithPublicResultsForRoute,
-} from '@/types/queries'
+import type { RouteWithChapter, RouteWithChapterName, RouteBasic } from '@/types/queries'
 
 // Re-export chapter utilities for convenience
 export { getChapterInfo, getAllChapterSlugs }
@@ -46,6 +41,7 @@ export interface RouteResultRider {
   name: string
   slug: string | null
   time: string
+  isFirstBrevet: boolean
 }
 
 export interface RouteResultEvent {
@@ -96,7 +92,7 @@ const getRouteResultsInner = cache(async (routeSlug: string): Promise<RouteResul
       name, event_date,
       routes!inner(slug),
       public_results (
-        finish_time, status, rider_slug, first_name, last_name
+        id, finish_time, status, rider_slug, first_name, last_name
       )
     `
     )
@@ -109,9 +105,36 @@ const getRouteResultsInner = cache(async (routeSlug: string): Promise<RouteResul
 
   if (!events) return []
 
+  // Collect all result IDs to check for First Brevet awards
+  type EventWithResults = (typeof events)[number]
+  const allResultIds: string[] = []
+  for (const event of events as EventWithResults[]) {
+    if (event.public_results) {
+      for (const result of event.public_results) {
+        if (result.id) allResultIds.push(result.id)
+      }
+    }
+  }
+
+  // Query for First Brevet awards
+  const firstBrevetResultIds = new Set<string>()
+  if (allResultIds.length > 0) {
+    const { data: awardData } = await getSupabase()
+      .from('result_awards')
+      .select('result_id, awards!inner(title)')
+      .in('result_id', allResultIds)
+      .eq('awards.title', 'First Brevet')
+
+    if (awardData) {
+      for (const award of awardData) {
+        firstBrevetResultIds.add(award.result_id)
+      }
+    }
+  }
+
   const results: RouteResultEvent[] = []
 
-  for (const event of events as EventWithPublicResultsForRoute[]) {
+  for (const event of events as EventWithResults[]) {
     const eventResults = event.public_results
     if (!eventResults || eventResults.length === 0) continue
 
@@ -121,6 +144,7 @@ const getRouteResultsInner = cache(async (routeSlug: string): Promise<RouteResul
         name: `${r.first_name} ${r.last_name}`.trim() || 'Unknown',
         slug: r.rider_slug,
         time: formatStatus(r.status ?? 'pending') ?? formatFinishTime(r.finish_time) ?? '',
+        isFirstBrevet: r.id ? firstBrevetResultIds.has(r.id) : false,
       }))
 
     // Sort by last name

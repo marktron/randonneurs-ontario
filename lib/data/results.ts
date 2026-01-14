@@ -34,6 +34,7 @@ export interface RiderResult {
   name: string
   slug: string | null
   time: string | 'DNF' | 'DNS' | 'OTL'
+  isFirstBrevet: boolean
 }
 
 export interface EventResult {
@@ -155,7 +156,7 @@ const getChapterResultsInner = cache(
         id, name, event_date, distance_km,
         routes (slug),
         public_results (
-          finish_time, status, team_name, rider_slug, first_name, last_name
+          id, finish_time, status, team_name, rider_slug, first_name, last_name
         )
       `
         )
@@ -174,7 +175,7 @@ const getChapterResultsInner = cache(
         id, name, event_date, distance_km,
         routes (slug),
         public_results (
-          finish_time, status, team_name, rider_slug, first_name, last_name
+          id, finish_time, status, team_name, rider_slug, first_name, last_name
         )
       `
         )
@@ -194,7 +195,7 @@ const getChapterResultsInner = cache(
         routes (slug),
         chapters!inner(slug),
         public_results (
-          finish_time, status, team_name, rider_slug, first_name, last_name
+          id, finish_time, status, team_name, rider_slug, first_name, last_name
         )
       `
         )
@@ -221,6 +222,32 @@ const getChapterResultsInner = cache(
       )
     }
 
+    // Collect all result IDs to check for First Brevet awards
+    const allResultIds: string[] = []
+    for (const event of events) {
+      if (event.public_results) {
+        for (const result of event.public_results) {
+          if (result.id) allResultIds.push(result.id)
+        }
+      }
+    }
+
+    // Query for First Brevet awards
+    const firstBrevetResultIds = new Set<string>()
+    if (allResultIds.length > 0) {
+      const { data: awardData } = await getSupabase()
+        .from('result_awards')
+        .select('result_id, awards!inner(title)')
+        .in('result_id', allResultIds)
+        .eq('awards.title', 'First Brevet')
+
+      if (awardData) {
+        for (const award of awardData) {
+          firstBrevetResultIds.add(award.result_id)
+        }
+      }
+    }
+
     // Transform to EventResult format
     const eventResults: EventResult[] = []
 
@@ -236,8 +263,9 @@ const getChapterResultsInner = cache(
         const statusStr = formatStatus(result.status ?? 'pending')
         // Show status (DNF/DNS/OTL/DQ) if not finished, otherwise show finish time
         const time = statusStr ?? formatFinishTime(result.finish_time) ?? ''
+        const isFirstBrevet = result.id ? firstBrevetResultIds.has(result.id) : false
 
-        return { name, slug, time }
+        return { name, slug, time, isFirstBrevet }
       })
 
       // Sort riders by last name A→Z
@@ -276,6 +304,11 @@ export interface RiderInfo {
   lastName: string
 }
 
+export interface RiderEventAward {
+  title: string
+  description: string | null
+}
+
 export interface RiderEventResult {
   date: string
   eventName: string
@@ -285,6 +318,7 @@ export interface RiderEventResult {
   note: string | null
   chapterSlug: string | null
   eventType: string
+  awards: RiderEventAward[]
 }
 
 export interface RiderYearResults {
@@ -336,7 +370,7 @@ const getRiderResultsInner = cache(async (slug: string): Promise<RiderYearResult
     )
   }
 
-  // Get all results for this rider with event info in a single query
+  // Get all results for this rider with event info and awards in a single query
   const { data: results, error: resultsError } = await getSupabase()
     .from('results')
     .select(
@@ -352,6 +386,12 @@ const getRiderResultsInner = cache(async (slug: string): Promise<RiderYearResult
         event_type,
         chapters (
           slug
+        )
+      ),
+      result_awards (
+        awards (
+          title,
+          description
         )
       )
     `
@@ -369,10 +409,17 @@ const getRiderResultsInner = cache(async (slug: string): Promise<RiderYearResult
 
   if (!results) return []
 
+  // Type for the query result with awards
+  type ResultWithAwards = ResultWithEvent & {
+    result_awards: Array<{
+      awards: { title: string; description: string | null } | null
+    }> | null
+  }
+
   // Group by year
   const yearMap = new Map<number, RiderEventResult[]>()
 
-  for (const result of results as ResultWithEvent[]) {
+  for (const result of results as ResultWithAwards[]) {
     const year = result.season
     const event = result.events
 
@@ -381,6 +428,14 @@ const getRiderResultsInner = cache(async (slug: string): Promise<RiderYearResult
     // Get chapter URL slug from the database chapter slug
     const dbChapterSlug = event.chapters?.slug
     const chapterSlug = dbChapterSlug ? getUrlSlugFromDbSlug(dbChapterSlug) : null
+
+    // Extract awards from result_awards join
+    const awards: RiderEventAward[] = (result.result_awards ?? [])
+      .filter((ra) => ra.awards !== null)
+      .map((ra) => ({
+        title: ra.awards!.title,
+        description: ra.awards!.description,
+      }))
 
     const eventResult: RiderEventResult = {
       date: event.event_date,
@@ -391,6 +446,7 @@ const getRiderResultsInner = cache(async (slug: string): Promise<RiderYearResult
       note: result.note,
       chapterSlug,
       eventType: event.event_type,
+      awards,
     }
 
     if (!yearMap.has(year)) {

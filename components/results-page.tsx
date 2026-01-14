@@ -1,35 +1,36 @@
-"use client";
+'use client'
 
-import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { PageShell } from "@/components/page-shell";
-import { PageHero } from "@/components/page-hero";
-import { type EventResult } from "@/lib/data/results";
+import Link from 'next/link'
+import { useRouter } from 'next/navigation'
+import { PageShell } from '@/components/page-shell'
+import { PageHero } from '@/components/page-hero'
+import { type EventResult } from '@/lib/data/results'
+import { AwardBadge } from '@/components/award-badge'
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
+} from '@/components/ui/dropdown-menu'
+import { ChevronLeftIcon, ChevronRightIcon } from 'lucide-react'
 
 export interface ResultsPageProps {
-  chapter: string;
-  chapterSlug: string;
-  year: number;
-  description: string;
-  coverImage: string;
-  events: EventResult[];
-  availableYears: number[];
+  chapter: string
+  chapterSlug: string
+  year: number
+  description: string
+  coverImage: string
+  events: EventResult[]
+  availableYears: number[]
 }
 
 function formatFullDate(dateString: string): string {
-  const date = new Date(dateString + "T00:00:00");
-  const month = date.toLocaleDateString("en-US", { month: "long" });
-  const day = date.getDate();
-  const year = date.getFullYear();
-  return `${month} ${day}, ${year}`;
+  const date = new Date(dateString + 'T00:00:00')
+  const month = date.toLocaleDateString('en-US', { month: 'long' })
+  const day = date.getDate()
+  const year = date.getFullYear()
+  return `${month} ${day}, ${year}`
 }
 
 export function ResultsPage({
@@ -41,21 +42,24 @@ export function ResultsPage({
   events,
   availableYears,
 }: ResultsPageProps) {
-  const router = useRouter();
+  const router = useRouter()
 
-  const totalStarters = events.reduce((acc, event) => acc + event.riders.length, 0);
+  const totalStarters = events.reduce((acc, event) => acc + event.riders.length, 0)
   const totalDistance = events.reduce((acc, event) => {
-    const finishers = event.riders.filter((r) => !["DNF", "DNS", "OTL", "DQ"].includes(r.time)).length;
-    return acc + (parseInt(event.distance, 10) * finishers);
-  }, 0);
+    const finishers = event.riders.filter(
+      (r) => !['DNF', 'DNS', 'OTL', 'DQ'].includes(r.time)
+    ).length
+    return acc + parseInt(event.distance, 10) * finishers
+  }, 0)
 
-  const currentIndex = availableYears.indexOf(year);
-  const prevYear = currentIndex < availableYears.length - 1 ? availableYears[currentIndex + 1] : null;
-  const nextYear = currentIndex > 0 ? availableYears[currentIndex - 1] : null;
+  const currentIndex = availableYears.indexOf(year)
+  const prevYear =
+    currentIndex < availableYears.length - 1 ? availableYears[currentIndex + 1] : null
+  const nextYear = currentIndex > 0 ? availableYears[currentIndex - 1] : null
 
   const handleYearChange = (newYear: string) => {
-    router.push(`/results/${newYear}/${chapterSlug}`);
-  };
+    router.push(`/results/${newYear}/${chapterSlug}`)
+  }
 
   return (
     <PageShell>
@@ -95,10 +99,7 @@ export function ResultsPage({
                   </span>
                   <span className="absolute -bottom-1 left-3 right-3 h-px bg-current opacity-0 group-hover:opacity-20 transition-opacity duration-200" />
                 </DropdownMenuTrigger>
-                <DropdownMenuContent
-                  className="max-h-72 min-w-[8rem]"
-                  align="center"
-                >
+                <DropdownMenuContent className="max-h-72 min-w-[8rem]" align="center">
                   <DropdownMenuRadioGroup value={year.toString()} onValueChange={handleYearChange}>
                     {availableYears.map((y) => (
                       <DropdownMenuRadioItem
@@ -170,10 +171,14 @@ export function ResultsPage({
           <div className="space-y-16">
             {events.map((event) => {
               // Count riders excluding DNS
-              const participants = event.riders.filter((r) => r.time !== "DNS");
+              const participants = event.riders.filter((r) => r.time !== 'DNS')
 
               return (
-                <article key={`${event.date}-${event.name}-${event.distance}`} id={`event-${event.date}`} className="scroll-mt-24">
+                <article
+                  key={`${event.date}-${event.name}-${event.distance}`}
+                  id={`event-${event.date}`}
+                  className="scroll-mt-24"
+                >
                   {/* Event Header */}
                   <header className="mb-6">
                     <h2 className="font-serif text-2xl md:text-3xl tracking-tight">
@@ -185,11 +190,14 @@ export function ResultsPage({
                           {event.name} {event.distance}
                         </Link>
                       ) : (
-                        <>{event.name} {event.distance}</>
+                        <>
+                          {event.name} {event.distance}
+                        </>
                       )}
                     </h2>
                     <p className="text-sm text-muted-foreground mt-1">
-                      {formatFullDate(event.date)} · {event.distance} km · {participants.length} {participants.length === 1 ? 'rider' : 'riders'}
+                      {formatFullDate(event.date)} · {event.distance} km · {participants.length}{' '}
+                      {participants.length === 1 ? 'rider' : 'riders'}
                     </p>
                   </header>
 
@@ -198,19 +206,24 @@ export function ResultsPage({
                     {participants.map((rider, index) => (
                       <div
                         key={`${rider.name}-${index}`}
-                        className="flex items-baseline justify-between py-1.5 border-b border-border/50 group"
+                        className="flex items-center justify-between py-1.5 border-b border-border/50 group gap-2"
                       >
-                        <Link
-                          href={`/riders/${rider.slug}`}
-                          className="text-sm hover:text-primary transition-colors truncate pr-4"
-                        >
-                          {rider.name}
-                        </Link>
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <Link
+                            href={`/riders/${rider.slug}`}
+                            className="text-sm hover:text-primary transition-colors truncate"
+                          >
+                            {rider.name}
+                          </Link>
+                          {rider.isFirstBrevet && (
+                            <AwardBadge award={{ title: 'First Brevet' }} className="shrink-0" />
+                          )}
+                        </div>
                         <span
                           className={`text-sm tabular-nums shrink-0 ${
-                            rider.time === "DNF" || rider.time === "DNS"
-                              ? "text-muted-foreground/60"
-                              : "text-muted-foreground"
+                            rider.time === 'DNF' || rider.time === 'DNS'
+                              ? 'text-muted-foreground/60'
+                              : 'text-muted-foreground'
                           }`}
                         >
                           {rider.time}
@@ -219,11 +232,11 @@ export function ResultsPage({
                     ))}
                   </div>
                 </article>
-              );
+              )
             })}
           </div>
         )}
       </div>
     </PageShell>
-  );
+  )
 }

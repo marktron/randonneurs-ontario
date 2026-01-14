@@ -1,6 +1,6 @@
 /**
  * Type definitions for Supabase query results
- * 
+ *
  * These types represent the structure of data returned from complex Supabase queries
  * that include joins and nested selects. They provide type safety without needing
  * to use `as any` casts.
@@ -55,14 +55,21 @@ export type EventWithRouteSlug = Pick<Event, 'id' | 'name' | 'event_date' | 'dis
  * Event with public results for results pages
  */
 export type EventWithPublicResults = EventWithRouteSlug & {
-  public_results: Array<Pick<PublicResult, 'finish_time' | 'status' | 'team_name' | 'rider_slug' | 'first_name' | 'last_name'>> | null
+  public_results: Array<
+    Pick<
+      PublicResult,
+      'id' | 'finish_time' | 'status' | 'team_name' | 'rider_slug' | 'first_name' | 'last_name'
+    >
+  > | null
 }
 
 /**
  * Event with public results for route results (simpler structure)
  */
 export type EventWithPublicResultsForRoute = Pick<Event, 'name' | 'event_date'> & {
-  public_results: Array<Pick<PublicResult, 'finish_time' | 'status' | 'rider_slug' | 'first_name' | 'last_name'>> | null
+  public_results: Array<
+    Pick<PublicResult, 'finish_time' | 'status' | 'rider_slug' | 'first_name' | 'last_name'>
+  > | null
 }
 
 /**
@@ -73,7 +80,10 @@ export type RouteBasic = Pick<Route, 'name' | 'distance_km' | 'rwgps_id'>
 /**
  * Event with results for rider profile pages
  */
-export type EventWithResultsForRider = Pick<Event, 'name' | 'event_date' | 'distance_km' | 'event_type'> & {
+export type EventWithResultsForRider = Pick<
+  Event,
+  'name' | 'event_date' | 'distance_km' | 'event_type'
+> & {
   chapters: Pick<Chapter, 'slug'> | null
 }
 
@@ -94,7 +104,10 @@ export type RouteWithChapter = Route & {
 /**
  * Route with chapter name (for active routes list)
  */
-export type RouteWithChapterName = Pick<Route, 'id' | 'name' | 'slug' | 'distance_km' | 'chapter_id'> & {
+export type RouteWithChapterName = Pick<
+  Route,
+  'id' | 'name' | 'slug' | 'distance_km' | 'chapter_id'
+> & {
   chapters: Pick<Chapter, 'name'> | null
 }
 
@@ -138,9 +151,11 @@ export type EventWithSeasonAndResults = Pick<Event, 'id' | 'season'> & {
 /**
  * RPC function return types
  */
-export type GetRegisteredRidersResult = Database['public']['Functions']['get_registered_riders']['Returns'][number]
+export type GetRegisteredRidersResult =
+  Database['public']['Functions']['get_registered_riders']['Returns'][number]
 
-export type GetDistinctSeasonsResult = Database['public']['Functions']['get_distinct_seasons']['Returns'][number]
+export type GetDistinctSeasonsResult =
+  Database['public']['Functions']['get_distinct_seasons']['Returns'][number]
 
 /**
  * Insert types (for create operations)
@@ -175,28 +190,40 @@ export type EventForStatusUpdate = Pick<Event, 'chapter_id' | 'event_type'>
 /**
  * Event with chapter name for admin display
  */
-export type EventWithChapterName = Pick<Event, 'id' | 'name' | 'event_date' | 'distance_km' | 'chapter_id' | 'event_type' | 'status'> & {
+export type EventWithChapterName = Pick<
+  Event,
+  'id' | 'name' | 'event_date' | 'distance_km' | 'chapter_id' | 'event_type' | 'status'
+> & {
   chapters: Pick<Chapter, 'name'> | null
 }
 
 /**
  * Event with chapter for admin events list
  */
-export type EventForAdminList = Pick<Event, 'id' | 'name' | 'event_date' | 'distance_km' | 'event_type' | 'status' | 'chapter_id'> & {
+export type EventForAdminList = Pick<
+  Event,
+  'id' | 'name' | 'event_date' | 'distance_km' | 'event_type' | 'status' | 'chapter_id'
+> & {
   chapters: Pick<Chapter, 'name'> | null
 }
 
 /**
  * Event with chapter for dashboard (needs results)
  */
-export type EventForDashboard = Pick<Event, 'id' | 'name' | 'event_date' | 'distance_km' | 'event_type'> & {
+export type EventForDashboard = Pick<
+  Event,
+  'id' | 'name' | 'event_date' | 'distance_km' | 'event_type'
+> & {
   chapters: Pick<Chapter, 'name'> | null
 }
 
 /**
  * Event with start time for dashboard
  */
-export type UpcomingEventForDashboard = Pick<Event, 'id' | 'name' | 'event_date' | 'start_time' | 'distance_km' | 'event_type'> & {
+export type UpcomingEventForDashboard = Pick<
+  Event,
+  'id' | 'name' | 'event_date' | 'start_time' | 'distance_km' | 'event_type'
+> & {
   chapters: Pick<Chapter, 'name'> | null
 }
 
@@ -240,7 +267,15 @@ export type RegistrationWithRiderForAdmin = Pick<
   Registration,
   'id' | 'rider_id' | 'registered_at' | 'status' | 'notes'
 > & {
-  riders: Pick<Rider, 'id' | 'first_name' | 'last_name' | 'email' | 'emergency_contact_name' | 'emergency_contact_phone'> | null
+  riders: Pick<
+    Rider,
+    | 'id'
+    | 'first_name'
+    | 'last_name'
+    | 'email'
+    | 'emergency_contact_name'
+    | 'emergency_contact_phone'
+  > | null
 }
 
 /**
@@ -279,7 +314,10 @@ export type RouteWithChapterForAdmin = Route & {
 /**
  * Rider with stats for admin riders list
  */
-export type RiderWithStats = Pick<Rider, 'id' | 'slug' | 'first_name' | 'last_name' | 'email' | 'gender' | 'created_at'> & {
+export type RiderWithStats = Pick<
+  Rider,
+  'id' | 'slug' | 'first_name' | 'last_name' | 'email' | 'gender' | 'created_at'
+> & {
   registrations: Array<{ count: number }> | null
   results: Array<{ count: number }> | null
 }
@@ -289,7 +327,17 @@ export type RiderWithStats = Pick<Rider, 'id' | 'slug' | 'first_name' | 'last_na
  */
 export type EventDetailForEdit = Pick<
   Event,
-  'id' | 'name' | 'chapter_id' | 'route_id' | 'event_type' | 'distance_km' | 'event_date' | 'start_time' | 'start_location' | 'description' | 'image_url'
+  | 'id'
+  | 'name'
+  | 'chapter_id'
+  | 'route_id'
+  | 'event_type'
+  | 'distance_km'
+  | 'event_date'
+  | 'start_time'
+  | 'start_location'
+  | 'description'
+  | 'image_url'
 >
 
 /**
@@ -342,13 +390,24 @@ export type ResultWithEventForRider = Pick<
  */
 export type EventForCalendar = Pick<
   Event,
-  'id' | 'slug' | 'name' | 'event_date' | 'start_time' | 'start_location' | 'distance_km' | 'event_type' | 'description'
+  | 'id'
+  | 'slug'
+  | 'name'
+  | 'event_date'
+  | 'start_time'
+  | 'start_location'
+  | 'distance_km'
+  | 'event_type'
+  | 'description'
 >
 
 /**
  * Event for cron completion check
  */
-export type EventForCronCompletion = Pick<Event, 'id' | 'name' | 'event_date' | 'start_time' | 'distance_km'> & {
+export type EventForCronCompletion = Pick<
+  Event,
+  'id' | 'name' | 'event_date' | 'start_time' | 'distance_km'
+> & {
   chapters: Pick<Chapter, 'name'> | null
 }
 
@@ -413,9 +472,11 @@ export type ResultForSubmission = Pick<
   | 'rider_notes'
   | 'submitted_at'
 > & {
-  events: Pick<Event, 'id' | 'name' | 'event_date' | 'distance_km' | 'status'> & {
-    chapters: Pick<Chapter, 'name'> | null
-  } | null
+  events:
+    | (Pick<Event, 'id' | 'name' | 'event_date' | 'distance_km' | 'status'> & {
+        chapters: Pick<Chapter, 'name'> | null
+      })
+    | null
   riders: Pick<Rider, 'first_name' | 'last_name' | 'email'> | null
 }
 
@@ -429,7 +490,15 @@ export type ResultWithEventStatus = Pick<Result, 'id'> & {
 /**
  * Result with event status and IDs for file uploads
  */
-export type ResultForFileUpload = Pick<Result, 'id' | 'event_id' | 'rider_id' | 'gpx_file_path' | 'control_card_front_path' | 'control_card_back_path'> & {
+export type ResultForFileUpload = Pick<
+  Result,
+  | 'id'
+  | 'event_id'
+  | 'rider_id'
+  | 'gpx_file_path'
+  | 'control_card_front_path'
+  | 'control_card_back_path'
+> & {
   events: Pick<Event, 'status'> | null
 }
 
