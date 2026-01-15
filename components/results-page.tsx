@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { PageShell } from '@/components/page-shell'
 import { PageHero } from '@/components/page-hero'
+import { devData } from '@/lib/dev-data'
 import { type EventResult } from '@/lib/data/results'
 import { AwardBadge } from '@/components/award-badge'
 import {
@@ -178,6 +179,7 @@ export function ResultsPage({
                   key={`${event.date}-${event.name}-${event.distance}`}
                   id={`event-${event.date}`}
                   className="scroll-mt-24"
+                  {...devData('events', event.id)}
                 >
                   {/* Event Header */}
                   <header className="mb-6">

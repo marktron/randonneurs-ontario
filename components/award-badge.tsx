@@ -1,4 +1,5 @@
 import { cn } from '@/lib/utils'
+import { devData } from '@/lib/dev-data'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 
 const colorClassesMap = {
@@ -29,6 +30,7 @@ const defaultDescriptions: Record<string, string> = {
 }
 
 export interface Award {
+  id?: string
   title: string
   description?: string | null
 }
@@ -51,6 +53,7 @@ export function AwardBadge({ award, className }: AwardBadgeProps) {
 
   const badge = (
     <span
+      {...devData('awards', award.id)}
       className={cn(
         'inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium',
         getColorClasses(award.title),

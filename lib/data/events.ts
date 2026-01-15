@@ -86,6 +86,7 @@ const getEventsByChapterInner = cache(async (urlSlug: string): Promise<Event[]> 
 
   // Transform to Event type
   return (events as EventWithRegistrationCount[]).map((event) => ({
+    id: event.id,
     slug: event.slug,
     date: event.event_date,
     name: event.name,
@@ -131,6 +132,7 @@ const getPermanentEventsInner = cache(async (): Promise<Event[]> => {
 
   // Transform to Event type
   return (events as EventWithRegistrationCount[]).map((event) => ({
+    id: event.id,
     slug: event.slug,
     date: event.event_date,
     name: event.name,

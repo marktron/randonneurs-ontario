@@ -6,12 +6,12 @@ This guide will walk you through setting up your development environment for the
 
 Before you begin, make sure you have the following installed:
 
-| Requirement | Version | How to Check | Install Link |
-|-------------|---------|--------------|--------------|
-| Node.js | 20+ | `node --version` | [nodejs.org](https://nodejs.org) |
-| npm | 10+ | `npm --version` | Comes with Node.js |
-| Docker | Latest | `docker --version` | [docker.com](https://www.docker.com/get-started) |
-| Git | Latest | `git --version` | [git-scm.com](https://git-scm.com) |
+| Requirement | Version | How to Check       | Install Link                                     |
+| ----------- | ------- | ------------------ | ------------------------------------------------ |
+| Node.js     | 20+     | `node --version`   | [nodejs.org](https://nodejs.org)                 |
+| npm         | 10+     | `npm --version`    | Comes with Node.js                               |
+| Docker      | Latest  | `docker --version` | [docker.com](https://www.docker.com/get-started) |
+| Git         | Latest  | `git --version`    | [git-scm.com](https://git-scm.com)               |
 
 Docker is required because the local Supabase instance runs in containers.
 
@@ -42,14 +42,14 @@ For local development, the environment variables will be populated after startin
 
 ### Required Environment Variables
 
-| Variable | Description | Where to Get It |
-|----------|-------------|-----------------|
-| `NEXT_PUBLIC_SUPABASE_URL` | Supabase API URL | `npx supabase status` after starting |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Public anonymous key | `npx supabase status` after starting |
-| `SUPABASE_SERVICE_ROLE_KEY` | Server-side admin key | `npx supabase status` after starting |
-| `SENDGRID_API_KEY` | SendGrid API key (optional for dev) | [SendGrid Dashboard](https://sendgrid.com) |
-| `NEXT_PUBLIC_CURRENT_SEASON` | Current riding season year | Set to current year (e.g., `2025`) |
-| `CRON_SECRET` | Secret for authenticating cron jobs (production only) | Generate a random string (e.g., `openssl rand -hex 32`) |
+| Variable                        | Description                                           | Where to Get It                                         |
+| ------------------------------- | ----------------------------------------------------- | ------------------------------------------------------- |
+| `NEXT_PUBLIC_SUPABASE_URL`      | Supabase API URL                                      | `npx supabase status` after starting                    |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Public anonymous key                                  | `npx supabase status` after starting                    |
+| `SUPABASE_SERVICE_ROLE_KEY`     | Server-side admin key                                 | `npx supabase status` after starting                    |
+| `SENDGRID_API_KEY`              | SendGrid API key (optional for dev)                   | [SendGrid Dashboard](https://sendgrid.com)              |
+| `NEXT_PUBLIC_CURRENT_SEASON`    | Current riding season year                            | Set to current year (e.g., `2025`)                      |
+| `CRON_SECRET`                   | Secret for authenticating cron jobs (production only) | Generate a random string (e.g., `openssl rand -hex 32`) |
 
 ## Step 4: Start Local Supabase
 
@@ -69,7 +69,7 @@ Started supabase local development setup.
          API URL: http://127.0.0.1:54321
      GraphQL URL: http://127.0.0.1:54321/graphql/v1
   S3 Storage URL: http://127.0.0.1:54321/storage/v1/s3
-          DB URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
+          DB URL: postgresql://postgres:...@127.0.0.1:54322/postgres
       Studio URL: http://127.0.0.1:54323
     Inbucket URL: http://127.0.0.1:54324
       JWT secret: super-secret-jwt-token-with-at-least-32-characters-long
@@ -95,10 +95,12 @@ npx supabase db reset
 ```
 
 This will:
+
 1. Apply all SQL migrations from `supabase/migrations/`
 2. Load seed data from `supabase/seed.sql`
 
 After this, your database will have:
+
 - 7 chapters (Toronto, Ottawa, Simcoe-Muskoka, Huron, Niagara, Other, Permanent)
 - 302 routes
 - 1,605 events (historical from 1983-2026)
@@ -132,12 +134,25 @@ Now you can log in at `/admin/login` with those credentials.
 
 ## Useful URLs During Development
 
-| URL | Description |
-|-----|-------------|
-| [localhost:3000](http://localhost:3000) | Main website |
-| [localhost:3000/admin](http://localhost:3000/admin) | Admin dashboard |
-| [localhost:54323](http://127.0.0.1:54323) | Supabase Studio (database admin) |
-| [localhost:54324](http://127.0.0.1:54324) | Inbucket (local email testing) |
+| URL                                                 | Description                      |
+| --------------------------------------------------- | -------------------------------- |
+| [localhost:3000](http://localhost:3000)             | Main website                     |
+| [localhost:3000/admin](http://localhost:3000/admin) | Admin dashboard                  |
+| [localhost:54323](http://127.0.0.1:54323)           | Supabase Studio (database admin) |
+| [localhost:54324](http://127.0.0.1:54324)           | Inbucket (local email testing)   |
+
+## Dev-Only Data Attributes
+
+In development mode, UI elements that render database entities include `data-dev-*` attributes to help you find the corresponding database records.
+
+When inspecting an element in browser DevTools, you'll see:
+
+- `data-dev-table`: The database table name (e.g., "awards")
+- `data-dev-id`: The record's primary key
+
+This makes it easy to find records in Supabase Studio when debugging. These attributes are stripped in production builds.
+
+Currently supported: Award badges, ride results (on rider pages), events (on calendar and results pages)
 
 ## Common Commands Reference
 
@@ -169,16 +184,16 @@ npx shadcn@latest add <component>   # Add new shadcn/ui component
 
 Here's where to find things:
 
-| I want to... | Look in... |
-|--------------|------------|
-| Add a new page | `app/` directory |
-| Create a new component | `components/` |
-| Add a database query | `lib/data/` |
-| Add a form submission handler | `lib/actions/` |
-| Modify database schema | `supabase/migrations/` |
-| Add an email template | `lib/email/templates.ts` |
-| Update chapter info | `lib/chapter-config.ts` |
-| Add a UI primitive | `components/ui/` (use shadcn) |
+| I want to...                  | Look in...                    |
+| ----------------------------- | ----------------------------- |
+| Add a new page                | `app/` directory              |
+| Create a new component        | `components/`                 |
+| Add a database query          | `lib/data/`                   |
+| Add a form submission handler | `lib/actions/`                |
+| Modify database schema        | `supabase/migrations/`        |
+| Add an email template         | `lib/email/templates.ts`      |
+| Update chapter info           | `lib/chapter-config.ts`       |
+| Add a UI primitive            | `components/ui/` (use shadcn) |
 
 ## Troubleshooting
 
@@ -198,6 +213,7 @@ npx supabase start
 ### "Missing environment variables"
 
 Make sure:
+
 1. `.env.local` exists
 2. You copied values from `npx supabase status`
 3. You restarted the dev server after changing `.env.local`

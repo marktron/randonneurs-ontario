@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { PageShell } from '@/components/page-shell'
+import { devData } from '@/lib/dev-data'
 import {
   getRiderBySlug,
   getRiderResults,
@@ -80,7 +81,7 @@ function ResultCard({ result, year }: { result: RiderEventResult; year: number }
   const hasAwards = result.awards && result.awards.length > 0
 
   return (
-    <div className="py-3 border-b border-border last:border-0">
+    <div {...devData('results', result.id)} className="py-3 border-b border-border last:border-0">
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
           {eventLink ? (
@@ -148,7 +149,10 @@ function YearSection({ yearData }: { yearData: RiderYearResults }) {
           </TableHeader>
           <TableBody>
             {yearData.results.map((result, index) => (
-              <TableRow key={`${result.date}-${result.eventName}-${index}`}>
+              <TableRow
+                key={`${result.date}-${result.eventName}-${index}`}
+                {...devData('results', result.id)}
+              >
                 <TableCell className="text-muted-foreground">{formatDate(result.date)}</TableCell>
                 <TableCell className="font-medium">
                   {result.chapterSlug ? (

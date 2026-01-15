@@ -38,6 +38,7 @@ export interface RiderResult {
 }
 
 export interface EventResult {
+  id?: string
   date: string
   name: string
   distance: string
@@ -276,6 +277,7 @@ const getChapterResultsInner = cache(
       })
 
       eventResults.push({
+        id: event.id,
         date: event.event_date,
         name: event.name,
         distance: event.distance_km.toString(),
@@ -305,11 +307,13 @@ export interface RiderInfo {
 }
 
 export interface RiderEventAward {
+  id?: string
   title: string
   description: string | null
 }
 
 export interface RiderEventResult {
+  id?: string
   date: string
   eventName: string
   distanceKm: number
@@ -375,6 +379,7 @@ const getRiderResultsInner = cache(async (slug: string): Promise<RiderYearResult
     .from('results')
     .select(
       `
+      id,
       finish_time,
       status,
       note,
@@ -390,6 +395,7 @@ const getRiderResultsInner = cache(async (slug: string): Promise<RiderYearResult
       ),
       result_awards (
         awards (
+          id,
           title,
           description
         )
@@ -411,8 +417,9 @@ const getRiderResultsInner = cache(async (slug: string): Promise<RiderYearResult
 
   // Type for the query result with awards
   type ResultWithAwards = ResultWithEvent & {
+    id: string
     result_awards: Array<{
-      awards: { title: string; description: string | null } | null
+      awards: { id: string; title: string; description: string | null } | null
     }> | null
   }
 
@@ -433,11 +440,13 @@ const getRiderResultsInner = cache(async (slug: string): Promise<RiderYearResult
     const awards: RiderEventAward[] = (result.result_awards ?? [])
       .filter((ra) => ra.awards !== null)
       .map((ra) => ({
+        id: ra.awards!.id,
         title: ra.awards!.title,
         description: ra.awards!.description,
       }))
 
     const eventResult: RiderEventResult = {
+      id: result.id,
       date: event.event_date,
       eventName: event.name,
       distanceKm: event.distance_km,
