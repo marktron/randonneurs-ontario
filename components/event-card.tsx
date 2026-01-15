@@ -71,6 +71,7 @@ export function EventCard({
           <div className="invisible">
             <div className="text-[11px]">&nbsp;</div>
             <div className="text-4xl mt-1 sm:text-5xl">&nbsp;</div>
+            <div className="text-[11px] mt-2 hidden sm:block">&nbsp;</div>
           </div>
         )}
       </div>
