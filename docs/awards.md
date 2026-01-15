@@ -34,7 +34,9 @@ Awards are associated with individual results through the `result_awards` juncti
 | O-12                 | Completed a 200+ km event for 12 consecutive months        | Violet        |
 | Paris-Brest-Paris    | Completed Paris-Brest-Paris                                | Blue          |
 | Granite Anvil        | Completed the Granite Anvil 1200 km brevet                 | Fuchsia       |
-| Course Record        | Fastest recorded time for a route                          | Gold gradient |
+| Course Record\*      | Fastest recorded time for a route                          | Gold gradient |
+
+\*Course Record is a **calculated award** that is not stored in the database. It is computed dynamically on the route detail page (`/routes/[chapter]/[slug]`) by finding the fastest finish time among all results for that route. If multiple riders share the same fastest time, they all receive the Course Record badge.
 
 ## Components
 
@@ -44,7 +46,6 @@ Displays a single award badge with tooltip showing the award description.
 
 ```tsx
 import { AwardBadge } from '@/components/award-badge'
-
 ;<AwardBadge award={{ title: 'Super Randonneur', description: null }} />
 ```
 
@@ -54,7 +55,6 @@ Displays multiple award badges in a flex-wrap layout.
 
 ```tsx
 import { AwardBadgeList } from '@/components/award-badge'
-
 ;<AwardBadgeList
   awards={[
     { title: 'Super Randonneur', description: null },

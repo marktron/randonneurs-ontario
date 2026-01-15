@@ -155,6 +155,9 @@ export default async function RouteDetailPage({ params }: PageProps) {
                         >
                           {rider.name}
                         </Link>
+                        {rider.isCourseRecord && (
+                          <AwardBadge award={{ title: 'Course Record' }} className="shrink-0" />
+                        )}
                         {rider.isFirstBrevet && (
                           <AwardBadge award={{ title: 'First Brevet' }} className="shrink-0" />
                         )}

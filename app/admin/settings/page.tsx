@@ -7,12 +7,10 @@ import { getChapters } from '@/lib/actions/admin-users'
 const ALLOWED_CHAPTER_SLUGS = ['huron', 'ottawa', 'simcoe', 'toronto']
 
 export default async function AdminSettingsPage() {
-  const [admin, allChapters] = await Promise.all([
-    requireAdmin(),
-    getChapters(),
-  ])
+  const [admin, allChapters] = await Promise.all([requireAdmin(), getChapters()])
 
-  const chapters = allChapters
+  type Chapter = Awaited<ReturnType<typeof getChapters>>[number]
+  const chapters = (allChapters as Chapter[])
     .filter((c) => ALLOWED_CHAPTER_SLUGS.includes(c.slug))
     .sort((a, b) => a.name.localeCompare(b.name))
 
@@ -20,9 +18,7 @@ export default async function AdminSettingsPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold">Settings</h1>
-        <p className="text-muted-foreground">
-          Manage your account settings
-        </p>
+        <p className="text-muted-foreground">Manage your account settings</p>
       </div>
 
       <div className="grid gap-6 max-w-2xl">
@@ -36,9 +32,7 @@ export default async function AdminSettingsPage() {
         <Card>
           <CardHeader>
             <CardTitle>Account Details</CardTitle>
-            <CardDescription>
-              Read-only account information
-            </CardDescription>
+            <CardDescription>Read-only account information</CardDescription>
           </CardHeader>
           <CardContent className="space-y-2">
             <div>

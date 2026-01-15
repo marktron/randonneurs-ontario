@@ -1,5 +1,5 @@
-import { clsx, type ClassValue } from "clsx"
-import { twMerge } from "tailwind-merge"
+import { clsx, type ClassValue } from 'clsx'
+import { twMerge } from 'tailwind-merge'
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -56,10 +56,28 @@ export function formatFinishTime(interval: string | null): string {
   if (!match) return interval
 
   const days = parseInt(match[1] || '0', 10)
-  const hours = parseInt(match[2], 10) + (days * 24)
+  const hours = parseInt(match[2], 10) + days * 24
   const minutes = match[3]
 
   return `${hours}:${minutes}`
+}
+
+/**
+ * Parse a PostgreSQL interval finish time to total minutes.
+ * Used for comparing finish times to find course records.
+ * Returns null if the time cannot be parsed.
+ */
+export function parseFinishTimeToMinutes(interval: string | null): number | null {
+  if (!interval) return null
+
+  const match = interval.match(/(?:(\d+)\s*days?\s*)?(\d+):(\d{2})(?::\d{2})?/)
+  if (!match) return null
+
+  const days = parseInt(match[1] || '0', 10)
+  const hours = parseInt(match[2], 10) + days * 24
+  const minutes = parseInt(match[3], 10)
+
+  return hours * 60 + minutes
 }
 
 /**
@@ -68,10 +86,10 @@ export function formatFinishTime(interval: string | null): string {
  */
 export function formatStatus(status: string): string | null {
   const statusMap: Record<string, string> = {
-    'dnf': 'DNF',
-    'dns': 'DNS',
-    'otl': 'OTL',
-    'dq': 'DQ',
+    dnf: 'DNF',
+    dns: 'DNS',
+    otl: 'OTL',
+    dq: 'DQ',
   }
   if (status === 'finished') return null
   return statusMap[status] || status.toUpperCase()

@@ -637,6 +637,35 @@ export type Database = {
       }
     }
     Functions: {
+      get_best_season_distances: {
+        Args: { limit_count?: number }
+        Returns: {
+          rank: number
+          rider_name: string
+          rider_slug: string
+          season: number
+          value: number
+        }[]
+      }
+      get_best_season_event_counts: {
+        Args: { limit_count?: number }
+        Returns: {
+          rank: number
+          rider_name: string
+          rider_slug: string
+          season: number
+          value: number
+        }[]
+      }
+      get_current_season_distances: {
+        Args: { limit_count?: number; p_season: number }
+        Returns: {
+          rank: number
+          rider_name: string
+          rider_slug: string
+          value: number
+        }[]
+      }
       get_distinct_event_seasons: {
         Args: never
         Returns: {
@@ -649,12 +678,161 @@ export type Database = {
           season: number
         }[]
       }
+      get_granite_anvil_completion_counts: {
+        Args: { limit_count?: number }
+        Returns: {
+          rank: number
+          rider_name: string
+          rider_slug: string
+          value: number
+        }[]
+      }
+      get_granite_anvil_fastest_times: {
+        Args: { limit_count?: number }
+        Returns: {
+          event_date: string
+          finish_time: string
+          rank: number
+          rider_name: string
+          rider_slug: string
+        }[]
+      }
+      get_pbp_completion_counts: {
+        Args: { limit_count?: number }
+        Returns: {
+          rank: number
+          rider_name: string
+          rider_slug: string
+          value: number
+        }[]
+      }
+      get_pbp_fastest_times: {
+        Args: { limit_count?: number }
+        Returns: {
+          event_date: string
+          finish_time: string
+          rank: number
+          rider_name: string
+          rider_slug: string
+        }[]
+      }
       get_registered_riders: {
         Args: { p_event_id: string }
         Returns: {
           first_name: string
           last_name: string
           share_registration: boolean
+        }[]
+      }
+      get_rider_active_seasons: {
+        Args: { limit_count?: number }
+        Returns: {
+          rank: number
+          rider_name: string
+          rider_slug: string
+          value: number
+        }[]
+      }
+      get_rider_award_counts: {
+        Args: { limit_count?: number; p_award_slug: string }
+        Returns: {
+          rank: number
+          rider_name: string
+          rider_slug: string
+          value: number
+        }[]
+      }
+      get_rider_completion_counts: {
+        Args: { limit_count?: number }
+        Returns: {
+          rank: number
+          rider_name: string
+          rider_slug: string
+          value: number
+        }[]
+      }
+      get_rider_distance_totals: {
+        Args: { limit_count?: number }
+        Returns: {
+          rank: number
+          rider_name: string
+          rider_slug: string
+          value: number
+        }[]
+      }
+      get_rider_longest_streaks: {
+        Args: { limit_count?: number; p_current_season: number }
+        Returns: {
+          rank: number
+          rider_name: string
+          rider_slug: string
+          streak_end_season: number
+          streak_length: number
+        }[]
+      }
+      get_rider_permanent_counts: {
+        Args: { limit_count?: number }
+        Returns: {
+          rank: number
+          rider_name: string
+          rider_slug: string
+          value: number
+        }[]
+      }
+      get_rider_sr_streaks: {
+        Args: { limit_count?: number; p_current_season: number }
+        Returns: {
+          rank: number
+          rider_name: string
+          rider_slug: string
+          streak_end_season: number
+          streak_length: number
+        }[]
+      }
+      get_route_frequency_counts: {
+        Args: { limit_count?: number }
+        Returns: {
+          chapter_name: string
+          distance_km: number
+          rank: number
+          route_name: string
+          route_slug: string
+          value: number
+        }[]
+      }
+      get_route_participant_counts: {
+        Args: { limit_count?: number }
+        Returns: {
+          chapter_name: string
+          distance_km: number
+          rank: number
+          route_name: string
+          route_slug: string
+          value: number
+        }[]
+      }
+      get_season_event_counts: {
+        Args: { limit_count?: number }
+        Returns: {
+          rank: number
+          season: number
+          value: number
+        }[]
+      }
+      get_season_total_distances: {
+        Args: { limit_count?: number }
+        Returns: {
+          rank: number
+          season: number
+          value: number
+        }[]
+      }
+      get_season_unique_rider_counts: {
+        Args: { limit_count?: number }
+        Returns: {
+          rank: number
+          season: number
+          value: number
         }[]
       }
       is_admin: { Args: never; Returns: boolean }
@@ -793,14 +971,15 @@ export const Constants = {
   },
 } as const
 
-// Table row type aliases (using generated Tables type)
+// Convenience type aliases for table rows
 export type Admin = Tables<'admins'>
 export type Award = Tables<'awards'>
 export type Chapter = Tables<'chapters'>
 export type Event = Tables<'events'>
 export type Image = Tables<'images'>
 export type Registration = Tables<'registrations'>
-export type ResultAward = Tables<'result_awards'>
 export type Result = Tables<'results'>
+export type ResultAward = Tables<'result_awards'>
 export type Rider = Tables<'riders'>
+export type RiderMerge = Tables<'rider_merges'>
 export type Route = Tables<'routes'>

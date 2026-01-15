@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest'
-import { createSlug, formatEventType, parseLocalDate, formatFinishTime } from '@/lib/utils'
+import {
+  createSlug,
+  formatEventType,
+  parseLocalDate,
+  formatFinishTime,
+  parseFinishTimeToMinutes,
+} from '@/lib/utils'
 
 describe('createSlug', () => {
   it('converts string to lowercase', () => {
@@ -163,5 +169,61 @@ describe('formatFinishTime', () => {
     expect(formatFinishTime('1 day 11:45:00')).toBe('35:45')
     // 1200km in 85h00m (3 days 13:00)
     expect(formatFinishTime('3 days 13:00:00')).toBe('85:00')
+  })
+})
+
+describe('parseFinishTimeToMinutes', () => {
+  it('returns null for null input', () => {
+    expect(parseFinishTimeToMinutes(null)).toBe(null)
+  })
+
+  it('parses simple time HH:MM:SS to total minutes', () => {
+    expect(parseFinishTimeToMinutes('10:30:00')).toBe(630) // 10 * 60 + 30
+    expect(parseFinishTimeToMinutes('08:15:00')).toBe(495) // 8 * 60 + 15
+    expect(parseFinishTimeToMinutes('23:59:00')).toBe(1439) // 23 * 60 + 59
+  })
+
+  it('parses time without seconds', () => {
+    expect(parseFinishTimeToMinutes('10:30')).toBe(630)
+  })
+
+  it('parses time over 24 hours', () => {
+    expect(parseFinishTimeToMinutes('105:30:00')).toBe(6330) // 105 * 60 + 30
+    expect(parseFinishTimeToMinutes('48:00:00')).toBe(2880) // 48 * 60
+  })
+
+  it('handles PostgreSQL interval with days', () => {
+    expect(parseFinishTimeToMinutes('4 days 09:30:00')).toBe(6330) // (4*24 + 9) * 60 + 30
+    expect(parseFinishTimeToMinutes('2 days 00:00:00')).toBe(2880) // 2 * 24 * 60
+  })
+
+  it('handles single day interval', () => {
+    expect(parseFinishTimeToMinutes('1 day 02:15:00')).toBe(1575) // (24 + 2) * 60 + 15
+    expect(parseFinishTimeToMinutes('1 day 00:00:00')).toBe(1440) // 24 * 60
+  })
+
+  it('handles zero days explicitly', () => {
+    expect(parseFinishTimeToMinutes('0 days 12:30:00')).toBe(750) // 12 * 60 + 30
+  })
+
+  it('returns null if pattern does not match', () => {
+    expect(parseFinishTimeToMinutes('invalid')).toBe(null)
+    expect(parseFinishTimeToMinutes('abc')).toBe(null)
+  })
+
+  it('handles midnight times', () => {
+    expect(parseFinishTimeToMinutes('00:00:00')).toBe(0)
+  })
+
+  it('handles real-world brevet finish times for comparison', () => {
+    // Compare two 200km finishes: 9:30 vs 10:15
+    const fastTime = parseFinishTimeToMinutes('09:30:00')
+    const slowTime = parseFinishTimeToMinutes('10:15:00')
+    expect(fastTime).toBeLessThan(slowTime!)
+
+    // Compare 600km finishes: 35:45 vs 38:00
+    const fast600 = parseFinishTimeToMinutes('1 day 11:45:00') // 35:45
+    const slow600 = parseFinishTimeToMinutes('1 day 14:00:00') // 38:00
+    expect(fast600).toBeLessThan(slow600!)
   })
 })

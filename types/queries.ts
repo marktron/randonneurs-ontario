@@ -13,7 +13,10 @@ export type Chapter = Database['public']['Tables']['chapters']['Row']
 export type Event = Database['public']['Tables']['events']['Row']
 export type Route = Database['public']['Tables']['routes']['Row']
 export type Rider = Database['public']['Tables']['riders']['Row']
-export type Result = Database['public']['Tables']['results']['Row']
+// Override finish_time from unknown to string | null (PostgreSQL interval -> JS string)
+export type Result = Omit<Database['public']['Tables']['results']['Row'], 'finish_time'> & {
+  finish_time: string | null
+}
 export type Registration = Database['public']['Tables']['registrations']['Row']
 
 // View types

@@ -262,7 +262,7 @@ const getChapterResultsInner = cache(
         const slug = result.rider_slug
         const statusStr = formatStatus(result.status ?? 'pending')
         // Show status (DNF/DNS/OTL/DQ) if not finished, otherwise show finish time
-        const time = statusStr ?? formatFinishTime(result.finish_time) ?? ''
+        const time = statusStr ?? formatFinishTime(result.finish_time as string | null) ?? ''
         const isFirstBrevet = result.id ? firstBrevetResultIds.has(result.id) : false
 
         return { name, slug, time, isFirstBrevet }

@@ -20,7 +20,7 @@ import {
   getDbSlug,
   getUrlSlugFromDbSlug,
 } from '@/lib/chapter-config'
-import { formatFinishTime, formatStatus } from '@/lib/utils'
+import { formatFinishTime, formatStatus, parseFinishTimeToMinutes } from '@/lib/utils'
 import { handleDataError } from '@/lib/errors'
 import type { RouteWithChapter, RouteWithChapterName, RouteBasic } from '@/types/queries'
 
@@ -42,6 +42,7 @@ export interface RouteResultRider {
   slug: string | null
   time: string
   isFirstBrevet: boolean
+  isCourseRecord: boolean
 }
 
 export interface RouteResultEvent {
@@ -132,6 +133,34 @@ const getRouteResultsInner = cache(async (routeSlug: string): Promise<RouteResul
     }
   }
 
+  // Find the course record (fastest finish time across all results)
+  // Track all result IDs with the fastest time to handle ties
+  const courseRecordResultIds = new Set<string>()
+  let fastestTimeMinutes: number | null = null
+
+  for (const event of events as EventWithResults[]) {
+    const eventResults = event.public_results
+    if (!eventResults) continue
+
+    for (const result of eventResults) {
+      // Only consider finished results with valid times
+      if (result.status !== 'finished' || !result.finish_time || !result.id) continue
+
+      const timeInMinutes = parseFinishTimeToMinutes(result.finish_time as string)
+      if (timeInMinutes === null) continue
+
+      if (fastestTimeMinutes === null || timeInMinutes < fastestTimeMinutes) {
+        // New fastest time - clear previous records and add this one
+        fastestTimeMinutes = timeInMinutes
+        courseRecordResultIds.clear()
+        courseRecordResultIds.add(result.id)
+      } else if (timeInMinutes === fastestTimeMinutes) {
+        // Tie - add to existing records
+        courseRecordResultIds.add(result.id)
+      }
+    }
+  }
+
   const results: RouteResultEvent[] = []
 
   for (const event of events as EventWithResults[]) {
@@ -143,8 +172,12 @@ const getRouteResultsInner = cache(async (routeSlug: string): Promise<RouteResul
       .map((r) => ({
         name: `${r.first_name} ${r.last_name}`.trim() || 'Unknown',
         slug: r.rider_slug,
-        time: formatStatus(r.status ?? 'pending') ?? formatFinishTime(r.finish_time) ?? '',
+        time:
+          formatStatus(r.status ?? 'pending') ??
+          formatFinishTime(r.finish_time as string | null) ??
+          '',
         isFirstBrevet: r.id ? firstBrevetResultIds.has(r.id) : false,
+        isCourseRecord: r.id ? courseRecordResultIds.has(r.id) : false,
       }))
 
     // Sort by last name

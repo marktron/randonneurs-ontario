@@ -194,6 +194,11 @@ export function Navbar() {
                       Rider Directory
                     </Link>
                   </li>
+                  <li>
+                    <Link href="/records" className={dropdownLinkStyles}>
+                      Records
+                    </Link>
+                  </li>
                 </ul>
               </NavigationMenuContent>
             </NavigationMenuItem>
@@ -358,6 +363,13 @@ export function Navbar() {
                   className="block px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors"
                 >
                   Rider Directory
+                </Link>
+                <Link
+                  href="/records"
+                  onClick={() => setOpen(false)}
+                  className="block px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors"
+                >
+                  Records
                 </Link>
               </MobileNavSection>
 
