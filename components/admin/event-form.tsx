@@ -29,6 +29,14 @@ import {
 } from '@/components/ui/command'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Alert, AlertDescription } from '@/components/ui/alert'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { AlertCircle, Loader2, CalendarIcon, ChevronDownIcon } from 'lucide-react'
 import { createEvent, updateEvent, type EventType } from '@/lib/actions/events'
 import { toast } from 'sonner'
@@ -79,6 +87,9 @@ export function EventForm({
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
+  const [showBrevetRestrictionModal, setShowBrevetRestrictionModal] = useState(false)
+
+  const currentSeason = process.env.NEXT_PUBLIC_CURRENT_SEASON || '2026'
 
   // Initialize state from event data in edit mode, or defaults in create mode
   const [chapterId, setChapterId] = useState(event?.chapterId || defaultChapterId || '')
@@ -162,6 +173,15 @@ export function EventForm({
       return
     }
 
+    // Check if trying to create a new brevet for the current season
+    if (mode === 'create' && eventType === 'brevet') {
+      const eventYear = eventDate.getFullYear().toString()
+      if (eventYear === currentSeason) {
+        setShowBrevetRestrictionModal(true)
+        return
+      }
+    }
+
     // Format date as YYYY-MM-DD for the server
     const formattedDate = format(eventDate, 'yyyy-MM-dd')
 
@@ -211,296 +231,316 @@ export function EventForm({
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>{mode === 'edit' ? 'Edit Event' : 'Create Event'}</CardTitle>
-        <CardDescription>
-          {mode === 'edit' ? 'Update event details' : 'Add a new event to the schedule'}
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {error && (
-            <Alert variant="destructive">
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          )}
+    <>
+      <Dialog open={showBrevetRestrictionModal} onOpenChange={setShowBrevetRestrictionModal}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Cannot Create Brevet</DialogTitle>
+            <DialogDescription>
+              New brevets cannot be created for {currentSeason}. You can still edit existing brevets
+              or create a permanent, populaire, or fleche event.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button onClick={() => setShowBrevetRestrictionModal(false)}>OK</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Card>
+        <CardHeader>
+          <CardTitle>{mode === 'edit' ? 'Edit Event' : 'Create Event'}</CardTitle>
+          <CardDescription>
+            {mode === 'edit' ? 'Update event details' : 'Add a new event to the schedule'}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleSubmit} className="space-y-6">
+            {error && (
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            )}
 
-          {/* Chapter and Route Selection */}
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="chapter">Chapter</Label>
-              <Select
-                value={chapterId || 'none'}
-                onValueChange={(v) => handleChapterChange(v === 'none' ? '' : v)}
-                disabled={isPending}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select chapter" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Select chapter</SelectItem>
-                  <SelectSeparator />
-                  <SelectGroup>
-                    <SelectLabel>Chapters</SelectLabel>
-                    {mainChapters.map((chapter) => (
-                      <SelectItem key={chapter.id} value={chapter.id}>
-                        {chapter.name}
-                      </SelectItem>
-                    ))}
-                  </SelectGroup>
-                  {otherChapters.length > 0 && (
-                    <>
-                      <SelectSeparator />
-                      <SelectGroup>
-                        <SelectLabel>Other</SelectLabel>
-                        {otherChapters.map((chapter) => (
-                          <SelectItem key={chapter.id} value={chapter.id}>
-                            {chapter.name}
-                          </SelectItem>
-                        ))}
-                      </SelectGroup>
-                    </>
-                  )}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="route">Route (optional)</Label>
-              <Popover open={routePickerOpen} onOpenChange={setRoutePickerOpen}>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    role="combobox"
-                    aria-expanded={routePickerOpen}
-                    disabled={isPending}
-                    className="w-full justify-between font-normal"
-                  >
-                    {selectedRoute ? (
-                      <span className="truncate">
-                        {selectedRoute.name}{' '}
-                        {selectedRoute.distanceKm && `(${selectedRoute.distanceKm} km)`}
-                      </span>
-                    ) : (
-                      <span className="text-muted-foreground">Search routes…</span>
+            {/* Chapter and Route Selection */}
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="chapter">Chapter</Label>
+                <Select
+                  value={chapterId || 'none'}
+                  onValueChange={(v) => handleChapterChange(v === 'none' ? '' : v)}
+                  disabled={isPending}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Select chapter" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Select chapter</SelectItem>
+                    <SelectSeparator />
+                    <SelectGroup>
+                      <SelectLabel>Chapters</SelectLabel>
+                      {mainChapters.map((chapter) => (
+                        <SelectItem key={chapter.id} value={chapter.id}>
+                          {chapter.name}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                    {otherChapters.length > 0 && (
+                      <>
+                        <SelectSeparator />
+                        <SelectGroup>
+                          <SelectLabel>Other</SelectLabel>
+                          {otherChapters.map((chapter) => (
+                            <SelectItem key={chapter.id} value={chapter.id}>
+                              {chapter.name}
+                            </SelectItem>
+                          ))}
+                        </SelectGroup>
+                      </>
                     )}
-                    <ChevronDownIcon className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
-                  <Command>
-                    <CommandInput placeholder="Search by name or distance…" />
-                    <CommandList>
-                      <CommandEmpty>No routes found.</CommandEmpty>
-                      <CommandGroup>
-                        <CommandItem
-                          value="__none__"
-                          onSelect={() => {
-                            setRouteId(null)
-                            setRoutePickerOpen(false)
-                          }}
-                        >
-                          No route
-                        </CommandItem>
-                      </CommandGroup>
-                      <CommandGroup
-                        heading={
-                          chapterId ? chapters.find((c) => c.id === chapterId)?.name : 'All Routes'
-                        }
-                      >
-                        {filteredRoutes.map((route) => (
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="route">Route (optional)</Label>
+                <Popover open={routePickerOpen} onOpenChange={setRoutePickerOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={routePickerOpen}
+                      disabled={isPending}
+                      className="w-full justify-between font-normal"
+                    >
+                      {selectedRoute ? (
+                        <span className="truncate">
+                          {selectedRoute.name}{' '}
+                          {selectedRoute.distanceKm && `(${selectedRoute.distanceKm} km)`}
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground">Search routes…</span>
+                      )}
+                      <ChevronDownIcon className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                    <Command>
+                      <CommandInput placeholder="Search by name or distance…" />
+                      <CommandList>
+                        <CommandEmpty>No routes found.</CommandEmpty>
+                        <CommandGroup>
                           <CommandItem
-                            key={route.id}
-                            value={`${route.name} ${route.distanceKm}`}
-                            onSelect={() => handleRouteSelect(route)}
-                            data-checked={routeId === route.id}
+                            value="__none__"
+                            onSelect={() => {
+                              setRouteId(null)
+                              setRoutePickerOpen(false)
+                            }}
                           >
-                            <div className="flex flex-col">
-                              <span>{route.name}</span>
-                              <span className="text-xs text-muted-foreground">
-                                {route.distanceKm} km
-                              </span>
-                            </div>
+                            No route
                           </CommandItem>
-                        ))}
-                      </CommandGroup>
-                    </CommandList>
-                  </Command>
-                </PopoverContent>
-              </Popover>
+                        </CommandGroup>
+                        <CommandGroup
+                          heading={
+                            chapterId
+                              ? chapters.find((c) => c.id === chapterId)?.name
+                              : 'All Routes'
+                          }
+                        >
+                          {filteredRoutes.map((route) => (
+                            <CommandItem
+                              key={route.id}
+                              value={`${route.name} ${route.distanceKm}`}
+                              onSelect={() => handleRouteSelect(route)}
+                              data-checked={routeId === route.id}
+                            >
+                              <div className="flex flex-col">
+                                <span>{route.name}</span>
+                                <span className="text-xs text-muted-foreground">
+                                  {route.distanceKm} km
+                                </span>
+                              </div>
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+              </div>
             </div>
-          </div>
-          <p className="text-xs text-muted-foreground -mt-2">
-            {chapterId
-              ? `Showing ${filteredRoutes.length} routes for selected chapter`
-              : 'Select a chapter to filter routes'}
-          </p>
+            <p className="text-xs text-muted-foreground -mt-2">
+              {chapterId
+                ? `Showing ${filteredRoutes.length} routes for selected chapter`
+                : 'Select a chapter to filter routes'}
+            </p>
 
-          {/* Event Name */}
-          <div className="space-y-2">
-            <Label htmlFor="name">Event Name</Label>
-            <Input
-              id="name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="e.g., Waterloo Spring 200"
-              required
-              disabled={isPending}
-            />
-          </div>
-
-          {/* Event Type, Distance, Date */}
-          <div className="grid gap-4 sm:grid-cols-3">
+            {/* Event Name */}
             <div className="space-y-2">
-              <Label htmlFor="eventType">Event Type</Label>
-              <Select
-                value={eventType}
-                onValueChange={(v) => setEventType(v as EventType)}
-                disabled={isPending}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {EVENT_TYPES.map((type) => (
-                    <SelectItem key={type.value} value={type.value}>
-                      {type.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="distance">Distance (km)</Label>
+              <Label htmlFor="name">Event Name</Label>
               <Input
-                id="distance"
-                type="number"
-                value={distanceKm}
-                onChange={(e) => setDistanceKm(e.target.value)}
-                placeholder="200"
-                min="1"
-                step="1"
+                id="name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="e.g., Waterloo Spring 200"
                 required
                 disabled={isPending}
               />
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="eventDate">Date</Label>
-              <Popover open={datePickerOpen} onOpenChange={setDatePickerOpen}>
-                <PopoverTrigger asChild>
-                  <Button
-                    id="eventDate"
-                    variant="outline"
-                    disabled={isPending}
-                    className={cn(
-                      'w-full justify-start text-left font-normal',
-                      !eventDate && 'text-muted-foreground'
-                    )}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {eventDate ? format(eventDate, 'PPP') : 'Select date'}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar
-                    mode="single"
-                    selected={eventDate}
-                    onSelect={(date) => {
-                      setEventDate(date)
-                      setDatePickerOpen(false)
-                    }}
-                  />
-                </PopoverContent>
-              </Popover>
-            </div>
-          </div>
+            {/* Event Type, Distance, Date */}
+            <div className="grid gap-4 sm:grid-cols-3">
+              <div className="space-y-2">
+                <Label htmlFor="eventType">Event Type</Label>
+                <Select
+                  value={eventType}
+                  onValueChange={(v) => setEventType(v as EventType)}
+                  disabled={isPending}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {EVENT_TYPES.map((type) => (
+                      <SelectItem key={type.value} value={type.value}>
+                        {type.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
 
-          {/* Start Time and Location */}
-          <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="distance">Distance (km)</Label>
+                <Input
+                  id="distance"
+                  type="number"
+                  value={distanceKm}
+                  onChange={(e) => setDistanceKm(e.target.value)}
+                  placeholder="200"
+                  min="1"
+                  step="1"
+                  required
+                  disabled={isPending}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="eventDate">Date</Label>
+                <Popover open={datePickerOpen} onOpenChange={setDatePickerOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      id="eventDate"
+                      variant="outline"
+                      disabled={isPending}
+                      className={cn(
+                        'w-full justify-start text-left font-normal',
+                        !eventDate && 'text-muted-foreground'
+                      )}
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {eventDate ? format(eventDate, 'PPP') : 'Select date'}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={eventDate}
+                      onSelect={(date) => {
+                        setEventDate(date)
+                        setDatePickerOpen(false)
+                      }}
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
+            </div>
+
+            {/* Start Time and Location */}
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="startTime">Start Time</Label>
+                <Input
+                  id="startTime"
+                  type="time"
+                  value={startTime}
+                  onChange={(e) => setStartTime(e.target.value)}
+                  disabled={isPending}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="startLocation">Start Location</Label>
+                <Input
+                  id="startLocation"
+                  value={startLocation}
+                  onChange={(e) => setStartLocation(e.target.value)}
+                  placeholder="e.g., Tim Hortons, 123 Main St, Waterloo"
+                  disabled={isPending}
+                />
+              </div>
+            </div>
+
+            {/* Description */}
             <div className="space-y-2">
-              <Label htmlFor="startTime">Start Time</Label>
-              <Input
-                id="startTime"
-                type="time"
-                value={startTime}
-                onChange={(e) => setStartTime(e.target.value)}
+              <Label htmlFor="description">Description (optional)</Label>
+              <Textarea
+                id="description"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Add event details, special instructions, or notes. Markdown formatting is supported."
+                rows={4}
+                disabled={isPending}
+                className="resize-y"
+              />
+              <p className="text-xs text-muted-foreground">
+                Supports markdown formatting (bold, italic, links, lists)
+              </p>
+            </div>
+
+            {/* Event Image */}
+            <div className="space-y-2">
+              <Label>Event Image (optional)</Label>
+              <p className="text-xs text-muted-foreground">
+                Add an image to display with this event
+              </p>
+              <ImageUpload
+                value={imageUrl || null}
+                onChange={(url) => setImageUrl(url || '')}
+                folder="events"
                 disabled={isPending}
               />
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="startLocation">Start Location</Label>
-              <Input
-                id="startLocation"
-                value={startLocation}
-                onChange={(e) => setStartLocation(e.target.value)}
-                placeholder="e.g., Tim Hortons, 123 Main St, Waterloo"
+            <div className="flex gap-4 pt-4">
+              <Button type="submit" disabled={isPending}>
+                {isPending ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    {mode === 'edit' ? 'Saving…' : 'Creating…'}
+                  </>
+                ) : mode === 'edit' ? (
+                  'Save Changes'
+                ) : (
+                  'Create Event'
+                )}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() =>
+                  router.push(
+                    mode === 'edit' && event ? `/admin/events/${event.id}` : '/admin/events'
+                  )
+                }
                 disabled={isPending}
-              />
+              >
+                Cancel
+              </Button>
             </div>
-          </div>
-
-          {/* Description */}
-          <div className="space-y-2">
-            <Label htmlFor="description">Description (optional)</Label>
-            <Textarea
-              id="description"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Add event details, special instructions, or notes. Markdown formatting is supported."
-              rows={4}
-              disabled={isPending}
-              className="resize-y"
-            />
-            <p className="text-xs text-muted-foreground">
-              Supports markdown formatting (bold, italic, links, lists)
-            </p>
-          </div>
-
-          {/* Event Image */}
-          <div className="space-y-2">
-            <Label>Event Image (optional)</Label>
-            <p className="text-xs text-muted-foreground">Add an image to display with this event</p>
-            <ImageUpload
-              value={imageUrl || null}
-              onChange={(url) => setImageUrl(url || '')}
-              folder="events"
-              disabled={isPending}
-            />
-          </div>
-
-          <div className="flex gap-4 pt-4">
-            <Button type="submit" disabled={isPending}>
-              {isPending ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  {mode === 'edit' ? 'Saving…' : 'Creating…'}
-                </>
-              ) : mode === 'edit' ? (
-                'Save Changes'
-              ) : (
-                'Create Event'
-              )}
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() =>
-                router.push(
-                  mode === 'edit' && event ? `/admin/events/${event.id}` : '/admin/events'
-                )
-              }
-              disabled={isPending}
-            >
-              Cancel
-            </Button>
-          </div>
-        </form>
-      </CardContent>
-    </Card>
+          </form>
+        </CardContent>
+      </Card>
+    </>
   )
 }
