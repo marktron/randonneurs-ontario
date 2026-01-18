@@ -1,0 +1,75 @@
+/**
+ * Test fixtures for events
+ */
+
+import type { Event } from '@/types/queries'
+
+export const mockEvents: Event[] = [
+  {
+    id: 'event-1',
+    slug: 'spring-200-2025',
+    name: 'Spring 200',
+    event_date: '2025-05-15',
+    start_time: '08:00',
+    start_location: 'Toronto',
+    distance_km: 200,
+    event_type: 'brevet',
+    status: 'scheduled',
+    chapter_id: 'chapter-1',
+    route_id: 'route-1',
+    description: null,
+    image_url: null,
+    collection: null,
+    season: 2025,
+    created_at: null,
+    updated_at: null,
+    external_register_url: null,
+    registration_opens_at: null,
+    registration_closes_at: null,
+  },
+  {
+    id: 'event-2',
+    slug: 'fall-300-2025',
+    name: 'Fall 300',
+    event_date: '2025-10-20',
+    start_time: '07:00',
+    start_location: 'Ottawa',
+    distance_km: 300,
+    event_type: 'brevet',
+    status: 'scheduled',
+    chapter_id: 'chapter-2',
+    route_id: 'route-2',
+    description: null,
+    image_url: null,
+    collection: null,
+    season: 2025,
+    created_at: null,
+    updated_at: null,
+    external_register_url: null,
+    registration_opens_at: null,
+    registration_closes_at: null,
+  },
+]
+
+export const mockPermanentEvent: Event = {
+  id: 'event-perm-1',
+  slug: 'permanent-200',
+  name: 'Permanent 200',
+  event_date: '2025-06-01',
+  start_time: '09:00',
+  start_location: 'Toronto',
+  distance_km: 200,
+  event_type: 'permanent',
+  status: 'scheduled',
+  chapter_id: 'chapter-permanents', // Permanents have a chapter
+  route_id: 'route-1',
+  description: null,
+  image_url: null,
+  collection: null,
+  season: 2025,
+  created_at: null,
+  updated_at: null,
+  external_register_url: null,
+  registration_opens_at: null,
+  registration_closes_at: null,
+}

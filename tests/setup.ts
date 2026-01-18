@@ -1,4 +1,18 @@
 import { vi } from 'vitest'
+import '@testing-library/jest-dom'
+
+// Polyfill missing DOM APIs for happy-dom compatibility with Radix UI
+if (typeof Element !== 'undefined' && !Element.prototype.hasPointerCapture) {
+  Element.prototype.hasPointerCapture = function (pointerId: number): boolean {
+    return false
+  }
+  Element.prototype.setPointerCapture = function (pointerId: number): void {
+    // No-op
+  }
+  Element.prototype.releasePointerCapture = function (pointerId: number): void {
+    // No-op
+  }
+}
 
 // Mock Next.js cache module
 vi.mock('next/cache', () => ({

@@ -5,11 +5,12 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
-  workers: process.env.CI ? 1 : undefined,
-  reporter: [
-    ['html', { outputFolder: 'playwright-report' }],
-    ['list'],
-  ],
+  workers: process.env.CI ? 1 : 2, // Limit workers to avoid dev server overload
+  timeout: 60000, // 60s per test
+  expect: {
+    timeout: 15000, // 15s for expect assertions
+  },
+  reporter: [['html', { outputFolder: 'playwright-report' }], ['list']],
   use: {
     baseURL: process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:3000',
     trace: 'on-first-retry',

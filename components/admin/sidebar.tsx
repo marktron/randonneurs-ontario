@@ -39,26 +39,31 @@ const mainNavItems = [
     title: 'Dashboard',
     href: '/admin',
     icon: LayoutDashboard,
+    testId: 'nav-dashboard',
   },
   {
     title: 'Events',
     href: '/admin/events',
     icon: Calendar,
+    testId: 'nav-events',
   },
   {
     title: 'Routes',
     href: '/admin/routes',
     icon: Route,
+    testId: 'nav-routes',
   },
   {
     title: 'Riders',
     href: '/admin/riders',
     icon: Users,
+    testId: 'nav-riders',
   },
   {
     title: 'Results',
     href: '/admin/results',
     icon: Trophy,
+    testId: 'nav-results',
   },
 ]
 
@@ -67,11 +72,13 @@ const managementNavItems = [
     title: 'Pages',
     href: '/admin/pages',
     icon: FileText,
+    testId: 'nav-pages',
   },
   {
     title: 'Admin Users',
     href: '/admin/users',
     icon: UserCog,
+    testId: 'nav-users',
   },
 ]
 
@@ -102,7 +109,7 @@ export function AdminSidebar({ admin }: AdminSidebarProps) {
               {mainNavItems.map((item) => (
                 <SidebarMenuItem key={item.href}>
                   <SidebarMenuButton asChild isActive={isActive(item.href)}>
-                    <Link href={item.href}>
+                    <Link href={item.href} data-testid={item.testId}>
                       <item.icon className="h-4 w-4" />
                       <span>{item.title}</span>
                     </Link>
@@ -121,7 +128,7 @@ export function AdminSidebar({ admin }: AdminSidebarProps) {
                 {managementNavItems.map((item) => (
                   <SidebarMenuItem key={item.href}>
                     <SidebarMenuButton asChild isActive={isActive(item.href)}>
-                      <Link href={item.href}>
+                      <Link href={item.href} data-testid={item.testId}>
                         <item.icon className="h-4 w-4" />
                         <span>{item.title}</span>
                       </Link>
@@ -139,17 +146,19 @@ export function AdminSidebar({ admin }: AdminSidebarProps) {
           <div className="text-sm">
             <p className="font-medium">{admin.name}</p>
             <p className="text-muted-foreground text-xs">{admin.email}</p>
-            <p className="text-muted-foreground text-xs capitalize">{admin.role?.replace('_', ' ') || 'User'}</p>
+            <p className="text-muted-foreground text-xs capitalize">
+              {admin.role?.replace('_', ' ') || 'User'}
+            </p>
           </div>
           <div className="flex gap-2">
             <Button variant="outline" size="sm" className="flex-1" asChild>
-              <Link href="/admin/settings">
+              <Link href="/admin/settings" data-testid="nav-settings">
                 <Settings className="h-4 w-4 mr-2" />
                 Settings
               </Link>
             </Button>
             <form action={logout}>
-              <Button variant="outline" size="sm" type="submit">
+              <Button variant="outline" size="sm" type="submit" data-testid="logout-button">
                 <LogOut className="h-4 w-4" />
               </Button>
             </form>

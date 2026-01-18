@@ -293,7 +293,10 @@ const getEventBySlugInner = cache(async (slug: string): Promise<EventDetails | n
     .single()
 
   if (error || !event) {
-    console.error('Error fetching event:', error)
+    // PGRST116 means "not found" - this is expected, don't log as error
+    if (error?.code !== 'PGRST116') {
+      console.error('Error fetching event:', error)
+    }
     return null
   }
 

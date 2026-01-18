@@ -179,7 +179,7 @@ export function RegistrationForm({
   if (success) {
     return (
       <div className={wrapperClassName}>
-        <div className="text-center py-8">
+        <div className="text-center py-8" data-testid="registration-success">
           <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-green-100 dark:bg-green-900/30 mb-4">
             <svg
               className="w-6 h-6 text-green-600 dark:text-green-400"
@@ -224,7 +224,11 @@ export function RegistrationForm({
 
       <form className="space-y-5" onSubmit={handleSubmit}>
         {error && (
-          <div role="alert" className="p-3 rounded-lg bg-destructive/10 text-destructive text-sm">
+          <div
+            role="alert"
+            className="p-3 rounded-lg bg-destructive/10 text-destructive text-sm"
+            data-testid="registration-error"
+          >
             {error}
           </div>
         )}
@@ -371,7 +375,13 @@ export function RegistrationForm({
         </div>
 
         {/* Submit */}
-        <Button type="submit" className="w-full" size="lg" disabled={isPending}>
+        <Button
+          type="submit"
+          className="w-full"
+          size="lg"
+          disabled={isPending}
+          data-testid="registration-submit"
+        >
           {isPending ? 'Registering…' : 'Register'}
         </Button>
       </form>
