@@ -197,6 +197,45 @@ export async function updateRoute(id: string, data: RouteFormData)
 export async function submitEventResults(eventId: string, results: ResultEntry[])
 ```
 
+### lib/actions/rider-results.ts (Public - Token-based)
+
+These actions support the rider self-service result submission flow. They use a token-based authentication system, where each result has a unique `submission_token` that is emailed to the rider after an event is completed.
+
+```typescript
+// Get result data by submission token (for result submission form)
+export async function getResultByToken(token: string): Promise<ActionResult<ResultSubmissionData>>
+
+// Submit rider's result (status, finish time, files, notes)
+export async function submitRiderResult(input: SubmitResultInput): Promise<ActionResult>
+
+// Upload GPX or control card files
+export async function uploadResultFile(
+  token: string,
+  fileType: string,
+  formData: FormData
+): Promise<ActionResult<{ path: string; url: string }>>
+
+// Delete uploaded files
+export async function deleteResultFile(token: string, fileType: string): Promise<ActionResult>
+
+// Get rider's upcoming registered events (shown after result submission)
+export async function getRiderUpcomingEvents(
+  riderId: string
+): Promise<ActionResult<UpcomingEvent[]>>
+
+// Get upcoming events for a chapter (suggested events for riders with no upcoming registrations)
+export async function getChapterUpcomingEvents(
+  chapterSlug: string,
+  riderId: string,
+  limit?: number
+): Promise<ActionResult<UpcomingEvent[]>>
+```
+
+The result submission form shows upcoming events after a rider submits their result:
+
+- If the rider has upcoming registrations, those events are displayed
+- If no upcoming registrations, the next 3 events in the same chapter are suggested with "Register" links
+
 ### Usage Pattern
 
 ```typescript

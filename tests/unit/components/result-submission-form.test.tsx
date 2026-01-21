@@ -12,11 +12,15 @@ import type { ResultSubmissionData } from '@/lib/actions/rider-results'
 const mockSubmitRiderResult = vi.fn()
 const mockUploadResultFile = vi.fn()
 const mockDeleteResultFile = vi.fn()
+const mockGetRiderUpcomingEvents = vi.fn()
+const mockGetChapterUpcomingEvents = vi.fn()
 
 vi.mock('@/lib/actions/rider-results', () => ({
   submitRiderResult: (...args: unknown[]) => mockSubmitRiderResult(...args),
   uploadResultFile: (...args: unknown[]) => mockUploadResultFile(...args),
   deleteResultFile: (...args: unknown[]) => mockDeleteResultFile(...args),
+  getRiderUpcomingEvents: (...args: unknown[]) => mockGetRiderUpcomingEvents(...args),
+  getChapterUpcomingEvents: (...args: unknown[]) => mockGetChapterUpcomingEvents(...args),
 }))
 
 // Mock router
@@ -51,6 +55,8 @@ describe('ResultSubmissionForm', () => {
     eventDate: '2025-05-15',
     eventDistance: 200,
     chapterName: 'Toronto',
+    chapterSlug: 'toronto',
+    riderId: 'rider-1',
     canSubmit: true,
     currentStatus: 'pending',
     finishTime: null,
@@ -75,6 +81,8 @@ describe('ResultSubmissionForm', () => {
       data: { path: 'test.gpx', url: 'https://example.com/test.gpx' },
     })
     mockDeleteResultFile.mockResolvedValue({ success: true })
+    mockGetRiderUpcomingEvents.mockResolvedValue({ success: true, data: [] })
+    mockGetChapterUpcomingEvents.mockResolvedValue({ success: true, data: [] })
   })
 
   describe('rendering', () => {
