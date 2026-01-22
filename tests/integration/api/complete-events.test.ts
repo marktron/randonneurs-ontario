@@ -20,7 +20,7 @@ vi.mock('@/lib/supabase-server', () => {
         return {
           ...builder,
           then: (resolve: (result: { data: typeof events; error: null }) => void) => {
-            resolve({ data: events.filter(e => e.status === 'scheduled'), error: null })
+            resolve({ data: events.filter((e) => e.status === 'scheduled'), error: null })
           },
         }
       }
@@ -42,7 +42,7 @@ vi.mock('@/lib/supabase-server', () => {
     __reset: () => {
       events.length = 0
     },
-    __addEvent: (event: typeof events[0]) => {
+    __addEvent: (event: (typeof events)[0]) => {
       events.push(event)
     },
   }
@@ -141,17 +141,17 @@ describe('closing time calculation', () => {
   it('calculates correct closing time for various distances', async () => {
     const { closeHours } = await import('@/lib/brmTimes')
 
-    // Test key BRM distances
-    // 200km: 1 + 60/20 + 140/15 = 1 + 3 + 9.33 = 13.33 hours
+    // Test key BRM distances (0-600km at 15 km/h)
+    // 200km: 200/15 = 13.33 hours
     expect(closeHours(200)).toBeCloseTo(13.33, 1)
 
-    // 300km: 1 + 60/20 + 240/15 = 1 + 3 + 16 = 20 hours
+    // 300km: 300/15 = 20 hours
     expect(closeHours(300)).toBeCloseTo(20, 1)
 
-    // 400km: 1 + 60/20 + 340/15 = 1 + 3 + 22.67 = 26.67 hours
+    // 400km: 400/15 = 26.67 hours
     expect(closeHours(400)).toBeCloseTo(26.67, 1)
 
-    // 600km: 1 + 60/20 + 540/15 = 1 + 3 + 36 = 40 hours
+    // 600km: 600/15 = 40 hours
     expect(closeHours(600)).toBeCloseTo(40, 1)
   })
 })

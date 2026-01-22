@@ -49,7 +49,7 @@ const FINISH_LIMITS_MIN: Record<NominalDistance, number> = {
   600: 40 * 60,
   1000: 75 * 60,
   1200: 90 * 60,
-  1300: 93 * 60,
+  1300: 108 * 60 + 20, // 108h 20m
 }
 
 // Opening speeds by segment (km/h)
@@ -63,31 +63,26 @@ const OPEN_SEGMENTS = [
 
 /**
  * Closing time in hours for distance d (km):
- *  - 0–60 km: 1 h + d/20
- *  - 60–600 km: 15 km/h
+ *  - 0–600 km: 15 km/h
  *  - 600–1000 km: 11.428 km/h
  *  - 1000–1300 km: 13.333 km/h
  */
 export function closeHours(d: number): number {
   if (d <= 0) return 1 // 1 hour for start control (km 0)
 
-  // First 0–60 band: "1h + d/20" (applies only to the portion within that band)
-  const firstSpan = Math.min(d, 60)
-  let h = 1 + firstSpan / 20
+  let h = 0
+  let remaining = d
 
-  let remaining = d - firstSpan
-  if (remaining <= 0) return h
-
-  // 60–600 at 15 km/h
-  const span2 = Math.min(remaining, Math.max(0, 600 - 60)) // up to 540 km
-  h += span2 / 15
-  remaining -= span2
+  // 0–600 at 15 km/h
+  const span1 = Math.min(remaining, 600)
+  h += span1 / 15
+  remaining -= span1
   if (remaining <= 0) return h
 
   // 600–1000 at 11.428 km/h
-  const span3 = Math.min(remaining, Math.max(0, 1000 - 600)) // up to 400 km
-  h += span3 / 11.428
-  remaining -= span3
+  const span2 = Math.min(remaining, 400) // up to 400 km in this band
+  h += span2 / 11.428
+  remaining -= span2
   if (remaining <= 0) return h
 
   // 1000–1300 at 13.333 km/h
@@ -133,7 +128,7 @@ export function computeControlTimes(
   const { truncateKm = true } = opts
 
   const dCtrl = truncateKm ? Math.trunc(controlKm) : controlKm
-  const dRoute = routeKm == null ? nominalKm : (truncateKm ? Math.trunc(routeKm) : routeKm)
+  const dRoute = routeKm == null ? nominalKm : truncateKm ? Math.trunc(routeKm) : routeKm
 
   // Opening
   const openMin = Math.round(openHours(dCtrl) * 60)
@@ -201,10 +196,12 @@ export function formatControlTime(date: Date): string {
  * Format a date for card display (e.g., "Apr 18 2026") in Toronto timezone
  */
 export function formatCardDate(date: Date): string {
-  return date.toLocaleDateString('en-US', {
-    month: 'short',
-    day: '2-digit',
-    year: 'numeric',
-    timeZone: TORONTO_TZ,
-  }).replace(',', '')
+  return date
+    .toLocaleDateString('en-US', {
+      month: 'short',
+      day: '2-digit',
+      year: 'numeric',
+      timeZone: TORONTO_TZ,
+    })
+    .replace(',', '')
 }
