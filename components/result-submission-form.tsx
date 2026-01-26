@@ -52,7 +52,7 @@ export function ResultSubmissionForm({ token, initialData }: ResultSubmissionFor
 
   // Form state
   const [status, setStatus] = useState<string>(
-    initialData.currentStatus === 'pending' ? '' : initialData.currentStatus
+    initialData.currentStatus === 'pending' ? 'finished' : initialData.currentStatus
   )
   // Parse initial finish time (format "HH:MM" or "H:MM") into hours and minutes
   const [initialHours, initialMinutes] = (initialData.finishTime || '').split(':')
@@ -276,7 +276,7 @@ export function ResultSubmissionForm({ token, initialData }: ResultSubmissionFor
             <h3 className="font-medium text-sm mb-4 text-center">Your Upcoming Events</h3>
             <div className="space-y-3">
               {upcomingEvents.map((event) => (
-                <UpcomingEventCard key={event.id} event={event} showRegisterLink={false} />
+                <UpcomingEventCard key={event.id} event={event} isRegistered={true} />
               ))}
             </div>
           </div>
@@ -290,7 +290,7 @@ export function ResultSubmissionForm({ token, initialData }: ResultSubmissionFor
             </p>
             <div className="space-y-3">
               {suggestedEvents.map((event) => (
-                <UpcomingEventCard key={event.id} event={event} showRegisterLink={true} />
+                <UpcomingEventCard key={event.id} event={event} isRegistered={false} />
               ))}
             </div>
           </div>
@@ -631,10 +631,10 @@ function FileUploadField({
 
 interface UpcomingEventCardProps {
   event: UpcomingEvent
-  showRegisterLink: boolean
+  isRegistered: boolean
 }
 
-function UpcomingEventCard({ event, showRegisterLink }: UpcomingEventCardProps) {
+function UpcomingEventCard({ event, isRegistered }: UpcomingEventCardProps) {
   return (
     <div className="flex items-center gap-4 p-3 rounded-lg border border-border bg-muted/30">
       <div className="flex-shrink-0 text-center w-14">
@@ -657,15 +657,13 @@ function UpcomingEventCard({ event, showRegisterLink }: UpcomingEventCardProps) 
           )}
         </div>
       </div>
-      {showRegisterLink && (
-        <Link
-          href={`/register/${event.slug}`}
-          className="flex-shrink-0 inline-flex items-center gap-1 text-sm text-primary hover:underline"
-        >
-          Register
-          <ArrowRight className="h-3.5 w-3.5" />
-        </Link>
-      )}
+      <Link
+        href={`/register/${event.slug}`}
+        className="flex-shrink-0 inline-flex items-center gap-1 text-sm text-primary hover:underline"
+      >
+        {isRegistered ? 'Details' : 'Register'}
+        <ArrowRight className="h-3.5 w-3.5" />
+      </Link>
     </div>
   )
 }
