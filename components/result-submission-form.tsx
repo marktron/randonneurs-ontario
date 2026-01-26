@@ -266,7 +266,7 @@ export function ResultSubmissionForm({ token, initialData }: ResultSubmissionFor
           <div className="border-t border-border pt-6 mt-6">
             <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
               <div className="w-4 h-4 border-2 border-muted-foreground border-t-transparent rounded-full animate-spin" />
-              Loading upcoming events...
+              Loading upcoming events…
             </div>
           </div>
         )}
@@ -647,15 +647,10 @@ function UpcomingEventCard({ event, isRegistered }: UpcomingEventCardProps) {
       </div>
       <div className="flex-1 min-w-0">
         <div className="font-medium text-sm truncate">{event.name}</div>
-        <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5">
-          <span className="tabular-nums">{event.distance} km</span>
-          {event.startLocation && (
-            <>
-              <span className="text-border">·</span>
-              <span className="truncate">{event.startLocation}</span>
-            </>
-          )}
-        </div>
+        <div className="text-xs text-muted-foreground mt-0.5 tabular-nums">{event.distance} km</div>
+        {event.startLocation && (
+          <div className="text-xs text-muted-foreground truncate">{event.startLocation}</div>
+        )}
       </div>
       <Link
         href={`/register/${event.slug}`}

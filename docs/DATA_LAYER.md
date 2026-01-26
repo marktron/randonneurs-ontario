@@ -229,12 +229,18 @@ export async function getChapterUpcomingEvents(
   riderId: string,
   limit?: number
 ): Promise<ActionResult<UpcomingEvent[]>>
+
+// Get upcoming events from the same chapter as a given event (used after registration)
+export async function getUpcomingEventsByEventId(
+  eventId: string,
+  limit?: number
+): Promise<ActionResult<UpcomingEvent[]>>
 ```
 
-The result submission form shows upcoming events after a rider submits their result:
+Both the result submission form and registration form show upcoming events after completion:
 
-- If the rider has upcoming registrations, those events are displayed
-- If no upcoming registrations, the next 3 events in the same chapter are suggested with "Register" links
+- **Result submission form**: Shows rider's upcoming registrations, or suggests next 3 chapter events if none
+- **Registration form**: Shows up to 3 upcoming events from the same chapter (not shown for permanents)
 
 ### Usage Pattern
 

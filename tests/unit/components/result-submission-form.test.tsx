@@ -114,16 +114,11 @@ describe('ResultSubmissionForm', () => {
   })
 
   describe('validation', () => {
-    it('shows error when status is not selected', async () => {
-      const user = userEvent.setup()
+    it('pre-selects finished status by default', () => {
       render(<ResultSubmissionForm {...defaultProps} />)
 
-      const submitButton = screen.getByRole('button', { name: /submit your result/i })
-      await user.click(submitButton)
-
-      await waitFor(() => {
-        expect(screen.getByText(/please select your finish status/i)).toBeInTheDocument()
-      })
+      // The "Finished" status is pre-selected, so time inputs should be visible
+      expect(screen.getByText('Elapsed Time')).toBeInTheDocument()
     })
 
     // Note: Status selection and time validation with Radix UI Select
@@ -141,17 +136,16 @@ describe('ResultSubmissionForm', () => {
       expect(screen.getByRole('button', { name: /submit your result/i })).toBeInTheDocument()
     })
 
-    it('does not call submitRiderResult without status selection', async () => {
+    it('does not call submitRiderResult without required fields', async () => {
       const user = userEvent.setup()
       render(<ResultSubmissionForm {...defaultProps} />)
 
+      // With "finished" pre-selected, the form requires finish time inputs
+      // Submitting without filling them should trigger HTML5 validation
       const submitButton = screen.getByRole('button', { name: /submit your result/i })
       await user.click(submitButton)
 
-      await waitFor(() => {
-        // Should show error, not submit
-        expect(screen.getByText(/please select your finish status/i)).toBeInTheDocument()
-      })
+      // Form should not submit without required fields
       expect(mockSubmitRiderResult).not.toHaveBeenCalled()
     })
   })

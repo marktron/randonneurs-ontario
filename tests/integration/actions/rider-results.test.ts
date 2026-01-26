@@ -51,6 +51,7 @@ import {
   submitRiderResult,
   getRiderUpcomingEvents,
   getChapterUpcomingEvents,
+  getUpcomingEventsByEventId,
 } from '@/lib/actions/rider-results'
 
 const mockModule = await vi.importMock<{
@@ -278,5 +279,19 @@ describe('getChapterUpcomingEvents', () => {
 
     expect(result.success).toBe(false)
     expect(result.error).toBe('Invalid chapter')
+  })
+})
+
+describe('getUpcomingEventsByEventId', () => {
+  beforeEach(() => {
+    mockModule.__reset()
+    vi.clearAllMocks()
+  })
+
+  it('returns error for empty event ID', async () => {
+    const result = await getUpcomingEventsByEventId('')
+
+    expect(result.success).toBe(false)
+    expect(result.error).toBe('Invalid event')
   })
 })

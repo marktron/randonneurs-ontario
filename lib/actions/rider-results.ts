@@ -567,3 +567,78 @@ export async function getChapterUpcomingEvents(
 
   return { success: true, data: upcomingEvents }
 }
+
+/**
+ * Get upcoming events from the same chapter as the given event.
+ * Used after registration to show other events the rider might be interested in.
+ * Excludes the current event.
+ */
+export async function getUpcomingEventsByEventId(
+  eventId: string,
+  limit: number = 3
+): Promise<ActionResult<UpcomingEvent[]>> {
+  if (!eventId) {
+    return { success: false, error: 'Invalid event' }
+  }
+
+  const supabase = getSupabaseAdmin()
+  const today = new Date().toISOString().split('T')[0]
+
+  // First, get the event to find its chapter and date
+  const { data: currentEvent, error: eventError } = await supabase
+    .from('events')
+    .select('chapter_id, event_date')
+    .eq('id', eventId)
+    .single()
+
+  if (eventError || !currentEvent) {
+    return handleSupabaseError(
+      eventError,
+      { operation: 'getUpcomingEventsByEventId.eventLookup' },
+      'Event not found'
+    )
+  }
+
+  // Get upcoming scheduled events for this chapter after the current event's date
+  const { data: events, error } = await supabase
+    .from('events')
+    .select(
+      `
+      id,
+      slug,
+      name,
+      event_date,
+      distance_km,
+      start_time,
+      start_location
+    `
+    )
+    .eq('chapter_id', currentEvent.chapter_id)
+    .eq('status', 'scheduled')
+    .neq('event_type', 'Permanent')
+    .neq('id', eventId)
+    .gt('event_date', currentEvent.event_date)
+    .gte('event_date', today)
+    .order('event_date', { ascending: true })
+    .limit(limit)
+
+  if (error) {
+    return handleSupabaseError(
+      error,
+      { operation: 'getUpcomingEventsByEventId' },
+      'Failed to fetch upcoming events'
+    )
+  }
+
+  const upcomingEvents: UpcomingEvent[] = (events || []).map((event) => ({
+    id: event.id,
+    slug: event.slug,
+    name: event.name,
+    date: event.event_date,
+    distance: event.distance_km,
+    startTime: event.start_time || '08:00',
+    startLocation: event.start_location || '',
+  }))
+
+  return { success: true, data: upcomingEvents }
+}

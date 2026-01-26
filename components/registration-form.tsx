@@ -18,6 +18,9 @@ import {
 import { registerForEvent, completeRegistrationWithRider } from '@/lib/actions/register'
 import { RiderMatchDialog } from '@/components/rider-match-dialog'
 import type { RiderMatchCandidate } from '@/lib/actions/rider-match'
+import { getUpcomingEventsByEventId, type UpcomingEvent } from '@/lib/actions/rider-results'
+import { format } from 'date-fns'
+import { ArrowRight } from 'lucide-react'
 
 const STORAGE_KEY = 'ro-registration'
 
@@ -78,6 +81,10 @@ export function RegistrationForm({
   const [matchCandidates, setMatchCandidates] = useState<RiderMatchCandidate[]>([])
   const [pendingNotes, setPendingNotes] = useState<string>('')
 
+  // Upcoming events state
+  const [upcomingEvents, setUpcomingEvents] = useState<UpcomingEvent[]>([])
+  const [loadingEvents, setLoadingEvents] = useState(false)
+
   // Load saved data on mount
   useEffect(() => {
     const saved = getSavedData()
@@ -125,6 +132,23 @@ export function RegistrationForm({
         })
         setSuccess(true)
         router.refresh()
+
+        // Fetch upcoming events for non-permanents
+        if (!isPermanent) {
+          setLoadingEvents(true)
+          getUpcomingEventsByEventId(eventId, 3)
+            .then((eventsResult) => {
+              if (eventsResult.success && eventsResult.data) {
+                setUpcomingEvents(eventsResult.data)
+              }
+            })
+            .catch(() => {
+              // Silently fail - the events are a nice-to-have
+            })
+            .finally(() => {
+              setLoadingEvents(false)
+            })
+        }
       } else if (result.needsRiderMatch && result.matchCandidates) {
         // Show fuzzy matching dialog
         setMatchCandidates(result.matchCandidates)
@@ -164,6 +188,23 @@ export function RegistrationForm({
         })
         setSuccess(true)
         router.refresh()
+
+        // Fetch upcoming events for non-permanents
+        if (!isPermanent) {
+          setLoadingEvents(true)
+          getUpcomingEventsByEventId(eventId, 3)
+            .then((eventsResult) => {
+              if (eventsResult.success && eventsResult.data) {
+                setUpcomingEvents(eventsResult.data)
+              }
+            })
+            .catch(() => {
+              // Silently fail - the events are a nice-to-have
+            })
+            .finally(() => {
+              setLoadingEvents(false)
+            })
+        }
       } else {
         setMatchDialogOpen(false)
         setError(result.error || 'Registration failed')
@@ -195,9 +236,30 @@ export function RegistrationForm({
               />
             </svg>
           </div>
-          <h2 className="font-serif text-2xl tracking-tight mb-2">You&apos;re registered!</h2>
+          <h2 className="font-serif text-2xl tracking-tight mb-2">You're registered!</h2>
           <p className="text-sm text-muted-foreground">See you at the start line.</p>
         </div>
+
+        {/* Upcoming Events Section */}
+        {loadingEvents && (
+          <div className="border-t border-border pt-6 mt-6">
+            <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+              <div className="w-4 h-4 border-2 border-muted-foreground border-t-transparent rounded-full animate-spin" />
+              Loading upcoming events…
+            </div>
+          </div>
+        )}
+
+        {!loadingEvents && upcomingEvents.length > 0 && (
+          <div className="border-t border-border pt-6 mt-6">
+            <h3 className="font-medium text-sm mb-4 text-center">More Upcoming Events</h3>
+            <div className="space-y-3">
+              {upcomingEvents.map((event) => (
+                <UpcomingEventCard key={event.id} event={event} />
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     )
   }
@@ -396,6 +458,39 @@ export function RegistrationForm({
         onCreateNew={() => handleRiderSelection(null)}
         isPending={isPending}
       />
+    </div>
+  )
+}
+
+interface UpcomingEventCardProps {
+  event: UpcomingEvent
+}
+
+function UpcomingEventCard({ event }: UpcomingEventCardProps) {
+  return (
+    <div className="flex items-center gap-4 p-3 rounded-lg border border-border bg-muted/30">
+      <div className="flex-shrink-0 text-center w-14">
+        <div className="text-xs text-muted-foreground uppercase">
+          {format(new Date(event.date + 'T00:00:00'), 'MMM')}
+        </div>
+        <div className="text-lg font-medium tabular-nums">
+          {format(new Date(event.date + 'T00:00:00'), 'd')}
+        </div>
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="font-medium text-sm truncate">{event.name}</div>
+        <div className="text-xs text-muted-foreground mt-0.5 tabular-nums">{event.distance} km</div>
+        {event.startLocation && (
+          <div className="text-xs text-muted-foreground truncate">{event.startLocation}</div>
+        )}
+      </div>
+      <Link
+        href={`/register/${event.slug}`}
+        className="flex-shrink-0 inline-flex items-center gap-1 text-sm text-primary hover:underline"
+      >
+        Register
+        <ArrowRight className="h-3.5 w-3.5" />
+      </Link>
     </div>
   )
 }
