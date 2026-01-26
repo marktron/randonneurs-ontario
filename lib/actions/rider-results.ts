@@ -21,6 +21,8 @@ export interface ResultSubmissionData {
   eventDate: string
   eventDistance: number
   chapterName: string
+  chapterSlug: string // For fetching suggested events
+  riderId: string // For fetching upcoming registrations
   riderName: string
   riderEmail: string
   currentStatus: string
@@ -37,9 +39,7 @@ export interface ResultSubmissionData {
 /**
  * Get result data by submission token. No authentication required.
  */
-export async function getResultByToken(
-  token: string
-): Promise<ActionResult<ResultSubmissionData>> {
+export async function getResultByToken(token: string): Promise<ActionResult<ResultSubmissionData>> {
   if (!token) {
     return { success: false, error: 'Invalid submission token' }
   }
@@ -49,7 +49,8 @@ export async function getResultByToken(
   // Fetch result with event and rider details
   const { data: result, error } = await supabase
     .from('results')
-    .select(`
+    .select(
+      `
       id,
       event_id,
       rider_id,
@@ -67,14 +68,16 @@ export async function getResultByToken(
         event_date,
         distance_km,
         status,
-        chapters (name)
+        chapters (name, slug)
       ),
       riders (
+        id,
         first_name,
         last_name,
         email
       )
-    `)
+    `
+    )
     .eq('submission_token', token)
     .single()
 
@@ -82,7 +85,17 @@ export async function getResultByToken(
     return { success: false, error: 'Result not found or invalid token' }
   }
 
-  const typedResult = result as ResultForSubmission
+  const typedResult = result as ResultForSubmission & {
+    riders: { id: string; first_name: string; last_name: string; email: string | null } | null
+    events: {
+      id: string
+      name: string
+      event_date: string
+      distance_km: number
+      status: string
+      chapters: { name: string; slug: string } | null
+    } | null
+  }
   const event = typedResult.events
   const rider = typedResult.riders
 
@@ -101,6 +114,8 @@ export async function getResultByToken(
       eventDate: event.event_date,
       eventDistance: event.distance_km,
       chapterName: event.chapters?.name || 'Randonneurs Ontario',
+      chapterSlug: event.chapters?.slug || '',
+      riderId: rider.id,
       riderName: `${rider.first_name} ${rider.last_name}`,
       riderEmail: rider.email || '',
       currentStatus: typedResult.status ?? 'pending',
@@ -127,9 +142,7 @@ export interface SubmitResultInput {
 /**
  * Submit result data (status, finish time, GPX URL, notes). No authentication required.
  */
-export async function submitRiderResult(
-  input: SubmitResultInput
-): Promise<ActionResult> {
+export async function submitRiderResult(input: SubmitResultInput): Promise<ActionResult> {
   const { token, status, finishTime, gpxUrl, riderNotes } = input
 
   if (!token) {
@@ -147,7 +160,10 @@ export async function submitRiderResult(
     }
     // Validate format: H:MM, HH:MM, or HHH:MM (for very long rides)
     if (!/^\d{1,3}:\d{2}$/.test(finishTime)) {
-      return { success: false, error: 'Invalid finish time format. Use HH:MM (e.g., 13:30 or 105:45)' }
+      return {
+        success: false,
+        error: 'Invalid finish time format. Use HH:MM (e.g., 13:30 or 105:45)',
+      }
     }
   }
 
@@ -167,7 +183,10 @@ export async function submitRiderResult(
   const typedResult = result as ResultWithEventStatus
 
   if (typedResult.events?.status === 'submitted') {
-    return { success: false, error: 'Results have already been submitted to ACP. Contact your chapter VP for changes.' }
+    return {
+      success: false,
+      error: 'Results have already been submitted to ACP. Contact your chapter VP for changes.',
+    }
   }
 
   // Update the result
@@ -240,7 +259,10 @@ export async function uploadResultFile(
   const typedResult = result as ResultForFileUpload
 
   if (typedResult.events?.status === 'submitted') {
-    return { success: false, error: 'Results have already been submitted. Contact your chapter VP for changes.' }
+    return {
+      success: false,
+      error: 'Results have already been submitted. Contact your chapter VP for changes.',
+    }
   }
 
   // Generate unique file path
@@ -274,11 +296,12 @@ export async function uploadResultFile(
   const publicUrl = urlData.publicUrl
 
   // Update the result with the file path
-  const updateField: ResultUpdate = fileType === 'gpx'
-    ? { gpx_file_path: filePath }
-    : fileType === 'control_card_front'
-      ? { control_card_front_path: filePath }
-      : { control_card_back_path: filePath }
+  const updateField: ResultUpdate =
+    fileType === 'gpx'
+      ? { gpx_file_path: filePath }
+      : fileType === 'control_card_front'
+        ? { control_card_front_path: filePath }
+        : { control_card_back_path: filePath }
 
   const { error: updateError } = await supabase
     .from('results')
@@ -315,11 +338,12 @@ export async function deleteResultFile(
   const supabase = getSupabaseAdmin()
 
   // Get the current file path
-  const pathField = fileType === 'gpx'
-    ? 'gpx_file_path'
-    : fileType === 'control_card_front'
-      ? 'control_card_front_path'
-      : 'control_card_back_path'
+  const pathField =
+    fileType === 'gpx'
+      ? 'gpx_file_path'
+      : fileType === 'control_card_front'
+        ? 'control_card_front_path'
+        : 'control_card_back_path'
 
   const { data: result, error: fetchError } = await supabase
     .from('results')
@@ -334,7 +358,10 @@ export async function deleteResultFile(
   const typedResult = result as ResultForFileUpload
 
   if (typedResult.events?.status === 'submitted') {
-    return { success: false, error: 'Results have already been submitted. Contact your chapter VP for changes.' }
+    return {
+      success: false,
+      error: 'Results have already been submitted. Contact your chapter VP for changes.',
+    }
   }
 
   const filePath = typedResult[pathField as keyof ResultForFileUpload] as string | null
@@ -366,4 +393,252 @@ export async function deleteResultFile(
   }
 
   return createActionResult()
+}
+
+// ============================================================================
+// UPCOMING EVENTS
+// ============================================================================
+
+export interface UpcomingEvent {
+  id: string
+  slug: string
+  name: string
+  date: string
+  distance: number
+  startTime: string
+  startLocation: string
+}
+
+/**
+ * Get a rider's upcoming registered events. No authentication required.
+ * Uses the rider ID to find events they're registered for that haven't happened yet.
+ *
+ * @param riderId - The rider's UUID
+ * @returns Array of upcoming events they're registered for
+ */
+export async function getRiderUpcomingEvents(
+  riderId: string
+): Promise<ActionResult<UpcomingEvent[]>> {
+  if (!riderId) {
+    return { success: false, error: 'Invalid rider ID' }
+  }
+
+  const supabase = getSupabaseAdmin()
+  const today = new Date().toISOString().split('T')[0]
+
+  // Get registrations for future events
+  const { data: registrations, error } = await supabase
+    .from('registrations')
+    .select(
+      `
+      events (
+        id,
+        slug,
+        name,
+        event_date,
+        distance_km,
+        start_time,
+        start_location,
+        status
+      )
+    `
+    )
+    .eq('rider_id', riderId)
+    .eq('status', 'registered')
+
+  if (error) {
+    return handleSupabaseError(
+      error,
+      { operation: 'getRiderUpcomingEvents' },
+      'Failed to fetch upcoming events'
+    )
+  }
+
+  // Filter to only future scheduled events and transform
+  const upcomingEvents: UpcomingEvent[] = []
+  for (const reg of registrations || []) {
+    const event = reg.events as {
+      id: string
+      slug: string
+      name: string
+      event_date: string
+      distance_km: number
+      start_time: string | null
+      start_location: string | null
+      status: string
+    } | null
+
+    if (event && event.status === 'scheduled' && event.event_date >= today) {
+      upcomingEvents.push({
+        id: event.id,
+        slug: event.slug,
+        name: event.name,
+        date: event.event_date,
+        distance: event.distance_km,
+        startTime: event.start_time || '08:00',
+        startLocation: event.start_location || '',
+      })
+    }
+  }
+
+  // Sort by date ascending
+  upcomingEvents.sort((a, b) => a.date.localeCompare(b.date))
+
+  return { success: true, data: upcomingEvents }
+}
+
+/**
+ * Get upcoming events for a chapter that the rider is NOT registered for.
+ * Used to suggest events to riders who have no upcoming registrations.
+ *
+ * @param chapterSlug - The chapter's database slug (e.g., 'toronto', 'simcoe')
+ * @param riderId - The rider's UUID (to exclude events they're already registered for)
+ * @param limit - Maximum number of events to return (default 3)
+ * @returns Array of upcoming events in the chapter
+ */
+export async function getChapterUpcomingEvents(
+  chapterSlug: string,
+  riderId: string,
+  limit: number = 3
+): Promise<ActionResult<UpcomingEvent[]>> {
+  if (!chapterSlug) {
+    return { success: false, error: 'Invalid chapter' }
+  }
+
+  const supabase = getSupabaseAdmin()
+  const today = new Date().toISOString().split('T')[0]
+
+  // First, get the events the rider is already registered for
+  const { data: existingRegistrations } = await supabase
+    .from('registrations')
+    .select('event_id')
+    .eq('rider_id', riderId)
+    .eq('status', 'registered')
+
+  const registeredEventIds = new Set((existingRegistrations || []).map((r) => r.event_id))
+
+  // Get upcoming scheduled events for this chapter
+  const { data: events, error } = await supabase
+    .from('events')
+    .select(
+      `
+      id,
+      slug,
+      name,
+      event_date,
+      distance_km,
+      start_time,
+      start_location,
+      chapters!inner (slug)
+    `
+    )
+    .eq('chapters.slug', chapterSlug)
+    .eq('status', 'scheduled')
+    .neq('event_type', 'permanent')
+    .gte('event_date', today)
+    .order('event_date', { ascending: true })
+    .order('distance_km', { ascending: false })
+    .limit(limit + registeredEventIds.size) // Get extra to account for filtering
+
+  if (error) {
+    return handleSupabaseError(
+      error,
+      { operation: 'getChapterUpcomingEvents' },
+      'Failed to fetch chapter events'
+    )
+  }
+
+  // Filter out events the rider is already registered for and transform
+  const upcomingEvents: UpcomingEvent[] = []
+  for (const event of events || []) {
+    if (registeredEventIds.has(event.id)) continue
+    if (upcomingEvents.length >= limit) break
+
+    upcomingEvents.push({
+      id: event.id,
+      slug: event.slug,
+      name: event.name,
+      date: event.event_date,
+      distance: event.distance_km,
+      startTime: event.start_time || '08:00',
+      startLocation: event.start_location || '',
+    })
+  }
+
+  return { success: true, data: upcomingEvents }
+}
+
+/**
+ * Get upcoming events from the same chapter as the given event.
+ * Used after registration to show other events the rider might be interested in.
+ * Excludes the current event.
+ */
+export async function getUpcomingEventsByEventId(
+  eventId: string,
+  limit: number = 3
+): Promise<ActionResult<UpcomingEvent[]>> {
+  if (!eventId) {
+    return { success: false, error: 'Invalid event' }
+  }
+
+  const supabase = getSupabaseAdmin()
+  const today = new Date().toISOString().split('T')[0]
+
+  // First, get the event to find its chapter and date
+  const { data: currentEvent, error: eventError } = await supabase
+    .from('events')
+    .select('chapter_id, event_date')
+    .eq('id', eventId)
+    .single()
+
+  if (eventError || !currentEvent) {
+    return handleSupabaseError(
+      eventError,
+      { operation: 'getUpcomingEventsByEventId.eventLookup' },
+      'Event not found'
+    )
+  }
+
+  // Get upcoming scheduled events for this chapter after the current event's date
+  const { data: events, error } = await supabase
+    .from('events')
+    .select(
+      `
+      id,
+      slug,
+      name,
+      event_date,
+      distance_km,
+      start_time,
+      start_location
+    `
+    )
+    .eq('chapter_id', currentEvent.chapter_id)
+    .eq('status', 'scheduled')
+    .neq('event_type', 'Permanent')
+    .neq('id', eventId)
+    .gt('event_date', currentEvent.event_date)
+    .gte('event_date', today)
+    .order('event_date', { ascending: true })
+    .limit(limit)
+
+  if (error) {
+    return handleSupabaseError(
+      error,
+      { operation: 'getUpcomingEventsByEventId' },
+      'Failed to fetch upcoming events'
+    )
+  }
+
+  const upcomingEvents: UpcomingEvent[] = (events || []).map((event) => ({
+    id: event.id,
+    slug: event.slug,
+    name: event.name,
+    date: event.event_date,
+    distance: event.distance_km,
+    startTime: event.start_time || '08:00',
+    startLocation: event.start_location || '',
+  }))
+
+  return { success: true, data: upcomingEvents }
 }

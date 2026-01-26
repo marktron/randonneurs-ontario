@@ -197,6 +197,51 @@ export async function updateRoute(id: string, data: RouteFormData)
 export async function submitEventResults(eventId: string, results: ResultEntry[])
 ```
 
+### lib/actions/rider-results.ts (Public - Token-based)
+
+These actions support the rider self-service result submission flow. They use a token-based authentication system, where each result has a unique `submission_token` that is emailed to the rider after an event is completed.
+
+```typescript
+// Get result data by submission token (for result submission form)
+export async function getResultByToken(token: string): Promise<ActionResult<ResultSubmissionData>>
+
+// Submit rider's result (status, finish time, files, notes)
+export async function submitRiderResult(input: SubmitResultInput): Promise<ActionResult>
+
+// Upload GPX or control card files
+export async function uploadResultFile(
+  token: string,
+  fileType: string,
+  formData: FormData
+): Promise<ActionResult<{ path: string; url: string }>>
+
+// Delete uploaded files
+export async function deleteResultFile(token: string, fileType: string): Promise<ActionResult>
+
+// Get rider's upcoming registered events (shown after result submission)
+export async function getRiderUpcomingEvents(
+  riderId: string
+): Promise<ActionResult<UpcomingEvent[]>>
+
+// Get upcoming events for a chapter (suggested events for riders with no upcoming registrations)
+export async function getChapterUpcomingEvents(
+  chapterSlug: string,
+  riderId: string,
+  limit?: number
+): Promise<ActionResult<UpcomingEvent[]>>
+
+// Get upcoming events from the same chapter as a given event (used after registration)
+export async function getUpcomingEventsByEventId(
+  eventId: string,
+  limit?: number
+): Promise<ActionResult<UpcomingEvent[]>>
+```
+
+Both the result submission form and registration form show upcoming events after completion:
+
+- **Result submission form**: Shows rider's upcoming registrations, or suggests next 3 chapter events if none
+- **Registration form**: Shows up to 3 upcoming events from the same chapter (not shown for permanents)
+
 ### Usage Pattern
 
 ```typescript

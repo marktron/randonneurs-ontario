@@ -6,7 +6,7 @@ vi.mock('@/lib/supabase-server', () => {
     const builder: Record<string, ReturnType<typeof vi.fn>> = {}
     const methods = ['select', 'eq', 'insert', 'update', 'single']
 
-    methods.forEach(method => {
+    methods.forEach((method) => {
       builder[method] = vi.fn(() => builder)
     })
 
@@ -22,7 +22,9 @@ vi.mock('@/lib/supabase-server', () => {
         from: vi.fn(() => ({
           upload: vi.fn().mockResolvedValue({ error: null }),
           remove: vi.fn().mockResolvedValue({ error: null }),
-          getPublicUrl: vi.fn().mockReturnValue({ data: { publicUrl: 'https://example.com/file.jpg' } }),
+          getPublicUrl: vi
+            .fn()
+            .mockReturnValue({ data: { publicUrl: 'https://example.com/file.jpg' } }),
         })),
       },
     })),
@@ -47,6 +49,9 @@ vi.mock('@/lib/supabase-server', () => {
 import {
   getResultByToken,
   submitRiderResult,
+  getRiderUpcomingEvents,
+  getChapterUpcomingEvents,
+  getUpcomingEventsByEventId,
 } from '@/lib/actions/rider-results'
 
 const mockModule = await vi.importMock<{
@@ -98,9 +103,10 @@ describe('getResultByToken', () => {
         event_date: '2025-06-15',
         distance_km: 200,
         status: 'completed',
-        chapters: { name: 'Toronto' },
+        chapters: { name: 'Toronto', slug: 'toronto' },
       },
       riders: {
+        id: 'rider-1',
         first_name: 'John',
         last_name: 'Doe',
         email: 'john@example.com',
@@ -114,6 +120,8 @@ describe('getResultByToken', () => {
     expect(result.data?.eventName).toBe('Test Event')
     expect(result.data?.riderName).toBe('John Doe')
     expect(result.data?.canSubmit).toBe(true)
+    expect(result.data?.chapterSlug).toBe('toronto')
+    expect(result.data?.riderId).toBe('rider-1')
   })
 
   it('returns canSubmit=false when event is submitted', async () => {
@@ -135,9 +143,10 @@ describe('getResultByToken', () => {
         event_date: '2025-06-15',
         distance_km: 200,
         status: 'submitted', // Already submitted
-        chapters: { name: 'Toronto' },
+        chapters: { name: 'Toronto', slug: 'toronto' },
       },
       riders: {
+        id: 'rider-1',
         first_name: 'John',
         last_name: 'Doe',
         email: 'john@example.com',
@@ -242,5 +251,47 @@ describe('submitRiderResult', () => {
 
     // Should not fail validation
     expect(result.error).not.toBe('Finish time is required for finished rides')
+  })
+})
+
+describe('getRiderUpcomingEvents', () => {
+  beforeEach(() => {
+    mockModule.__reset()
+    vi.clearAllMocks()
+  })
+
+  it('returns error for empty rider ID', async () => {
+    const result = await getRiderUpcomingEvents('')
+
+    expect(result.success).toBe(false)
+    expect(result.error).toBe('Invalid rider ID')
+  })
+})
+
+describe('getChapterUpcomingEvents', () => {
+  beforeEach(() => {
+    mockModule.__reset()
+    vi.clearAllMocks()
+  })
+
+  it('returns error for empty chapter slug', async () => {
+    const result = await getChapterUpcomingEvents('', 'rider-1')
+
+    expect(result.success).toBe(false)
+    expect(result.error).toBe('Invalid chapter')
+  })
+})
+
+describe('getUpcomingEventsByEventId', () => {
+  beforeEach(() => {
+    mockModule.__reset()
+    vi.clearAllMocks()
+  })
+
+  it('returns error for empty event ID', async () => {
+    const result = await getUpcomingEventsByEventId('')
+
+    expect(result.success).toBe(false)
+    expect(result.error).toBe('Invalid event')
   })
 })

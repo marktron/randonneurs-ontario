@@ -12,11 +12,15 @@ import type { ResultSubmissionData } from '@/lib/actions/rider-results'
 const mockSubmitRiderResult = vi.fn()
 const mockUploadResultFile = vi.fn()
 const mockDeleteResultFile = vi.fn()
+const mockGetRiderUpcomingEvents = vi.fn()
+const mockGetChapterUpcomingEvents = vi.fn()
 
 vi.mock('@/lib/actions/rider-results', () => ({
   submitRiderResult: (...args: unknown[]) => mockSubmitRiderResult(...args),
   uploadResultFile: (...args: unknown[]) => mockUploadResultFile(...args),
   deleteResultFile: (...args: unknown[]) => mockDeleteResultFile(...args),
+  getRiderUpcomingEvents: (...args: unknown[]) => mockGetRiderUpcomingEvents(...args),
+  getChapterUpcomingEvents: (...args: unknown[]) => mockGetChapterUpcomingEvents(...args),
 }))
 
 // Mock router
@@ -51,6 +55,8 @@ describe('ResultSubmissionForm', () => {
     eventDate: '2025-05-15',
     eventDistance: 200,
     chapterName: 'Toronto',
+    chapterSlug: 'toronto',
+    riderId: 'rider-1',
     canSubmit: true,
     currentStatus: 'pending',
     finishTime: null,
@@ -75,6 +81,8 @@ describe('ResultSubmissionForm', () => {
       data: { path: 'test.gpx', url: 'https://example.com/test.gpx' },
     })
     mockDeleteResultFile.mockResolvedValue({ success: true })
+    mockGetRiderUpcomingEvents.mockResolvedValue({ success: true, data: [] })
+    mockGetChapterUpcomingEvents.mockResolvedValue({ success: true, data: [] })
   })
 
   describe('rendering', () => {
@@ -106,16 +114,11 @@ describe('ResultSubmissionForm', () => {
   })
 
   describe('validation', () => {
-    it('shows error when status is not selected', async () => {
-      const user = userEvent.setup()
+    it('pre-selects finished status by default', () => {
       render(<ResultSubmissionForm {...defaultProps} />)
 
-      const submitButton = screen.getByRole('button', { name: /submit your result/i })
-      await user.click(submitButton)
-
-      await waitFor(() => {
-        expect(screen.getByText(/please select your finish status/i)).toBeInTheDocument()
-      })
+      // The "Finished" status is pre-selected, so time inputs should be visible
+      expect(screen.getByText('Elapsed Time')).toBeInTheDocument()
     })
 
     // Note: Status selection and time validation with Radix UI Select
@@ -133,17 +136,16 @@ describe('ResultSubmissionForm', () => {
       expect(screen.getByRole('button', { name: /submit your result/i })).toBeInTheDocument()
     })
 
-    it('does not call submitRiderResult without status selection', async () => {
+    it('does not call submitRiderResult without required fields', async () => {
       const user = userEvent.setup()
       render(<ResultSubmissionForm {...defaultProps} />)
 
+      // With "finished" pre-selected, the form requires finish time inputs
+      // Submitting without filling them should trigger HTML5 validation
       const submitButton = screen.getByRole('button', { name: /submit your result/i })
       await user.click(submitButton)
 
-      await waitFor(() => {
-        // Should show error, not submit
-        expect(screen.getByText(/please select your finish status/i)).toBeInTheDocument()
-      })
+      // Form should not submit without required fields
       expect(mockSubmitRiderResult).not.toHaveBeenCalled()
     })
   })
