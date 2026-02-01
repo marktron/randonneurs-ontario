@@ -252,6 +252,51 @@ export type Database = {
         }
         Relationships: []
       }
+      memberships: {
+        Row: {
+          created_at: string | null
+          id: string
+          membership_id: number
+          rider_id: string
+          season: number
+          type: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          membership_id: number
+          rider_id: string
+          season: number
+          type: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          membership_id?: number
+          rider_id?: string
+          season?: number
+          type?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'memberships_rider_id_fkey'
+            columns: ['rider_id']
+            isOneToOne: false
+            referencedRelation: 'public_riders'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'memberships_rider_id_fkey'
+            columns: ['rider_id']
+            isOneToOne: false
+            referencedRelation: 'riders'
+            referencedColumns: ['id']
+          },
+        ]
+      }
       registrations: {
         Row: {
           event_id: string
@@ -970,16 +1015,3 @@ export const Constants = {
     Enums: {},
   },
 } as const
-
-// Convenience type aliases for table rows
-export type Admin = Tables<'admins'>
-export type Award = Tables<'awards'>
-export type Chapter = Tables<'chapters'>
-export type Event = Tables<'events'>
-export type Image = Tables<'images'>
-export type Registration = Tables<'registrations'>
-export type Result = Tables<'results'>
-export type ResultAward = Tables<'result_awards'>
-export type Rider = Tables<'riders'>
-export type RiderMerge = Tables<'rider_merges'>
-export type Route = Tables<'routes'>
