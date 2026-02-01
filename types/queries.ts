@@ -18,6 +18,15 @@ export type Result = Omit<Database['public']['Tables']['results']['Row'], 'finis
   finish_time: string | null
 }
 export type Registration = Database['public']['Tables']['registrations']['Row']
+export type Membership = Database['public']['Tables']['memberships']['Row']
+export type MembershipInsert = Database['public']['Tables']['memberships']['Insert']
+
+// Membership type enum for type safety
+export type MembershipType =
+  | 'Individual Membership'
+  | 'Additional Family Member'
+  | 'Family Membership > PRIMARY FAMILY MEMBER'
+  | 'Trial Member'
 
 // View types
 export type PublicResult = Database['public']['Views']['public_results']['Row']
