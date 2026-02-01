@@ -29,6 +29,7 @@ import {
 } from '@/components/ui/select'
 import { Loader2, Check, Plus, CheckCircle2, Globe, FileText } from 'lucide-react'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { Badge } from '@/components/ui/badge'
 import { createResult, updateResult, type ResultStatus } from '@/lib/actions/results'
 import { formatFinishTime } from '@/lib/utils'
 import { SubmitResultsButton } from './submit-results-button'
@@ -84,6 +85,7 @@ interface Participant {
   emergencyContactPhone: string | null
   registrationNotes: string | null
   hasRegistration: boolean
+  registrationStatus: string | null
 }
 
 interface EventResultsManagerProps {
@@ -199,6 +201,11 @@ function RiderRow({ participant, result, eventId, season, distanceKm }: RiderRow
       <TableCell className="font-medium">
         <div>
           {riderName}
+          {participant.registrationStatus === 'incomplete: membership' && (
+            <Badge variant="destructive" className="ml-2">
+              Missing membership
+            </Badge>
+          )}
           {participant.email && (
             <p className="text-xs text-muted-foreground">{participant.email}</p>
           )}
@@ -359,6 +366,7 @@ export function EventResultsManager({
       emergencyContactPhone: reg.riders!.emergency_contact_phone,
       registrationNotes: reg.notes,
       hasRegistration: true,
+      registrationStatus: reg.status,
     }))
 
   const participantsFromResultsOnly: Participant[] = results
@@ -373,6 +381,7 @@ export function EventResultsManager({
       emergencyContactPhone: null,
       registrationNotes: null,
       hasRegistration: false,
+      registrationStatus: null,
     }))
 
   const allParticipants = [...participantsFromRegistrations, ...participantsFromResultsOnly]
