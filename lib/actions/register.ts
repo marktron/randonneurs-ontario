@@ -656,6 +656,91 @@ export async function registerForPermanent(
 
     const riderId = riderResult.riderId
 
+    // Step: Verify membership
+    const membershipResult = await getMembershipForRider(riderId, trimmedFirstName, trimmedLastName)
+
+    if (!membershipResult.found) {
+      // Create incomplete registration
+      await createRegistrationRecord(
+        eventId,
+        riderId,
+        shareRegistration,
+        notes,
+        'incomplete: membership'
+      )
+
+      // Send warning email (fire-and-forget)
+      const chapter = route.chapters
+      const fullName = `${trimmedFirstName} ${trimmedLastName}`
+      sendRegistrationConfirmationEmail({
+        registrantName: fullName,
+        registrantEmail: normalizedEmail,
+        eventName: eventName,
+        eventDate: formatEventDate(eventDate),
+        eventTime: formatEventTime(startTime),
+        eventLocation: startLocation?.trim() || 'Start control per route',
+        eventDistance: route.distance_km || 0,
+        eventType: 'Permanent',
+        chapterName: chapter?.name || '',
+        chapterSlug: chapter?.slug || '',
+        notes: notes || undefined,
+        membershipStatus: 'none',
+      }).catch((error) => {
+        logError(error, {
+          operation: 'registerForPermanent.sendEmail',
+          context: { routeId, email: normalizedEmail },
+        })
+      })
+
+      return {
+        success: false,
+        membershipError: 'no-membership',
+        error: 'Membership verification failed',
+      }
+    }
+
+    // Check Trial Member usage
+    if (membershipResult.type === 'Trial Member') {
+      const trialUsed = await isTrialUsed(riderId)
+      if (trialUsed) {
+        await createRegistrationRecord(
+          eventId,
+          riderId,
+          shareRegistration,
+          notes,
+          'incomplete: membership'
+        )
+
+        const chapter = route.chapters
+        const fullName = `${trimmedFirstName} ${trimmedLastName}`
+        sendRegistrationConfirmationEmail({
+          registrantName: fullName,
+          registrantEmail: normalizedEmail,
+          eventName: eventName,
+          eventDate: formatEventDate(eventDate),
+          eventTime: formatEventTime(startTime),
+          eventLocation: startLocation?.trim() || 'Start control per route',
+          eventDistance: route.distance_km || 0,
+          eventType: 'Permanent',
+          chapterName: chapter?.name || '',
+          chapterSlug: chapter?.slug || '',
+          notes: notes || undefined,
+          membershipStatus: 'trial-used',
+        }).catch((error) => {
+          logError(error, {
+            operation: 'registerForPermanent.sendEmail',
+            context: { routeId, email: normalizedEmail },
+          })
+        })
+
+        return {
+          success: false,
+          membershipError: 'trial-used',
+          error: 'Trial membership already used',
+        }
+      }
+    }
+
     // Check if already registered
     const isDuplicate = await checkDuplicateRegistration(eventId, riderId)
     if (isDuplicate) {
@@ -680,6 +765,8 @@ export async function registerForPermanent(
       chapterName: chapter?.name || '',
       chapterSlug: chapter?.slug || '',
       notes: notes || undefined,
+      membershipType: membershipResult.type,
+      membershipStatus: 'valid',
     }).catch((error) => {
       logError(error, {
         operation: 'registerForPermanent.sendEmail',

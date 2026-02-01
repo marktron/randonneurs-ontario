@@ -64,6 +64,10 @@ export async function searchCCNMembership(
   return {
     found: true,
     membershipId: member.id,
-    type: member.registration_category as CCNSearchResult & { found: true }['type'],
+    type: member.registration_category as
+      | 'Individual Membership'
+      | 'Additional Family Member'
+      | 'Family Membership > PRIMARY FAMILY MEMBER'
+      | 'Trial Member',
   }
 }
