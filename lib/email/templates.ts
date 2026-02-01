@@ -10,6 +10,8 @@ export interface RegistrationEmailData {
   chapterName: string
   chapterSlug: string
   notes?: string
+  membershipType?: string
+  membershipStatus?: 'valid' | 'none' | 'trial-used'
 }
 
 export function buildRegistrationConfirmationEmail(data: RegistrationEmailData): {
@@ -20,13 +22,76 @@ export function buildRegistrationConfirmationEmail(data: RegistrationEmailData):
   const rideName = `${data.eventName} ${data.eventDistance}`
   const subject = `Registration Received: ${rideName}`
 
+  // Membership warning for text version
+  const membershipWarningText =
+    data.membershipStatus === 'none'
+      ? `
+⚠️ IMPORTANT: Your registration is NOT YET VALID
+
+We could not verify your club membership. Please join Randonneurs Ontario at https://randonneursontario.ca/membership before the event to complete your registration.
+
+---
+
+`
+      : data.membershipStatus === 'trial-used'
+        ? `
+⚠️ IMPORTANT: Your trial membership has been used
+
+Your trial membership was used for a previous event this season. Please upgrade to a full membership at https://randonneursontario.ca/membership to participate in this event.
+
+---
+
+`
+        : ''
+
+  // Membership warning for HTML version
+  const membershipWarningHtml =
+    data.membershipStatus === 'none'
+      ? `
+  <div style="background-color: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 16px; margin: 16px 0;">
+    <p style="color: #dc2626; font-weight: 600; margin: 0 0 8px 0;">⚠️ Your registration is NOT YET VALID</p>
+    <p style="color: #7f1d1d; margin: 0;">
+      We could not verify your club membership. Please
+      <a href="https://randonneursontario.ca/membership" style="color: #dc2626;">join Randonneurs Ontario</a>
+      before the event to complete your registration.
+    </p>
+  </div>
+`
+      : data.membershipStatus === 'trial-used'
+        ? `
+  <div style="background-color: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 16px; margin: 16px 0;">
+    <p style="color: #dc2626; font-weight: 600; margin: 0 0 8px 0;">⚠️ Trial Membership Used</p>
+    <p style="color: #7f1d1d; margin: 0;">
+      Your trial membership was used for a previous event. Please
+      <a href="https://randonneursontario.ca/membership" style="color: #dc2626;">upgrade to a full membership</a>
+      to participate in this event.
+    </p>
+  </div>
+`
+        : ''
+
+  // Membership type row for table (only if valid)
+  const membershipTypeRow =
+    data.membershipType && data.membershipStatus === 'valid'
+      ? `Membership: ${data.membershipType}`
+      : ''
+
+  const membershipTypeRowHtml =
+    data.membershipType && data.membershipStatus === 'valid'
+      ? `
+    <tr>
+      <td style="padding: 8px 0; border-bottom: 1px solid #eee; font-weight: 600;">Membership</td>
+      <td style="padding: 8px 0; border-bottom: 1px solid #eee;">${data.membershipType}</td>
+    </tr>`
+      : ''
+
   const notesSection = data.notes
     ? `Notes for the ride organizer: ${data.notes}`
     : 'Notes for the ride organizer: (none)'
 
   const text = `
 Hi ${data.registrantName},
-
+${membershipWarningText}
 Thanks for your interest in our ${rideName}. We've received your registration request and we'll be following up if we need anything more.
 
 Rider name: ${data.registrantName}
@@ -35,6 +100,7 @@ Chapter: ${data.chapterName}
 Start time: ${data.eventTime} ${data.eventDate}
 Start location: ${data.eventLocation}
 ${notesSection}
+${membershipTypeRow}
 
 Thanks
 
@@ -76,7 +142,7 @@ https://randonneursontario.ca
 </head>
 <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
   <p>Hi ${data.registrantName},</p>
-
+${membershipWarningHtml}
   <p>Thanks for your interest in our <strong>${rideName}</strong>. We've received your registration request and we'll be following up if we need anything more.</p>
 
   <table style="width: 100%; border-collapse: collapse; margin: 24px 0;">
@@ -103,7 +169,7 @@ https://randonneursontario.ca
     <tr>
       <td style="padding: 8px 0; font-weight: 600;">Notes for organizer</td>
       <td style="padding: 8px 0;">${data.notes || '(none)'}</td>
-    </tr>
+    </tr>${membershipTypeRowHtml}
   </table>
 
   <p>Thanks</p>
