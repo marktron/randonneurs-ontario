@@ -21,6 +21,7 @@ import type { RiderMatchCandidate } from '@/lib/actions/rider-match'
 import { getUpcomingEventsByEventId, type UpcomingEvent } from '@/lib/actions/rider-results'
 import { format } from 'date-fns'
 import { ArrowRight } from 'lucide-react'
+import { MembershipErrorModal } from '@/components/membership-error-modal'
 
 const STORAGE_KEY = 'ro-registration'
 
@@ -75,6 +76,11 @@ export function RegistrationForm({
   const [emergencyContactPhone, setEmergencyContactPhone] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
+
+  // Membership error state
+  const [membershipErrorVariant, setMembershipErrorVariant] = useState<
+    'no-membership' | 'trial-used' | null
+  >(null)
 
   // Fuzzy matching state
   const [matchDialogOpen, setMatchDialogOpen] = useState(false)
@@ -154,6 +160,8 @@ export function RegistrationForm({
         setMatchCandidates(result.matchCandidates)
         setPendingNotes(notes || '')
         setMatchDialogOpen(true)
+      } else if (result.membershipError) {
+        setMembershipErrorVariant(result.membershipError)
       } else {
         setError(result.error || 'Registration failed')
       }
@@ -457,6 +465,12 @@ export function RegistrationForm({
         onSelectRider={(riderId) => handleRiderSelection(riderId)}
         onCreateNew={() => handleRiderSelection(null)}
         isPending={isPending}
+      />
+
+      <MembershipErrorModal
+        open={membershipErrorVariant !== null}
+        onClose={() => setMembershipErrorVariant(null)}
+        variant={membershipErrorVariant || 'no-membership'}
       />
     </div>
   )
