@@ -32,6 +32,7 @@ import { sendRegistrationConfirmationEmail } from '@/lib/email/send-registration
 import { formatEventType } from '@/lib/utils'
 import { format, parseISO } from 'date-fns'
 import { searchRiderCandidates, type RiderMatchCandidate } from './rider-match'
+import { getMembershipForRider, isTrialUsed } from '@/lib/memberships/service'
 import { handleActionError, handleSupabaseError, createActionResult, logError } from '@/lib/errors'
 import type {
   RiderInsert,
@@ -66,6 +67,8 @@ export interface RegistrationResult {
   matchCandidates?: RiderMatchCandidate[]
   /** Original form data to resubmit after selection */
   pendingData?: RegistrationData
+  /** Set when membership verification fails */
+  membershipError?: 'no-membership' | 'trial-used'
 }
 
 // ============================================================================
@@ -80,7 +83,10 @@ export interface RegistrationResult {
  * createRiderSlug("john.doe@example.com") → "john-doe-a3f2b1"
  */
 function createRiderSlug(email: string): string {
-  const prefix = email.split('@')[0].toLowerCase().replace(/[^a-z0-9]/g, '-')
+  const prefix = email
+    .split('@')[0]
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '-')
   const suffix = Math.random().toString(36).substring(2, 8)
   return `${prefix}-${suffix}`
 }
@@ -215,10 +221,7 @@ async function findOrCreateRider(
  * @param riderId - Rider ID
  * @returns true if already registered, false otherwise
  */
-async function checkDuplicateRegistration(
-  eventId: string,
-  riderId: string
-): Promise<boolean> {
+async function checkDuplicateRegistration(eventId: string, riderId: string): Promise<boolean> {
   const { data: existingRegistration } = await getSupabaseAdmin()
     .from('registrations')
     .select('id')
@@ -236,18 +239,20 @@ async function checkDuplicateRegistration(
  * @param riderId - Rider ID
  * @param shareRegistration - Whether to share registration publicly
  * @param notes - Optional registration notes
+ * @param status - Registration status (defaults to 'registered')
  * @throws Error if registration creation fails
  */
 async function createRegistrationRecord(
   eventId: string,
   riderId: string,
   shareRegistration: boolean,
-  notes?: string
+  notes?: string,
+  status: 'registered' | 'incomplete: membership' = 'registered'
 ): Promise<void> {
   const insertRegistration: RegistrationInsert = {
     event_id: eventId,
     rider_id: riderId,
-    status: 'registered',
+    status,
     share_registration: shareRegistration,
     notes: notes || null,
   }
@@ -276,7 +281,17 @@ async function createRegistrationRecord(
  * @returns Success/error result
  */
 export async function registerForEvent(data: RegistrationData): Promise<RegistrationResult> {
-  const { eventId, firstName, lastName, email, gender, shareRegistration, notes, emergencyContactName, emergencyContactPhone } = data
+  const {
+    eventId,
+    firstName,
+    lastName,
+    email,
+    gender,
+    shareRegistration,
+    notes,
+    emergencyContactName,
+    emergencyContactPhone,
+  } = data
 
   // Step 1: Validate required fields
   if (!eventId || !firstName.trim() || !lastName.trim() || !email.trim()) {
@@ -290,11 +305,13 @@ export async function registerForEvent(data: RegistrationData): Promise<Registra
   // Check if event exists and is scheduled (fetch details for confirmation email)
   const { data: eventData, error: eventError } = await getSupabaseAdmin()
     .from('events')
-    .select(`
+    .select(
+      `
       id, slug, status, name, event_date, start_time,
       start_location, distance_km, event_type,
       chapters (slug, name)
-    `)
+    `
+    )
     .eq('id', eventId)
     .single()
 
@@ -336,6 +353,91 @@ export async function registerForEvent(data: RegistrationData): Promise<Registra
 
     const riderId = riderResult.riderId
 
+    // Step: Verify membership
+    const membershipResult = await getMembershipForRider(riderId, trimmedFirstName, trimmedLastName)
+
+    if (!membershipResult.found) {
+      // Create incomplete registration
+      await createRegistrationRecord(
+        eventId,
+        riderId,
+        shareRegistration,
+        notes,
+        'incomplete: membership'
+      )
+
+      // Send warning email (fire-and-forget)
+      const chapter = event.chapters
+      const fullName = `${trimmedFirstName} ${trimmedLastName}`
+      sendRegistrationConfirmationEmail({
+        registrantName: fullName,
+        registrantEmail: normalizedEmail,
+        eventName: event.name,
+        eventDate: formatEventDate(event.event_date),
+        eventTime: formatEventTime(event.start_time),
+        eventLocation: event.start_location || 'TBD',
+        eventDistance: event.distance_km,
+        eventType: formatEventType(event.event_type),
+        chapterName: chapter?.name || '',
+        chapterSlug: chapter?.slug || '',
+        notes: notes || undefined,
+        membershipStatus: 'none',
+      }).catch((error) => {
+        logError(error, {
+          operation: 'registerForEvent.sendEmail',
+          context: { eventId, email: normalizedEmail },
+        })
+      })
+
+      return {
+        success: false,
+        membershipError: 'no-membership',
+        error: 'Membership verification failed',
+      }
+    }
+
+    // Check Trial Member usage
+    if (membershipResult.type === 'Trial Member') {
+      const trialUsed = await isTrialUsed(riderId)
+      if (trialUsed) {
+        await createRegistrationRecord(
+          eventId,
+          riderId,
+          shareRegistration,
+          notes,
+          'incomplete: membership'
+        )
+
+        const chapter = event.chapters
+        const fullName = `${trimmedFirstName} ${trimmedLastName}`
+        sendRegistrationConfirmationEmail({
+          registrantName: fullName,
+          registrantEmail: normalizedEmail,
+          eventName: event.name,
+          eventDate: formatEventDate(event.event_date),
+          eventTime: formatEventTime(event.start_time),
+          eventLocation: event.start_location || 'TBD',
+          eventDistance: event.distance_km,
+          eventType: formatEventType(event.event_type),
+          chapterName: chapter?.name || '',
+          chapterSlug: chapter?.slug || '',
+          notes: notes || undefined,
+          membershipStatus: 'trial-used',
+        }).catch((error) => {
+          logError(error, {
+            operation: 'registerForEvent.sendEmail',
+            context: { eventId, email: normalizedEmail },
+          })
+        })
+
+        return {
+          success: false,
+          membershipError: 'trial-used',
+          error: 'Trial membership already used',
+        }
+      }
+    }
+
     // Check if already registered
     const isDuplicate = await checkDuplicateRegistration(eventId, riderId)
     if (isDuplicate) {
@@ -360,8 +462,13 @@ export async function registerForEvent(data: RegistrationData): Promise<Registra
       chapterName: chapter?.name || '',
       chapterSlug: chapter?.slug || '',
       notes: notes || undefined,
+      membershipType: membershipResult.type,
+      membershipStatus: 'valid',
     }).catch((error) => {
-      logError(error, { operation: 'registerForEvent.sendEmail', context: { eventId, email: normalizedEmail } })
+      logError(error, {
+        operation: 'registerForEvent.sendEmail',
+        context: { eventId, email: normalizedEmail },
+      })
     })
 
     // Revalidate cache tags for registration data
@@ -378,9 +485,9 @@ export async function registerForEvent(data: RegistrationData): Promise<Registra
 
 export interface PermanentRegistrationData {
   routeId: string
-  eventDate: string       // YYYY-MM-DD
-  startTime: string       // HH:MM
-  startLocation?: string  // Optional - only if different from route start
+  eventDate: string // YYYY-MM-DD
+  startTime: string // HH:MM
+  startLocation?: string // Optional - only if different from route start
   direction: 'as_posted' | 'reversed'
   firstName: string
   lastName: string
@@ -392,8 +499,9 @@ export interface PermanentRegistrationData {
   emergencyContactPhone: string
 }
 
-
-export async function registerForPermanent(data: PermanentRegistrationData): Promise<RegistrationResult> {
+export async function registerForPermanent(
+  data: PermanentRegistrationData
+): Promise<RegistrationResult> {
   const {
     routeId,
     eventDate,
@@ -411,7 +519,14 @@ export async function registerForPermanent(data: PermanentRegistrationData): Pro
   } = data
 
   // Validate required fields
-  if (!routeId || !eventDate || !startTime || !firstName.trim() || !lastName.trim() || !email.trim()) {
+  if (
+    !routeId ||
+    !eventDate ||
+    !startTime ||
+    !firstName.trim() ||
+    !lastName.trim() ||
+    !email.trim()
+  ) {
     return { success: false, error: 'Missing required fields' }
   }
 
@@ -425,16 +540,21 @@ export async function registerForPermanent(data: PermanentRegistrationData): Pro
   twoWeeksFromNow.setHours(0, 0, 0, 0)
 
   if (eventDateObj < twoWeeksFromNow) {
-    return { success: false, error: 'Permanent rides must be scheduled at least 2 weeks in advance' }
+    return {
+      success: false,
+      error: 'Permanent rides must be scheduled at least 2 weeks in advance',
+    }
   }
 
   // Fetch route details
   const { data: routeData, error: routeError } = await getSupabaseAdmin()
     .from('routes')
-    .select(`
+    .select(
+      `
       id, name, slug, distance_km, chapter_id,
       chapters (slug, name)
-    `)
+    `
+    )
     .eq('id', routeId)
     .eq('is_active', true)
     .single()
@@ -561,7 +681,10 @@ export async function registerForPermanent(data: PermanentRegistrationData): Pro
       chapterSlug: chapter?.slug || '',
       notes: notes || undefined,
     }).catch((error) => {
-      logError(error, { operation: 'registerForPermanent.sendEmail', context: { routeId, email: normalizedEmail } })
+      logError(error, {
+        operation: 'registerForPermanent.sendEmail',
+        context: { routeId, email: normalizedEmail },
+      })
     })
 
     // Revalidate cache tags for registration data
@@ -585,7 +708,7 @@ export async function registerForPermanent(data: PermanentRegistrationData): Pro
 
 export interface CompleteRegistrationData {
   eventId: string
-  selectedRiderId: string | null  // null = create new rider
+  selectedRiderId: string | null // null = create new rider
   firstName: string
   lastName: string
   email: string
@@ -611,7 +734,18 @@ export interface CompleteRegistrationData {
 export async function completeRegistrationWithRider(
   data: CompleteRegistrationData
 ): Promise<RegistrationResult> {
-  const { eventId, selectedRiderId, firstName, lastName, email, gender, shareRegistration, notes, emergencyContactName, emergencyContactPhone } = data
+  const {
+    eventId,
+    selectedRiderId,
+    firstName,
+    lastName,
+    email,
+    gender,
+    shareRegistration,
+    notes,
+    emergencyContactName,
+    emergencyContactPhone,
+  } = data
 
   // Validate required fields
   if (!eventId || !firstName.trim() || !lastName.trim() || !email.trim()) {
@@ -626,11 +760,13 @@ export async function completeRegistrationWithRider(
   // Check if event exists and is scheduled
   const { data: eventData, error: eventError } = await getSupabaseAdmin()
     .from('events')
-    .select(`
+    .select(
+      `
       id, slug, status, name, event_date, start_time,
       start_location, distance_km, event_type,
       chapters (slug, name)
-    `)
+    `
+    )
     .eq('id', eventId)
     .single()
 
