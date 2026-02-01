@@ -27,6 +27,7 @@ interface RiderWithStats {
   created_at: string | null
   registrations: { count: number }[] | null
   results: { count: number }[] | null
+  memberships: { type: string; season: number }[] | null
 }
 
 interface RidersTableProps {
@@ -176,6 +177,7 @@ export function RidersTable({ riders, searchQuery }: RidersTableProps) {
               <TableHead>Gender</TableHead>
               <TableHead className="text-center">Registrations</TableHead>
               <TableHead className="text-center">Results</TableHead>
+              <TableHead>Membership</TableHead>
               <TableHead>Joined</TableHead>
               <TableHead className="w-[100px]">Actions</TableHead>
             </TableRow>
@@ -183,7 +185,7 @@ export function RidersTable({ riders, searchQuery }: RidersTableProps) {
           <TableBody>
             {riders.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8} className="text-center text-muted-foreground">
+                <TableCell colSpan={9} className="text-center text-muted-foreground">
                   {searchQuery ? 'No riders found matching your search' : 'No riders found'}
                 </TableCell>
               </TableRow>
@@ -222,6 +224,22 @@ export function RidersTable({ riders, searchQuery }: RidersTableProps) {
                       ) : (
                         <span className="text-muted-foreground">0</span>
                       )}
+                    </TableCell>
+                    <TableCell>
+                      {(() => {
+                        const currentSeason = parseInt(
+                          process.env.NEXT_PUBLIC_CURRENT_SEASON || '2026',
+                          10
+                        )
+                        const currentMembership = rider.memberships?.find(
+                          (m) => m.season === currentSeason
+                        )
+                        return currentMembership ? (
+                          <span className="text-sm">{currentMembership.type}</span>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )
+                      })()}
                     </TableCell>
                     <TableCell>
                       {rider.created_at

@@ -332,6 +332,7 @@ export type RiderWithStats = Pick<
 > & {
   registrations: Array<{ count: number }> | null
   results: Array<{ count: number }> | null
+  memberships: Array<{ type: string; season: number }> | null
 }
 
 /**
