@@ -51,7 +51,7 @@ async function getRegistrations(eventId: string): Promise<RegistrationWithRiderF
     `
     )
     .eq('event_id', eventId)
-    .eq('status', 'registered')
+    .in('status', ['registered', 'incomplete: membership'])
     .order('registered_at', { ascending: true })
 
   return (data as RegistrationWithRiderForAdmin[]) ?? []
