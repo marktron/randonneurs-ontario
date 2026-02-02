@@ -35,15 +35,27 @@ export function MembershipErrorModal({ open, onClose, variant }: MembershipError
           <DialogDescription className="pt-2">
             {isNoMembership ? (
               <>
-                To register for events, you need to be an active member of Randonneurs Ontario.
-                Please join the club first, then return to complete your registration.
+                To register for events, you need to be an active member of Randonneurs Ontario for
+                the {process.env.NEXT_PUBLIC_CURRENT_SEASON}. <br />
+                <br />
+                Join the club first, then return to complete your registration.
               </>
             ) : (
               <>
-                Your trial membership has already been used for another event this season. To
-                continue participating, please upgrade to a full membership.
+                Your Trial Membership has already been used for another event this season. To
+                continue participating, upgrade to a full membership.
               </>
             )}
+            <br />
+            <br />
+            If you have any questions,{' '}
+            <a
+              href={`mailto:${process.env.NEXT_PUBLIC_SUPPORT_EMAIL}`}
+              className="text-[var(--color-accent)] underline"
+            >
+              please email us
+            </a>
+            .
           </DialogDescription>
         </DialogHeader>
         <div className="flex flex-col gap-3 pt-4">
