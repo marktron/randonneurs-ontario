@@ -279,15 +279,19 @@ export type RegistrationWithRiderForAdmin = Pick<
   Registration,
   'id' | 'rider_id' | 'registered_at' | 'status' | 'notes'
 > & {
-  riders: Pick<
-    Rider,
-    | 'id'
-    | 'first_name'
-    | 'last_name'
-    | 'email'
-    | 'emergency_contact_name'
-    | 'emergency_contact_phone'
-  > | null
+  riders:
+    | (Pick<
+        Rider,
+        | 'id'
+        | 'first_name'
+        | 'last_name'
+        | 'email'
+        | 'emergency_contact_name'
+        | 'emergency_contact_phone'
+      > & {
+        memberships: Array<{ type: string; season: number }> | null
+      })
+    | null
 }
 
 /**

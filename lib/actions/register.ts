@@ -941,6 +941,84 @@ export async function completeRegistrationWithRider(
     return { success: false, error: 'You are already registered for this event' }
   }
 
+  // Verify membership (same as registerForEvent / registerForPermanent)
+  const membershipResult = await getMembershipForRider(riderId, trimmedFirstName, trimmedLastName)
+
+  if (!membershipResult.found) {
+    await createRegistrationRecord(
+      eventId,
+      riderId,
+      shareRegistration,
+      notes,
+      'incomplete: membership'
+    )
+    const chapter = event.chapters
+    const fullName = `${trimmedFirstName} ${trimmedLastName}`
+    sendRegistrationConfirmationEmail({
+      registrantName: fullName,
+      registrantEmail: normalizedEmail,
+      eventName: event.name,
+      eventDate: formatEventDate(event.event_date),
+      eventTime: formatEventTime(event.start_time),
+      eventLocation: event.start_location || 'TBD',
+      eventDistance: event.distance_km,
+      eventType: formatEventType(event.event_type),
+      chapterName: chapter?.name || '',
+      chapterSlug: chapter?.slug || '',
+      notes: notes || undefined,
+      membershipStatus: 'none',
+    }).catch((error) => {
+      logError(error, {
+        operation: 'completeRegistrationWithRider.sendEmail',
+        context: { eventId, email: normalizedEmail },
+      })
+    })
+    return {
+      success: false,
+      membershipError: 'no-membership',
+      error: 'Membership verification failed',
+    }
+  }
+
+  if (membershipResult.type === 'Trial Member') {
+    const trialUsed = await isTrialUsed(riderId)
+    if (trialUsed) {
+      await createRegistrationRecord(
+        eventId,
+        riderId,
+        shareRegistration,
+        notes,
+        'incomplete: membership'
+      )
+      const chapter = event.chapters
+      const fullName = `${trimmedFirstName} ${trimmedLastName}`
+      sendRegistrationConfirmationEmail({
+        registrantName: fullName,
+        registrantEmail: normalizedEmail,
+        eventName: event.name,
+        eventDate: formatEventDate(event.event_date),
+        eventTime: formatEventTime(event.start_time),
+        eventLocation: event.start_location || 'TBD',
+        eventDistance: event.distance_km,
+        eventType: formatEventType(event.event_type),
+        chapterName: chapter?.name || '',
+        chapterSlug: chapter?.slug || '',
+        notes: notes || undefined,
+        membershipStatus: 'trial-used',
+      }).catch((error) => {
+        logError(error, {
+          operation: 'completeRegistrationWithRider.sendEmail',
+          context: { eventId, email: normalizedEmail },
+        })
+      })
+      return {
+        success: false,
+        membershipError: 'trial-used',
+        error: 'Trial membership already used',
+      }
+    }
+  }
+
   // Create registration
   try {
     await createRegistrationRecord(eventId, riderId, shareRegistration, notes)
@@ -964,8 +1042,13 @@ export async function completeRegistrationWithRider(
     chapterName: chapter?.name || '',
     chapterSlug: chapter?.slug || '',
     notes: notes || undefined,
+    membershipType: membershipResult.type,
+    membershipStatus: 'valid',
   }).catch((error) => {
-    console.error('🚨 Email sending failed:', error)
+    logError(error, {
+      operation: 'completeRegistrationWithRider.sendEmail',
+      context: { eventId, email: normalizedEmail },
+    })
   })
 
   // Revalidate cache tags for registration data

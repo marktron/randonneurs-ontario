@@ -213,6 +213,9 @@ export function RegistrationForm({
               setLoadingEvents(false)
             })
         }
+      } else if (result.membershipError) {
+        setMatchDialogOpen(false)
+        setMembershipErrorVariant(result.membershipError)
       } else {
         setMatchDialogOpen(false)
         setError(result.error || 'Registration failed')
