@@ -18,6 +18,15 @@ export type Result = Omit<Database['public']['Tables']['results']['Row'], 'finis
   finish_time: string | null
 }
 export type Registration = Database['public']['Tables']['registrations']['Row']
+export type Membership = Database['public']['Tables']['memberships']['Row']
+export type MembershipInsert = Database['public']['Tables']['memberships']['Insert']
+
+// Membership type enum for type safety
+export type MembershipType =
+  | 'Individual Membership'
+  | 'Additional Family Member'
+  | 'Family Membership > PRIMARY FAMILY MEMBER'
+  | 'Trial Member'
 
 // View types
 export type PublicResult = Database['public']['Views']['public_results']['Row']
@@ -208,6 +217,8 @@ export type EventForAdminList = Pick<
   'id' | 'name' | 'event_date' | 'distance_km' | 'event_type' | 'status' | 'chapter_id'
 > & {
   chapters: Pick<Chapter, 'name'> | null
+  registrations: Array<{ count: number }> | null
+  results: Array<{ count: number }> | null
 }
 
 /**
@@ -270,15 +281,19 @@ export type RegistrationWithRiderForAdmin = Pick<
   Registration,
   'id' | 'rider_id' | 'registered_at' | 'status' | 'notes'
 > & {
-  riders: Pick<
-    Rider,
-    | 'id'
-    | 'first_name'
-    | 'last_name'
-    | 'email'
-    | 'emergency_contact_name'
-    | 'emergency_contact_phone'
-  > | null
+  riders:
+    | (Pick<
+        Rider,
+        | 'id'
+        | 'first_name'
+        | 'last_name'
+        | 'email'
+        | 'emergency_contact_name'
+        | 'emergency_contact_phone'
+      > & {
+        memberships: Array<{ type: string; season: number }> | null
+      })
+    | null
 }
 
 /**
@@ -323,6 +338,7 @@ export type RiderWithStats = Pick<
 > & {
   registrations: Array<{ count: number }> | null
   results: Array<{ count: number }> | null
+  memberships: Array<{ type: string; season: number }> | null
 }
 
 /**

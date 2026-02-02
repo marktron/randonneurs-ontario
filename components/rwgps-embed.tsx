@@ -1,17 +1,17 @@
-"use client";
+'use client'
 
-import { useState } from "react";
+import { useState } from 'react'
 
 interface RwgpsEmbedProps {
-  routeId: string | number;
-  title?: string;
+  routeId: string | number
+  title?: string
 }
 
-export function RwgpsEmbed({ routeId, title = "Route Map" }: RwgpsEmbedProps) {
-  const [isLoaded, setIsLoaded] = useState(false);
+export function RwgpsEmbed({ routeId, title = 'Route Map' }: RwgpsEmbedProps) {
+  const [isLoaded, setIsLoaded] = useState(false)
 
   return (
-    <div className="relative" style={{ height: "500px" }}>
+    <div className="relative" style={{ height: '500px' }}>
       {/* Loading placeholder */}
       {!isLoaded && (
         <div className="absolute inset-0 bg-muted animate-pulse rounded-lg flex items-center justify-center">
@@ -29,7 +29,15 @@ export function RwgpsEmbed({ routeId, title = "Route Map" }: RwgpsEmbedProps) {
                 d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l5.447 2.724A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"
               />
             </svg>
-            <p className="text-sm">Loading route map...</p>
+            <p className="text-sm">Loading route map…</p>
+            <a
+              href={`https://ridewithgps.com/routes/${routeId}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-2 text-sm text-primary hover:underline underline-offset-2"
+            >
+              Open on Ride with GPS
+            </a>
           </div>
         </div>
       )}
@@ -38,17 +46,18 @@ export function RwgpsEmbed({ routeId, title = "Route Map" }: RwgpsEmbedProps) {
       <iframe
         src={`https://ridewithgps.com/embeds?type=route&id=${routeId}&sampleGraph=true&metricUnits=true`}
         style={{
-          width: "1px",
-          minWidth: "100%",
-          height: "500px",
-          border: "none",
+          width: '1px',
+          minWidth: '100%',
+          height: '500px',
+          border: 'none',
           opacity: isLoaded ? 1 : 0,
-          transition: "opacity 0.3s ease-in-out",
+          pointerEvents: isLoaded ? 'auto' : 'none',
+          transition: 'opacity 0.3s ease-in-out',
         }}
         scrolling="no"
         title={title}
         onLoad={() => setIsLoaded(true)}
       />
     </div>
-  );
+  )
 }

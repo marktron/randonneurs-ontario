@@ -29,6 +29,7 @@ import {
 } from '@/components/ui/select'
 import { Loader2, Check, Plus, CheckCircle2, Globe, FileText } from 'lucide-react'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { Badge } from '@/components/ui/badge'
 import { createResult, updateResult, type ResultStatus } from '@/lib/actions/results'
 import { formatFinishTime } from '@/lib/utils'
 import { SubmitResultsButton } from './submit-results-button'
@@ -48,6 +49,7 @@ interface Registration {
     email: string | null
     emergency_contact_name: string | null
     emergency_contact_phone: string | null
+    memberships?: Array<{ type: string; season: number }> | null
   } | null
 }
 
@@ -84,6 +86,8 @@ interface Participant {
   emergencyContactPhone: string | null
   registrationNotes: string | null
   hasRegistration: boolean
+  registrationStatus: string | null
+  membershipType: string | null // membership type for event's season, if any
 }
 
 interface EventResultsManagerProps {
@@ -199,6 +203,18 @@ function RiderRow({ participant, result, eventId, season, distanceKm }: RiderRow
       <TableCell className="font-medium">
         <div>
           {riderName}
+          {participant.registrationStatus === 'incomplete: membership' && (
+            <Badge variant="destructive" className="ml-2">
+              Missing membership
+            </Badge>
+          )}
+          {participant.hasRegistration &&
+            participant.registrationStatus === 'registered' &&
+            participant.membershipType === 'Trial Member' && (
+              <Badge variant="secondary" className="ml-2">
+                Trial
+              </Badge>
+            )}
           {participant.email && (
             <p className="text-xs text-muted-foreground">{participant.email}</p>
           )}
@@ -349,17 +365,22 @@ export function EventResultsManager({
 
   const participantsFromRegistrations: Participant[] = registrations
     .filter((reg) => reg.riders)
-    .map((reg) => ({
-      id: reg.id,
-      riderId: reg.rider_id,
-      firstName: reg.riders!.first_name,
-      lastName: reg.riders!.last_name,
-      email: reg.riders!.email,
-      emergencyContactName: reg.riders!.emergency_contact_name,
-      emergencyContactPhone: reg.riders!.emergency_contact_phone,
-      registrationNotes: reg.notes,
-      hasRegistration: true,
-    }))
+    .map((reg) => {
+      const currentMembership = reg.riders!.memberships?.find((m) => m.season === season)
+      return {
+        id: reg.id,
+        riderId: reg.rider_id,
+        firstName: reg.riders!.first_name,
+        lastName: reg.riders!.last_name,
+        email: reg.riders!.email,
+        emergencyContactName: reg.riders!.emergency_contact_name,
+        emergencyContactPhone: reg.riders!.emergency_contact_phone,
+        registrationNotes: reg.notes,
+        hasRegistration: true,
+        registrationStatus: reg.status,
+        membershipType: currentMembership?.type ?? null,
+      }
+    })
 
   const participantsFromResultsOnly: Participant[] = results
     .filter((result) => !registeredRiderIds.has(result.rider_id) && result.riders)
@@ -373,6 +394,8 @@ export function EventResultsManager({
       emergencyContactPhone: null,
       registrationNotes: null,
       hasRegistration: false,
+      registrationStatus: null,
+      membershipType: null,
     }))
 
   const allParticipants = [...participantsFromRegistrations, ...participantsFromResultsOnly]

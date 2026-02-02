@@ -1,7 +1,7 @@
 import { createSupabaseServerClient } from '@/lib/supabase-server-client'
-import type { Admin } from '@/types/supabase'
+import type { AdminUser } from '@/types/queries'
 
-export async function getAdmin(): Promise<Admin | null> {
+export async function getAdmin(): Promise<AdminUser | null> {
   const supabase = await createSupabaseServerClient()
 
   const {
@@ -12,16 +12,12 @@ export async function getAdmin(): Promise<Admin | null> {
     return null
   }
 
-  const { data: admin } = await supabase
-    .from('admins')
-    .select('*')
-    .eq('id', user.id)
-    .single()
+  const { data: admin } = await supabase.from('admins').select('*').eq('id', user.id).single()
 
   return admin
 }
 
-export async function requireAdmin(): Promise<Admin> {
+export async function requireAdmin(): Promise<AdminUser> {
   const admin = await getAdmin()
   if (!admin) {
     throw new Error('Unauthorized')
