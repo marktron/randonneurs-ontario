@@ -51,7 +51,9 @@ async function getEvents(season: string, chapterId?: string): Promise<EventForAd
       event_type,
       status,
       chapter_id,
-      chapters (name)
+      chapters (name),
+      registrations (count),
+      results (count)
     `
     )
     .gte('event_date', startDate)
@@ -125,13 +127,14 @@ export default async function AdminEventsPage({ searchParams }: AdminEventsPageP
               <TableHead>Chapter</TableHead>
               <TableHead>Date</TableHead>
               <TableHead>Distance</TableHead>
+              <TableHead>Riders</TableHead>
               <TableHead>Status</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {events.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5} className="text-center text-muted-foreground">
+                <TableCell colSpan={6} className="text-center text-muted-foreground">
                   No events found
                 </TableCell>
               </TableRow>
@@ -157,6 +160,9 @@ export default async function AdminEventsPage({ searchParams }: AdminEventsPageP
                     })}
                   </TableCell>
                   <TableCell>{event.distance_km} km</TableCell>
+                  <TableCell className="tabular-nums">
+                    {(event.registrations?.[0]?.count ?? 0) + (event.results?.[0]?.count ?? 0)}
+                  </TableCell>
                   <TableCell>{getStatusBadge(event.status ?? 'scheduled')}</TableCell>
                 </ClickableTableRow>
               ))

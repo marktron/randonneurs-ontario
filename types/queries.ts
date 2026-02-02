@@ -217,6 +217,8 @@ export type EventForAdminList = Pick<
   'id' | 'name' | 'event_date' | 'distance_km' | 'event_type' | 'status' | 'chapter_id'
 > & {
   chapters: Pick<Chapter, 'name'> | null
+  registrations: Array<{ count: number }> | null
+  results: Array<{ count: number }> | null
 }
 
 /**
