@@ -9,6 +9,7 @@ export interface RegistrationEmailData {
   eventType: string
   chapterName: string
   chapterSlug: string
+  routeUrl?: string
   notes?: string
   membershipType?: string
   membershipStatus?: 'valid' | 'none' | 'trial-used'
@@ -85,9 +86,19 @@ Your trial membership was used for a previous event this season. Please upgrade 
     </tr>`
       : ''
 
+  const routeRowHtml = data.routeUrl
+    ? `
+    <tr>
+      <td style="padding: 8px 0; border-bottom: 1px solid #eee; font-weight: 600;">Route</td>
+      <td style="padding: 8px 0; border-bottom: 1px solid #eee;"><a href="${data.routeUrl}" style="color: #0066cc;">View on Ride with GPS</a></td>
+    </tr>`
+    : ''
+
   const notesSection = data.notes
     ? `Notes for the ride organizer: ${data.notes}`
     : 'Notes for the ride organizer: (none)'
+
+  const routeSection = data.routeUrl ? `Route: ${data.routeUrl}` : ''
 
   const text = `
 Hi ${data.registrantName},
@@ -96,13 +107,12 @@ Thanks for your interest in our ${rideName}. We've received your registration re
 
 Rider name: ${data.registrantName}
 Ride: ${rideName}
+${routeSection}
 Chapter: ${data.chapterName}
 Start time: ${data.eventTime} ${data.eventDate}
 Start location: ${data.eventLocation}
-${notesSection}
 ${membershipTypeRow}
-
-Thanks
+${notesSection}
 
 --------------------
 Brevet Rules
@@ -147,13 +157,14 @@ ${membershipWarningHtml}
 
   <table style="width: 100%; border-collapse: collapse; margin: 24px 0;">
     <tr>
-      <td style="padding: 8px 0; border-bottom: 1px solid #eee; font-weight: 600; width: 180px;">Rider name</td>
+      <td style="padding: 8px 0; border-bottom: 1px solid #eee; font-weight: 600; width: 180px;">Registrant</td>
       <td style="padding: 8px 0; border-bottom: 1px solid #eee;">${data.registrantName}</td>
     </tr>
     <tr>
-      <td style="padding: 8px 0; border-bottom: 1px solid #eee; font-weight: 600;">Ride</td>
+      <td style="padding: 8px 0; border-bottom: 1px solid #eee; font-weight: 600;">Event</td>
       <td style="padding: 8px 0; border-bottom: 1px solid #eee;">${rideName}</td>
     </tr>
+     ${routeRowHtml}
     <tr>
       <td style="padding: 8px 0; border-bottom: 1px solid #eee; font-weight: 600;">Chapter</td>
       <td style="padding: 8px 0; border-bottom: 1px solid #eee;">${data.chapterName}</td>
@@ -166,15 +177,12 @@ ${membershipWarningHtml}
       <td style="padding: 8px 0; border-bottom: 1px solid #eee; font-weight: 600;">Start location</td>
       <td style="padding: 8px 0; border-bottom: 1px solid #eee;">${data.eventLocation}</td>
     </tr>
+    ${membershipTypeRowHtml}
     <tr>
-      <td style="padding: 8px 0; font-weight: 600;">Notes for organizer</td>
-      <td style="padding: 8px 0;">${data.notes || '(none)'}</td>
-    </tr>${membershipTypeRowHtml}
+      <td style="padding: 8px 0; border-bottom: 1px solid #eee; font-weight: 600;">Notes for organizer</td>
+      <td style="padding: 8px 0; border-bottom: 1px solid #eee;">${data.notes || '(none)'}</td>
+    </tr>
   </table>
-
-  <p>Thanks</p>
-
-  <hr style="border: none; border-top: 1px solid #eee; margin: 32px 0;">
 
   <h2 style="font-size: 18px; margin-bottom: 16px;">Brevet Rules</h2>
   <ul style="padding-left: 20px; margin: 0 0 24px 0;">

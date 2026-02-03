@@ -39,7 +39,7 @@ import type {
   RiderUpdate,
   RegistrationInsert,
   EventInsert,
-  EventWithChapter,
+  EventWithRelations,
   RouteWithChapter,
   RiderIdOnly,
   EventIdOnly,
@@ -110,6 +110,17 @@ function formatEventTime(timeStr: string | null): string {
   const ampm = hour >= 12 ? 'PM' : 'AM'
   const hour12 = hour % 12 || 12
   return `${hour12}:${minutes} ${ampm}`
+}
+
+/**
+ * Build a URL to the route page if route info is available.
+ */
+function buildRouteUrl(
+  chapterSlug: string | undefined,
+  routeSlug: string | undefined
+): string | undefined {
+  if (!chapterSlug || !routeSlug) return undefined
+  return `https://randonneursontario.ca/routes/${chapterSlug}/${routeSlug}`
 }
 
 /**
@@ -309,7 +320,8 @@ export async function registerForEvent(data: RegistrationData): Promise<Registra
       `
       id, slug, status, name, event_date, start_time,
       start_location, distance_km, event_type,
-      chapters (slug, name)
+      chapters (slug, name),
+      routes (slug)
     `
     )
     .eq('id', eventId)
@@ -323,7 +335,7 @@ export async function registerForEvent(data: RegistrationData): Promise<Registra
     )
   }
 
-  const event = eventData as EventWithChapter
+  const event = eventData as EventWithRelations
 
   if (event.status !== 'scheduled') {
     return { success: false, error: 'Registration is not open for this event' }
@@ -380,6 +392,7 @@ export async function registerForEvent(data: RegistrationData): Promise<Registra
         eventType: formatEventType(event.event_type),
         chapterName: chapter?.name || '',
         chapterSlug: chapter?.slug || '',
+        routeUrl: buildRouteUrl(chapter?.slug, event.routes?.slug),
         notes: notes || undefined,
         membershipStatus: 'none',
       }).catch((error) => {
@@ -421,6 +434,7 @@ export async function registerForEvent(data: RegistrationData): Promise<Registra
           eventType: formatEventType(event.event_type),
           chapterName: chapter?.name || '',
           chapterSlug: chapter?.slug || '',
+          routeUrl: buildRouteUrl(chapter?.slug, event.routes?.slug),
           notes: notes || undefined,
           membershipStatus: 'trial-used',
         }).catch((error) => {
@@ -461,6 +475,7 @@ export async function registerForEvent(data: RegistrationData): Promise<Registra
       eventType: formatEventType(event.event_type),
       chapterName: chapter?.name || '',
       chapterSlug: chapter?.slug || '',
+      routeUrl: buildRouteUrl(chapter?.slug, event.routes?.slug),
       notes: notes || undefined,
       membershipType: membershipResult.type,
       membershipStatus: 'valid',
@@ -683,6 +698,7 @@ export async function registerForPermanent(
         eventType: 'Permanent',
         chapterName: chapter?.name || '',
         chapterSlug: chapter?.slug || '',
+        routeUrl: buildRouteUrl(chapter?.slug, route.slug),
         notes: notes || undefined,
         membershipStatus: 'none',
       }).catch((error) => {
@@ -724,6 +740,7 @@ export async function registerForPermanent(
           eventType: 'Permanent',
           chapterName: chapter?.name || '',
           chapterSlug: chapter?.slug || '',
+          routeUrl: buildRouteUrl(chapter?.slug, route.slug),
           notes: notes || undefined,
           membershipStatus: 'trial-used',
         }).catch((error) => {
@@ -764,6 +781,7 @@ export async function registerForPermanent(
       eventType: 'Permanent',
       chapterName: chapter?.name || '',
       chapterSlug: chapter?.slug || '',
+      routeUrl: buildRouteUrl(chapter?.slug, route.slug),
       notes: notes || undefined,
       membershipType: membershipResult.type,
       membershipStatus: 'valid',
@@ -851,7 +869,8 @@ export async function completeRegistrationWithRider(
       `
       id, slug, status, name, event_date, start_time,
       start_location, distance_km, event_type,
-      chapters (slug, name)
+      chapters (slug, name),
+      routes (slug)
     `
     )
     .eq('id', eventId)
@@ -861,7 +880,7 @@ export async function completeRegistrationWithRider(
     return { success: false, error: 'Event not found' }
   }
 
-  const event = eventData as EventWithChapter
+  const event = eventData as EventWithRelations
 
   if (event.status !== 'scheduled') {
     return { success: false, error: 'Registration is not open for this event' }
@@ -965,6 +984,7 @@ export async function completeRegistrationWithRider(
       eventType: formatEventType(event.event_type),
       chapterName: chapter?.name || '',
       chapterSlug: chapter?.slug || '',
+      routeUrl: buildRouteUrl(chapter?.slug, event.routes?.slug),
       notes: notes || undefined,
       membershipStatus: 'none',
     }).catch((error) => {
@@ -1003,6 +1023,7 @@ export async function completeRegistrationWithRider(
         eventType: formatEventType(event.event_type),
         chapterName: chapter?.name || '',
         chapterSlug: chapter?.slug || '',
+        routeUrl: buildRouteUrl(chapter?.slug, event.routes?.slug),
         notes: notes || undefined,
         membershipStatus: 'trial-used',
       }).catch((error) => {
@@ -1041,6 +1062,7 @@ export async function completeRegistrationWithRider(
     eventType: formatEventType(event.event_type),
     chapterName: chapter?.name || '',
     chapterSlug: chapter?.slug || '',
+    routeUrl: buildRouteUrl(chapter?.slug, event.routes?.slug),
     notes: notes || undefined,
     membershipType: membershipResult.type,
     membershipStatus: 'valid',

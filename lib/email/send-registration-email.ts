@@ -24,16 +24,22 @@ export async function sendRegistrationConfirmationEmail(
     await sendgrid.send({
       to: data.registrantEmail,
       from: fromEmail,
+      replyTo: vpEmail || undefined,
       cc: vpEmail || undefined,
       subject,
       text,
       html,
     })
 
-    console.log(`Registration email sent to ${data.registrantEmail}${vpEmail ? ` (cc: ${vpEmail})` : ''}`)
+    console.log(
+      `Registration email sent to ${data.registrantEmail}${vpEmail ? ` (cc: ${vpEmail})` : ''}`
+    )
     return { success: true }
   } catch (error) {
-    logError(error, { operation: 'sendRegistrationConfirmationEmail', context: { email: data.registrantEmail } })
+    logError(error, {
+      operation: 'sendRegistrationConfirmationEmail',
+      context: { email: data.registrantEmail },
+    })
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Unknown email error',
