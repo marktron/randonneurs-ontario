@@ -10,10 +10,17 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { login } from '@/lib/actions/auth'
 import { AlertCircle, Loader2 } from 'lucide-react'
 
+function getSafeRedirectUrl(redirect: string | null): string {
+  if (!redirect) return '/admin'
+  // Only allow relative paths starting with /admin to prevent open redirects
+  if (redirect.startsWith('/admin')) return redirect
+  return '/admin'
+}
+
 export default function LoginPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const redirectTo = searchParams.get('redirect') || '/admin'
+  const redirectTo = getSafeRedirectUrl(searchParams.get('redirect'))
   const urlError = searchParams.get('error')
 
   const [email, setEmail] = useState('')

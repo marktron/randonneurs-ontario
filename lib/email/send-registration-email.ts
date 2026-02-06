@@ -31,14 +31,11 @@ export async function sendRegistrationConfirmationEmail(
       html,
     })
 
-    console.log(
-      `Registration email sent to ${data.registrantEmail}${vpEmail ? ` (cc: ${vpEmail})` : ''}`
-    )
+    console.log('Registration email sent successfully')
     return { success: true }
   } catch (error) {
     logError(error, {
       operation: 'sendRegistrationConfirmationEmail',
-      context: { email: data.registrantEmail },
     })
     return {
       success: false,

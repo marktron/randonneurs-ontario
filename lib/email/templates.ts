@@ -1,3 +1,15 @@
+/**
+ * Escape HTML special characters to prevent injection in email templates.
+ */
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;')
+}
+
 export interface RegistrationEmailData {
   registrantName: string
   registrantEmail: string
@@ -22,6 +34,19 @@ export function buildRegistrationConfirmationEmail(data: RegistrationEmailData):
 } {
   const rideName = `${data.eventName} ${data.eventDistance}`
   const subject = `Registration Received: ${rideName}`
+
+  // Escape user-supplied values for safe HTML interpolation
+  const safe = {
+    registrantName: escapeHtml(data.registrantName),
+    rideName: escapeHtml(rideName),
+    chapterName: escapeHtml(data.chapterName),
+    eventTime: escapeHtml(data.eventTime),
+    eventDate: escapeHtml(data.eventDate),
+    eventLocation: escapeHtml(data.eventLocation),
+    notes: data.notes ? escapeHtml(data.notes) : '(none)',
+    membershipType: data.membershipType ? escapeHtml(data.membershipType) : '',
+    routeUrl: data.routeUrl ? escapeHtml(data.routeUrl) : '',
+  }
 
   // Membership warning for text version
   const membershipWarningText =
@@ -82,7 +107,7 @@ Your trial membership was used for a previous event this season. Please upgrade 
       ? `
     <tr>
       <td style="padding: 8px 0; border-bottom: 1px solid #eee; font-weight: 600;">Membership</td>
-      <td style="padding: 8px 0; border-bottom: 1px solid #eee;">${data.membershipType}</td>
+      <td style="padding: 8px 0; border-bottom: 1px solid #eee;">${safe.membershipType}</td>
     </tr>`
       : ''
 
@@ -90,7 +115,7 @@ Your trial membership was used for a previous event this season. Please upgrade 
     ? `
     <tr>
       <td style="padding: 8px 0; border-bottom: 1px solid #eee; font-weight: 600;">Route</td>
-      <td style="padding: 8px 0; border-bottom: 1px solid #eee;"><a href="${data.routeUrl}" style="color: #0066cc;">View on Ride with GPS</a></td>
+      <td style="padding: 8px 0; border-bottom: 1px solid #eee;"><a href="${safe.routeUrl}" style="color: #0066cc;">View on Ride with GPS</a></td>
     </tr>`
     : ''
 
@@ -151,36 +176,36 @@ https://randonneursontario.ca
   <meta name="viewport" content="width=device-width, initial-scale=1">
 </head>
 <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
-  <p>Hi ${data.registrantName},</p>
+  <p>Hi ${safe.registrantName},</p>
 ${membershipWarningHtml}
-  <p>Thanks for your interest in our <strong>${rideName}</strong>. We've received your registration request and we'll be following up if we need anything more.</p>
+  <p>Thanks for your interest in our <strong>${safe.rideName}</strong>. We've received your registration request and we'll be following up if we need anything more.</p>
 
   <table style="width: 100%; border-collapse: collapse; margin: 24px 0;">
     <tr>
       <td style="padding: 8px 0; border-bottom: 1px solid #eee; font-weight: 600; width: 180px;">Registrant</td>
-      <td style="padding: 8px 0; border-bottom: 1px solid #eee;">${data.registrantName}</td>
+      <td style="padding: 8px 0; border-bottom: 1px solid #eee;">${safe.registrantName}</td>
     </tr>
     <tr>
       <td style="padding: 8px 0; border-bottom: 1px solid #eee; font-weight: 600;">Event</td>
-      <td style="padding: 8px 0; border-bottom: 1px solid #eee;">${rideName}</td>
+      <td style="padding: 8px 0; border-bottom: 1px solid #eee;">${safe.rideName}</td>
     </tr>
      ${routeRowHtml}
     <tr>
       <td style="padding: 8px 0; border-bottom: 1px solid #eee; font-weight: 600;">Chapter</td>
-      <td style="padding: 8px 0; border-bottom: 1px solid #eee;">${data.chapterName}</td>
+      <td style="padding: 8px 0; border-bottom: 1px solid #eee;">${safe.chapterName}</td>
     </tr>
     <tr>
       <td style="padding: 8px 0; border-bottom: 1px solid #eee; font-weight: 600;">Start time</td>
-      <td style="padding: 8px 0; border-bottom: 1px solid #eee;">${data.eventTime} ${data.eventDate}</td>
+      <td style="padding: 8px 0; border-bottom: 1px solid #eee;">${safe.eventTime} ${safe.eventDate}</td>
     </tr>
     <tr>
       <td style="padding: 8px 0; border-bottom: 1px solid #eee; font-weight: 600;">Start location</td>
-      <td style="padding: 8px 0; border-bottom: 1px solid #eee;">${data.eventLocation}</td>
+      <td style="padding: 8px 0; border-bottom: 1px solid #eee;">${safe.eventLocation}</td>
     </tr>
     ${membershipTypeRowHtml}
     <tr>
       <td style="padding: 8px 0; border-bottom: 1px solid #eee; font-weight: 600;">Notes for organizer</td>
-      <td style="padding: 8px 0; border-bottom: 1px solid #eee;">${data.notes || '(none)'}</td>
+      <td style="padding: 8px 0; border-bottom: 1px solid #eee;">${safe.notes}</td>
     </tr>
   </table>
 
@@ -205,7 +230,7 @@ ${membershipWarningHtml}
 
   <hr style="border: none; border-top: 1px solid #eee; margin: 32px 0;">
 
-  <p>The ${data.chapterName} Chapter VP is included in this email. Just hit reply if you have any questions. We're always happy to help!</p>
+  <p>The ${safe.chapterName} Chapter VP is included in this email. Just hit reply if you have any questions. We're always happy to help!</p>
 
   <p>See you on the road,</p>
 
@@ -237,6 +262,15 @@ export function buildResultSubmissionRequestEmail(data: ResultSubmissionEmailDat
 } {
   const rideName = `${data.eventName} ${data.eventDistance}km`
   const subject = `Submit Your Results: ${rideName}`
+
+  // Escape user-supplied values for safe HTML interpolation
+  const safe = {
+    riderName: escapeHtml(data.riderName),
+    rideName: escapeHtml(rideName),
+    eventDate: escapeHtml(data.eventDate),
+    chapterName: escapeHtml(data.chapterName),
+    submissionUrl: escapeHtml(data.submissionUrl),
+  }
 
   const text = `
 Hi ${data.riderName},
@@ -274,27 +308,27 @@ https://randonneursontario.ca
   <meta name="viewport" content="width=device-width, initial-scale=1">
 </head>
 <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
-  <p>Hi ${data.riderName},</p>
+  <p>Hi ${safe.riderName},</p>
 
-  <p>The <strong>${rideName}</strong> has finished! Please submit your results using the button below.</p>
+  <p>The <strong>${safe.rideName}</strong> has finished! Please submit your results using the button below.</p>
 
   <table style="width: 100%; border-collapse: collapse; margin: 24px 0;">
     <tr>
       <td style="padding: 8px 0; border-bottom: 1px solid #eee; font-weight: 600; width: 120px;">Event</td>
-      <td style="padding: 8px 0; border-bottom: 1px solid #eee;">${rideName}</td>
+      <td style="padding: 8px 0; border-bottom: 1px solid #eee;">${safe.rideName}</td>
     </tr>
     <tr>
       <td style="padding: 8px 0; border-bottom: 1px solid #eee; font-weight: 600;">Date</td>
-      <td style="padding: 8px 0; border-bottom: 1px solid #eee;">${data.eventDate}</td>
+      <td style="padding: 8px 0; border-bottom: 1px solid #eee;">${safe.eventDate}</td>
     </tr>
     <tr>
       <td style="padding: 8px 0; font-weight: 600;">Chapter</td>
-      <td style="padding: 8px 0;">${data.chapterName}</td>
+      <td style="padding: 8px 0;">${safe.chapterName}</td>
     </tr>
   </table>
 
   <p style="text-align: center; margin: 32px 0;">
-    <a href="${data.submissionUrl}" style="display: inline-block; background-color: #0066cc; color: white; padding: 12px 32px; text-decoration: none; border-radius: 6px; font-weight: 600;">Submit Your Results</a>
+    <a href="${safe.submissionUrl}" style="display: inline-block; background-color: #0066cc; color: white; padding: 12px 32px; text-decoration: none; border-radius: 6px; font-weight: 600;">Submit Your Results</a>
   </p>
 
   <p>You'll need to provide:</p>

@@ -216,6 +216,8 @@ export async function mergeRiders(data: MergeRidersData): Promise<MergeRidersRes
 export async function getRiderCounts(
   riderIds: string[]
 ): Promise<Record<string, { registrations: number; results: number }>> {
+  await requireAdmin()
+
   // Get registration counts
   const { data: regs } = await getSupabaseAdmin()
     .from('registrations')

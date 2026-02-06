@@ -146,13 +146,13 @@ export async function createPendingResultsAndSendEmails(
           html,
         })
         emailsSent++
-        console.log(`Sent result submission email to ${result.riderEmail} for event ${event.name}`)
+        console.log(`Sent result submission email for event ${event.name}`)
       } else {
-        console.warn(`SendGrid not configured, skipping email to ${result.riderEmail}`)
+        console.warn('SendGrid not configured, skipping result submission email')
       }
     } catch (emailError) {
       const errorMessage = emailError instanceof Error ? emailError.message : 'Unknown error'
-      errors.push(`Failed to send email to ${result.riderEmail}: ${errorMessage}`)
+      errors.push(`Failed to send result submission email: ${errorMessage}`)
     }
   }
 

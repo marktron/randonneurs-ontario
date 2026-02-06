@@ -3,7 +3,7 @@
 import { revalidatePath, revalidateTag } from 'next/cache'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { requireAdmin } from '@/lib/auth/get-admin'
-import { sendgrid } from '@/lib/email/sendgrid'
+import { sendgrid, fromEmail } from '@/lib/email/sendgrid'
 import { parseLocalDate, createSlug } from '@/lib/utils'
 import { getUrlSlugFromDbSlug } from '@/lib/chapter-config'
 import { createPendingResultsAndSendEmails } from '@/lib/events/complete-event'
@@ -502,7 +502,8 @@ This email was sent from the Randonneurs Ontario admin system.
       try {
         await sendgrid.send({
           to: 'vp-toronto@randonneursontario.ca',
-          from: admin.email,
+          from: fromEmail,
+          replyTo: admin.email,
           subject,
           text: emailBody,
         })
