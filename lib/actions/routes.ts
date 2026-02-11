@@ -5,6 +5,7 @@ import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { requireAdmin } from '@/lib/auth/get-admin'
 import { createSlug } from '@/lib/utils'
 import { getUrlSlugFromDbSlug } from '@/lib/chapter-config'
+import { logAuditEvent } from '@/lib/audit-log'
 import { handleActionError, handleSupabaseError, createActionResult, logError } from '@/lib/errors'
 import type { ActionResult, MergeResult } from '@/types/actions'
 import type {
@@ -100,9 +101,19 @@ function extractRwgpsId(input: string | null | undefined): string | null {
 }
 
 export async function createRoute(data: RouteData): Promise<ActionResult> {
-  await requireAdmin()
+  const admin = await requireAdmin()
 
-  const { name, chapterId, distanceKm, collection, description, rwgpsUrl, cueSheetUrl, notes, isActive } = data
+  const {
+    name,
+    chapterId,
+    distanceKm,
+    collection,
+    description,
+    rwgpsUrl,
+    cueSheetUrl,
+    notes,
+    isActive,
+  } = data
 
   if (!name?.trim()) {
     return { success: false, error: 'Route name is required' }
@@ -124,9 +135,7 @@ export async function createRoute(data: RouteData): Promise<ActionResult> {
     is_active: isActive ?? true,
   }
 
-  const { error } = await getSupabaseAdmin()
-    .from('routes')
-    .insert(insertData)
+  const { error } = await getSupabaseAdmin().from('routes').insert(insertData)
 
   if (error) {
     return handleSupabaseError(
@@ -144,11 +153,21 @@ export async function createRoute(data: RouteData): Promise<ActionResult> {
     await revalidateRoutesTags(chapterId, slug)
   }
 
+  await logAuditEvent({
+    adminId: admin.id,
+    action: 'create',
+    entityType: 'route',
+    description: `Created route: ${name}`,
+  })
+
   return createActionResult()
 }
 
-export async function updateRoute(routeId: string, data: Partial<RouteData>): Promise<ActionResult> {
-  await requireAdmin()
+export async function updateRoute(
+  routeId: string,
+  data: Partial<RouteData>
+): Promise<ActionResult> {
+  const admin = await requireAdmin()
 
   const updateData: Record<string, unknown> = {}
 
@@ -216,11 +235,19 @@ export async function updateRoute(routeId: string, data: Partial<RouteData>): Pr
     }
   }
 
+  await logAuditEvent({
+    adminId: admin.id,
+    action: 'update',
+    entityType: 'route',
+    entityId: routeId,
+    description: `Updated route: ${data.name || routeId}`,
+  })
+
   return { success: true }
 }
 
 export async function deleteRoute(routeId: string): Promise<ActionResult> {
-  await requireAdmin()
+  const admin = await requireAdmin()
 
   // Fetch route to get chapter info before deleting
   const { data: route } = await getSupabaseAdmin()
@@ -239,21 +266,14 @@ export async function deleteRoute(routeId: string): Promise<ActionResult> {
   if (events && events.length > 0) {
     return {
       success: false,
-      error: 'Cannot delete route that is used by events. Mark it as inactive instead.'
+      error: 'Cannot delete route that is used by events. Mark it as inactive instead.',
     }
   }
 
-  const { error } = await getSupabaseAdmin()
-    .from('routes')
-    .delete()
-    .eq('id', routeId)
+  const { error } = await getSupabaseAdmin().from('routes').delete().eq('id', routeId)
 
   if (error) {
-    return handleSupabaseError(
-      error,
-      { operation: 'deleteRoute' },
-      'Failed to delete route'
-    )
+    return handleSupabaseError(error, { operation: 'deleteRoute' }, 'Failed to delete route')
   }
 
   // Revalidate admin pages (still use revalidatePath for admin routes)
@@ -267,17 +287,22 @@ export async function deleteRoute(routeId: string): Promise<ActionResult> {
     }
   }
 
+  await logAuditEvent({
+    adminId: admin.id,
+    action: 'delete',
+    entityType: 'route',
+    entityId: routeId,
+    description: `Deleted route: ${routeId}`,
+  })
+
   return createActionResult()
 }
 
 export async function toggleRouteActive(routeId: string, isActive: boolean): Promise<ActionResult> {
-  await requireAdmin()
+  const admin = await requireAdmin()
 
   const updateData: RouteUpdate = { is_active: isActive }
-  const { error } = await getSupabaseAdmin()
-    .from('routes')
-    .update(updateData)
-    .eq('id', routeId)
+  const { error } = await getSupabaseAdmin().from('routes').update(updateData).eq('id', routeId)
 
   if (error) {
     return handleSupabaseError(
@@ -304,6 +329,14 @@ export async function toggleRouteActive(routeId: string, isActive: boolean): Pro
     }
   }
 
+  await logAuditEvent({
+    adminId: admin.id,
+    action: 'update',
+    entityType: 'route',
+    entityId: routeId,
+    description: `Set route ${isActive ? 'active' : 'inactive'}: ${routeId}`,
+  })
+
   return createActionResult()
 }
 
@@ -314,7 +347,7 @@ export interface MergeRoutesData {
 }
 
 export async function mergeRoutes(data: MergeRoutesData): Promise<MergeResult> {
-  await requireAdmin()
+  const admin = await requireAdmin()
 
   const { targetRouteId, sourceRouteIds, routeData } = data
 
@@ -329,7 +362,7 @@ export async function mergeRoutes(data: MergeRoutesData): Promise<MergeResult> {
   }
 
   // Routes to delete (all except target)
-  const routesToDelete = sourceRouteIds.filter(id => id !== targetRouteId)
+  const routesToDelete = sourceRouteIds.filter((id) => id !== targetRouteId)
 
   try {
     // Step 1: Update all events that reference any of the source routes to use target route
@@ -388,7 +421,10 @@ export async function mergeRoutes(data: MergeRoutesData): Promise<MergeResult> {
     if (updateRouteError) {
       return handleSupabaseError(
         updateRouteError,
-        { operation: 'mergeRoutes.updateRoute', userMessage: 'A route with this slug already exists' },
+        {
+          operation: 'mergeRoutes.updateRoute',
+          userMessage: 'A route with this slug already exists',
+        },
         'Failed to update merged route'
       )
     }
@@ -396,13 +432,25 @@ export async function mergeRoutes(data: MergeRoutesData): Promise<MergeResult> {
     revalidatePath('/admin/routes')
     revalidatePath('/admin/events')
 
+    await logAuditEvent({
+      adminId: admin.id,
+      action: 'merge',
+      entityType: 'route',
+      entityId: targetRouteId,
+      description: `Merged ${sourceRouteIds.length} routes into: ${routeData.name}`,
+    })
+
     return {
       success: true,
       updatedEventsCount,
       deletedRoutesCount: routesToDelete.length,
     }
   } catch (err) {
-    return handleActionError(err, { operation: 'mergeRoutes' }, 'An unexpected error occurred while merging routes')
+    return handleActionError(
+      err,
+      { operation: 'mergeRoutes' },
+      'An unexpected error occurred while merging routes'
+    )
   }
 }
 

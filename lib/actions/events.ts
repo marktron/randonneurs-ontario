@@ -7,6 +7,7 @@ import { sendgrid, fromEmail } from '@/lib/email/sendgrid'
 import { parseLocalDate, createSlug } from '@/lib/utils'
 import { getUrlSlugFromDbSlug } from '@/lib/chapter-config'
 import { createPendingResultsAndSendEmails } from '@/lib/events/complete-event'
+import { logAuditEvent } from '@/lib/audit-log'
 import { handleActionError, handleSupabaseError, createActionResult } from '@/lib/errors'
 import type { ActionResult } from '@/types/actions'
 import type {
@@ -70,7 +71,7 @@ export interface CreateEventData {
 
 export async function createEvent(data: CreateEventData): Promise<ActionResult<{ id: string }>> {
   try {
-    await requireAdmin()
+    const admin = await requireAdmin()
 
     const {
       name,
@@ -140,6 +141,14 @@ export async function createEvent(data: CreateEventData): Promise<ActionResult<{
     // Revalidate cache tags for calendar pages
     await revalidateCalendarTags(chapterId, eventType)
 
+    await logAuditEvent({
+      adminId: admin.id,
+      action: 'create',
+      entityType: 'event',
+      entityId: typedNewEvent.id,
+      description: `Created event: ${name}`,
+    })
+
     return createActionResult({ id: typedNewEvent.id })
   } catch (error) {
     return handleActionError(error, { operation: 'createEvent' }, 'Failed to create event')
@@ -161,7 +170,7 @@ export interface UpdateEventData {
 
 export async function updateEvent(eventId: string, data: UpdateEventData): Promise<ActionResult> {
   try {
-    await requireAdmin()
+    const admin = await requireAdmin()
 
     const updateData: Record<string, unknown> = {}
 
@@ -224,6 +233,14 @@ export async function updateEvent(eventId: string, data: UpdateEventData): Promi
       await revalidateCalendarTags(event.chapter_id, event.event_type, event.slug)
     }
 
+    await logAuditEvent({
+      adminId: admin.id,
+      action: 'update',
+      entityType: 'event',
+      entityId: eventId,
+      description: `Updated event: ${data.name || eventId}`,
+    })
+
     return createActionResult()
   } catch (error) {
     return handleActionError(error, { operation: 'updateEvent' }, 'Failed to update event')
@@ -232,7 +249,7 @@ export async function updateEvent(eventId: string, data: UpdateEventData): Promi
 
 export async function deleteEvent(eventId: string): Promise<ActionResult> {
   try {
-    await requireAdmin()
+    const admin = await requireAdmin()
 
     // Fetch the event to check the date and get chapter info for revalidation
     const { data: event, error: fetchError } = await getSupabaseAdmin()
@@ -302,6 +319,14 @@ export async function deleteEvent(eventId: string): Promise<ActionResult> {
     // Revalidate cache tags for calendar pages
     await revalidateCalendarTags(typedEvent.chapter_id, typedEvent.event_type)
 
+    await logAuditEvent({
+      adminId: admin.id,
+      action: 'delete',
+      entityType: 'event',
+      entityId: eventId,
+      description: `Deleted event: ${eventId}`,
+    })
+
     return createActionResult()
   } catch (error) {
     return handleActionError(error, { operation: 'deleteEvent' }, 'Failed to delete event')
@@ -313,7 +338,7 @@ export async function updateEventStatus(
   status: EventStatus
 ): Promise<ActionResult> {
   try {
-    await requireAdmin()
+    const admin = await requireAdmin()
 
     // If cancelling, delete all results for this event first
     if (status === 'cancelled') {
@@ -379,6 +404,14 @@ export async function updateEventStatus(
     if (event) {
       await revalidateCalendarTags(event.chapter_id, event.event_type)
     }
+
+    await logAuditEvent({
+      adminId: admin.id,
+      action: 'status_change',
+      entityType: 'event',
+      entityId: eventId,
+      description: `Changed event status to ${status}: ${typedEvent.name}`,
+    })
 
     return { success: true }
   } catch (error) {
@@ -530,6 +563,14 @@ This email was sent from the Randonneurs Ontario admin system.
     revalidatePath('/admin/events')
     revalidatePath('/admin')
     revalidatePath('/admin/results')
+
+    await logAuditEvent({
+      adminId: admin.id,
+      action: 'submit',
+      entityType: 'event',
+      entityId: eventId,
+      description: `Submitted results for event: ${typedEvent.name}`,
+    })
 
     return { success: true }
   } catch (error) {

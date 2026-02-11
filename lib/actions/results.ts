@@ -4,6 +4,7 @@ import { revalidatePath, revalidateTag } from 'next/cache'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { requireAdmin } from '@/lib/auth/get-admin'
 import { getUrlSlugFromDbSlug } from '@/lib/chapter-config'
+import { logAuditEvent } from '@/lib/audit-log'
 import { handleSupabaseError, createActionResult } from '@/lib/errors'
 import type { ActionResult } from '@/types/actions'
 import type {
@@ -62,7 +63,7 @@ export interface UpdateResultData {
 }
 
 export async function createResult(data: CreateResultData): Promise<ActionResult> {
-  await requireAdmin()
+  const admin = await requireAdmin()
 
   const { eventId, riderId, finishTime, status, teamName, note, season, distanceKm } = data
 
@@ -89,16 +90,10 @@ export async function createResult(data: CreateResultData): Promise<ActionResult
     distance_km: distanceKm,
   }
 
-  const { error } = await getSupabaseAdmin()
-    .from('results')
-    .insert(insertData)
+  const { error } = await getSupabaseAdmin().from('results').insert(insertData)
 
   if (error) {
-    return handleSupabaseError(
-      error,
-      { operation: 'createResult' },
-      'Failed to create result'
-    )
+    return handleSupabaseError(error, { operation: 'createResult' }, 'Failed to create result')
   }
 
   revalidatePath(`/admin/events/${eventId}`)
@@ -106,11 +101,22 @@ export async function createResult(data: CreateResultData): Promise<ActionResult
   // Revalidate public results pages
   await revalidateResultsTags(eventId)
 
+  await logAuditEvent({
+    adminId: admin.id,
+    action: 'create',
+    entityType: 'result',
+    entityId: eventId,
+    description: `Created result for event ${eventId}: rider ${riderId}, status ${status}`,
+  })
+
   return createActionResult()
 }
 
-export async function updateResult(resultId: string, data: UpdateResultData): Promise<ActionResult> {
-  await requireAdmin()
+export async function updateResult(
+  resultId: string,
+  data: UpdateResultData
+): Promise<ActionResult> {
+  const admin = await requireAdmin()
 
   const updateData: ResultUpdate = {
     finish_time: data.finishTime,
@@ -119,17 +125,10 @@ export async function updateResult(resultId: string, data: UpdateResultData): Pr
     note: data.note,
   }
 
-  const { error } = await getSupabaseAdmin()
-    .from('results')
-    .update(updateData)
-    .eq('id', resultId)
+  const { error } = await getSupabaseAdmin().from('results').update(updateData).eq('id', resultId)
 
   if (error) {
-    return handleSupabaseError(
-      error,
-      { operation: 'updateResult' },
-      'Failed to update result'
-    )
+    return handleSupabaseError(error, { operation: 'updateResult' }, 'Failed to update result')
   }
 
   // Revalidate admin pages (still use revalidatePath for admin routes)
@@ -149,11 +148,19 @@ export async function updateResult(resultId: string, data: UpdateResultData): Pr
     }
   }
 
+  await logAuditEvent({
+    adminId: admin.id,
+    action: 'update',
+    entityType: 'result',
+    entityId: resultId,
+    description: `Updated result: ${resultId}`,
+  })
+
   return createActionResult()
 }
 
 export async function deleteResult(resultId: string): Promise<ActionResult> {
-  await requireAdmin()
+  const admin = await requireAdmin()
 
   // Fetch event_id before deleting for revalidation
   const { data: result } = await getSupabaseAdmin()
@@ -162,17 +169,10 @@ export async function deleteResult(resultId: string): Promise<ActionResult> {
     .eq('id', resultId)
     .single()
 
-  const { error } = await getSupabaseAdmin()
-    .from('results')
-    .delete()
-    .eq('id', resultId)
+  const { error } = await getSupabaseAdmin().from('results').delete().eq('id', resultId)
 
   if (error) {
-    return handleSupabaseError(
-      error,
-      { operation: 'deleteResult' },
-      'Failed to delete result'
-    )
+    return handleSupabaseError(error, { operation: 'deleteResult' }, 'Failed to delete result')
   }
 
   // Revalidate admin pages (still use revalidatePath for admin routes)
@@ -185,6 +185,14 @@ export async function deleteResult(resultId: string): Promise<ActionResult> {
       await revalidateResultsTags(typedResult.event_id)
     }
   }
+
+  await logAuditEvent({
+    adminId: admin.id,
+    action: 'delete',
+    entityType: 'result',
+    entityId: resultId,
+    description: `Deleted result: ${resultId}`,
+  })
 
   return createActionResult()
 }
@@ -201,7 +209,7 @@ export async function createBulkResults(
   season: number,
   distanceKm: number
 ): Promise<ActionResult> {
-  await requireAdmin()
+  const admin = await requireAdmin()
 
   const insertData: ResultInsert[] = results.map((r) => ({
     event_id: eventId,
@@ -214,9 +222,7 @@ export async function createBulkResults(
     distance_km: distanceKm,
   }))
 
-  const { error } = await getSupabaseAdmin()
-    .from('results')
-    .insert(insertData)
+  const { error } = await getSupabaseAdmin().from('results').insert(insertData)
 
   if (error) {
     return handleSupabaseError(
@@ -230,6 +236,14 @@ export async function createBulkResults(
 
   // Revalidate public results pages
   await revalidateResultsTags(eventId)
+
+  await logAuditEvent({
+    adminId: admin.id,
+    action: 'create',
+    entityType: 'result',
+    entityId: eventId,
+    description: `Created ${results.length} bulk results for event ${eventId}`,
+  })
 
   return { success: true }
 }

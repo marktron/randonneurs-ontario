@@ -4,6 +4,7 @@ import fs from 'fs'
 import path from 'path'
 import { revalidatePath } from 'next/cache'
 import { requireAdmin } from '@/lib/auth/get-admin'
+import { logAuditEvent } from '@/lib/audit-log'
 import { handleActionError, createActionResult, logError } from '@/lib/errors'
 
 interface SavePageInput {
@@ -51,7 +52,7 @@ function getReservedSlugs(): string[] {
 
 export async function savePage(input: SavePageInput): Promise<SavePageResult> {
   // Verify admin access
-  await requireAdmin()
+  const admin = await requireAdmin()
 
   const { slug, title, description, content, headerImage } = input
 
@@ -89,7 +90,17 @@ ${content}
 
   // In development, always save locally (getPage reads from local filesystem)
   if (process.env.NODE_ENV === 'development') {
-    return saveLocalFile(slug, fileContent)
+    const result = await saveLocalFile(slug, fileContent)
+    if (result.success) {
+      await logAuditEvent({
+        adminId: admin.id,
+        action: 'update',
+        entityType: 'page',
+        entityId: slug,
+        description: `Saved page: ${title}`,
+      })
+    }
+    return result
   }
 
   // Check for required environment variables
@@ -150,6 +161,14 @@ ${content}
     revalidatePath('/admin/pages')
     revalidatePath(`/admin/pages/${slug}`)
     revalidatePath(`/${slug}`)
+
+    await logAuditEvent({
+      adminId: admin.id,
+      action: 'update',
+      entityType: 'page',
+      entityId: slug,
+      description: `Saved page: ${title}`,
+    })
 
     return createActionResult()
   } catch (error) {

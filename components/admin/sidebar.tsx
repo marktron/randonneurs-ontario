@@ -25,6 +25,7 @@ import {
   Trophy,
   LogOut,
   FileText,
+  ScrollText,
   Settings,
 } from 'lucide-react'
 import { logout } from '@/lib/actions/auth'
@@ -79,6 +80,12 @@ const managementNavItems = [
     href: '/admin/users',
     icon: UserCog,
     testId: 'nav-users',
+  },
+  {
+    title: 'Audit Log',
+    href: '/admin/logs',
+    icon: ScrollText,
+    testId: 'nav-logs',
   },
 ]
 

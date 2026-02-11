@@ -3,6 +3,7 @@
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { requireAdmin } from '@/lib/auth/get-admin'
 import { applyRiderSearchFilter } from '@/lib/utils/rider-search'
+import { logAuditEvent } from '@/lib/audit-log'
 import { handleActionError, handleSupabaseError, handleDataError } from '@/lib/errors'
 import type { ActionResult } from '@/types/actions'
 import type {
@@ -53,7 +54,7 @@ export interface CreateRiderResult extends ActionResult {
 }
 
 export async function createRider(data: CreateRiderData): Promise<CreateRiderResult> {
-  await requireAdmin()
+  const admin = await requireAdmin()
 
   const { firstName, lastName, email } = data
 
@@ -100,6 +101,15 @@ export async function createRider(data: CreateRiderData): Promise<CreateRiderRes
   }
 
   const typedNewRider = newRider as RiderIdOnly
+
+  await logAuditEvent({
+    adminId: admin.id,
+    action: 'create',
+    entityType: 'rider',
+    entityId: typedNewRider.id,
+    description: `Created rider: ${firstName} ${lastName}`,
+  })
+
   return { success: true, riderId: typedNewRider.id }
 }
 
@@ -123,7 +133,7 @@ export interface MergeRidersResult extends ActionResult {
 }
 
 export async function mergeRiders(data: MergeRidersData): Promise<MergeRidersResult> {
-  await requireAdmin()
+  const admin = await requireAdmin()
 
   const { targetRiderId, sourceRiderIds, riderData } = data
 
@@ -200,6 +210,14 @@ export async function mergeRiders(data: MergeRidersData): Promise<MergeRidersRes
       console.error('Error updating target rider:', updateRiderError)
       return { success: false, error: 'Failed to update merged rider' }
     }
+
+    await logAuditEvent({
+      adminId: admin.id,
+      action: 'merge',
+      entityType: 'rider',
+      entityId: targetRiderId,
+      description: `Merged ${sourceRiderIds.length} riders into: ${riderData.firstName} ${riderData.lastName}`,
+    })
 
     return {
       success: true,

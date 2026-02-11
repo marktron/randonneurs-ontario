@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { requireAdmin } from '@/lib/auth/get-admin'
+import { logAuditEvent } from '@/lib/audit-log'
 import { handleSupabaseError, createActionResult, logError } from '@/lib/errors'
 import type { Database } from '@/types/supabase'
 import type { ActionResult } from '@/types/actions'
@@ -76,6 +77,15 @@ export async function createAdminUser(data: AdminUserData): Promise<ActionResult
   }
 
   revalidatePath('/admin/users')
+
+  await logAuditEvent({
+    adminId: currentAdmin.id,
+    action: 'create',
+    entityType: 'admin_user',
+    entityId: authData.user.id,
+    description: `Created admin user: ${name} (${email})`,
+  })
+
   return createActionResult()
 }
 
@@ -113,6 +123,15 @@ export async function updateAdminUser(
   }
 
   revalidatePath('/admin/users')
+
+  await logAuditEvent({
+    adminId: currentAdmin.id,
+    action: 'update',
+    entityType: 'admin_user',
+    entityId: userId,
+    description: `Updated admin user: ${name || userId}`,
+  })
+
   return createActionResult()
 }
 
@@ -153,6 +172,15 @@ export async function deleteAdminUser(userId: string): Promise<ActionResult> {
   }
 
   revalidatePath('/admin/users')
+
+  await logAuditEvent({
+    adminId: currentAdmin.id,
+    action: 'delete',
+    entityType: 'admin_user',
+    entityId: userId,
+    description: `Deleted admin user: ${userId}`,
+  })
+
   return createActionResult()
 }
 

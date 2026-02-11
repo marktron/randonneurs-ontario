@@ -85,7 +85,16 @@ vi.mock('@/lib/supabase-server', () => {
 })
 
 vi.mock('@/lib/auth/get-admin', () => ({
-  requireAdmin: vi.fn().mockResolvedValue(undefined),
+  requireAdmin: vi.fn().mockResolvedValue({
+    id: 'admin-1',
+    email: 'admin@test.com',
+    name: 'Test Admin',
+    role: 'admin',
+  }),
+}))
+
+vi.mock('@/lib/audit-log', () => ({
+  logAuditEvent: vi.fn().mockResolvedValue(undefined),
 }))
 
 vi.mock('next/cache', () => ({

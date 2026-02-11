@@ -1,12 +1,13 @@
-import Link from "next/link";
-import { siFacebook, siStrava } from "simple-icons";
+import Link from 'next/link'
+import { MessageSquareText } from 'lucide-react'
+import { siFacebook, siStrava } from 'simple-icons'
 
 function FacebookIcon({ className }: { className?: string }) {
   return (
     <svg className={className} fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
       <path d={siFacebook.path} />
     </svg>
-  );
+  )
 }
 
 function StravaIcon({ className }: { className?: string }) {
@@ -14,11 +15,11 @@ function StravaIcon({ className }: { className?: string }) {
     <svg className={className} fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
       <path d={siStrava.path} />
     </svg>
-  );
+  )
 }
 
 export function Footer() {
-  const currentYear = new Date().getFullYear();
+  const currentYear = new Date().getFullYear()
 
   return (
     <footer className="border-t border-border bg-muted/30">
@@ -29,8 +30,17 @@ export function Footer() {
             <p>&copy; {currentYear} Randonneurs Ontario. All rights reserved.</p>
           </div>
 
-          {/* Social Links */}
+          {/* Links */}
           <div className="flex items-center gap-4">
+            <Link
+              href="https://forms.gle/D342cLDardMFnxwY9"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 rounded-full border border-accent/30 bg-accent/5 px-3 py-1 text-sm font-medium text-accent hover:bg-accent/10 transition-colors"
+            >
+              <MessageSquareText className="h-4 w-4" />
+              Feedback
+            </Link>
             <Link
               href="https://www.facebook.com/groups/randonneursontario"
               target="_blank"
@@ -53,5 +63,5 @@ export function Footer() {
         </div>
       </div>
     </footer>
-  );
+  )
 }
