@@ -83,7 +83,7 @@ export default async function RecordsPage() {
         </div>
         <div className="grid gap-10 lg:grid-cols-2">
           <RiderRecordTable
-            title="Most Devil Week Awards"
+            title="Most Completed Devil Weeks"
             records={lifetime.mostDevilWeeks}
             valueLabel="Awards"
           />

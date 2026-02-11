@@ -13,7 +13,7 @@ All-time rankings based on a rider's complete history with Randonneurs Ontario.
 | Most Completed Events           | Total count of successful finishes (all event types) |
 | Highest Total Distance          | Cumulative kilometers from all completed events      |
 | Most Active Seasons             | Number of distinct seasons with at least one finish  |
-| Most Devil Week Awards          | Number of years completing Devil Week                |
+| Most Completed Devil Week       | Number of years completing Devil Week                |
 | Most Super Randonneur Awards    | Number of Super Randonneur awards earned             |
 | Most Permanents Completed       | Total permanent event completions                    |
 | Longest Active Streak           | Most consecutive seasons with at least one finish    |
