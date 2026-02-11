@@ -21,7 +21,7 @@ export interface ResultsPageProps {
   chapterSlug: string
   year: number
   description: string
-  coverImage: string
+  coverImage?: string
   events: EventResult[]
   availableYears: number[]
 }

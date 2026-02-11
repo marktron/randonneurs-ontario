@@ -57,6 +57,14 @@ export type EventWithRegistrationCount = Event & {
 }
 
 /**
+ * Event with registration count and chapter name (for all-chapters calendar)
+ */
+export type EventWithRegistrationCountAndChapter = Event & {
+  registrations: Array<{ count: number }> | null
+  chapters: Pick<Chapter, 'slug' | 'name'> | null
+}
+
+/**
  * Event with route slug for results queries
  */
 export type EventWithRouteSlug = Pick<Event, 'id' | 'name' | 'event_date' | 'distance_km'> & {

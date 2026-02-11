@@ -15,7 +15,7 @@ export interface CalendarPageProps {
   chapter: string
   chapterSlug: string
   description: string
-  coverImage: string
+  coverImage?: string
   events: Event[]
 }
 

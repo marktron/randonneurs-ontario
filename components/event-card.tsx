@@ -13,6 +13,7 @@ export interface Event {
   startLocation: string
   startTime: string // HH:MM format
   registeredCount?: number // Number of registered riders
+  chapterName?: string // Chapter name for all-chapters view
 }
 
 function formatDate(dateString: string): {
@@ -78,6 +79,11 @@ export function EventCard({
 
       {/* Event details */}
       <div className="min-w-0 flex flex-col justify-center">
+        {event.chapterName && (
+          <div className="mb-1 text-xs font-medium tracking-wide text-muted-foreground/70 uppercase">
+            {event.chapterName}
+          </div>
+        )}
         <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
           <h3 className="font-serif text-xl leading-tight sm:text-2xl">
             <Link

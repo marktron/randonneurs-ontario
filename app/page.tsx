@@ -1,11 +1,12 @@
-import { PageShell } from "@/components/page-shell";
-import { Hero } from "@/components/hero";
-import { UpcomingRides } from "@/components/upcoming-rides";
-import { ArrowLink } from "@/components/arrow-link";
-import { getHeroImages } from "@/lib/hero-images";
+import { PageShell } from '@/components/page-shell'
+import { Hero } from '@/components/hero'
+import { UpcomingRides } from '@/components/upcoming-rides'
+import { ArrowLink } from '@/components/arrow-link'
+import { MyRidesSection } from '@/components/my-rides-section'
+import { getHeroImages } from '@/lib/hero-images'
 
 export default function Page() {
-  const heroImages = getHeroImages();
+  const heroImages = getHeroImages()
   return (
     <PageShell>
       <Hero images={heroImages} />
@@ -27,27 +28,26 @@ export default function Page() {
               </p>
 
               <p>
-                At Randonneurs Ontario, it&apos;s about self-reliance, curiosity, and seeing
-                how far you can go under your own power.
+                At Randonneurs Ontario, it&apos;s about self-reliance, curiosity, and seeing how far
+                you can go under your own power.
               </p>
 
               <p>
                 Randonneurs Ontario is a volunteer-run cycling organization dedicated to
-                non-competitive long-distance cycling in Ontario. We organize brevets —
-                structured rides of 200 km and beyond — that challenge riders to manage
-                pacing, navigation, and endurance within generous time limits.
+                non-competitive long-distance cycling in Ontario. We organize brevets — structured
+                rides of 200 km and beyond — that challenge riders to manage pacing, navigation, and
+                endurance within generous time limits.
               </p>
 
               <p>
-                Riders participate for many reasons: to explore quiet roads, to test
-                themselves, to ride through the night, or simply to experience distance
-                differently. There are no podiums and no winners — only the satisfaction
-                of steady forward progress.
+                Riders participate for many reasons: to explore quiet roads, to test themselves, to
+                ride through the night, or simply to experience distance differently. There are no
+                podiums and no winners — only the satisfaction of steady forward progress.
               </p>
 
               <p>
-                Whether you are curious about your first long ride or are an experienced
-                randonneur planning a season, you&apos;ll find your place here.
+                Whether you are curious about your first long ride or are an experienced randonneur
+                planning a season, you&apos;ll find your place here.
               </p>
             </div>
 
@@ -61,10 +61,11 @@ export default function Page() {
 
           {/* Sidebar */}
           <div className="lg:w-80 lg:shrink-0 lg:border-l lg:border-border lg:pl-12">
+            <MyRidesSection />
             <UpcomingRides />
           </div>
         </div>
       </div>
     </PageShell>
-  );
+  )
 }

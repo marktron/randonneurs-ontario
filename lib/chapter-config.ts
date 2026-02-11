@@ -7,7 +7,7 @@ export interface ChapterInfo {
   slug: string
   name: string
   description: string
-  coverImage: string
+  coverImage?: string
   dbSlug: string | null // null means uses collection field instead of chapter
 }
 
@@ -16,28 +16,32 @@ const coreChapters: Record<string, ChapterInfo> = {
   toronto: {
     slug: 'toronto',
     name: 'Toronto',
-    description: 'Brevets and populaires through the Greater Toronto Area, Niagara Peninsula, and the rolling hills beyond.',
+    description:
+      'Brevets and populaires through the Greater Toronto Area, Niagara Peninsula, and the rolling hills beyond.',
     coverImage: '/toronto.jpg',
     dbSlug: 'toronto',
   },
   ottawa: {
     slug: 'ottawa',
     name: 'Ottawa',
-    description: 'Explore the scenic routes of Eastern Ontario, from the Ottawa Valley to the St. Lawrence.',
+    description:
+      'Explore the scenic routes of Eastern Ontario, from the Ottawa Valley to the St. Lawrence.',
     coverImage: '/ottawa.jpg',
     dbSlug: 'ottawa',
   },
   'simcoe-muskoka': {
     slug: 'simcoe-muskoka',
     name: 'Simcoe-Muskoka',
-    description: 'Brevets and populaires through the lakes and forests of Muskoka, Georgian Bay, and the Kawarthas.',
+    description:
+      'Brevets and populaires through the lakes and forests of Muskoka, Georgian Bay, and the Kawarthas.',
     coverImage: '/simcoe.jpg',
     dbSlug: 'simcoe',
   },
   huron: {
     slug: 'huron',
     name: 'Huron',
-    description: 'Discover the shores of Lake Huron and the rolling farmland of Southwestern Ontario.',
+    description:
+      'Discover the shores of Lake Huron and the rolling farmland of Southwestern Ontario.',
     coverImage: '/huron.jpg',
     dbSlug: 'huron',
   },
@@ -49,35 +53,32 @@ const resultsOnlyChapters: Record<string, ChapterInfo> = {
     slug: 'niagara',
     name: 'Niagara',
     description: 'Historical results from the Niagara chapter.',
-    coverImage: '/toronto.jpg',
     dbSlug: 'niagara',
   },
   other: {
     slug: 'other',
     name: 'Other',
     description: 'Results from miscellaneous events.',
-    coverImage: '/toronto.jpg',
     dbSlug: 'other',
   },
   permanent: {
     slug: 'permanent',
     name: 'Permanents',
     description: 'Routes ridden outside of the normal Brevet schedule.',
-    coverImage: '/toronto.jpg',
     dbSlug: 'permanent',
   },
   pbp: {
     slug: 'pbp',
     name: 'Paris-Brest-Paris',
     description: 'Ontario randonneurs who have completed Paris-Brest-Paris.',
-    coverImage: '/toronto.jpg',
+    coverImage: '/pbp.jpg',
     dbSlug: 'other', // PBP events are stored in the 'other' chapter
   },
   'granite-anvil': {
     slug: 'granite-anvil',
     name: 'Granite Anvil',
     description: 'Results from the Granite Anvil 1000km+ series.',
-    coverImage: '/toronto.jpg',
+    coverImage: '/granite-anvil.jpg',
     dbSlug: null, // Uses collection field instead of chapter
   },
 }

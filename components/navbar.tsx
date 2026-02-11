@@ -121,6 +121,11 @@ export function Navbar() {
               </NavigationMenuTrigger>
               <NavigationMenuContent>
                 <ul className="grid w-48 gap-1 p-2">
+                  <li>
+                    <Link href="/calendar" className={dropdownLinkStyles}>
+                      All Chapters
+                    </Link>
+                  </li>
                   {chapters.map((chapter) => (
                     <li key={chapter}>
                       <Link
@@ -292,6 +297,13 @@ export function Navbar() {
 
               {/* Calendar */}
               <MobileNavSection title="Calendar">
+                <Link
+                  href="/calendar"
+                  onClick={() => setOpen(false)}
+                  className="block px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors"
+                >
+                  All Chapters
+                </Link>
                 {chapters.map((chapter) => (
                   <Link
                     key={chapter}

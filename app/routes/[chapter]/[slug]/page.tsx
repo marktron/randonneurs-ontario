@@ -1,7 +1,7 @@
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
-import Image from 'next/image'
 import { PageShell } from '@/components/page-shell'
+import { PageHero } from '@/components/page-hero'
 import { getRouteBySlug, getRouteResults, getChapterInfo } from '@/lib/data/routes'
 import { AwardBadge } from '@/components/award-badge'
 
@@ -54,27 +54,14 @@ export default async function RouteDetailPage({ params }: PageProps) {
   return (
     <PageShell>
       {/* Header */}
-      <div className="relative border-b border-border overflow-hidden">
-        <Image
-          src={chapterInfo.coverImage}
-          alt=""
-          fill
-          className="object-cover editorial-image"
-          priority
-        />
-        <div className="absolute inset-0 bg-gradient-to-t from-neutral-900/80 via-neutral-900/40 to-neutral-900/20" />
-        <div className="relative mx-auto max-w-5xl px-6 py-28 md:py-36">
-          <p className="eyebrow-hero text-neutral-300 text-shadow-lg">Route History</p>
-          <h1 className="font-serif text-5xl md:text-6xl lg:text-7xl tracking-tight mt-2 text-white text-shadow-lg">
-            {route.name}
-          </h1>
-          {route.distanceKm && (
-            <p className="mt-4 text-lg leading-relaxed text-neutral-200 max-w-xl text-shadow-lg">
-              {route.distanceKm} km · {route.chapterName} Chapter
-            </p>
-          )}
-        </div>
-      </div>
+      <PageHero
+        image={chapterInfo.coverImage}
+        eyebrow="Route History"
+        title={route.name}
+        description={
+          route.distanceKm ? `${route.distanceKm} km · ${route.chapterName} Chapter` : undefined
+        }
+      />
 
       {/* Stats Bar */}
       <div className="border-b border-border bg-muted/30">

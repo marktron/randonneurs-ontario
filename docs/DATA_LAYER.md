@@ -102,6 +102,9 @@ All read operations live in `lib/data/`. Each file handles a specific domain:
 // Get upcoming events for a chapter
 export async function getEventsByChapter(urlSlug: string): Promise<Event[]>
 
+// Get all upcoming events across all chapters (with chapter names)
+export async function getAllUpcomingEvents(): Promise<Event[]>
+
 // Get all permanent events
 export async function getPermanentEvents(): Promise<Event[]>
 

@@ -36,6 +36,7 @@ import {
 } from '@/lib/chapter-config'
 import type {
   EventWithRegistrationCount,
+  EventWithRegistrationCountAndChapter,
   EventWithRelations,
   EventSlug,
   GetRegisteredRidersResult,
@@ -106,6 +107,52 @@ export async function getEventsByChapter(urlSlug: string): Promise<Event[]> {
       tags: ['events', `chapter-${urlSlug}`],
     }
   )()
+}
+
+/**
+ * Get all upcoming events across all chapters.
+ * Returns non-permanent events that are scheduled and have a date >= today,
+ * with chapter name included for display.
+ *
+ * @returns Array of events sorted by date, with chapter names
+ *
+ * @example
+ * const events = await getAllUpcomingEvents()
+ * // Returns upcoming events from all chapters
+ */
+const getAllUpcomingEventsInner = cache(async (): Promise<Event[]> => {
+  const today = new Date().toISOString().split('T')[0]
+  const { data: events, error } = await getSupabase()
+    .from('events')
+    .select('*, registrations(count), chapters!inner(slug, name)')
+    .eq('status', 'scheduled')
+    .neq('event_type', 'permanent')
+    .gte('event_date', today)
+    .order('event_date', { ascending: true })
+    .order('distance_km', { ascending: false })
+
+  if (error) {
+    return handleDataError(error, { operation: 'getAllUpcomingEvents' }, [])
+  }
+
+  return (events as EventWithRegistrationCountAndChapter[]).map((event) => ({
+    id: event.id,
+    slug: event.slug,
+    date: event.event_date,
+    name: event.name,
+    type: formatEventType(event.event_type),
+    distance: event.distance_km.toString(),
+    startLocation: event.start_location || '',
+    startTime: event.start_time || '08:00',
+    registeredCount: event.registrations?.[0]?.count ?? 0,
+    chapterName: event.chapters?.name || '',
+  }))
+})
+
+export async function getAllUpcomingEvents(): Promise<Event[]> {
+  return unstable_cache(async () => getAllUpcomingEventsInner(), ['all-upcoming-events'], {
+    tags: ['events'],
+  })()
 }
 
 /**
