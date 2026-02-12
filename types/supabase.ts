@@ -574,6 +574,7 @@ export type Database = {
           gender: string | null
           id: string
           last_name: string
+          rider_number: number | null
           slug: string
           updated_at: string | null
         }
@@ -587,6 +588,7 @@ export type Database = {
           gender?: string | null
           id?: string
           last_name: string
+          rider_number?: number | null
           slug: string
           updated_at?: string | null
         }
@@ -600,6 +602,7 @@ export type Database = {
           gender?: string | null
           id?: string
           last_name?: string
+          rider_number?: number | null
           slug?: string
           updated_at?: string | null
         }
@@ -695,6 +698,7 @@ export type Database = {
           gender: string | null
           id: string | null
           last_name: string | null
+          rider_number: number | null
           slug: string | null
           updated_at: string | null
         }
@@ -704,6 +708,7 @@ export type Database = {
           gender?: string | null
           id?: string | null
           last_name?: string | null
+          rider_number?: number | null
           slug?: string | null
           updated_at?: string | null
         }
@@ -713,6 +718,7 @@ export type Database = {
           gender?: string | null
           id?: string | null
           last_name?: string | null
+          rider_number?: number | null
           slug?: string | null
           updated_at?: string | null
         }

@@ -16,7 +16,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { AwardBadgeList, AwardSummary, aggregateAwards } from '@/components/award-badge'
+import { AwardBadge, AwardBadgeList, AwardSummary, aggregateAwards } from '@/components/award-badge'
 
 export const revalidate = 3600 // Revalidate every hour
 
@@ -240,8 +240,21 @@ export default async function RiderPage({ params }: RiderPageProps) {
               {totalDistanceKm.toLocaleString()} km total
             </p>
           )}
-          {aggregatedAwards.length > 0 && (
-            <AwardSummary awards={aggregatedAwards} className="mt-4" />
+          {(rider.riderNumber || aggregatedAwards.length > 0) && (
+            <AwardSummary
+              awards={aggregatedAwards}
+              className="mt-4"
+              prepend={
+                rider.riderNumber ? (
+                  <AwardBadge
+                    award={{
+                      title: `Rider No. ${rider.riderNumber}`,
+                      description: `Member No. ${rider.riderNumber}; a lower number reflects longer standing in the club.`,
+                    }}
+                  />
+                ) : undefined
+              }
+            />
           )}
         </div>
       </div>

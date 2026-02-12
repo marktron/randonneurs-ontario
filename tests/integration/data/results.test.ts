@@ -269,6 +269,7 @@ describe('getRiderBySlug', () => {
       slug: 'john-doe',
       first_name: 'John',
       last_name: 'Doe',
+      rider_number: null,
     }
 
     mockModule.__mockRiderFound(mockRider)
@@ -280,6 +281,43 @@ describe('getRiderBySlug', () => {
       expect(result.slug).toBe('john-doe')
       expect(result.firstName).toBe('John')
       expect(result.lastName).toBe('Doe')
+      expect(result.riderNumber).toBeNull()
+    }
+  })
+
+  it('returns riderNumber when present', async () => {
+    const mockRider = {
+      slug: 'jane-smith',
+      first_name: 'Jane',
+      last_name: 'Smith',
+      rider_number: 42,
+    }
+
+    mockModule.__mockRiderFound(mockRider)
+
+    const result = await getRiderBySlug('jane-smith')
+
+    expect(result).not.toBeNull()
+    if (result) {
+      expect(result.riderNumber).toBe(42)
+    }
+  })
+
+  it('returns null riderNumber when absent', async () => {
+    const mockRider = {
+      slug: 'new-rider',
+      first_name: 'New',
+      last_name: 'Rider',
+      rider_number: null,
+    }
+
+    mockModule.__mockRiderFound(mockRider)
+
+    const result = await getRiderBySlug('new-rider')
+
+    expect(result).not.toBeNull()
+    if (result) {
+      expect(result.riderNumber).toBeNull()
     }
   })
 })

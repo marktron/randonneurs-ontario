@@ -304,6 +304,7 @@ export interface RiderInfo {
   slug: string
   firstName: string
   lastName: string
+  riderNumber: number | null
 }
 
 export interface RiderEventAward {
@@ -336,18 +337,19 @@ const getRiderBySlugInner = cache(async (slug: string): Promise<RiderInfo | null
   // Use public_riders view (riders table is restricted to protect emails)
   const { data, error } = await getSupabase()
     .from('public_riders')
-    .select('slug, first_name, last_name')
+    .select('slug, first_name, last_name, rider_number')
     .eq('slug', slug)
     .single()
 
   if (error || !data) return null
 
-  const typedRider = data as Pick<PublicRider, 'slug' | 'first_name' | 'last_name'>
+  const typedRider = data as Pick<PublicRider, 'slug' | 'first_name' | 'last_name' | 'rider_number'>
 
   return {
     slug: typedRider.slug ?? '',
     firstName: typedRider.first_name ?? '',
     lastName: typedRider.last_name ?? '',
+    riderNumber: typedRider.rider_number ?? null,
   }
 })
 

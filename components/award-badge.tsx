@@ -13,7 +13,7 @@ const colorClassesMap = {
   'Paris-Brest-Paris': 'bg-blue-200 dark:bg-blue-800 text-blue-800 dark:text-blue-200',
   'Granite Anvil': 'bg-fuchsia-200 dark:bg-fuchsia-800 text-fuchsia-800 dark:text-fuchsia-200',
   'Course Record': 'bg-linear-to-tr from-amber-600 to-yellow-500 text-white dark:text-amber-950',
-  default: 'bg-zinc-300 dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200',
+  default: 'bg-zinc-200 dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200',
 } as const
 
 const defaultDescriptions: Record<string, string> = {
@@ -106,13 +106,15 @@ export interface AwardCount {
 interface AwardSummaryProps {
   awards: AwardCount[]
   className?: string
+  prepend?: React.ReactNode
 }
 
-export function AwardSummary({ awards, className }: AwardSummaryProps) {
-  if (awards.length === 0) return null
+export function AwardSummary({ awards, className, prepend }: AwardSummaryProps) {
+  if (awards.length === 0 && !prepend) return null
 
   return (
     <div className={cn('flex flex-wrap gap-2', className)}>
+      {prepend}
       {awards.map((award) => {
         const description = getDescription(award)
 
