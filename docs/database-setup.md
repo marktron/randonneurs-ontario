@@ -87,7 +87,7 @@ All tables have RLS enabled. The security model:
 ### Public Read Access
 
 - `chapters`, `routes`, `events`, `results`, `awards`, `result_awards` - fully public
-- `public_riders` view - riders without email addresses
+- `public_riders` view - riders without email addresses (only includes riders with at least one result)
 
 ### Restricted Access
 

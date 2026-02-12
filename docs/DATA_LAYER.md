@@ -291,10 +291,10 @@ export function RegistrationForm({ eventId }: { eventId: string }) {
 
 ### Database Views
 
-| View             | Description                               |
-| ---------------- | ----------------------------------------- |
-| `public_riders`  | Riders without email (for public display) |
-| `public_results` | Results with denormalized rider names     |
+| View             | Description                                                               |
+| ---------------- | ------------------------------------------------------------------------- |
+| `public_riders`  | Riders without email, filtered to those with results (for public display) |
+| `public_results` | Results with denormalized rider names                                     |
 
 ### Database Functions
 
@@ -316,7 +316,7 @@ All tables have RLS enabled. Key policies:
 ### Public Read Access
 
 - `chapters`, `routes`, `events`, `results`, `awards` - anyone can read
-- `public_riders` view - riders without emails
+- `public_riders` view - riders without emails (only those with at least one result)
 
 ### Protected Data
 
