@@ -5,6 +5,7 @@ import {
   parseLocalDate,
   formatFinishTime,
   parseFinishTimeToMinutes,
+  buildParticipantMailtoUrl,
 } from '@/lib/utils'
 
 describe('createSlug', () => {
@@ -225,5 +226,69 @@ describe('parseFinishTimeToMinutes', () => {
     const fast600 = parseFinishTimeToMinutes('1 day 11:45:00') // 35:45
     const slow600 = parseFinishTimeToMinutes('1 day 14:00:00') // 38:00
     expect(fast600).toBeLessThan(slow600!)
+  })
+})
+
+describe('buildParticipantMailtoUrl', () => {
+  it('builds mailto URL with BCC and subject', () => {
+    const url = buildParticipantMailtoUrl(
+      ['alice@example.com', 'bob@example.com'],
+      'Spring 200',
+      '2026-04-15'
+    )
+    expect(url).toContain('mailto:?bcc=')
+    expect(url).toContain('alice@example.com')
+    expect(url).toContain('bob@example.com')
+    expect(url).toContain('&subject=')
+    expect(url).toContain('Spring%20200')
+    expect(url).toContain('April')
+    expect(url).toContain('2026')
+  })
+
+  it('returns null when no emails provided', () => {
+    expect(buildParticipantMailtoUrl([], 'Spring 200', '2026-04-15')).toBeNull()
+  })
+
+  it('filters out empty strings', () => {
+    const url = buildParticipantMailtoUrl(['', 'alice@example.com', ''], 'Spring 200', '2026-04-15')
+    expect(url).not.toBeNull()
+    expect(url).toContain('alice@example.com')
+    // BCC should only have one email, not empty strings
+    const bccPart = url!.split('bcc=')[1].split('&')[0]
+    expect(bccPart).toBe('alice@example.com')
+  })
+
+  it('returns null when all emails are empty strings', () => {
+    expect(buildParticipantMailtoUrl(['', ''], 'Spring 200', '2026-04-15')).toBeNull()
+  })
+
+  it('encodes special characters in event name', () => {
+    const url = buildParticipantMailtoUrl(
+      ['rider@example.com'],
+      "New Year's 200 & Beyond",
+      '2026-01-01'
+    )
+    expect(url).not.toBeNull()
+    // Subject should be URL-encoded
+    expect(url).toContain('subject=')
+    const subject = url!.split('subject=')[1]
+    expect(decodeURIComponent(subject)).toContain("New Year's 200 & Beyond")
+  })
+
+  it('handles single email', () => {
+    const url = buildParticipantMailtoUrl(['solo@example.com'], 'Fall 300', '2026-10-05')
+    expect(url).toBe(
+      `mailto:?bcc=solo@example.com&subject=${encodeURIComponent('Fall 300 - October 5, 2026')}`
+    )
+  })
+
+  it('joins multiple emails with commas in BCC', () => {
+    const url = buildParticipantMailtoUrl(
+      ['a@example.com', 'b@example.com', 'c@example.com'],
+      'Test Event',
+      '2026-06-01'
+    )
+    const bccPart = url!.split('bcc=')[1].split('&')[0]
+    expect(bccPart).toBe('a@example.com,b@example.com,c@example.com')
   })
 })

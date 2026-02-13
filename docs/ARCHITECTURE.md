@@ -14,15 +14,15 @@ Randonneurs Ontario is a volunteer-run organization dedicated to **randonneuring
 
 ## Tech Stack
 
-| Layer | Technology | Purpose |
-|-------|------------|---------|
-| **Framework** | Next.js 16 (App Router) | React meta-framework with server-side rendering |
-| **Language** | TypeScript | Type-safe JavaScript |
-| **Database** | Supabase (PostgreSQL) | Hosted database with authentication |
-| **Styling** | Tailwind CSS 4 | Utility-first CSS framework |
-| **UI Components** | shadcn/ui + Radix UI | Accessible component library |
-| **Email** | SendGrid | Transactional emails for registration |
-| **Maps** | RideWithGPS | Route maps and cue sheets |
+| Layer             | Technology              | Purpose                                         |
+| ----------------- | ----------------------- | ----------------------------------------------- |
+| **Framework**     | Next.js 16 (App Router) | React meta-framework with server-side rendering |
+| **Language**      | TypeScript              | Type-safe JavaScript                            |
+| **Database**      | Supabase (PostgreSQL)   | Hosted database with authentication             |
+| **Styling**       | Tailwind CSS 4          | Utility-first CSS framework                     |
+| **UI Components** | shadcn/ui + Radix UI    | Accessible component library                    |
+| **Email**         | SendGrid                | Transactional emails for registration           |
+| **Maps**          | RideWithGPS             | Route maps and cue sheets                       |
 
 ## Directory Structure
 
@@ -81,14 +81,14 @@ Next.js 16 uses React Server Components by default. This means:
 ```tsx
 // Server Component (default) - can fetch data directly
 export default async function CalendarPage() {
-  const events = await getEventsByChapter('toronto')  // Direct DB access
+  const events = await getEventsByChapter('toronto') // Direct DB access
   return <EventList events={events} />
 }
 
 // Client Component - for interactive features
-'use client'
+;('use client')
 export function RegistrationForm() {
-  const [name, setName] = useState('')  // Browser-only state
+  const [name, setName] = useState('') // Browser-only state
   // ...
 }
 ```
@@ -113,10 +113,10 @@ export async function registerForEvent(data: RegistrationData) {
 
 The codebase separates **reads** from **writes**:
 
-| Folder | Purpose | Example |
-|--------|---------|---------|
-| `lib/data/` | Read operations (queries) | `getEventsByChapter()` |
-| `lib/actions/` | Write operations (mutations) | `registerForEvent()` |
+| Folder         | Purpose                      | Example                |
+| -------------- | ---------------------------- | ---------------------- |
+| `lib/data/`    | Read operations (queries)    | `getEventsByChapter()` |
+| `lib/actions/` | Write operations (mutations) | `registerForEvent()`   |
 
 This separation makes it easy to understand data flow and apply caching.
 
@@ -124,11 +124,11 @@ This separation makes it easy to understand data flow and apply caching.
 
 There are multiple Supabase clients for different use cases:
 
-| Client | File | Use Case |
-|--------|------|----------|
-| `getSupabase()` | `lib/supabase.ts` | Public reads (respects RLS) |
-| `createSupabaseServerClient()` | `lib/supabase-server-client.ts` | Server components with auth |
-| `getSupabaseAdmin()` | `lib/supabase-server.ts` | Server actions (bypasses RLS) |
+| Client                         | File                            | Use Case                      |
+| ------------------------------ | ------------------------------- | ----------------------------- |
+| `getSupabase()`                | `lib/supabase.ts`               | Public reads (respects RLS)   |
+| `createSupabaseServerClient()` | `lib/supabase-server-client.ts` | Server components with auth   |
+| `getSupabaseAdmin()`           | `lib/supabase-server.ts`        | Server actions (bypasses RLS) |
 
 **Rule of thumb:** Use `getSupabase()` for reading public data, `getSupabaseAdmin()` for writes.
 
@@ -189,10 +189,11 @@ Admin submits final results to ACP
 ```
 
 **Key components:**
+
 - `lib/events/complete-event.ts` - Creates pending results and sends emails
 - `lib/actions/rider-results.ts` - Handles rider submissions and file uploads
 - `components/result-submission-form.tsx` - Rider-facing submission form
-- `components/admin/event-results-manager.tsx` - Admin view with evidence column
+- `components/admin/event-results-manager.tsx` - Admin view with evidence column and "Email Participants" mailto link (BCC'd to all registered riders, subject pre-populated with event name and date)
 
 **Security:** Each result has a unique `submission_token` (UUID). No authentication required - the token acts as a capability URL.
 
@@ -222,10 +223,12 @@ This site has a **split authentication model**:
 - **Admins**: Use Supabase Auth (email/password) for the admin dashboard
 
 Admin roles:
+
 - `admin` - Full access to all chapters
 - `chapter_admin` - Scoped to their chapter only
 
 Admin features:
+
 - Login at `/admin/login`
 - Settings page at `/admin/settings` for profile editing (name, phone, default chapter) and password changes
 - Super admins can manage other admin users at `/admin/users`
@@ -245,6 +248,7 @@ GitHub Actions (hourly) → /api/cron/complete-events → Update event status �
 **Workflow:** `.github/workflows/complete-events.yml`
 
 **How it works:**
+
 1. GitHub Actions triggers every hour (`0 * * * *`)
 2. Calls the `/api/cron/complete-events` endpoint with `CRON_SECRET` for auth
 3. The endpoint checks each scheduled event's closing time (start + BRM time limit)
@@ -252,6 +256,7 @@ GitHub Actions (hourly) → /api/cron/complete-events → Update event status �
 5. Registered riders receive emails with links to submit their results
 
 **Required GitHub Secrets:**
+
 - `CRON_SECRET` - Must match the Vercel environment variable
 - `SITE_URL` - Production URL (e.g., `https://randonneursontario.ca`)
 
@@ -262,26 +267,28 @@ GitHub Actions (hourly) → /api/cron/complete-events → Update event status �
 The site uses **Sentry** for error tracking and performance monitoring.
 
 **Configuration files:**
+
 - `instrumentation.ts` - Server-side initialization
 - `instrumentation-client.ts` - Client-side initialization
 - `sentry.server.config.ts` - Server config
 - `sentry.edge.config.ts` - Edge runtime config
 
 **Required Vercel environment variable:**
+
 - `SENTRY_AUTH_TOKEN` - For source map uploads during builds
 
 Errors are automatically captured for both client and server. View them at [sentry.io](https://sentry.io).
 
 ## Key Configuration Files
 
-| File | Purpose |
-|------|---------|
-| `next.config.ts` | Next.js configuration (wrapped with Sentry) |
-| `tailwind.config.ts` | Tailwind CSS customization |
-| `components.json` | shadcn/ui component settings |
-| `supabase/config.toml` | Local Supabase settings |
-| `.env.local` | Environment variables (secrets) |
-| `.github/workflows/` | GitHub Actions for scheduled tasks |
+| File                   | Purpose                                     |
+| ---------------------- | ------------------------------------------- |
+| `next.config.ts`       | Next.js configuration (wrapped with Sentry) |
+| `tailwind.config.ts`   | Tailwind CSS customization                  |
+| `components.json`      | shadcn/ui component settings                |
+| `supabase/config.toml` | Local Supabase settings                     |
+| `.env.local`           | Environment variables (secrets)             |
+| `.github/workflows/`   | GitHub Actions for scheduled tasks          |
 
 ## Common Patterns
 
@@ -289,11 +296,7 @@ Errors are automatically captured for both client and server. View them at [sent
 
 ```tsx
 // app/calendar/[chapter]/page.tsx
-export default async function CalendarPage({
-  params
-}: {
-  params: Promise<{ chapter: string }>
-}) {
+export default async function CalendarPage({ params }: { params: Promise<{ chapter: string }> }) {
   const { chapter } = await params
   const events = await getEventsByChapter(chapter)
 

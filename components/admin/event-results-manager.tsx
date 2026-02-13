@@ -27,11 +27,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Loader2, Check, Plus, CheckCircle2, Globe, FileText } from 'lucide-react'
+import { Loader2, Check, Plus, CheckCircle2, Globe, FileText, Mail } from 'lucide-react'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { createResult, updateResult, type ResultStatus } from '@/lib/actions/results'
-import { formatFinishTime } from '@/lib/utils'
+import { formatFinishTime, buildParticipantMailtoUrl } from '@/lib/utils'
 import { SubmitResultsButton } from './submit-results-button'
 import { AddRiderDialog } from './add-rider-dialog'
 import { toast } from 'sonner'
@@ -93,6 +93,7 @@ interface Participant {
 interface EventResultsManagerProps {
   eventId: string
   eventName: string
+  eventDate: string
   eventStatus: string | null
   isPastEvent: boolean
   season: number | null
@@ -347,6 +348,7 @@ function RiderRow({ participant, result, eventId, season, distanceKm }: RiderRow
 export function EventResultsManager({
   eventId,
   eventName,
+  eventDate,
   eventStatus,
   isPastEvent,
   season,
@@ -413,6 +415,11 @@ export function EventResultsManager({
   const completedCount = results.length
   const totalCount = allParticipants.length
 
+  const participantEmails = allParticipants
+    .map((p) => p.email)
+    .filter((email): email is string => email !== null)
+  const mailtoUrl = buildParticipantMailtoUrl(participantEmails, eventName, eventDate)
+
   return (
     <Card>
       <CardHeader className="flex flex-row items-start justify-between space-y-0">
@@ -424,12 +431,22 @@ export function EventResultsManager({
             </CardDescription>
           )}
         </div>
-        {isPastEvent && (
-          <Button variant="outline" size="sm" onClick={() => setAddRiderOpen(true)}>
-            <Plus className="mr-2 h-4 w-4" />
-            Add Rider
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          {mailtoUrl && (
+            <Button variant="outline" size="sm" asChild>
+              <a href={mailtoUrl}>
+                <Mail className="mr-2 h-4 w-4" />
+                Email Participants
+              </a>
+            </Button>
+          )}
+          {isPastEvent && (
+            <Button variant="outline" size="sm" onClick={() => setAddRiderOpen(true)}>
+              <Plus className="mr-2 h-4 w-4" />
+              Add Rider
+            </Button>
+          )}
+        </div>
       </CardHeader>
       <CardContent className="space-y-4">
         {isSubmitted && (
