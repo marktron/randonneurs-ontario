@@ -101,12 +101,22 @@ export async function createResult(data: CreateResultData): Promise<ActionResult
   // Revalidate public results pages
   await revalidateResultsTags(eventId)
 
+  // Look up names for audit log
+  const [{ data: eventData }, { data: riderData }] = await Promise.all([
+    getSupabaseAdmin().from('events').select('name').eq('id', eventId).single(),
+    getSupabaseAdmin().from('riders').select('first_name, last_name').eq('id', riderId).single(),
+  ])
+  const eventName = (eventData as { name: string } | null)?.name || eventId
+  const riderName = riderData
+    ? `${(riderData as { first_name: string; last_name: string }).first_name} ${(riderData as { first_name: string; last_name: string }).last_name}`
+    : riderId
+
   await logAuditEvent({
     adminId: admin.id,
     action: 'create',
     entityType: 'result',
     entityId: eventId,
-    description: `Created result for event ${eventId}: rider ${riderId}, status ${status}`,
+    description: `Created result for ${eventName}: ${riderName}, status ${status}`,
   })
 
   return createActionResult()
@@ -137,7 +147,7 @@ export async function updateResult(
   // Get the event_id to revalidate results cache tags
   const { data: result } = await getSupabaseAdmin()
     .from('results')
-    .select('event_id')
+    .select('event_id, events (name), riders (first_name, last_name)')
     .eq('id', resultId)
     .single()
 
@@ -148,12 +158,23 @@ export async function updateResult(
     }
   }
 
+  const updateEvent = (result as { events: { name: string } | null } | null)?.events
+  const updateRider = (
+    result as { riders: { first_name: string; last_name: string } | null } | null
+  )?.riders
+  const updateDesc = [
+    updateEvent ? updateEvent.name : null,
+    updateRider ? `${updateRider.first_name} ${updateRider.last_name}` : null,
+  ]
+    .filter(Boolean)
+    .join(', ')
+
   await logAuditEvent({
     adminId: admin.id,
     action: 'update',
     entityType: 'result',
     entityId: resultId,
-    description: `Updated result: ${resultId}`,
+    description: `Updated result${updateDesc ? `: ${updateDesc}` : ''}`,
   })
 
   return createActionResult()
@@ -162,10 +183,10 @@ export async function updateResult(
 export async function deleteResult(resultId: string): Promise<ActionResult> {
   const admin = await requireAdmin()
 
-  // Fetch event_id before deleting for revalidation
+  // Fetch event_id and names before deleting for revalidation and audit log
   const { data: result } = await getSupabaseAdmin()
     .from('results')
-    .select('event_id')
+    .select('event_id, events (name), riders (first_name, last_name)')
     .eq('id', resultId)
     .single()
 
@@ -186,12 +207,23 @@ export async function deleteResult(resultId: string): Promise<ActionResult> {
     }
   }
 
+  const deleteEvent = (result as { events: { name: string } | null } | null)?.events
+  const deleteRider = (
+    result as { riders: { first_name: string; last_name: string } | null } | null
+  )?.riders
+  const deleteDesc = [
+    deleteEvent ? deleteEvent.name : null,
+    deleteRider ? `${deleteRider.first_name} ${deleteRider.last_name}` : null,
+  ]
+    .filter(Boolean)
+    .join(', ')
+
   await logAuditEvent({
     adminId: admin.id,
     action: 'delete',
     entityType: 'result',
     entityId: resultId,
-    description: `Deleted result: ${resultId}`,
+    description: `Deleted result${deleteDesc ? `: ${deleteDesc}` : ''}`,
   })
 
   return createActionResult()
@@ -237,12 +269,19 @@ export async function createBulkResults(
   // Revalidate public results pages
   await revalidateResultsTags(eventId)
 
+  const { data: bulkEventData } = await getSupabaseAdmin()
+    .from('events')
+    .select('name')
+    .eq('id', eventId)
+    .single()
+  const bulkEventName = (bulkEventData as { name: string } | null)?.name || eventId
+
   await logAuditEvent({
     adminId: admin.id,
     action: 'create',
     entityType: 'result',
     entityId: eventId,
-    description: `Created ${results.length} bulk results for event ${eventId}`,
+    description: `Created ${results.length} bulk results for ${bulkEventName}`,
   })
 
   return { success: true }

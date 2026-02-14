@@ -147,6 +147,14 @@ export async function deleteAdminUser(userId: string): Promise<ActionResult> {
     return { success: false, error: 'You cannot delete your own account' }
   }
 
+  // Fetch name before deleting for audit log
+  const { data: adminToDelete } = await getSupabaseAdmin()
+    .from('admins')
+    .select('name')
+    .eq('id', userId)
+    .single()
+  const deletedAdminName = (adminToDelete as { name: string } | null)?.name || userId
+
   // Delete admin record first
   const { error: adminError } = await getSupabaseAdmin().from('admins').delete().eq('id', userId)
 
@@ -178,7 +186,7 @@ export async function deleteAdminUser(userId: string): Promise<ActionResult> {
     action: 'delete',
     entityType: 'admin_user',
     entityId: userId,
-    description: `Deleted admin user: ${userId}`,
+    description: `Deleted admin user: ${deletedAdminName}`,
   })
 
   return createActionResult()

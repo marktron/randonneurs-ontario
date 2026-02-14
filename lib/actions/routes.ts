@@ -221,10 +221,10 @@ export async function updateRoute(
   revalidatePath('/admin/routes')
   revalidatePath(`/admin/routes/${routeId}`)
 
-  // Fetch route to get chapter and slug for cache tag revalidation
+  // Fetch route to get chapter, slug, and name for cache tag revalidation and audit log
   const { data: route } = await getSupabaseAdmin()
     .from('routes')
-    .select('chapter_id, slug')
+    .select('name, chapter_id, slug')
     .eq('id', routeId)
     .single()
 
@@ -235,12 +235,14 @@ export async function updateRoute(
     }
   }
 
+  const updatedRouteName = data.name || (route as { name: string } | null)?.name || routeId
+
   await logAuditEvent({
     adminId: admin.id,
     action: 'update',
     entityType: 'route',
     entityId: routeId,
-    description: `Updated route: ${data.name || routeId}`,
+    description: `Updated route: ${updatedRouteName}`,
   })
 
   return { success: true }
@@ -249,10 +251,10 @@ export async function updateRoute(
 export async function deleteRoute(routeId: string): Promise<ActionResult> {
   const admin = await requireAdmin()
 
-  // Fetch route to get chapter info before deleting
+  // Fetch route to get chapter info and name before deleting
   const { data: route } = await getSupabaseAdmin()
     .from('routes')
-    .select('chapter_id')
+    .select('name, chapter_id')
     .eq('id', routeId)
     .single()
 
@@ -292,7 +294,7 @@ export async function deleteRoute(routeId: string): Promise<ActionResult> {
     action: 'delete',
     entityType: 'route',
     entityId: routeId,
-    description: `Deleted route: ${routeId}`,
+    description: `Deleted route: ${(route as { name: string } | null)?.name || routeId}`,
   })
 
   return createActionResult()
@@ -315,10 +317,10 @@ export async function toggleRouteActive(routeId: string, isActive: boolean): Pro
   // Revalidate admin pages (still use revalidatePath for admin routes)
   revalidatePath('/admin/routes')
 
-  // Fetch route to get chapter and slug for cache tag revalidation
+  // Fetch route to get chapter, slug, and name for cache tag revalidation and audit log
   const { data: route } = await getSupabaseAdmin()
     .from('routes')
-    .select('chapter_id, slug')
+    .select('name, chapter_id, slug')
     .eq('id', routeId)
     .single()
 
@@ -329,12 +331,14 @@ export async function toggleRouteActive(routeId: string, isActive: boolean): Pro
     }
   }
 
+  const routeName = (route as { name: string } | null)?.name || routeId
+
   await logAuditEvent({
     adminId: admin.id,
     action: 'update',
     entityType: 'route',
     entityId: routeId,
-    description: `Set route ${isActive ? 'active' : 'inactive'}: ${routeId}`,
+    description: `Set route ${isActive ? 'active' : 'inactive'}: ${routeName}`,
   })
 
   return createActionResult()

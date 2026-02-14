@@ -254,7 +254,7 @@ export async function deleteEvent(eventId: string): Promise<ActionResult> {
     // Fetch the event to check the date and get chapter info for revalidation
     const { data: event, error: fetchError } = await getSupabaseAdmin()
       .from('events')
-      .select('id, event_date, chapter_id, event_type')
+      .select('id, name, event_date, chapter_id, event_type')
       .eq('id', eventId)
       .single()
 
@@ -262,7 +262,10 @@ export async function deleteEvent(eventId: string): Promise<ActionResult> {
       return { success: false, error: 'Event not found' }
     }
 
-    const typedEvent = event as Pick<Event, 'id' | 'event_date' | 'chapter_id' | 'event_type'>
+    const typedEvent = event as Pick<
+      Event,
+      'id' | 'name' | 'event_date' | 'chapter_id' | 'event_type'
+    >
 
     // Check if event is in the past
     const today = new Date().toISOString().split('T')[0]
@@ -324,7 +327,7 @@ export async function deleteEvent(eventId: string): Promise<ActionResult> {
       action: 'delete',
       entityType: 'event',
       entityId: eventId,
-      description: `Deleted event: ${eventId}`,
+      description: `Deleted event: ${typedEvent.name}`,
     })
 
     return createActionResult()
