@@ -149,7 +149,7 @@ describe('uploadImage', () => {
 
     it('returns error for invalid file type', async () => {
       const formData = new FormData()
-      const file = createMockFile('test.pdf', 'application/pdf', 1000)
+      const file = createMockFile('test.zip', 'application/zip', 1000)
       formData.append('file', file)
 
       const result = await uploadImage(formData)
@@ -178,7 +178,7 @@ describe('uploadImage', () => {
 
     it('returns error for file too large', async () => {
       const formData = new FormData()
-      const file = createMockFile('large.jpg', 'image/jpeg', 6 * 1024 * 1024) // 6MB
+      const file = createMockFile('large.jpg', 'image/jpeg', 11 * 1024 * 1024) // 11MB
       formData.append('file', file)
 
       const result = await uploadImage(formData)
@@ -189,7 +189,7 @@ describe('uploadImage', () => {
 
     it('accepts file at maximum size', async () => {
       const formData = new FormData()
-      const file = createMockFile('max.jpg', 'image/jpeg', 5 * 1024 * 1024) // 5MB
+      const file = createMockFile('max.jpg', 'image/jpeg', 10 * 1024 * 1024) // 10MB
       formData.append('file', file)
 
       mockModule.__mockUploadSuccess()
@@ -324,6 +324,77 @@ describe('uploadImage', () => {
       if (result.success && result.data) {
         expect(result.data.storagePath).toContain('general/')
       }
+    })
+  })
+
+  describe('document uploads', () => {
+    it('accepts PDF files', async () => {
+      const formData = new FormData()
+      const file = createMockFile('document.pdf', 'application/pdf', 2000)
+      formData.append('file', file)
+
+      mockModule.__mockUploadSuccess()
+      mockModule.__mockDbInsertSuccess()
+
+      const result = await uploadImage(formData)
+
+      expect(result.success).toBe(true)
+      if (result.success && result.data) {
+        expect(result.data.filename).toBe('document.pdf')
+        expect(result.data.contentType).toBe('application/pdf')
+      }
+    })
+
+    it('accepts Word documents', async () => {
+      const formData = new FormData()
+      const file = createMockFile(
+        'report.docx',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        3000
+      )
+      formData.append('file', file)
+
+      mockModule.__mockUploadSuccess()
+      mockModule.__mockDbInsertSuccess()
+
+      const result = await uploadImage(formData)
+
+      expect(result.success).toBe(true)
+      if (result.success && result.data) {
+        expect(result.data.filename).toBe('report.docx')
+      }
+    })
+
+    it('accepts Excel spreadsheets', async () => {
+      const formData = new FormData()
+      const file = createMockFile(
+        'data.xlsx',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        4000
+      )
+      formData.append('file', file)
+
+      mockModule.__mockUploadSuccess()
+      mockModule.__mockDbInsertSuccess()
+
+      const result = await uploadImage(formData)
+
+      expect(result.success).toBe(true)
+      if (result.success && result.data) {
+        expect(result.data.filename).toBe('data.xlsx')
+      }
+    })
+
+    it('returns descriptive error for unsupported types', async () => {
+      const formData = new FormData()
+      const file = createMockFile('archive.zip', 'application/zip', 1000)
+      formData.append('file', file)
+
+      const result = await uploadImage(formData)
+
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('Invalid file type')
+      expect(result.error).toContain('Allowed:')
     })
   })
 })

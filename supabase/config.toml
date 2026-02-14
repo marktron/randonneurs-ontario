@@ -109,11 +109,21 @@ file_size_limit = "10MiB"
 # [storage.image_transformation]
 # enabled = true
 
-# Storage bucket for admin-uploaded images
+# Storage bucket for admin-uploaded files (images and documents)
 [storage.buckets.images]
 public = true
-file_size_limit = "5MiB"
-allowed_mime_types = ["image/png", "image/jpeg", "image/webp", "image/gif"]
+file_size_limit = "10MiB"
+allowed_mime_types = [
+  "image/png",
+  "image/jpeg",
+  "image/webp",
+  "image/gif",
+  "application/pdf",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.ms-excel",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+]
 
 [auth]
 enabled = true
