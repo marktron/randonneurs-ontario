@@ -94,3 +94,28 @@ export function formatStatus(status: string): string | null {
   if (status === 'finished') return null
   return statusMap[status] || status.toUpperCase()
 }
+
+/**
+ * Build a mailto: URL with participant emails in BCC and event details in the subject.
+ * Filters out participants without email addresses.
+ * Returns null if no participants have email addresses.
+ */
+export function buildParticipantMailtoUrl(
+  emails: string[],
+  eventName: string,
+  eventDate: string
+): string | null {
+  const validEmails = emails.filter(Boolean)
+  if (validEmails.length === 0) return null
+
+  const formattedDate = parseLocalDate(eventDate).toLocaleDateString('en-CA', {
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  })
+
+  const subject = encodeURIComponent(`${eventName} - ${formattedDate}`)
+  const bcc = validEmails.join(',')
+
+  return `mailto:?bcc=${bcc}&subject=${subject}`
+}

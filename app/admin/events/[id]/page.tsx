@@ -189,6 +189,7 @@ export default async function EventDetailPage({ params, searchParams }: EventPag
       <EventResultsManager
         eventId={event.id}
         eventName={event.name}
+        eventDate={event.event_date}
         eventStatus={event.status}
         isPastEvent={event.event_date < new Date().toISOString().split('T')[0]}
         season={event.season}
