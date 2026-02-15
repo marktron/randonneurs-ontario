@@ -145,6 +145,12 @@ export async function getPermanentRoutes()
 export async function getAllRiders(): Promise<RiderListItem[]>
 ```
 
+#### News
+
+- `getPublishedNews()` — Published items for homepage, cached with 60s revalidation
+- `getAllNews()` — All items for admin list (uses admin client)
+- `getNewsItem(id)` — Single item by ID for admin edit (uses admin client)
+
 ### Usage Pattern
 
 ```typescript
@@ -199,6 +205,12 @@ export async function updateRoute(id: string, data: RouteFormData)
 ```typescript
 export async function submitEventResults(eventId: string, results: ResultEntry[])
 ```
+
+#### News (`lib/actions/news.ts`)
+
+- `createNewsItem(input)` — Create news item with audit log
+- `updateNewsItem(id, input)` — Update news item with audit log
+- `deleteNewsItem(id)` — Delete news item with audit log
 
 ### lib/actions/rider-results.ts (Public - Token-based)
 

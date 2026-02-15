@@ -235,4 +235,75 @@ test.describe('Admin Workflows', () => {
       }
     })
   })
+
+  test.describe('News Management', () => {
+    test.beforeEach(async ({ page }) => {
+      if (!process.env.E2E_ADMIN_EMAIL || !process.env.E2E_ADMIN_PASSWORD) {
+        test.skip()
+        return
+      }
+      await loginAsAdmin(page)
+    })
+
+    test('can create, publish, and unpublish a news item', async ({ page }) => {
+      // Navigate to the news admin page
+      await page.goto('/admin/news')
+      await page.waitForLoadState('networkidle')
+
+      // Verify the page loads with the correct heading
+      await expect(page.locator('h1')).toContainText('News', { timeout: 10000 })
+
+      // Click "New Item" to create a news item
+      await page.click('a[href="/admin/news/new"]')
+      await page.waitForLoadState('networkidle')
+      await expect(page).toHaveURL(/\/admin\/news\/new/, { timeout: 10000 })
+
+      // Fill in the title
+      await page.fill('input#title', 'Test Announcement')
+
+      // Fill in the body (the markdown editor textarea)
+      await page.fill(
+        'textarea[placeholder="Write your news content here using Markdown..."]',
+        'This is a **test** notice.'
+      )
+
+      // Toggle the published switch on
+      await page.click('button#published')
+
+      // Click the create button
+      await page.click('button:has-text("Create Item")')
+
+      // Wait for navigation to the edit page (indicates successful creation)
+      await page.waitForURL(/\/admin\/news\/[a-zA-Z0-9-]+$/, { timeout: 10000 })
+      await page.waitForLoadState('networkidle')
+
+      // Navigate to the homepage and verify the news item appears
+      await page.goto('/')
+      await page.waitForLoadState('networkidle')
+      await expect(page.locator('text=Test Announcement')).toBeVisible({ timeout: 10000 })
+
+      // Navigate back to the admin news list
+      await page.goto('/admin/news')
+      await page.waitForLoadState('networkidle')
+
+      // Click on the test item in the table
+      await page.click('text=Test Announcement')
+      await page.waitForLoadState('networkidle')
+      await expect(page).toHaveURL(/\/admin\/news\/[a-zA-Z0-9-]+$/, { timeout: 10000 })
+
+      // Toggle published switch off (it should currently be checked)
+      await page.click('button#published')
+
+      // Save changes
+      await page.click('button:has-text("Save Changes")')
+
+      // Wait for the save to complete (toast notification appears)
+      await expect(page.locator('text=News item saved')).toBeVisible({ timeout: 10000 })
+
+      // Navigate to the homepage and verify the news item no longer appears
+      await page.goto('/')
+      await page.waitForLoadState('networkidle')
+      await expect(page.locator('text=Test Announcement')).not.toBeVisible({ timeout: 10000 })
+    })
+  })
 })

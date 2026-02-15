@@ -215,6 +215,15 @@ HTML streamed to browser
 Client components hydrate
 ```
 
+### News & Notices
+
+The `news` table stores homepage announcements managed through `/admin/news`. Each item has a title, markdown body, publish toggle, and sort order. Published items display as compact cards in the homepage sidebar with accordion-style expansion. All admins (both `admin` and `chapter_admin` roles) can manage news items. News is org-wide (not chapter-scoped).
+
+- **Data queries:** `lib/data/news.ts` — `getPublishedNews()`, `getAllNews()`, `getNewsItem(id)`
+- **Server actions:** `lib/actions/news.ts` — `createNewsItem()`, `updateNewsItem()`, `deleteNewsItem()`
+- **Admin UI:** `app/admin/news/` — list, create, edit pages
+- **Homepage component:** `components/news-section.tsx`
+
 ## Authentication Model
 
 This site has a **split authentication model**:
