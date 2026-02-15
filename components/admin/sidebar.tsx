@@ -27,6 +27,7 @@ import {
   FileText,
   ScrollText,
   Settings,
+  Megaphone,
 } from 'lucide-react'
 import { logout } from '@/lib/actions/auth'
 import type { AdminUser } from '@/types/queries'
@@ -65,6 +66,12 @@ const mainNavItems = [
     href: '/admin/results',
     icon: Trophy,
     testId: 'nav-results',
+  },
+  {
+    title: 'News',
+    href: '/admin/news',
+    icon: Megaphone,
+    testId: 'nav-news',
   },
 ]
 

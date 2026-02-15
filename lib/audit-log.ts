@@ -1,7 +1,14 @@
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 
 export type AuditAction = 'create' | 'update' | 'delete' | 'status_change' | 'merge' | 'submit'
-export type AuditEntityType = 'event' | 'route' | 'rider' | 'result' | 'page' | 'admin_user'
+export type AuditEntityType =
+  | 'event'
+  | 'route'
+  | 'rider'
+  | 'result'
+  | 'page'
+  | 'admin_user'
+  | 'news'
 
 interface AuditLogParams {
   adminId: string

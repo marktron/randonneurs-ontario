@@ -533,3 +533,18 @@ export type ResultForFileUpload = Pick<
  * Chapter slug only (for revalidation)
  */
 export type ChapterSlugOnly = Pick<Chapter, 'slug'>
+
+/**
+ * News item for admin list
+ */
+export type NewsItem = Database['public']['Tables']['news']['Row']
+
+/**
+ * News item insert type
+ */
+export type NewsInsert = Database['public']['Tables']['news']['Insert']
+
+/**
+ * News item update type
+ */
+export type NewsUpdate = Database['public']['Tables']['news']['Update']
