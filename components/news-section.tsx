@@ -20,11 +20,6 @@ interface NewsSectionProps {
   items: NewsItem[]
 }
 
-function formatDate(dateString: string): string {
-  const date = new Date(dateString)
-  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-}
-
 function stripMarkdown(text: string): string {
   return text
     .replace(/#{1,6}\s+/g, '') // headings
@@ -84,11 +79,6 @@ export function NewsSection({ items }: NewsSectionProps) {
                     <ChevronDown className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
                   )}
                 </button>
-
-                {/* Date */}
-                <div className="text-xs text-muted-foreground mt-1">
-                  {formatDate(item.created_at)}
-                </div>
 
                 {/* Collapsed: teaser */}
                 {!isExpanded && (
