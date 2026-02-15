@@ -3,10 +3,13 @@ import { Hero } from '@/components/hero'
 import { UpcomingRides } from '@/components/upcoming-rides'
 import { ArrowLink } from '@/components/arrow-link'
 import { MyRidesSection } from '@/components/my-rides-section'
+import { NewsSection } from '@/components/news-section'
 import { getHeroImages } from '@/lib/hero-images'
+import { getPublishedNews } from '@/lib/data/news'
 
-export default function Page() {
+export default async function Page() {
   const heroImages = getHeroImages()
+  const newsItems = await getPublishedNews()
   return (
     <PageShell>
       <Hero images={heroImages} />
@@ -61,6 +64,7 @@ export default function Page() {
 
           {/* Sidebar */}
           <div className="lg:w-80 lg:shrink-0 lg:border-l lg:border-border lg:pl-12">
+            <NewsSection items={newsItems} />
             <MyRidesSection />
             <UpcomingRides />
           </div>

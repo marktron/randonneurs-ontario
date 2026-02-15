@@ -157,7 +157,7 @@ export function UpcomingRides() {
 
             {/* Rides list */}
             <ul className="space-y-1">
-              {chapter.rides.map((ride, index) => {
+              {chapter.rides.slice(0, 3).map((ride, index) => {
                 const { month, day } = formatDate(ride.date)
                 return (
                   <li key={index}>
