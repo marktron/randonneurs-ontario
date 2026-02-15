@@ -342,7 +342,7 @@ export type Database = {
           created_by: string | null
           id: string
           is_published: boolean
-          sort_order: number
+          teaser: string | null
           title: string
           updated_at: string
         }
@@ -352,7 +352,7 @@ export type Database = {
           created_by?: string | null
           id?: string
           is_published?: boolean
-          sort_order?: number
+          teaser?: string | null
           title: string
           updated_at?: string
         }
@@ -362,7 +362,7 @@ export type Database = {
           created_by?: string | null
           id?: string
           is_published?: boolean
-          sort_order?: number
+          teaser?: string | null
           title?: string
           updated_at?: string
         }

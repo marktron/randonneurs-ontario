@@ -55,8 +55,8 @@ export default async function AdminEditNewsPage({ params }: PageProps) {
         initialId={item.id}
         initialTitle={item.title}
         initialBody={item.body}
+        initialTeaser={item.teaser ?? ''}
         initialIsPublished={item.is_published}
-        initialSortOrder={item.sort_order}
       />
     </div>
   )

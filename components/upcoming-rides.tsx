@@ -136,13 +136,13 @@ function formatDate(dateString: string): { month: string; day: string } {
 export function UpcomingRides() {
   return (
     <aside className="w-full">
-      <h2 className="font-serif text-2xl tracking-tight mb-8">Upcoming Rides</h2>
+      <h2 className="font-serif text-2xl tracking-tight mb-4">Upcoming Rides</h2>
 
-      <div className="space-y-8">
+      <div className="space-y-4">
         {upcomingRides.map((chapter) => (
           <div key={chapter.slug}>
             {/* Chapter name as overline */}
-            <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center justify-between mb-2">
               <h3 className="text-xs font-medium tracking-widest uppercase text-muted-foreground">
                 {chapter.name}
               </h3>
@@ -163,7 +163,7 @@ export function UpcomingRides() {
                   <li key={index}>
                     <Link
                       href={`/register/${ride.slug}`}
-                      className="group flex items-start gap-3 py-3 -mx-2 px-2 rounded-lg hover:bg-muted/50 transition-colors"
+                      className="group flex items-start gap-2 py-2 -mx-2 px-2 rounded-lg hover:bg-muted/50 transition-colors"
                     >
                       {/* Date block */}
                       <div className="flex-shrink-0 w-10 text-center">

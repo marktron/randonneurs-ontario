@@ -23,8 +23,8 @@ interface NewsEditorProps {
   initialId?: string
   initialTitle?: string
   initialBody?: string
+  initialTeaser?: string
   initialIsPublished?: boolean
-  initialSortOrder?: number
   isNew?: boolean
 }
 
@@ -32,15 +32,15 @@ export function NewsEditor({
   initialId,
   initialTitle = '',
   initialBody = '',
+  initialTeaser = '',
   initialIsPublished = false,
-  initialSortOrder = 0,
   isNew = false,
 }: NewsEditorProps) {
   const router = useRouter()
   const [title, setTitle] = useState(initialTitle)
   const [body, setBody] = useState(initialBody)
+  const [teaser, setTeaser] = useState(initialTeaser)
   const [isPublished, setIsPublished] = useState(initialIsPublished)
-  const [sortOrder, setSortOrder] = useState(initialSortOrder)
   const [saving, setSaving] = useState(false)
 
   async function handleSave() {
@@ -55,8 +55,8 @@ export function NewsEditor({
         const result = await createNewsItem({
           title: title.trim(),
           body: body.trim(),
+          teaser: teaser.trim(),
           is_published: isPublished,
-          sort_order: sortOrder,
         })
 
         if (result.success) {
@@ -71,8 +71,8 @@ export function NewsEditor({
         const result = await updateNewsItem(initialId, {
           title: title.trim(),
           body: body.trim(),
+          teaser: teaser.trim(),
           is_published: isPublished,
-          sort_order: sortOrder,
         })
 
         if (result.success) {
@@ -101,6 +101,19 @@ export function NewsEditor({
         />
       </div>
 
+      <div className="space-y-2">
+        <Label htmlFor="teaser">Teaser</Label>
+        <Input
+          id="teaser"
+          value={teaser}
+          onChange={(e) => setTeaser(e.target.value)}
+          placeholder="Optional one-line summary for the homepage"
+        />
+        <p className="text-xs text-muted-foreground">
+          If left blank, the first few lines of the content will be used.
+        </p>
+      </div>
+
       <MarkdownEditor
         label="Content (Markdown)"
         value={body}
@@ -108,42 +121,30 @@ export function NewsEditor({
         placeholder="Write your news content here using Markdown..."
       />
 
-      <div className="space-y-2">
-        <Label htmlFor="sort-order">Sort Order</Label>
-        <Input
-          id="sort-order"
-          type="number"
-          value={sortOrder}
-          onChange={(e) => setSortOrder(parseInt(e.target.value, 10) || 0)}
-          placeholder="0"
-        />
-        <p className="text-xs text-muted-foreground">
-          Lower numbers appear first. Items with the same sort order are sorted by date.
-        </p>
-      </div>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <Switch id="published" checked={isPublished} onCheckedChange={setIsPublished} />
+          <Label htmlFor="published">Published</Label>
+        </div>
 
-      <div className="flex items-center space-x-2">
-        <Switch id="published" checked={isPublished} onCheckedChange={setIsPublished} />
-        <Label htmlFor="published">Published</Label>
-      </div>
-
-      <div className="flex justify-end gap-2">
-        <Button variant="outline" onClick={() => router.back()}>
-          Cancel
-        </Button>
-        <Button onClick={handleSave} disabled={saving}>
-          {saving ? (
-            <>
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              {isNew ? 'Creating...' : 'Saving...'}
-            </>
-          ) : (
-            <>
-              <Save className="h-4 w-4 mr-2" />
-              {isNew ? 'Create Item' : 'Save Changes'}
-            </>
-          )}
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => router.back()}>
+            Cancel
+          </Button>
+          <Button onClick={handleSave} disabled={saving}>
+            {saving ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                {isNew ? 'Creating...' : 'Saving...'}
+              </>
+            ) : (
+              <>
+                <Save className="h-4 w-4 mr-2" />
+                {isNew ? 'Create Item' : 'Save Changes'}
+              </>
+            )}
+          </Button>
+        </div>
       </div>
     </div>
   )

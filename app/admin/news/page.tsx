@@ -57,7 +57,6 @@ export default async function AdminNewsPage() {
                   <TableRow>
                     <TableHead>Title</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead>Sort Order</TableHead>
                     <TableHead>Created</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -76,10 +75,9 @@ export default async function AdminNewsPage() {
                         {item.is_published ? (
                           <Badge className="bg-green-600 text-white">Published</Badge>
                         ) : (
-                          <Badge variant="outline">Draft</Badge>
+                          <Badge variant="outline">Unpublished</Badge>
                         )}
                       </TableCell>
-                      <TableCell>{item.sort_order}</TableCell>
                       <TableCell className="text-muted-foreground">
                         {new Date(item.created_at).toLocaleDateString('en-US', {
                           month: 'short',

@@ -6,7 +6,7 @@ import type { NewsItem } from '@/types/queries'
 
 /**
  * Get published news items for homepage display.
- * Ordered by sort_order ascending (lower = higher), then created_at descending.
+ * Ordered by created_at descending (newest first), limited to 10.
  */
 export const getPublishedNews = cache(async (): Promise<NewsItem[]> => {
   return unstable_cache(
@@ -15,8 +15,8 @@ export const getPublishedNews = cache(async (): Promise<NewsItem[]> => {
         .from('news')
         .select('*')
         .eq('is_published', true)
-        .order('sort_order', { ascending: true })
         .order('created_at', { ascending: false })
+        .limit(10)
 
       if (error) {
         return handleDataError(error, { operation: 'getPublishedNews' }, [])

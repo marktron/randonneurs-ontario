@@ -115,8 +115,8 @@ const { logAuditEvent } = await vi.importMock<{
 const validInput = {
   title: 'Test News Item',
   body: 'This is the body of the news item.',
+  teaser: '',
   is_published: true,
-  sort_order: 0,
 }
 
 describe('createNewsItem', () => {
@@ -167,8 +167,8 @@ describe('createNewsItem', () => {
     await createNewsItem({
       title: '  Padded Title  ',
       body: '  Padded Body  ',
+      teaser: '  Padded Teaser  ',
       is_published: false,
-      sort_order: 1,
     })
 
     // Verify the insert was called - the builder chain passes trimmed values

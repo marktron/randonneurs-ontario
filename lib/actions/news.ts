@@ -10,13 +10,14 @@ import type { ActionResult } from '@/types/actions'
 interface NewsItemInput {
   title: string
   body: string
+  teaser: string
   is_published: boolean
-  sort_order: number
 }
 
 function revalidateNews() {
   revalidateTag('news', 'max')
   revalidatePath('/')
+  revalidatePath('/news')
   revalidatePath('/admin/news')
 }
 
@@ -29,8 +30,8 @@ export async function createNewsItem(input: NewsItemInput): Promise<ActionResult
       .insert({
         title: input.title.trim(),
         body: input.body.trim(),
+        teaser: input.teaser.trim() || null,
         is_published: input.is_published,
-        sort_order: input.sort_order,
         created_by: admin.id,
       })
       .select('id')
@@ -68,8 +69,8 @@ export async function updateNewsItem(id: string, input: NewsItemInput): Promise<
       .update({
         title: input.title.trim(),
         body: input.body.trim(),
+        teaser: input.teaser.trim() || null,
         is_published: input.is_published,
-        sort_order: input.sort_order,
       })
       .eq('id', id)
 

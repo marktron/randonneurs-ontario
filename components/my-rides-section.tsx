@@ -53,14 +53,14 @@ export function MyRidesSection() {
       <h2 className="font-serif text-2xl tracking-tight">Your Upcoming Rides</h2>
       {firstName && <p className="mt-1 text-sm text-muted-foreground">Welcome back, {firstName}</p>}
 
-      <ul className="mt-6 space-y-1">
+      <ul className="mt-4 space-y-1">
         {visibleRides.map((ride) => {
           const { month, day } = formatDate(ride.date)
           return (
             <li key={ride.slug}>
               <Link
                 href={`/register/${ride.slug}`}
-                className="group flex items-start gap-3 py-2 -mx-1 px-1 rounded-md hover:bg-background/60 transition-colors"
+                className="group flex items-start gap-2 py-2 -mx-1 px-1 rounded-md hover:bg-background/60 transition-colors"
               >
                 {/* Date block */}
                 <div className="flex-shrink-0 w-10 text-center">

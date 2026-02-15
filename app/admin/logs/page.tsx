@@ -42,6 +42,7 @@ const entityTypeLabels: Record<string, string> = {
   result: 'Result',
   page: 'Page',
   admin_user: 'Admin User',
+  news: 'News',
 }
 
 function formatDateTime(dateString: string): string {
