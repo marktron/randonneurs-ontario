@@ -61,7 +61,7 @@ export function NewsEditor({
 
         if (result.success) {
           toast.success('News item created')
-          router.push(`/admin/news/${result.data.id}`)
+          router.push(`/admin/news/${result.data?.id}`)
         } else {
           toast.error(result.error || 'Failed to create news item')
         }

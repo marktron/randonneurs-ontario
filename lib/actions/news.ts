@@ -15,7 +15,7 @@ interface NewsItemInput {
 }
 
 function revalidateNews() {
-  revalidateTag('news')
+  revalidateTag('news', 'max')
   revalidatePath('/')
   revalidatePath('/admin/news')
 }
