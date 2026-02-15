@@ -335,6 +335,47 @@ export type Database = {
           },
         ]
       }
+      news: {
+        Row: {
+          body: string
+          created_at: string
+          created_by: string | null
+          id: string
+          is_published: boolean
+          sort_order: number
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          body?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_published?: boolean
+          sort_order?: number
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_published?: boolean
+          sort_order?: number
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'news_created_by_fkey'
+            columns: ['created_by']
+            isOneToOne: false
+            referencedRelation: 'admins'
+            referencedColumns: ['id']
+          },
+        ]
+      }
       registrations: {
         Row: {
           event_id: string
