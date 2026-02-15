@@ -4,12 +4,19 @@ import { useState, useRef, useCallback, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { MarkdownContent } from '@/components/markdown-content'
-import { Eye, Edit3, Upload, Loader2, AlertCircle } from 'lucide-react'
+import { Eye, Edit3, Upload, Loader2, AlertCircle, HelpCircle } from 'lucide-react'
 import { uploadFile } from '@/lib/actions/images'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { Label } from '@/components/ui/label'
 import { Alert, AlertDescription } from '@/components/ui/alert'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog'
 
 const ALLOWED_TYPES = [
   'image/png',
@@ -182,24 +189,171 @@ export function MarkdownEditor({ value, onChange, placeholder, label }: Markdown
     <div className="space-y-2">
       <div className="flex items-center justify-between">
         {label && <Label>{label}</Label>}
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() => setShowPreview(!showPreview)}
-        >
-          {showPreview ? (
-            <>
-              <Edit3 className="h-4 w-4 mr-2" />
-              Edit
-            </>
-          ) : (
-            <>
-              <Eye className="h-4 w-4 mr-2" />
-              Preview
-            </>
-          )}
-        </Button>
+        <div className="flex items-center gap-1">
+          <Dialog>
+            <DialogTrigger asChild>
+              <Button type="button" variant="ghost" size="sm">
+                <HelpCircle className="h-4 w-4" />
+                Help
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-lg">
+              <DialogHeader>
+                <DialogTitle>Markdown Formatting Reference</DialogTitle>
+                <p className="text-muted-foreground text-sm">
+                  Use these shortcuts in the editor. Click <strong>Preview</strong> to see how your
+                  page will look.
+                </p>
+              </DialogHeader>
+              <div className="space-y-5 text-sm">
+                <div>
+                  <h4 className="font-medium mb-2">Text formatting</h4>
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b text-left">
+                        <th className="pb-2 font-medium text-muted-foreground">You type</th>
+                        <th className="pb-2 font-medium text-muted-foreground">Result</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y">
+                      <tr>
+                        <td className="py-2">
+                          <code className="bg-muted px-1.5 py-0.5 rounded text-xs">
+                            ## Section title
+                          </code>
+                        </td>
+                        <td className="py-2 font-semibold">Section title</td>
+                      </tr>
+                      <tr>
+                        <td className="py-2">
+                          <code className="bg-muted px-1.5 py-0.5 rounded text-xs">
+                            ### Subsection
+                          </code>
+                        </td>
+                        <td className="py-2 font-medium text-[13px]">Subsection</td>
+                      </tr>
+                      <tr>
+                        <td className="py-2">
+                          <code className="bg-muted px-1.5 py-0.5 rounded text-xs">
+                            **bold text**
+                          </code>
+                        </td>
+                        <td className="py-2">
+                          <strong>bold text</strong>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td className="py-2">
+                          <code className="bg-muted px-1.5 py-0.5 rounded text-xs">
+                            *italic text*
+                          </code>
+                        </td>
+                        <td className="py-2">
+                          <em>italic text</em>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                <div>
+                  <h4 className="font-medium mb-2">Links & lists</h4>
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b text-left">
+                        <th className="pb-2 font-medium text-muted-foreground">You type</th>
+                        <th className="pb-2 font-medium text-muted-foreground">Result</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y">
+                      <tr>
+                        <td className="py-2">
+                          <code className="bg-muted px-1.5 py-0.5 rounded text-xs">{`[link text](https://...)`}</code>
+                        </td>
+                        <td className="py-2 text-primary underline">link text</td>
+                      </tr>
+                      <tr>
+                        <td className="py-2">
+                          <code className="bg-muted px-1.5 py-0.5 rounded text-xs">
+                            - First item
+                          </code>
+                          <br />
+                          <code className="bg-muted px-1.5 py-0.5 rounded text-xs">
+                            - Second item
+                          </code>
+                        </td>
+                        <td className="py-2">
+                          <ul className="list-disc list-inside">
+                            <li>First item</li>
+                            <li>Second item</li>
+                          </ul>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td className="py-2">
+                          <code className="bg-muted px-1.5 py-0.5 rounded text-xs">
+                            1. First item
+                          </code>
+                          <br />
+                          <code className="bg-muted px-1.5 py-0.5 rounded text-xs">
+                            2. Second item
+                          </code>
+                        </td>
+                        <td className="py-2">
+                          <ol className="list-decimal list-inside">
+                            <li>First item</li>
+                            <li>Second item</li>
+                          </ol>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                <div>
+                  <h4 className="font-medium mb-2">Images & files</h4>
+                  <div className="space-y-2 text-muted-foreground">
+                    <p>
+                      <strong className="text-foreground">Images</strong> &mdash; Drag & drop or
+                      paste an image directly into the editor. The markdown is inserted
+                      automatically.
+                    </p>
+                    <p>
+                      <strong className="text-foreground">Documents</strong> (PDF, Word, Excel)
+                      &mdash; Drag & drop a file into the editor. A download link is inserted
+                      automatically.
+                    </p>
+                    <p>Maximum file size: 10 MB.</p>
+                  </div>
+                </div>
+
+                <div className="rounded-md bg-muted/50 px-3 py-2.5 text-muted-foreground text-xs">
+                  Tip: Leave a blank line between paragraphs. Use the{' '}
+                  <strong className="text-foreground">Preview</strong> button to check your
+                  formatting before saving.
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setShowPreview(!showPreview)}
+          >
+            {showPreview ? (
+              <>
+                <Edit3 className="h-4 w-4 mr-2" />
+                Edit
+              </>
+            ) : (
+              <>
+                <Eye className="h-4 w-4 mr-2" />
+                Preview
+              </>
+            )}
+          </Button>
+        </div>
       </div>
 
       {showPreview ? (
