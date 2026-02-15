@@ -70,7 +70,6 @@ export async function updateNewsItem(id: string, input: NewsItemInput): Promise<
         body: input.body.trim(),
         is_published: input.is_published,
         sort_order: input.sort_order,
-        updated_at: new Date().toISOString(),
       })
       .eq('id', id)
 
