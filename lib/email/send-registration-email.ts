@@ -1,4 +1,4 @@
-import { sendgrid, fromEmail } from './sendgrid'
+import { sendgrid, fromEmail, suppressAdminEmails } from './sendgrid'
 import { buildRegistrationConfirmationEmail, type RegistrationEmailData } from './templates'
 import { getVpEmail } from './vp-emails'
 import { logError } from '@/lib/errors'
@@ -24,8 +24,8 @@ export async function sendRegistrationConfirmationEmail(
     await sendgrid.send({
       to: data.registrantEmail,
       from: fromEmail,
-      replyTo: vpEmail || undefined,
-      cc: vpEmail || undefined,
+      replyTo: suppressAdminEmails ? undefined : vpEmail || undefined,
+      cc: suppressAdminEmails ? undefined : vpEmail || undefined,
       subject,
       text,
       html,
