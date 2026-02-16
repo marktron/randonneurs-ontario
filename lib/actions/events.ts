@@ -538,6 +538,7 @@ This email was sent from the Randonneurs Ontario admin system.
       try {
         await sendgrid.send({
           to: 'vp-toronto@randonneursontario.ca',
+          cc: admin.email,
           from: fromEmail,
           replyTo: admin.email,
           subject,
