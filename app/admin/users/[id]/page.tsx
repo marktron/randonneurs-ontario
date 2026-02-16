@@ -1,4 +1,5 @@
 import { requireAdmin } from '@/lib/auth/get-admin'
+import { isSuperAdmin } from '@/lib/auth/roles'
 import { getChapters } from '@/lib/actions/admin-users'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { redirect, notFound } from 'next/navigation'
@@ -9,15 +10,18 @@ import { ChevronLeft } from 'lucide-react'
 import type { AdminUser } from '@/types/queries'
 
 // Lazy-load UserForm (form component)
-const UserForm = dynamic(() => import('@/components/admin/user-form').then(mod => ({ default: mod.UserForm })), {
-  loading: () => (
-    <div className="space-y-6">
-      <div className="h-10 bg-muted animate-pulse rounded" />
-      <div className="h-10 bg-muted animate-pulse rounded" />
-      <div className="h-32 bg-muted animate-pulse rounded" />
-    </div>
-  ),
-})
+const UserForm = dynamic(
+  () => import('@/components/admin/user-form').then((mod) => ({ default: mod.UserForm })),
+  {
+    loading: () => (
+      <div className="space-y-6">
+        <div className="h-10 bg-muted animate-pulse rounded" />
+        <div className="h-10 bg-muted animate-pulse rounded" />
+        <div className="h-32 bg-muted animate-pulse rounded" />
+      </div>
+    ),
+  }
+)
 
 interface EditUserPageProps {
   params: Promise<{ id: string }>
@@ -27,7 +31,7 @@ export default async function EditUserPage({ params }: EditUserPageProps) {
   const { id } = await params
   const admin = await requireAdmin()
 
-  if (admin.role !== 'admin') {
+  if (!isSuperAdmin(admin.role)) {
     redirect('/admin')
   }
 
@@ -57,7 +61,7 @@ export default async function EditUserPage({ params }: EditUserPageProps) {
           chapters={chapters}
           user={{
             ...typedUser,
-            role: (typedUser.role as 'admin' | 'chapter_admin') || 'chapter_admin',
+            role: (typedUser.role as 'super_admin' | 'admin' | 'chapter_admin') || 'chapter_admin',
           }}
           mode="edit"
         />

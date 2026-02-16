@@ -86,13 +86,15 @@ export function AdminUsersTable({ users, currentAdminId }: AdminUsersTableProps)
                   <TableCell className="font-medium">{user.name}</TableCell>
                   <TableCell>{user.email}</TableCell>
                   <TableCell>
-                    <Badge variant={user.role === 'admin' ? 'default' : 'secondary'}>
-                      {user.role === 'admin' ? 'Admin' : 'Chapter Admin'}
+                    <Badge variant={user.role === 'chapter_admin' ? 'secondary' : 'default'}>
+                      {user.role === 'super_admin'
+                        ? 'Super Admin'
+                        : user.role === 'admin'
+                          ? 'Admin'
+                          : 'Chapter Admin'}
                     </Badge>
                   </TableCell>
-                  <TableCell>
-                    {user.chapters?.name || '—'}
-                  </TableCell>
+                  <TableCell>{user.chapters?.name || '—'}</TableCell>
                   <TableCell>
                     {user.created_at ? new Date(user.created_at).toLocaleDateString() : '—'}
                   </TableCell>

@@ -1,4 +1,5 @@
 import { requireAdmin } from '@/lib/auth/get-admin'
+import { isFullAdmin } from '@/lib/auth/roles'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { redirect } from 'next/navigation'
 import {
@@ -58,7 +59,7 @@ function formatDateTime(dateString: string): string {
 export default async function AuditLogsPage() {
   const admin = await requireAdmin()
 
-  if (admin.role !== 'admin') {
+  if (!isFullAdmin(admin.role)) {
     redirect('/admin')
   }
 

@@ -105,6 +105,23 @@ describe('UserForm', () => {
     })
   })
 
+  describe('super_admin role', () => {
+    it('renders with super_admin role in edit mode', () => {
+      const superAdmin = {
+        id: 'user-1',
+        email: 'super@test.com',
+        name: 'Jane Doe',
+        phone: null,
+        role: 'super_admin' as const,
+        chapter_id: null,
+      }
+      render(<UserForm chapters={mockChapters} user={superAdmin} mode="edit" />)
+
+      expect(screen.getByDisplayValue('Jane Doe')).toBeInTheDocument()
+      expect(screen.getByDisplayValue('super@test.com')).toBeInTheDocument()
+    })
+  })
+
   describe('edit mode', () => {
     const mockUser = {
       id: 'user-1',

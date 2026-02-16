@@ -231,9 +231,10 @@ This site has a **split authentication model**:
 - **Riders**: No accounts needed - they register with name/email
 - **Admins**: Use Supabase Auth (email/password) for the admin dashboard
 
-Admin roles:
+Admin roles (three-tier hierarchy):
 
-- `admin` - Full access to all chapters
+- `super_admin` - Full access including admin user management at `/admin/users`
+- `admin` - Full data management (events, routes, results, news, pages, riders, audit log) but no admin user management
 - `chapter_admin` - Scoped to their chapter only
 
 Admin features:

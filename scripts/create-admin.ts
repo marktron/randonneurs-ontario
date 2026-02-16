@@ -18,12 +18,14 @@ const password = process.env.ADMIN_PASSWORD
 const name = process.env.ADMIN_NAME
 
 if (!email || !password || !name) {
-  console.error('Usage: ADMIN_EMAIL=x ADMIN_PASSWORD=x ADMIN_NAME=x npx tsx scripts/create-admin.ts')
+  console.error(
+    'Usage: ADMIN_EMAIL=x ADMIN_PASSWORD=x ADMIN_NAME=x npx tsx scripts/create-admin.ts'
+  )
   process.exit(1)
 }
 
 const supabase = createClient(supabaseUrl, supabaseServiceKey, {
-  auth: { autoRefreshToken: false, persistSession: false }
+  auth: { autoRefreshToken: false, persistSession: false },
 })
 
 async function createAdmin() {
@@ -48,7 +50,7 @@ async function createAdmin() {
     id: authData.user.id,
     email,
     name,
-    role: 'admin',
+    role: 'super_admin',
   })
 
   if (adminError) {

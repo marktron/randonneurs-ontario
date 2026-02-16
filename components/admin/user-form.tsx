@@ -24,7 +24,7 @@ interface AdminUser {
   email: string
   name: string
   phone: string | null
-  role: 'admin' | 'chapter_admin'
+  role: 'super_admin' | 'admin' | 'chapter_admin'
   chapter_id: string | null
 }
 
@@ -43,7 +43,9 @@ export function UserForm({ chapters, user, mode }: UserFormProps) {
   const [email, setEmail] = useState(user?.email || '')
   const [phone, setPhone] = useState(user?.phone || '')
   const [password, setPassword] = useState('')
-  const [role, setRole] = useState<'admin' | 'chapter_admin'>(user?.role || 'chapter_admin')
+  const [role, setRole] = useState<'super_admin' | 'admin' | 'chapter_admin'>(
+    user?.role || 'chapter_admin'
+  )
   const [chapterId, setChapterId] = useState<string>(user?.chapter_id || '')
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -165,13 +167,14 @@ export function UserForm({ chapters, user, mode }: UserFormProps) {
             <Label htmlFor="role">Role</Label>
             <Select
               value={role}
-              onValueChange={(v) => setRole(v as 'admin' | 'chapter_admin')}
+              onValueChange={(v) => setRole(v as 'super_admin' | 'admin' | 'chapter_admin')}
               disabled={isPending}
             >
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value="super_admin">Super Admin</SelectItem>
                 <SelectItem value="admin">Admin (Full Access)</SelectItem>
                 <SelectItem value="chapter_admin">Chapter Admin</SelectItem>
               </SelectContent>

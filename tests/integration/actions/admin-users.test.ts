@@ -137,14 +137,12 @@ vi.mock('@/lib/supabase-server', () => {
 })
 
 vi.mock('@/lib/auth/get-admin', () => ({
-  requireAdmin: vi
-    .fn()
-    .mockResolvedValue({
-      id: 'admin-1',
-      email: 'admin@test.com',
-      name: 'Test Admin',
-      role: 'admin',
-    }),
+  requireAdmin: vi.fn().mockResolvedValue({
+    id: 'admin-1',
+    email: 'admin@test.com',
+    name: 'Test Admin',
+    role: 'super_admin',
+  }),
 }))
 
 vi.mock('next/cache', () => ({
@@ -190,7 +188,7 @@ describe('createAdminUser', () => {
       id: 'admin-1',
       email: 'admin@test.com',
       name: 'Test Admin',
-      role: 'admin',
+      role: 'super_admin',
     })
   })
 
@@ -212,6 +210,24 @@ describe('createAdminUser', () => {
       expect(result.success).toBe(false)
       expect(result.error).toBe('You do not have permission to create admin users')
     })
+
+    it('returns error when regular admin tries to create user', async () => {
+      mockRequireAdmin.requireAdmin.mockResolvedValueOnce({
+        id: 'admin-2',
+        email: 'admin2@test.com',
+        role: 'admin',
+      })
+
+      const result = await createAdminUser({
+        email: 'new@example.com',
+        name: 'New User',
+        password: 'password123',
+        role: 'admin',
+      })
+
+      expect(result.success).toBe(false)
+      expect(result.error).toBe('You do not have permission to create admin users')
+    })
   })
 
   describe('validation', () => {
@@ -220,7 +236,7 @@ describe('createAdminUser', () => {
         email: '',
         name: 'New User',
         password: 'password123',
-        role: 'admin',
+        role: 'super_admin',
       })
 
       expect(result.success).toBe(false)
@@ -268,7 +284,7 @@ describe('createAdminUser', () => {
         email: 'existing@example.com',
         name: 'Existing User',
         password: 'password123',
-        role: 'admin',
+        role: 'super_admin',
       })
 
       expect(result.success).toBe(false)
@@ -286,7 +302,7 @@ describe('createAdminUser', () => {
         email: 'new@example.com',
         name: 'New User',
         password: 'password123',
-        role: 'admin',
+        role: 'super_admin',
       })
 
       expect(result.success).toBe(false)
@@ -303,7 +319,7 @@ describe('updateAdminUser', () => {
       id: 'admin-1',
       email: 'admin@test.com',
       name: 'Test Admin',
-      role: 'admin',
+      role: 'super_admin',
     })
   })
 
@@ -311,6 +327,20 @@ describe('updateAdminUser', () => {
     mockRequireAdmin.requireAdmin.mockResolvedValueOnce({
       id: 'chapter-admin-1',
       role: 'chapter_admin',
+    })
+
+    const result = await updateAdminUser('user-1', {
+      name: 'Updated Name',
+    })
+
+    expect(result.success).toBe(false)
+    expect(result.error).toBe('You do not have permission to update admin users')
+  })
+
+  it('returns error when regular admin tries to update', async () => {
+    mockRequireAdmin.requireAdmin.mockResolvedValueOnce({
+      id: 'admin-2',
+      role: 'admin',
     })
 
     const result = await updateAdminUser('user-1', {
@@ -353,7 +383,7 @@ describe('deleteAdminUser', () => {
       id: 'admin-1',
       email: 'admin@test.com',
       name: 'Test Admin',
-      role: 'admin',
+      role: 'super_admin',
     })
   })
 
@@ -369,10 +399,22 @@ describe('deleteAdminUser', () => {
     expect(result.error).toBe('You do not have permission to delete admin users')
   })
 
+  it('returns error when regular admin tries to delete', async () => {
+    mockRequireAdmin.requireAdmin.mockResolvedValueOnce({
+      id: 'admin-2',
+      role: 'admin',
+    })
+
+    const result = await deleteAdminUser('user-1')
+
+    expect(result.success).toBe(false)
+    expect(result.error).toBe('You do not have permission to delete admin users')
+  })
+
   it('returns error when trying to delete own account', async () => {
     mockRequireAdmin.requireAdmin.mockResolvedValueOnce({
       id: 'admin-1',
-      role: 'admin',
+      role: 'super_admin',
     })
 
     const result = await deleteAdminUser('admin-1')
@@ -409,7 +451,7 @@ describe('resetAdminPassword', () => {
       id: 'admin-1',
       email: 'admin@test.com',
       name: 'Test Admin',
-      role: 'admin',
+      role: 'super_admin',
     })
   })
 
@@ -417,6 +459,18 @@ describe('resetAdminPassword', () => {
     mockRequireAdmin.requireAdmin.mockResolvedValueOnce({
       id: 'chapter-admin-1',
       role: 'chapter_admin',
+    })
+
+    const result = await resetAdminPassword('user-1', 'newpassword123')
+
+    expect(result.success).toBe(false)
+    expect(result.error).toBe('You do not have permission to reset passwords')
+  })
+
+  it('returns error when regular admin tries to reset password', async () => {
+    mockRequireAdmin.requireAdmin.mockResolvedValueOnce({
+      id: 'admin-2',
+      role: 'admin',
     })
 
     const result = await resetAdminPassword('user-1', 'newpassword123')

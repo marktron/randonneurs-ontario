@@ -190,7 +190,7 @@ describe('Chapter Admin Scoping', () => {
       id: 'admin-1',
       email: 'admin@example.com',
       name: 'Super Admin',
-      role: 'admin',
+      role: 'super_admin',
       chapter_id: null,
     }
 
@@ -199,7 +199,7 @@ describe('Chapter Admin Scoping', () => {
 
     const result = await requireAdmin()
 
-    expect(result.role).toBe('admin')
+    expect(result.role).toBe('super_admin')
     expect(result.chapter_id).toBeNull()
   })
 })

@@ -1,4 +1,5 @@
 import { requireAdmin } from '@/lib/auth/get-admin'
+import { isFullAdmin } from '@/lib/auth/roles'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { parseLocalDate, formatFinishTime } from '@/lib/utils'
 import { notFound, redirect } from 'next/navigation'
@@ -14,11 +15,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import type {
-  RiderDetail,
-  RegistrationWithEvent,
-  ResultWithEventForRider,
-} from '@/types/queries'
+import type { RiderDetail, RegistrationWithEvent, ResultWithEventForRider } from '@/types/queries'
 
 async function getRiderDetails(riderId: string): Promise<RiderDetail | null> {
   const { data: rider } = await getSupabaseAdmin()
@@ -33,12 +30,14 @@ async function getRiderDetails(riderId: string): Promise<RiderDetail | null> {
 async function getRiderRegistrations(riderId: string): Promise<RegistrationWithEvent[]> {
   const { data } = await getSupabaseAdmin()
     .from('registrations')
-    .select(`
+    .select(
+      `
       id,
       registered_at,
       status,
       events (id, name, event_date, distance_km)
-    `)
+    `
+    )
     .eq('rider_id', riderId)
     .order('registered_at', { ascending: false })
 
@@ -48,7 +47,8 @@ async function getRiderRegistrations(riderId: string): Promise<RegistrationWithE
 async function getRiderResults(riderId: string): Promise<ResultWithEventForRider[]> {
   const { data } = await getSupabaseAdmin()
     .from('results')
-    .select(`
+    .select(
+      `
       id,
       finish_time,
       status,
@@ -56,7 +56,8 @@ async function getRiderResults(riderId: string): Promise<ResultWithEventForRider
       season,
       distance_km,
       events (id, name, event_date)
-    `)
+    `
+    )
     .eq('rider_id', riderId)
     .order('created_at', { ascending: false })
 
@@ -92,7 +93,7 @@ export default async function RiderDetailPage({ params }: RiderPageProps) {
   const { id } = await params
   const admin = await requireAdmin()
 
-  if (admin.role !== 'admin') {
+  if (!isFullAdmin(admin.role)) {
     redirect('/admin')
   }
 
@@ -188,42 +189,44 @@ export default async function RiderDetailPage({ params }: RiderPageProps) {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {results.filter((result) => result.events).map((result) => (
-                    <TableRow key={result.id}>
-                      <TableCell>
-                        <Link
-                          href={`/admin/events/${result.events!.id}`}
-                          className="font-medium hover:underline"
-                        >
-                          {result.events!.name}
-                        </Link>
-                        {result.team_name && (
-                          <p className="text-sm text-muted-foreground">
-                            Team: {result.team_name}
-                          </p>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {parseLocalDate(result.events!.event_date).toLocaleDateString('en-CA', {
-                          month: 'short',
-                          day: 'numeric',
-                          year: 'numeric',
-                        })}
-                      </TableCell>
-                      <TableCell>{result.distance_km} km</TableCell>
-                      <TableCell>
-                        {result.finish_time ? (
-                          <span className="inline-flex items-center gap-1">
-                            <Clock className="h-3 w-3" />
-                            {formatFinishTime(result.finish_time)}
-                          </span>
-                        ) : (
-                          '—'
-                        )}
-                      </TableCell>
-                      <TableCell>{getStatusBadge(result.status ?? 'pending')}</TableCell>
-                    </TableRow>
-                  ))}
+                  {results
+                    .filter((result) => result.events)
+                    .map((result) => (
+                      <TableRow key={result.id}>
+                        <TableCell>
+                          <Link
+                            href={`/admin/events/${result.events!.id}`}
+                            className="font-medium hover:underline"
+                          >
+                            {result.events!.name}
+                          </Link>
+                          {result.team_name && (
+                            <p className="text-sm text-muted-foreground">
+                              Team: {result.team_name}
+                            </p>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {parseLocalDate(result.events!.event_date).toLocaleDateString('en-CA', {
+                            month: 'short',
+                            day: 'numeric',
+                            year: 'numeric',
+                          })}
+                        </TableCell>
+                        <TableCell>{result.distance_km} km</TableCell>
+                        <TableCell>
+                          {result.finish_time ? (
+                            <span className="inline-flex items-center gap-1">
+                              <Clock className="h-3 w-3" />
+                              {formatFinishTime(result.finish_time)}
+                            </span>
+                          ) : (
+                            '—'
+                          )}
+                        </TableCell>
+                        <TableCell>{getStatusBadge(result.status ?? 'pending')}</TableCell>
+                      </TableRow>
+                    ))}
                 </TableBody>
               </Table>
             </div>
@@ -253,34 +256,38 @@ export default async function RiderDetailPage({ params }: RiderPageProps) {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {registrations.filter((reg) => reg.events).map((reg) => (
-                    <TableRow key={reg.id}>
-                      <TableCell>
-                        <Link
-                          href={`/admin/events/${reg.events!.id}`}
-                          className="font-medium hover:underline"
-                        >
-                          {reg.events!.name}
-                        </Link>
-                      </TableCell>
-                      <TableCell>
-                        {parseLocalDate(reg.events!.event_date).toLocaleDateString('en-CA', {
-                          month: 'short',
-                          day: 'numeric',
-                          year: 'numeric',
-                        })}
-                      </TableCell>
-                      <TableCell>{reg.events!.distance_km} km</TableCell>
-                      <TableCell>
-                        {reg.registered_at ? new Date(reg.registered_at).toLocaleDateString('en-CA', {
-                          month: 'short',
-                          day: 'numeric',
-                          year: 'numeric',
-                        }) : '—'}
-                      </TableCell>
-                      <TableCell>{getStatusBadge(reg.status ?? 'registered')}</TableCell>
-                    </TableRow>
-                  ))}
+                  {registrations
+                    .filter((reg) => reg.events)
+                    .map((reg) => (
+                      <TableRow key={reg.id}>
+                        <TableCell>
+                          <Link
+                            href={`/admin/events/${reg.events!.id}`}
+                            className="font-medium hover:underline"
+                          >
+                            {reg.events!.name}
+                          </Link>
+                        </TableCell>
+                        <TableCell>
+                          {parseLocalDate(reg.events!.event_date).toLocaleDateString('en-CA', {
+                            month: 'short',
+                            day: 'numeric',
+                            year: 'numeric',
+                          })}
+                        </TableCell>
+                        <TableCell>{reg.events!.distance_km} km</TableCell>
+                        <TableCell>
+                          {reg.registered_at
+                            ? new Date(reg.registered_at).toLocaleDateString('en-CA', {
+                                month: 'short',
+                                day: 'numeric',
+                                year: 'numeric',
+                              })
+                            : '—'}
+                        </TableCell>
+                        <TableCell>{getStatusBadge(reg.status ?? 'registered')}</TableCell>
+                      </TableRow>
+                    ))}
                 </TableBody>
               </Table>
             </div>

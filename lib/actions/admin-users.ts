@@ -5,6 +5,7 @@ import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { requireAdmin } from '@/lib/auth/get-admin'
 import { logAuditEvent } from '@/lib/audit-log'
 import { handleSupabaseError, createActionResult, logError } from '@/lib/errors'
+import { isSuperAdmin } from '@/lib/auth/roles'
 import type { Database } from '@/types/supabase'
 import type { ActionResult } from '@/types/actions'
 import type { AdminInsert, AdminUpdate } from '@/types/queries'
@@ -24,7 +25,7 @@ export async function createAdminUser(data: AdminUserData): Promise<ActionResult
   const currentAdmin = await requireAdmin()
 
   // Only super admins can create users
-  if (currentAdmin.role !== 'admin') {
+  if (!isSuperAdmin(currentAdmin.role)) {
     return { success: false, error: 'You do not have permission to create admin users' }
   }
 
@@ -95,7 +96,7 @@ export async function updateAdminUser(
 ): Promise<ActionResult> {
   const currentAdmin = await requireAdmin()
 
-  if (currentAdmin.role !== 'admin') {
+  if (!isSuperAdmin(currentAdmin.role)) {
     return { success: false, error: 'You do not have permission to update admin users' }
   }
 
@@ -138,7 +139,7 @@ export async function updateAdminUser(
 export async function deleteAdminUser(userId: string): Promise<ActionResult> {
   const currentAdmin = await requireAdmin()
 
-  if (currentAdmin.role !== 'admin') {
+  if (!isSuperAdmin(currentAdmin.role)) {
     return { success: false, error: 'You do not have permission to delete admin users' }
   }
 
@@ -198,7 +199,7 @@ export async function resetAdminPassword(
 ): Promise<ActionResult> {
   const currentAdmin = await requireAdmin()
 
-  if (currentAdmin.role !== 'admin') {
+  if (!isSuperAdmin(currentAdmin.role)) {
     return { success: false, error: 'You do not have permission to reset passwords' }
   }
 
@@ -224,7 +225,7 @@ export async function resetAdminPassword(
 export async function getAdminUsers() {
   const currentAdmin = await requireAdmin()
 
-  if (currentAdmin.role !== 'admin') {
+  if (!isSuperAdmin(currentAdmin.role)) {
     return []
   }
 

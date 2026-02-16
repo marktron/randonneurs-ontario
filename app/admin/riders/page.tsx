@@ -1,4 +1,5 @@
 import { requireAdmin } from '@/lib/auth/get-admin'
+import { isFullAdmin } from '@/lib/auth/roles'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { applyRiderSearchFilter } from '@/lib/utils/rider-search'
 import { redirect } from 'next/navigation'
@@ -55,8 +56,8 @@ interface AdminRidersPageProps {
 export default async function AdminRidersPage({ searchParams }: AdminRidersPageProps) {
   const admin = await requireAdmin()
 
-  // Only admins can access this page
-  if (admin.role !== 'admin') {
+  // Only full admins can access this page
+  if (!isFullAdmin(admin.role)) {
     redirect('/admin')
   }
 

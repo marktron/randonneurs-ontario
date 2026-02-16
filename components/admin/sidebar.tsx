@@ -30,6 +30,7 @@ import {
   Megaphone,
 } from 'lucide-react'
 import { logout } from '@/lib/actions/auth'
+import { isSuperAdmin, isFullAdmin } from '@/lib/auth/roles'
 import type { AdminUser } from '@/types/queries'
 
 interface AdminSidebarProps {
@@ -81,18 +82,21 @@ const managementNavItems = [
     href: '/admin/pages',
     icon: FileText,
     testId: 'nav-pages',
+    requiresSuperAdmin: false,
   },
   {
     title: 'Admin Users',
     href: '/admin/users',
     icon: UserCog,
     testId: 'nav-users',
+    requiresSuperAdmin: true,
   },
   {
     title: 'Audit Log',
     href: '/admin/logs',
     icon: ScrollText,
     testId: 'nav-logs',
+    requiresSuperAdmin: false,
   },
 ]
 
@@ -134,21 +138,23 @@ export function AdminSidebar({ admin }: AdminSidebarProps) {
           </SidebarGroupContent>
         </SidebarGroup>
 
-        {admin.role === 'admin' && (
+        {isFullAdmin(admin.role) && (
           <SidebarGroup>
             <SidebarGroupLabel>Management</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
-                {managementNavItems.map((item) => (
-                  <SidebarMenuItem key={item.href}>
-                    <SidebarMenuButton asChild isActive={isActive(item.href)}>
-                      <Link href={item.href} data-testid={item.testId}>
-                        <item.icon className="h-4 w-4" />
-                        <span>{item.title}</span>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                ))}
+                {managementNavItems
+                  .filter((item) => !item.requiresSuperAdmin || isSuperAdmin(admin.role))
+                  .map((item) => (
+                    <SidebarMenuItem key={item.href}>
+                      <SidebarMenuButton asChild isActive={isActive(item.href)}>
+                        <Link href={item.href} data-testid={item.testId}>
+                          <item.icon className="h-4 w-4" />
+                          <span>{item.title}</span>
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  ))}
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>

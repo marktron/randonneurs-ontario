@@ -1,4 +1,5 @@
 import { requireAdmin } from '@/lib/auth/get-admin'
+import { isSuperAdmin } from '@/lib/auth/roles'
 import { getAdminUsers } from '@/lib/actions/admin-users'
 import { redirect } from 'next/navigation'
 import dynamic from 'next/dynamic'
@@ -7,20 +8,23 @@ import { Plus } from 'lucide-react'
 import Link from 'next/link'
 
 // Lazy-load AdminUsersTable (large table component)
-const AdminUsersTable = dynamic(() => import('@/components/admin/users-table').then(mod => ({ default: mod.AdminUsersTable })), {
-  loading: () => (
-    <div className="space-y-4">
-      <div className="h-10 bg-muted animate-pulse rounded" />
-      <div className="h-96 bg-muted animate-pulse rounded" />
-    </div>
-  ),
-})
+const AdminUsersTable = dynamic(
+  () => import('@/components/admin/users-table').then((mod) => ({ default: mod.AdminUsersTable })),
+  {
+    loading: () => (
+      <div className="space-y-4">
+        <div className="h-10 bg-muted animate-pulse rounded" />
+        <div className="h-96 bg-muted animate-pulse rounded" />
+      </div>
+    ),
+  }
+)
 
 export default async function AdminUsersPage() {
   const admin = await requireAdmin()
 
   // Only super admins can access this page
-  if (admin.role !== 'admin') {
+  if (!isSuperAdmin(admin.role)) {
     redirect('/admin')
   }
 
@@ -31,9 +35,7 @@ export default async function AdminUsersPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold">Admin Users</h1>
-          <p className="text-muted-foreground">
-            Manage admin and chapter admin accounts
-          </p>
+          <p className="text-muted-foreground">Manage admin and chapter admin accounts</p>
         </div>
         <Button asChild>
           <Link href="/admin/users/new">
