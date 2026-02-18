@@ -76,8 +76,8 @@ export function CalendarPage({
         title={chapter}
         description={description}
       />
-      <div className="content-container py-16 md:py-20">
-        <div className="flex items-center justify-end gap-3 mb-6">
+      <div className="content-container pt-6 pb-16 md:pt-10 md:pb-20">
+        <div className="flex flex-wrap items-center justify-end gap-3 mb-8">
           <Select
             value={distanceFilter}
             onValueChange={(value) => setDistanceFilter(value as DistanceFilter)}

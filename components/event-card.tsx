@@ -18,16 +18,20 @@ export interface Event {
 
 function formatDate(dateString: string): {
   dayOfWeek: string
+  shortDayOfWeek: string
   month: string
+  monthShort: string
   day: string
   year: string
 } {
   const date = new Date(dateString + 'T00:00:00')
   const dayOfWeek = date.toLocaleDateString('en-US', { weekday: 'long' })
+  const shortDayOfWeek = date.toLocaleDateString('en-US', { weekday: 'short' })
   const month = date.toLocaleDateString('en-US', { month: 'short' }).toUpperCase()
+  const monthShort = date.toLocaleDateString('en-US', { month: 'short' })
   const day = date.getDate().toString()
   const year = date.getFullYear().toString()
-  return { dayOfWeek, month, day, year }
+  return { dayOfWeek, shortDayOfWeek, month, monthShort, day, year }
 }
 
 function formatTime(time: string): string {
@@ -47,38 +51,42 @@ export function EventCard({
   showDate?: boolean
   showBorder?: boolean
 }) {
-  const { dayOfWeek, month, day } = formatDate(event.date)
+  const { dayOfWeek, shortDayOfWeek, month, monthShort, day } = formatDate(event.date)
 
   return (
     <article
       {...devData('events', event.id)}
-      className={`group relative grid grid-cols-[4.5rem_1fr] gap-6 sm:grid-cols-[6rem_1fr] sm:gap-10 ${showDate ? 'pt-8' : 'pt-4'} ${showBorder ? 'border-b border-border pb-8' : ''}`}
+      className={`group relative sm:grid sm:grid-cols-[6rem_1fr] sm:gap-10 ${showDate ? 'pt-6 sm:pt-8' : 'pt-8 sm:pt-4'} ${showBorder ? 'border-b border-border/60 pb-6 sm:pb-8' : ''}`}
     >
-      {/* Date block */}
-      <div className="text-center">
+      {/* Date block - visible on sm+ */}
+      <div className="hidden sm:block text-center">
         {showDate ? (
           <>
             <div className="text-[11px] font-medium tracking-[0.2em] text-muted-foreground">
               {month}
             </div>
-            <div className="text-4xl font-serif tabular-nums leading-none mt-1 sm:text-5xl">
-              {day}
-            </div>
-            <div className="text-[11px] font-medium tracking-wide text-muted-foreground mt-2 hidden sm:block">
+            <div className="text-5xl font-serif tabular-nums leading-none mt-1">{day}</div>
+            <div className="text-[11px] font-medium tracking-wide text-muted-foreground mt-2">
               {dayOfWeek}
             </div>
           </>
         ) : (
           <div className="invisible">
             <div className="text-[11px]">&nbsp;</div>
-            <div className="text-4xl mt-1 sm:text-5xl">&nbsp;</div>
-            <div className="text-[11px] mt-2 hidden sm:block">&nbsp;</div>
+            <div className="text-5xl mt-1">&nbsp;</div>
+            <div className="text-[11px] mt-2">&nbsp;</div>
           </div>
         )}
       </div>
 
       {/* Event details */}
       <div className="min-w-0 flex flex-col justify-center">
+        {/* Inline date - mobile only */}
+        {showDate && (
+          <div className="sm:hidden text-xs font-medium tracking-wide text-muted-foreground mb-2">
+            {shortDayOfWeek}, {monthShort} {day}
+          </div>
+        )}
         {event.chapterName && (
           <div className="mb-1 text-xs font-medium tracking-wide text-muted-foreground/70 uppercase">
             {event.chapterName}
@@ -101,7 +109,7 @@ export function EventCard({
           )}
         </div>
 
-        <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted-foreground">
+        <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
           {event.startLocation && (
             <>
               <span>{event.startLocation}</span>
@@ -119,8 +127,8 @@ export function EventCard({
           )}
         </div>
 
-        <div className="mt-4 md:mt-0 md:absolute md:right-0 md:opacity-0 md:group-hover:opacity-100 md:transition-opacity">
-          <Button variant="default" size="sm" asChild>
+        <div className="mt-3 md:mt-0 md:absolute md:right-0 md:opacity-0 md:group-hover:opacity-100 md:transition-opacity">
+          <Button variant="outline" size="sm" asChild>
             <Link href={`/register/${event.slug}`}>Register</Link>
           </Button>
         </div>
@@ -145,7 +153,7 @@ export function EventList({ events }: { events: Event[] }) {
   )
 
   return (
-    <div className="space-y-16">
+    <div className="space-y-10 sm:space-y-16">
       {Object.entries(eventsByMonth).map(([month, monthEvents]) => (
         <section key={month}>
           <header className="mb-2">

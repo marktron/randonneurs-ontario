@@ -229,10 +229,14 @@ export function Navbar() {
             </Button>
           </SheetTrigger>
           <SheetContent side="right" className="w-[85vw] max-w-80 overflow-y-auto">
-            <SheetHeader>
-              <SheetTitle className="font-serif">Randonneurs Ontario</SheetTitle>
+            <SheetHeader className="pt-4">
+              <SheetTitle className="font-serif">
+                <Link href="/" onClick={() => setOpen(false)}>
+                  Randonneurs Ontario
+                </Link>
+              </SheetTitle>
             </SheetHeader>
-            <nav className="flex flex-col gap-1 mt-6 px-3">
+            <nav className="flex flex-col gap-1 mt-3 px-3">
               {/* About */}
               <MobileNavSection title="About">
                 <Link
