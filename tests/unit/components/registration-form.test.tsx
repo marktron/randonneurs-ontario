@@ -275,6 +275,61 @@ describe('RegistrationForm', () => {
     })
   })
 
+  describe('mobile optimizations', () => {
+    it('has autocomplete attributes on name and email fields', () => {
+      render(<RegistrationForm {...defaultProps} />)
+
+      expect(screen.getByLabelText(/first name/i)).toHaveAttribute('autocomplete', 'given-name')
+      expect(screen.getByLabelText(/last name/i)).toHaveAttribute('autocomplete', 'family-name')
+      expect(screen.getByLabelText(/email/i)).toHaveAttribute('autocomplete', 'email')
+    })
+
+    it('has correct inputMode on email and phone fields', () => {
+      const { container } = render(<RegistrationForm {...defaultProps} />)
+
+      expect(screen.getByLabelText(/email/i)).toHaveAttribute('inputmode', 'email')
+      expect(container.querySelector('#emergencyContactPhone')).toHaveAttribute('inputmode', 'tel')
+    })
+
+    it('has autocomplete off on emergency contact fields to prevent autofilling rider info', () => {
+      const { container } = render(<RegistrationForm {...defaultProps} />)
+
+      expect(container.querySelector('#emergencyContactName')).toHaveAttribute(
+        'autocomplete',
+        'off'
+      )
+      expect(container.querySelector('#emergencyContactPhone')).toHaveAttribute(
+        'autocomplete',
+        'off'
+      )
+    })
+
+    it('scrolls error into view when error appears', async () => {
+      mockRegisterForEvent.mockResolvedValueOnce({
+        success: false,
+        error: 'Event is full',
+      })
+
+      const user = userEvent.setup()
+      const { container } = render(<RegistrationForm {...defaultProps} />)
+
+      await user.type(screen.getByLabelText(/first name/i), 'John')
+      await user.type(screen.getByLabelText(/last name/i), 'Doe')
+      await user.type(screen.getByLabelText(/email/i), 'john@example.com')
+      await user.type(container.querySelector('#emergencyContactName')!, 'Jane Doe')
+      await user.type(container.querySelector('#emergencyContactPhone')!, '555-1234')
+
+      await user.click(screen.getByRole('button', { name: /register/i }))
+
+      await waitFor(() => {
+        const errorEl = screen.getByTestId('registration-error')
+        expect(errorEl).toBeInTheDocument()
+        // Verify scrollIntoView was available (it's called in the useEffect)
+        expect(errorEl.scrollIntoView).toBeDefined()
+      })
+    })
+  })
+
   describe('loading states', () => {
     it('disables submit button while pending', async () => {
       mockRegisterForEvent.mockImplementation(

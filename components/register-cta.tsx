@@ -2,12 +2,7 @@
 
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
+import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from '@/components/ui/drawer'
 import { RegistrationForm } from '@/components/registration-form'
 
 interface RegisterCTAProps {
@@ -22,24 +17,22 @@ export function RegisterCTA({ eventId, isPermanent }: RegisterCTAProps) {
     <>
       {/* Mobile CTA Button */}
       <div className="lg:hidden">
-        <Button
-          size="lg"
-          className="w-full text-base"
-          onClick={() => setIsOpen(true)}
-        >
+        <Button size="lg" className="w-full text-base h-12" onClick={() => setIsOpen(true)}>
           Register for this event
         </Button>
       </div>
 
-      {/* Mobile Modal */}
-      <Dialog open={isOpen} onOpenChange={setIsOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle className="font-serif text-2xl tracking-tight">Register</DialogTitle>
-          </DialogHeader>
-          <RegistrationForm eventId={eventId} isPermanent={isPermanent} variant="plain" />
-        </DialogContent>
-      </Dialog>
+      {/* Mobile Drawer (bottom sheet) */}
+      <Drawer open={isOpen} onOpenChange={setIsOpen}>
+        <DrawerContent className="px-2 pb-safe">
+          <DrawerHeader>
+            <DrawerTitle className="font-serif text-2xl tracking-tight">Register</DrawerTitle>
+          </DrawerHeader>
+          <div className="overflow-y-auto px-4 pb-6">
+            <RegistrationForm eventId={eventId} isPermanent={isPermanent} variant="plain" />
+          </div>
+        </DrawerContent>
+      </Drawer>
 
       {/* Desktop Sidebar Form */}
       <div className="hidden lg:block">

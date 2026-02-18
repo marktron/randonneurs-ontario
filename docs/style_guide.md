@@ -10,36 +10,36 @@
 
 - **Grid:** 12-col at lg+, 6-col at md, 4-col at sm. Strong baseline rhythm.
 - **Page widths (Tailwind):**
-	- Reading pages: `max-w-3xl` to `max-w-4xl` for body.
-	- Article w/ media: body `max-w-3xl` + media breakout to `max-w-6xl`.
-	- Data-heavy pages: `max-w-6xl` to `max-w-7xl`.
+  - Reading pages: `max-w-3xl` to `max-w-4xl` for body.
+  - Article w/ media: body `max-w-3xl` + media breakout to `max-w-6xl`.
+  - Data-heavy pages: `max-w-6xl` to `max-w-7xl`.
 - **Spacing rhythm:** 4/8/12/16/24/32px steps (Tailwind: `space-y-4/6/8`, `py-12/16`, `gap-6/8`).
 - **Breakouts:** allow images, pull quotes, and route maps to “break the column” on desktop; keep body line-length stable.
 
 ### 3) Color + surfaces
 
 - **Palette:** mostly neutral with one restrained accent.
-	- Base: near-black ink, warm off-white background, a single muted midtone for borders.
-	- Accent (1): deep “club” color (red) used sparingly for links, focus, badges.
+  - Base: near-black ink, warm off-white background, a single muted midtone for borders.
+  - Accent (1): deep “club” color (red) used sparingly for links, focus, badges.
 - **Surface hierarchy (3 levels):**
-	1. Primary background (paper)
-	2. Elevated cards/panels (subtle tint)
-	3. Interactive/selected states (slightly stronger tint)
+  1.  Primary background (paper)
+  2.  Elevated cards/panels (subtle tint)
+  3.  Interactive/selected states (slightly stronger tint)
 - **Borders over shadows:** prefer hairline borders (`border`, `ring-1`) and soft elevation only when necessary.
 
 ### 4) Typography
 
 - **Pairing:** classic editorial serif for headlines + modern grotesk for UI/body.
-	- Headings: Noto Serif, high contrast, tight tracking.
-	- UI/body: Noto Sans, high legibility, slightly generous leading.
+  - Headings: Noto Serif, high contrast, tight tracking.
+  - UI/body: Noto Sans, high legibility, slightly generous leading.
 - **Scale (guideline):**
-	- Article H1: 42–56 / tight leading
-	- H2: 28–36
-	- Body: 16–18 with `leading-7` / `leading-8`
-	- Small/meta: 12–14 with increased tracking
+  - Article H1: 42–56 / tight leading
+  - H2: 28–36
+  - Body: 16–18 with `leading-7` / `leading-8`
+  - Small/meta: 12–14 with increased tracking
 - **Text conventions:**
-	- Dates/distances/elevations are “data”—render in tabular numerals.
-	- Overlines for taxonomy (Region / Series / Year) in small caps or tracked uppercase.
+  - Dates/distances/elevations are “data”—render in tabular numerals.
+  - Overlines for taxonomy (Region / Series / Year) in small caps or tracked uppercase.
 
 ### 5) Photography + imagery
 
@@ -47,9 +47,9 @@
 - **Treatment:** natural color, slightly muted; avoid heavy filters.
 - **Captions:** present, but quiet (small sans; subtle color).
 - **Image composition templates:**
-	- Full-bleed hero (desktop) + constrained body.
-	- Split layout: text column + vertical image.
-	- Gallery: 2–3 column masonry-like with consistent gutters (no chaotic grids).
+  - Full-bleed hero (desktop) + constrained body.
+  - Split layout: text column + vertical image.
+  - Gallery: 2–3 column masonry-like with consistent gutters (no chaotic grids).
 
 ### 6) Components (Tailwind + shadcn/ui)
 
@@ -80,19 +80,19 @@ Use shadcn primitives, but style them to feel “print” rather than “SaaS”
 
 - **Tables must be beautiful.** They’re a core artifact for randonneuring.
 - Rules:
-	- Tabular numerals for time/power-like data (`font-variant-numeric: tabular-nums`).
-	- Right-align numeric columns; left-align labels.
-	- Sticky header on desktop; on mobile convert rows to stacked cards with label/value pairs.
-	- Provide “copyable” snippets for key fields (route link, start location, time limits).
+  - Tabular numerals for time/power-like data (`font-variant-numeric: tabular-nums`).
+  - Right-align numeric columns; left-align labels.
+  - Sticky header on desktop; on mobile convert rows to stacked cards with label/value pairs.
+  - Provide “copyable” snippets for key fields (route link, start location, time limits).
 - **Filters:** always present above dense lists (distance, date range, region, status).
 
 ### 8) Voice + microcopy (UI)
 
 - **Style:** concise, factual, encouraging. No hype.
 - **Patterns:**
-	- Replace “Submit” with specific actions (“Register”, “Save details”, “Confirm entry”).
-	- Validation: state what happened and what to do next (“Email is required to send confirmation.”).
-	- Status language: “Registration open”, “Waitlist”, “Registration closed”.
+  - Replace “Submit” with specific actions (“Register”, “Save details”, “Confirm entry”).
+  - Validation: state what happened and what to do next (“Email is required to send confirmation.”).
+  - Status language: “Registration open”, “Waitlist”, “Registration closed”.
 
 ### 9) Accessibility + quality bar
 
@@ -102,11 +102,22 @@ Use shadcn primitives, but style them to feel “print” rather than “SaaS”
 - Motion reduced when `prefers-reduced-motion`.
 - Typography: line length ~60–80 chars for articles.
 
-### 10) Implementation notes (Tailwind + shadcn/ui)
+### 10) Mobile form patterns
+
+Registration forms follow these mobile-first conventions:
+
+- **Bottom sheet (Drawer) on mobile:** The event registration form uses a Vaul Drawer on mobile instead of a centered Dialog. Drawers are swipe-dismissible and provide more vertical space for forms.
+- **Autocomplete attributes:** All personal fields use standard `autoComplete` values (`given-name`, `family-name`, `email`) to enable browser/OS autofill. Emergency contact fields use `autoComplete="off"` to prevent filling with the registrant's own info.
+- **Input modes:** Fields use `inputMode` to show the right mobile keyboard: `email` for email fields, `tel` for phone fields.
+- **Responsive field grids:** Paired fields (first/last name, emergency name/phone) use `grid-cols-1 min-[400px]:grid-cols-2` so they stack on very narrow screens but sit side-by-side when there's room.
+- **Touch targets:** Submit buttons and popover triggers use `h-12` (48px) on mobile for comfortable tapping. Radio group items in selection dialogs use generous vertical padding.
+- **Scroll-to-error:** When a validation error appears, the error message scrolls into view automatically via `scrollIntoView({ behavior: 'smooth', block: 'nearest' })`.
+
+### 11) Implementation notes (Tailwind + shadcn/ui)
 
 - Define tokens in CSS variables (shadcn theme): `background/foreground`, `muted`, `border`, `ring`, `accent`.
 - Add utility classes for editorial typography (Prose layer):
-	- Use `@tailwindcss/typography` but **override** for tighter headings, nicer blockquotes, caption style, link underline behavior.
-- Create two “modes”:
-	- **Editorial**: uses `prose` + bespoke article components.
-	- **Utility**: uses shadcn forms/tables with club styling and calmer density.
+  - Use `@tailwindcss/typography` but **override** for tighter headings, nicer blockquotes, caption style, link underline behavior.
+- Create two "modes":
+  - **Editorial**: uses `prose` + bespoke article components.
+  - **Utility**: uses shadcn forms/tables with club styling and calmer density.

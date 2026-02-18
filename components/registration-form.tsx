@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition, useEffect } from 'react'
+import { useState, useTransition, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Input } from '@/components/ui/input'
@@ -56,7 +56,7 @@ function saveData(data: SavedRegistrationData): void {
 interface RegistrationFormProps {
   eventId: string
   isPermanent?: boolean
-  /** "card" shows border/title container, "plain" for use in modals */
+  /** "card" shows border/title container, "plain" for use in drawers/modals */
   variant?: 'card' | 'plain'
 }
 
@@ -91,6 +91,8 @@ export function RegistrationForm({
   const [upcomingEvents, setUpcomingEvents] = useState<UpcomingEvent[]>([])
   const [loadingEvents, setLoadingEvents] = useState(false)
 
+  const errorRef = useRef<HTMLDivElement>(null)
+
   // Load saved data on mount
   useEffect(() => {
     const saved = getSavedData()
@@ -104,6 +106,13 @@ export function RegistrationForm({
       setEmergencyContactPhone(saved.emergencyContactPhone || '')
     }
   }, [])
+
+  // Scroll error into view when it appears
+  useEffect(() => {
+    if (error && errorRef.current) {
+      errorRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+    }
+  }, [error])
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -298,6 +307,7 @@ export function RegistrationForm({
       <form className="space-y-5" onSubmit={handleSubmit}>
         {error && (
           <div
+            ref={errorRef}
             role="alert"
             className="p-3 rounded-lg bg-destructive/10 text-destructive text-sm"
             data-testid="registration-error"
@@ -307,7 +317,7 @@ export function RegistrationForm({
         )}
 
         {/* Name */}
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 min-[400px]:grid-cols-2 gap-4">
           <div className="space-y-2">
             <Label htmlFor="firstName">First name</Label>
             <Input
@@ -316,6 +326,7 @@ export function RegistrationForm({
               type="text"
               placeholder="First"
               required
+              autoComplete="given-name"
               disabled={isPending}
               value={firstName}
               onChange={(e) => setFirstName(e.target.value)}
@@ -329,6 +340,7 @@ export function RegistrationForm({
               type="text"
               placeholder="Last"
               required
+              autoComplete="family-name"
               disabled={isPending}
               value={lastName}
               onChange={(e) => setLastName(e.target.value)}
@@ -343,8 +355,10 @@ export function RegistrationForm({
             id="email"
             name="email"
             type="email"
+            inputMode="email"
             placeholder="you@example.com"
             required
+            autoComplete="email"
             disabled={isPending}
             value={email}
             onChange={(e) => setEmail(e.target.value)}
@@ -402,7 +416,7 @@ export function RegistrationForm({
         {/* Emergency Contact */}
         <div className="bg-muted/50 border border-border rounded-lg p-4 space-y-3">
           <p className="text-sm font-medium">Emergency contact</p>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 min-[400px]:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="emergencyContactName">Name</Label>
               <Input
@@ -411,6 +425,7 @@ export function RegistrationForm({
                 type="text"
                 placeholder="Name"
                 required
+                autoComplete="off"
                 disabled={isPending}
                 value={emergencyContactName}
                 onChange={(e) => setEmergencyContactName(e.target.value)}
@@ -422,8 +437,10 @@ export function RegistrationForm({
                 id="emergencyContactPhone"
                 name="emergencyContactPhone"
                 type="tel"
+                inputMode="tel"
                 placeholder="Phone number"
                 required
+                autoComplete="off"
                 disabled={isPending}
                 value={emergencyContactPhone}
                 onChange={(e) => setEmergencyContactPhone(e.target.value)}
@@ -450,7 +467,7 @@ export function RegistrationForm({
         {/* Submit */}
         <Button
           type="submit"
-          className="w-full"
+          className="w-full h-12"
           size="lg"
           disabled={isPending}
           data-testid="registration-submit"

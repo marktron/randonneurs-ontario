@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition, useEffect, useMemo } from 'react'
+import { useState, useTransition, useEffect, useMemo, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { ChevronDownIcon } from 'lucide-react'
 import { format, addDays, isBefore, startOfDay } from 'date-fns'
@@ -100,6 +100,8 @@ export function PermanentRegistrationForm({ routes }: PermanentRegistrationFormP
   const [matchCandidates, setMatchCandidates] = useState<RiderMatchCandidate[]>([])
   const [pendingEventId, setPendingEventId] = useState<string>('')
 
+  const errorRef = useRef<HTMLDivElement>(null)
+
   // Group routes by chapter
   const routesByChapter = useMemo(() => {
     const grouped: Record<string, ActiveRoute[]> = {}
@@ -127,6 +129,13 @@ export function PermanentRegistrationForm({ routes }: PermanentRegistrationFormP
       setEmergencyContactPhone(saved.emergencyContactPhone || '')
     }
   }, [])
+
+  // Scroll error into view when it appears
+  useEffect(() => {
+    if (error && errorRef.current) {
+      errorRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+    }
+  }, [error])
 
   const selectedRoute = routes.find((r) => r.id === routeId)
 
@@ -259,6 +268,7 @@ export function PermanentRegistrationForm({ routes }: PermanentRegistrationFormP
       <form className="space-y-6" onSubmit={handleSubmit}>
         {error && (
           <div
+            ref={errorRef}
             role="alert"
             className="p-3 rounded-lg bg-destructive/10 text-destructive text-sm"
             data-testid="registration-error"
@@ -283,7 +293,7 @@ export function PermanentRegistrationForm({ routes }: PermanentRegistrationFormP
                   role="combobox"
                   aria-expanded={routePickerOpen}
                   disabled={isPending}
-                  className="w-full justify-between font-normal"
+                  className="w-full justify-between font-normal h-12 sm:h-9"
                 >
                   {selectedRoute ? (
                     <span className="truncate">
@@ -340,7 +350,7 @@ export function PermanentRegistrationForm({ routes }: PermanentRegistrationFormP
                   variant="outline"
                   id="date"
                   disabled={isPending}
-                  className="w-full justify-between font-normal"
+                  className="w-full justify-between font-normal h-12 sm:h-9"
                 >
                   {eventDate ? format(eventDate, 'EEEE, MMMM d, yyyy') : 'Select date'}
                   <ChevronDownIcon className="h-4 w-4 opacity-50" />
@@ -388,6 +398,7 @@ export function PermanentRegistrationForm({ routes }: PermanentRegistrationFormP
               value={startLocation}
               onChange={(e) => setStartLocation(e.target.value)}
               disabled={isPending}
+              autoComplete="off"
             />
             <p className="text-xs text-muted-foreground">
               Only needed if you&apos;re not starting at the route&apos;s planned start control
@@ -423,7 +434,7 @@ export function PermanentRegistrationForm({ routes }: PermanentRegistrationFormP
           </h3>
 
           {/* Name */}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 min-[400px]:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="firstName">First name</Label>
               <Input
@@ -432,6 +443,7 @@ export function PermanentRegistrationForm({ routes }: PermanentRegistrationFormP
                 type="text"
                 placeholder="First"
                 required
+                autoComplete="given-name"
                 disabled={isPending}
                 value={firstName}
                 onChange={(e) => setFirstName(e.target.value)}
@@ -445,6 +457,7 @@ export function PermanentRegistrationForm({ routes }: PermanentRegistrationFormP
                 type="text"
                 placeholder="Last"
                 required
+                autoComplete="family-name"
                 disabled={isPending}
                 value={lastName}
                 onChange={(e) => setLastName(e.target.value)}
@@ -459,8 +472,10 @@ export function PermanentRegistrationForm({ routes }: PermanentRegistrationFormP
               id="email"
               name="email"
               type="email"
+              inputMode="email"
               placeholder="you@example.com"
               required
+              autoComplete="email"
               disabled={isPending}
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -518,7 +533,7 @@ export function PermanentRegistrationForm({ routes }: PermanentRegistrationFormP
           {/* Emergency Contact */}
           <div className="bg-muted/50 border border-border rounded-lg p-4 space-y-3">
             <p className="text-sm font-medium">Emergency contact</p>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 min-[400px]:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="emergencyContactName">Name</Label>
                 <Input
@@ -527,6 +542,7 @@ export function PermanentRegistrationForm({ routes }: PermanentRegistrationFormP
                   type="text"
                   placeholder="Name"
                   required
+                  autoComplete="off"
                   disabled={isPending}
                   value={emergencyContactName}
                   onChange={(e) => setEmergencyContactName(e.target.value)}
@@ -538,8 +554,10 @@ export function PermanentRegistrationForm({ routes }: PermanentRegistrationFormP
                   id="emergencyContactPhone"
                   name="emergencyContactPhone"
                   type="tel"
+                  inputMode="tel"
                   placeholder="Phone number"
                   required
+                  autoComplete="off"
                   disabled={isPending}
                   value={emergencyContactPhone}
                   onChange={(e) => setEmergencyContactPhone(e.target.value)}
@@ -569,7 +587,7 @@ export function PermanentRegistrationForm({ routes }: PermanentRegistrationFormP
         {/* Submit */}
         <Button
           type="submit"
-          className="w-full"
+          className="w-full h-12"
           size="lg"
           disabled={isPending}
           data-testid="registration-submit"
