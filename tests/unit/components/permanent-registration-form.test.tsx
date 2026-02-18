@@ -213,4 +213,54 @@ describe('PermanentRegistrationForm', () => {
       expect(screen.getByText('Direction')).toBeInTheDocument()
     })
   })
+
+  describe('mobile optimizations', () => {
+    it('has autocomplete attributes on name and email fields', () => {
+      render(<PermanentRegistrationForm routes={mockRoutes} />)
+
+      expect(screen.getByLabelText(/first name/i)).toHaveAttribute('autocomplete', 'given-name')
+      expect(screen.getByLabelText(/last name/i)).toHaveAttribute('autocomplete', 'family-name')
+      expect(screen.getByLabelText(/email/i)).toHaveAttribute('autocomplete', 'email')
+    })
+
+    it('has correct inputMode on email and phone fields', () => {
+      const { container } = render(<PermanentRegistrationForm routes={mockRoutes} />)
+
+      expect(screen.getByLabelText(/email/i)).toHaveAttribute('inputmode', 'email')
+      expect(container.querySelector('#emergencyContactPhone')).toHaveAttribute('inputmode', 'tel')
+    })
+
+    it('has autocomplete off on emergency contact fields', () => {
+      const { container } = render(<PermanentRegistrationForm routes={mockRoutes} />)
+
+      expect(container.querySelector('#emergencyContactName')).toHaveAttribute(
+        'autocomplete',
+        'off'
+      )
+      expect(container.querySelector('#emergencyContactPhone')).toHaveAttribute(
+        'autocomplete',
+        'off'
+      )
+    })
+
+    it('scrolls error into view on validation failure', async () => {
+      const user = userEvent.setup()
+      const { container } = render(<PermanentRegistrationForm routes={mockRoutes} />)
+
+      // Fill required text fields but skip route/date to trigger client-side validation
+      await user.type(screen.getByLabelText(/first name/i), 'John')
+      await user.type(screen.getByLabelText(/last name/i), 'Doe')
+      await user.type(screen.getByLabelText(/email/i), 'john@example.com')
+      await user.type(container.querySelector('#emergencyContactName')!, 'Jane Doe')
+      await user.type(container.querySelector('#emergencyContactPhone')!, '555-1234')
+
+      await user.click(screen.getByRole('button', { name: /schedule permanent/i }))
+
+      await waitFor(() => {
+        const errorEl = screen.getByTestId('registration-error')
+        expect(errorEl).toBeInTheDocument()
+        expect(errorEl.scrollIntoView).toBeDefined()
+      })
+    })
+  })
 })

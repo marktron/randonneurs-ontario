@@ -70,11 +70,11 @@ export function RiderMatchDialog({
         >
           {/* Candidate riders */}
           {candidates.map((candidate) => (
-            <div key={candidate.id} className="flex items-center gap-3 py-3">
+            <div key={candidate.id} className="flex items-center gap-3 py-3.5">
               <RadioGroupItem value={candidate.id} id={candidate.id} />
               <Label
                 htmlFor={candidate.id}
-                className="flex-1 cursor-pointer flex items-center justify-between"
+                className="flex-1 cursor-pointer flex flex-col min-[400px]:flex-row min-[400px]:items-center min-[400px]:justify-between gap-0.5"
               >
                 <span className="font-medium">{candidate.fullName}</span>
                 <span className="text-sm text-muted-foreground">
@@ -93,7 +93,7 @@ export function RiderMatchDialog({
           ))}
 
           {/* New rider option */}
-          <div className="flex items-center gap-3 py-3 pt-4">
+          <div className="flex items-center gap-3 py-3.5 pt-4">
             <RadioGroupItem value={NEW_RIDER_VALUE} id={NEW_RIDER_VALUE} />
             <Label htmlFor={NEW_RIDER_VALUE} className="flex-1 cursor-pointer">
               <span className="font-medium">I&apos;m a new rider</span>
@@ -105,10 +105,15 @@ export function RiderMatchDialog({
         </RadioGroup>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isPending}>
+          <Button
+            variant="outline"
+            size="lg"
+            onClick={() => onOpenChange(false)}
+            disabled={isPending}
+          >
             Cancel
           </Button>
-          <Button onClick={handleContinue} disabled={!selectedValue || isPending}>
+          <Button size="lg" onClick={handleContinue} disabled={!selectedValue || isPending}>
             {isPending ? 'Processing…' : 'Continue'}
           </Button>
         </DialogFooter>
