@@ -3,14 +3,18 @@ title: Devil Week 2026
 slug: devil-week-2026
 description: A one-week randonneuring challenge offering a full Super Randonneur series (600, 400, 300, and 200 km) plus camaraderie, endurance, and community.
 headerImage: https://blddxbjpgqhyvergugzh.supabase.co/storage/v1/object/public/images/headers/1768274237401-0wzkc3.jpeg
-lastUpdated: 2026-01-13
+lastUpdated: 2026-02-21
 ---
 
-Devil Week challenges riders to complete a full Super Randonneur series in a single week. Hosted a rotating club chapter every year, it combines a long-distance personal challenge with the rare opportunity to ride, recover, and connect alongside fellow randonneurs day after day. Whether you're testing your limits or immersing yourself in the social side of ultra-distance cycling, Devil Week is as much about the community as the kilometers.
+Devil Week challenges riders to complete a full Super Randonneur series in a single week. Hosted by a rotating club chapter every year, it combines a long-distance personal challenge with the rare opportunity to ride, recover, and connect alongside fellow randonneurs day after day. Whether you're testing your limits or immersing yourself in the social side of ultra-distance cycling, Devil Week is as much about the community as the kilometers.
 
 ## 2026 Devil Week: Grimsby, ON
 
-The 2026 edition of Devil Week is hosted by the Toronto chapter and will be run out of Grimsby. A block of hotel rooms at the starting location is being arranged – stay tuned for details.
+The 2026 edition of Devil Week is hosted by the Toronto chapter and based out of Grimsby. We’ll explore the Niagara Peninsula and surrounding region on a mix of new routes and club favourites.
+
+Following last year’s successful format, we’ll run the brevets from longest to shortest. Ride the full Devil Week, join us for a single event, or pick anything in between.
+
+**Lodging**: A block of 20 double bed hotel rooms at [The Casablanca Hotel](https://casablancahotel.ca/) in Grimsby is set aside until April 14 at a rate of $189/night. Call the hotel at 905-309-7171 and mention the Randonneurs Ontario Room Block. You’re also welcome to arrange your own lodging if you prefer.
 
 ### Monday June 15, 2026
 - **Distance**: 600 km
