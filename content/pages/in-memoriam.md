@@ -6,7 +6,6 @@ headerImage: https://blddxbjpgqhyvergugzh.supabase.co/storage/v1/object/public/i
 lastUpdated: 2026-02-22
 ---
 
-- First item
 - Ozzie Ala
 - Brian Armstrong
 - Mike Barry
