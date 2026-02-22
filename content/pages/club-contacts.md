@@ -19,4 +19,4 @@ Member-at-large (Toronto)	David Cole	Contact
 Member-at-large (Toronto)	Tiago Varella-Cid	Contact
 Member-at-large (Toronto)	Bob Macleod	Contact
 Social Media	Marc Deshaies	Contact
-Director of Communications	Vytas Janusauskas	Contact
+Director of Communications	Vytas Janusauskas
