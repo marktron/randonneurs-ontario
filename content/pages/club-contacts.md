@@ -5,7 +5,7 @@ description: Board of Directors
 lastUpdated: 2026-02-22
 ---
 
-President	Tim O'Callahan	Contact
+President	[Tim O'Callahan]	(mailto:president@randonneursontario.ca)
 Secretary	Martin Cooper	Contact
 Treasurer	Dave Thompson	Contact
 Vice-president, Brevet Administration	Peter Leiss	Contact
@@ -19,4 +19,4 @@ Member-at-large (Toronto)	David Cole	Contact
 Member-at-large (Toronto)	Tiago Varella-Cid	Contact
 Member-at-large (Toronto)	Bob Macleod	Contact
 Social Media	Marc Deshaies	Contact
-Director of Communications	Vytas Janusauskas
+Director of Communications	Vytas Janusauskas	Contact
