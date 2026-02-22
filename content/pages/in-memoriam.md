@@ -2,7 +2,7 @@
 title: In Memoriam
 slug: in-memoriam
 description: Former members not to be forgotten
-headerImage: https://blddxbjpgqhyvergugzh.supabase.co/storage/v1/object/public/images/headers/1771794022087-p2c8yy.jpg
+headerImage: https://blddxbjpgqhyvergugzh.supabase.co/storage/v1/object/public/images/headers/1771794058807-q2esw1.jpg
 lastUpdated: 2026-02-22
 ---
 
