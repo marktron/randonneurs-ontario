@@ -6,8 +6,8 @@ headerImage: https://blddxbjpgqhyvergugzh.supabase.co/storage/v1/object/public/i
 lastUpdated: 2026-02-22
 ---
 
-- Ozzie Ala
-- Brian Armstrong
+* Ozzie Ala
+* Brian Armstrong
 - Mike Barry
 - Jim Griffin
 - Arthur Hale
