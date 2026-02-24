@@ -28,6 +28,7 @@ import {
   ScrollText,
   Settings,
   Megaphone,
+  Navigation,
 } from 'lucide-react'
 import { logout } from '@/lib/actions/auth'
 import { isSuperAdmin, isFullAdmin } from '@/lib/auth/roles'
@@ -82,6 +83,13 @@ const managementNavItems = [
     href: '/admin/pages',
     icon: FileText,
     testId: 'nav-pages',
+    requiresSuperAdmin: false,
+  },
+  {
+    title: 'Navigation',
+    href: '/admin/navigation',
+    icon: Navigation,
+    testId: 'nav-navigation',
     requiresSuperAdmin: false,
   },
   {
