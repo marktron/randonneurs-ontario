@@ -1,6 +1,8 @@
+'use client'
+
 import dynamic from 'next/dynamic'
 import { Footer } from '@/components/footer'
-import { getNavigation } from '@/lib/content'
+import { getResolvedNavigation } from '@/lib/navigation'
 
 // Dynamic import with ssr: false to avoid Radix UI hydration mismatch
 // Radix components use useId() internally which can generate different IDs on server vs client
@@ -13,7 +15,7 @@ interface PageShellProps {
 }
 
 export function PageShell({ children }: PageShellProps) {
-  const { items } = getNavigation()
+  const { items } = getResolvedNavigation()
 
   return (
     <div className="min-h-screen bg-background flex flex-col">

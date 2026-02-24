@@ -4,10 +4,8 @@ import matter from "gray-matter";
 import type {
   NavigationConfig,
   NavigationConfigRaw,
-  NavItem,
-  NavItemRaw,
 } from "@/types/navigation";
-import { getAllChapterSlugs, getChapterInfo } from "@/lib/chapter-config";
+import { expandItem, getTemplateVariables } from "@/lib/navigation";
 
 const contentDirectory = path.join(process.cwd(), "content/pages");
 
@@ -98,72 +96,15 @@ export function getPageRaw(slug: string): string | null {
 }
 
 // ---------------------------------------------------------------------------
-// Navigation config
+// Navigation config (server-side, uses fs for reading from disk)
+// Template resolution logic is imported from lib/navigation.ts
 // ---------------------------------------------------------------------------
 
 const navigationFile = path.join(process.cwd(), "content/navigation.json");
 
-const chapters = getAllChapterSlugs()
-  .map((slug) => ({ slug, name: getChapterInfo(slug)?.name ?? slug }))
-  .sort((a, b) => a.name.localeCompare(b.name));
-
 const FALLBACK_NAV: NavigationConfig = {
   items: [{ label: "Home", href: "/" }],
 };
-
-function getTemplateVariables(): Record<string, string> {
-  const currentSeason =
-    process.env.NEXT_PUBLIC_CURRENT_SEASON || "2026";
-  const currentYear = new Date().getFullYear();
-  const pbpYear = currentYear - ((currentYear - 3) % 4);
-  const graniteAnvilYear = 2025;
-
-  return {
-    season: currentSeason,
-    pbpYear: String(pbpYear),
-    graniteAnvilYear: String(graniteAnvilYear),
-  };
-}
-
-function resolveHref(
-  href: string,
-  variables: Record<string, string>,
-): string {
-  return href.replace(
-    /\{\{([\w-]+)\}\}/g,
-    (_, key) => variables[key] ?? `{{${key}}}`,
-  );
-}
-
-function expandItem(
-  item: NavItemRaw,
-  variables: Record<string, string>,
-): NavItem[] {
-  if (item.separator) return [{ label: "", separator: true }];
-  if (item.type === "heading") return [{ label: item.label ?? "", type: "heading" }];
-
-  if (item.template === "chapters") {
-    return chapters.map(({ slug, name }) => {
-      const chapterVars = { ...variables, chapter: name, "chapter-slug": slug };
-      return {
-        label: name,
-        href: resolveHref(item.href ?? "", chapterVars),
-      };
-    });
-  }
-
-  const resolved: NavItem = { label: item.label ?? "" };
-  if (item.href) resolved.href = resolveHref(item.href, variables);
-  if (item.external) resolved.external = true;
-  if (item.style) resolved.style = item.style;
-  if (item.children) {
-    resolved.children = item.children.flatMap((child) =>
-      expandItem(child, variables),
-    );
-  }
-
-  return [resolved];
-}
 
 /**
  * Read raw navigation config (unexpanded, for admin editing)
@@ -180,6 +121,8 @@ export function getNavigationRaw(): NavigationConfigRaw | null {
 
 /**
  * Read and resolve navigation config from content/navigation.json
+ * Server-side only (uses fs). For client components, use
+ * getResolvedNavigation() from lib/navigation.ts instead.
  */
 export function getNavigation(): NavigationConfig {
   try {

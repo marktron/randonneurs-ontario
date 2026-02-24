@@ -232,7 +232,7 @@ Save locally    GitHub API commit
                    ↓
               Vercel rebuild
        ↓
-getNavigation() reads JSON, resolves templates
+getResolvedNavigation() resolves templates (client-safe, JSON import)
        ↓
 PageShell passes resolved items to Navbar
        ↓
@@ -241,7 +241,8 @@ Navbar renders desktop + mobile nav from data
 
 **Key files:**
 - `content/navigation.json` — raw nav structure with template placeholders
-- `lib/content.ts` — `getNavigation()` (resolved) and `getNavigationRaw()` (for editing)
+- `lib/navigation.ts` — `getResolvedNavigation()` (client-safe, imports JSON module), plus shared template resolution helpers (`expandItem`, `resolveHref`, `getTemplateVariables`)
+- `lib/content.ts` — `getNavigation()` (server-side, reads from disk via `fs`) and `getNavigationRaw()` (for admin editing)
 - `lib/actions/navigation.ts` — `saveNavigation()` server action
 - `components/navbar.tsx` — data-driven navbar renderer
 - `components/admin/navigation-editor.tsx` — admin drag-and-drop editor
