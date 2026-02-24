@@ -12,7 +12,7 @@ export default function NavigationPage() {
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Navigation</h1>
         <p className="text-muted-foreground">
-          Manage the site navigation menu. Changes trigger a new deployment.
+          Manage the site navigation menu. Saving changes triggers a new deployment, which can take up to 5 minutes to appear on the site.
         </p>
       </div>
       <NavigationEditor initialConfig={config} pages={pages} />

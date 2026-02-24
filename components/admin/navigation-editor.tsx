@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef, useMemo } from 'react'
 import {
   DndContext,
   closestCenter,
@@ -34,6 +34,17 @@ import {
   CollapsibleTrigger,
 } from '@/components/ui/collapsible'
 import { Card, CardContent } from '@/components/ui/card'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog'
 import { toast } from 'sonner'
 import {
   ChevronDown,
@@ -41,6 +52,7 @@ import {
   GripVertical,
   Loader2,
   Plus,
+  RotateCcw,
   Save,
   Trash2,
   X,
@@ -54,7 +66,7 @@ import type { PageMeta } from '@/lib/content'
 // --------------------------------------------------------------------------
 
 /** Internal representation of a child item's "kind" in the editor */
-type ChildKind = 'link' | 'external' | 'separator' | 'heading' | 'chapter-template'
+type ChildKind = 'link' | 'separator' | 'heading' | 'chapter-template'
 
 interface NavigationEditorProps {
   initialConfig: NavigationConfigRaw | null
@@ -91,24 +103,37 @@ function addIds(items: NavItemRaw[]): NavItemWithId[] {
 }
 
 function stripIds(items: NavItemWithId[]): NavItemRaw[] {
+  function cleanItem(raw: NavItemRaw): NavItemRaw {
+    const item = { ...raw }
+    // Auto-detect external links from href
+    delete item.external
+    if (isExternalHref(item.href)) {
+      item.external = true
+    }
+    return item
+  }
+
   return items.map((item) => {
     const { _id, children, ...rest } = item
-    const clean: NavItemRaw = { ...rest }
+    const clean: NavItemRaw = cleanItem(rest)
     if (children && children.length > 0) {
       clean.children = children.map((child) => {
         const { _id: _, ...childRest } = child
-        return childRest
+        return cleanItem(childRest)
       })
     }
     return clean
   })
 }
 
+function isExternalHref(href: string | undefined): boolean {
+  return !!href && (href.startsWith('http://') || href.startsWith('https://'))
+}
+
 function childKindOf(child: NavItemRaw): ChildKind {
   if (child.separator) return 'separator'
   if (child.type === 'heading') return 'heading'
   if (child.template === 'chapters') return 'chapter-template'
-  if (child.external) return 'external'
   return 'link'
 }
 
@@ -116,8 +141,6 @@ function childKindLabel(kind: ChildKind): string {
   switch (kind) {
     case 'link':
       return 'Link'
-    case 'external':
-      return 'External Link'
     case 'separator':
       return 'Separator'
     case 'heading':
@@ -133,11 +156,6 @@ function makeDefaultChild(kind: ChildKind): NavItemChildWithId {
     case 'link':
       base.label = ''
       base.href = ''
-      break
-    case 'external':
-      base.label = ''
-      base.href = ''
-      base.external = true
       break
     case 'separator':
       base.separator = true
@@ -238,15 +256,30 @@ function SortableTopItem({
               </button>
             </CollapsibleTrigger>
 
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 text-muted-foreground hover:text-destructive"
-              onClick={onDelete}
-              aria-label={`Delete ${item.label || 'item'}`}
-            >
-              <Trash2 className="h-4 w-4" />
-            </Button>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                  aria-label={`Delete ${item.label || 'item'}`}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Delete &ldquo;{item.label || 'item'}&rdquo;?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This will remove the menu item{item.children && item.children.length > 0 ? ` and its ${item.children.length} child item${item.children.length !== 1 ? 's' : ''}` : ''}. You can undo by discarding your unsaved changes.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction variant="destructive" onClick={onDelete}>Delete</AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           </div>
 
           <CollapsibleContent>
@@ -476,8 +509,8 @@ function SortableChildItem({
               </span>
             </div>
           ) : kind === 'heading' ? (
-            <div className="space-y-2">
-              <span className="text-xs font-medium bg-muted px-2 py-1 rounded">
+            <div>
+              <span className="text-xs font-medium bg-muted px-2 py-1 rounded mb-1 inline-block">
                 Heading
               </span>
               <Input
@@ -488,8 +521,8 @@ function SortableChildItem({
               />
             </div>
           ) : kind === 'chapter-template' ? (
-            <div className="space-y-2">
-              <span className="text-xs font-medium bg-primary/10 text-primary px-2 py-1 rounded">
+            <div>
+              <span className="text-xs font-medium bg-primary/10 text-primary px-2 py-1 rounded mb-1 inline-block">
                 Chapter Template
               </span>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -512,32 +545,30 @@ function SortableChildItem({
               </div>
             </div>
           ) : (
-            <div className="space-y-2">
-              {kind === 'external' && (
-                <span className="text-xs font-medium bg-muted px-2 py-1 rounded">
-                  External
-                </span>
-              )}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <div>
+              <span className="text-xs font-medium bg-muted px-2 py-1 rounded mb-1 inline-block">
+                Link
+              </span>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <Input
+                value={child.label ?? ''}
+                onChange={(e) =>
+                  onUpdate({ ...child, label: e.target.value })
+                }
+                placeholder="Link label"
+                className="h-8 text-sm"
+              />
+              <div className="relative">
                 <Input
-                  value={child.label ?? ''}
+                  value={child.href ?? ''}
                   onChange={(e) =>
-                    onUpdate({ ...child, label: e.target.value })
+                    onUpdate({ ...child, href: e.target.value })
                   }
-                  placeholder="Link label"
+                  placeholder="/page-slug or https://..."
                   className="h-8 text-sm"
+                  list={`pages-${child._id}`}
                 />
-                <div className="relative">
-                  <Input
-                    value={child.href ?? ''}
-                    onChange={(e) =>
-                      onUpdate({ ...child, href: e.target.value })
-                    }
-                    placeholder={kind === 'external' ? 'https://...' : '/page-slug'}
-                    className="h-8 text-sm"
-                    list={`pages-${child._id}`}
-                  />
-                  {kind === 'link' && pages.length > 0 && (
+                {!isExternalHref(child.href) && pages.length > 0 && (
                     <datalist id={`pages-${child._id}`}>
                       {pages.map((p) => (
                         <option key={p.slug} value={`/${p.slug}`}>
@@ -552,15 +583,30 @@ function SortableChildItem({
           )}
         </div>
 
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-7 w-7 text-muted-foreground hover:text-destructive shrink-0"
-          onClick={onDelete}
-          aria-label="Delete child"
-        >
-          <X className="h-3.5 w-3.5" />
-        </Button>
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 text-muted-foreground hover:text-destructive shrink-0"
+              aria-label="Delete child"
+            >
+              <X className="h-3.5 w-3.5" />
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete this item?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This will remove the {childKindLabel(kind).toLowerCase()} from the dropdown. You can undo by discarding your unsaved changes.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction variant="destructive" onClick={onDelete}>Delete</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </div>
   )
@@ -577,7 +623,7 @@ interface AddChildMenuProps {
 function AddChildMenu({ onAdd }: AddChildMenuProps) {
   const [open, setOpen] = useState(false)
 
-  const kinds: ChildKind[] = ['link', 'external', 'separator', 'heading', 'chapter-template']
+  const kinds: ChildKind[] = ['link', 'separator', 'heading', 'chapter-template']
 
   if (!open) {
     return (
@@ -630,6 +676,13 @@ export function NavigationEditor({ initialConfig, pages }: NavigationEditorProps
   const [openItems, setOpenItems] = useState<Set<string>>(new Set())
   const [saving, setSaving] = useState(false)
 
+  // Snapshot of last-saved state for change detection and discard
+  const savedSnapshot = useRef(JSON.stringify(initialConfig?.items ?? []))
+  const hasChanges = useMemo(
+    () => JSON.stringify(stripIds(items)) !== savedSnapshot.current,
+    [items]
+  )
+
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, {
@@ -677,6 +730,13 @@ export function NavigationEditor({ initialConfig, pages }: NavigationEditorProps
     })
   }, [])
 
+  // -- Discard changes --
+  function discardChanges() {
+    const saved: NavItemRaw[] = JSON.parse(savedSnapshot.current)
+    setItems(addIds(saved))
+    setOpenItems(new Set())
+  }
+
   // -- Add a new top-level item --
   function addTopItem() {
     const newItem: NavItemWithId = {
@@ -697,6 +757,7 @@ export function NavigationEditor({ initialConfig, pages }: NavigationEditorProps
       }
       const result = await saveNavigation(config)
       if (result.success) {
+        savedSnapshot.current = JSON.stringify(config.items)
         toast.success('Navigation saved')
       } else {
         toast.error(result.error || 'Failed to save navigation')
@@ -747,8 +808,12 @@ export function NavigationEditor({ initialConfig, pages }: NavigationEditorProps
         Add top-level item
       </Button>
 
-      <div className="flex justify-end pt-4 border-t">
-        <Button onClick={handleSave} disabled={saving}>
+      <div className="flex justify-end gap-2 pt-4 border-t">
+        <Button variant="outline" onClick={discardChanges} disabled={!hasChanges || saving}>
+          <RotateCcw className="h-4 w-4 mr-2" />
+          Discard changes
+        </Button>
+        <Button onClick={handleSave} disabled={saving || !hasChanges}>
           {saving ? (
             <>
               <Loader2 className="h-4 w-4 mr-2 animate-spin" />

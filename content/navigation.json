@@ -3,46 +3,120 @@
     {
       "label": "About",
       "children": [
-        { "label": "About Us", "href": "/about" },
-        { "label": "What is Randonneuring?", "href": "/intro" },
-        { "label": "Blog", "href": "https://blog.randonneursontario.ca", "external": true },
-        { "label": "Club Policies", "href": "/policies" },
-        { "label": "Mailing List", "href": "/mailing-list" },
-        { "label": "Contact", "href": "/contact" }
+        {
+          "label": "About Us",
+          "href": "/about"
+        },
+        {
+          "label": "What is Randonneuring?",
+          "href": "/intro"
+        },
+        {
+          "label": "Blog",
+          "href": "https://blog.randonneursontario.ca",
+          "external": true
+        },
+        {
+          "separator": true
+        },
+        {
+          "label": "Club History",
+          "type": "heading"
+        },
+        {
+          "label": "In Memoriam",
+          "href": "/in-memoriam"
+        },
+        {
+          "separator": true
+        },
+        {
+          "label": "Administration",
+          "type": "heading"
+        },
+        {
+          "label": "Club Policies",
+          "href": "/policies"
+        },
+        {
+          "label": "Mailing List",
+          "href": "/mailing-list"
+        },
+        {
+          "label": "Contact",
+          "href": "/contact"
+        }
       ]
     },
     {
       "label": "Routes",
       "children": [
-        { "label": "{{chapter}}", "href": "/routes/{{chapter-slug}}", "template": "chapters" }
+        {
+          "label": "{{chapter}}",
+          "href": "/routes/{{chapter-slug}}",
+          "template": "chapters"
+        }
       ]
     },
     {
       "label": "Calendar",
       "children": [
-        { "label": "All Chapters", "href": "/calendar" },
-        { "label": "{{chapter}}", "href": "/calendar/{{chapter-slug}}", "template": "chapters" },
-        { "separator": true },
-        { "label": "Permanents", "href": "/calendar/permanents" },
-        { "label": "Devil Week 2026", "href": "/devil-week-2026" }
+        {
+          "label": "All Chapters",
+          "href": "/calendar"
+        },
+        {
+          "label": "{{chapter}}",
+          "href": "/calendar/{{chapter-slug}}",
+          "template": "chapters"
+        },
+        {
+          "separator": true
+        },
+        {
+          "label": "Permanents",
+          "href": "/calendar/permanents"
+        },
+        {
+          "label": "Devil Week 2026",
+          "href": "/devil-week-2026"
+        }
       ]
     },
     {
       "label": "Results",
       "children": [
-        { "label": "Chapters", "type": "heading" },
         {
           "label": "{{chapter}}",
           "href": "/results/{{season}}/{{chapter-slug}}",
           "template": "chapters"
         },
-        { "separator": true },
-        { "label": "Permanents", "href": "/results/{{season}}/permanent" },
-        { "label": "Granite Anvil", "href": "/results/{{graniteAnvilYear}}/granite-anvil" },
-        { "label": "Paris-Brest-Paris", "href": "/results/{{pbpYear}}/pbp" },
-        { "separator": true },
-        { "label": "Rider Directory", "href": "/riders" },
-        { "label": "Records", "href": "/records" }
+        {
+          "separator": true
+        },
+        {
+          "label": "Permanents",
+          "href": "/results/{{season}}/permanent"
+        },
+        {
+          "label": "Granite Anvil",
+          "href": "/results/{{graniteAnvilYear}}/granite-anvil"
+        },
+        {
+          "label": "Paris-Brest-Paris",
+          "href": "/results/{{pbpYear}}/pbp"
+        },
+        {
+          "separator": true
+        },
+        {
+          "label": "Rider Directory",
+          "href": "/riders"
+        },
+        {
+          "label": "Records",
+          "href": "/records"
+        }
       ]
     },
     {
