@@ -9,6 +9,7 @@ export type AuditEntityType =
   | 'page'
   | 'admin_user'
   | 'news'
+  | 'navigation'
 
 interface AuditLogParams {
   adminId: string

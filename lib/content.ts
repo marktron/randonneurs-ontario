@@ -1,6 +1,11 @@
 import fs from "fs";
 import path from "path";
 import matter from "gray-matter";
+import type {
+  NavigationConfig,
+  NavigationConfigRaw,
+} from "@/types/navigation";
+import { expandItem, getTemplateVariables } from "@/lib/navigation";
 
 const contentDirectory = path.join(process.cwd(), "content/pages");
 
@@ -87,5 +92,50 @@ export function getPageRaw(slug: string): string | null {
     return fs.readFileSync(filePath, "utf8");
   } catch {
     return null;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Navigation config (server-side, uses fs for reading from disk)
+// Template resolution logic is imported from lib/navigation.ts
+// ---------------------------------------------------------------------------
+
+const navigationFile = path.join(process.cwd(), "content/navigation.json");
+
+const FALLBACK_NAV: NavigationConfig = {
+  items: [{ label: "Home", href: "/" }],
+};
+
+/**
+ * Read raw navigation config (unexpanded, for admin editing)
+ */
+export function getNavigationRaw(): NavigationConfigRaw | null {
+  try {
+    if (!fs.existsSync(navigationFile)) return null;
+    const raw = fs.readFileSync(navigationFile, "utf8");
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Read and resolve navigation config from content/navigation.json
+ * Server-side only (uses fs). For client components, use
+ * getResolvedNavigation() from lib/navigation.ts instead.
+ */
+export function getNavigation(): NavigationConfig {
+  try {
+    if (!fs.existsSync(navigationFile)) return FALLBACK_NAV;
+
+    const raw = fs.readFileSync(navigationFile, "utf8");
+    const config: NavigationConfigRaw = JSON.parse(raw);
+    const variables = getTemplateVariables();
+
+    return {
+      items: config.items.flatMap((item) => expandItem(item, variables)),
+    };
+  } catch {
+    return FALLBACK_NAV;
   }
 }

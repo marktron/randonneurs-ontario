@@ -14,17 +14,15 @@ import {
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Button } from '@/components/ui/button'
-
-const currentSeason = process.env.NEXT_PUBLIC_CURRENT_SEASON || '2026'
-const currentYear = new Date().getFullYear()
-const mostRecentPbpYear = currentYear - ((currentYear - 3) % 4) // PBP years: 2023, 2027, 2031...
-const mostRecentGraniteAnvilYear = 2025
-
-const chapters = ['Huron', 'Ottawa', 'Simcoe-Muskoka', 'Toronto']
+import type { NavItem } from '@/types/navigation'
 
 const dropdownLinkStyles = 'block rounded-md px-3 py-2 text-sm hover:bg-muted transition-colors'
 
-export function Navbar() {
+interface NavbarProps {
+  items: NavItem[]
+}
+
+export function Navbar({ items }: NavbarProps) {
   const [open, setOpen] = useState(false)
 
   return (
@@ -47,176 +45,37 @@ export function Navbar() {
         {/* Desktop Navigation */}
         <NavigationMenu viewport={false} className="hidden lg:flex">
           <NavigationMenuList>
-            {/* About */}
-            <NavigationMenuItem>
-              <NavigationMenuTrigger className="bg-transparent hover:bg-muted/50 data-open:bg-muted/50">
-                About
-              </NavigationMenuTrigger>
-              <NavigationMenuContent>
-                <ul className="grid w-52 gap-1 p-2">
-                  <li>
-                    <Link href="/about" className={dropdownLinkStyles}>
-                      About Us
-                    </Link>
-                  </li>
-                  <li>
-                    <Link href="/intro" className={dropdownLinkStyles}>
-                      What is Randonneuring?
-                    </Link>
-                  </li>
-                  <li>
-                    <a
-                      href="https://blog.randonneursontario.ca"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className={dropdownLinkStyles}
-                    >
-                      Blog
-                    </a>
-                  </li>
-                  <li>
-                    <Link href="/policies" className={dropdownLinkStyles}>
-                      Club Policies
-                    </Link>
-                  </li>
-                  <li>
-                    <Link href="/mailing-list" className={dropdownLinkStyles}>
-                      Mailing List
-                    </Link>
-                  </li>
-                  <li>
-                    <Link href="/contact" className={dropdownLinkStyles}>
-                      Contact
-                    </Link>
-                  </li>
-                </ul>
-              </NavigationMenuContent>
-            </NavigationMenuItem>
-
-            {/* Routes */}
-            <NavigationMenuItem>
-              <NavigationMenuTrigger className="bg-transparent hover:bg-muted/50 data-open:bg-muted/50">
-                Routes
-              </NavigationMenuTrigger>
-              <NavigationMenuContent>
-                <ul className="grid w-48 gap-1 p-2">
-                  {chapters.map((chapter) => (
-                    <li key={chapter}>
-                      <Link
-                        href={`/routes/${chapter.toLowerCase().replace(' ', '-')}`}
-                        className={dropdownLinkStyles}
-                      >
-                        {chapter}
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              </NavigationMenuContent>
-            </NavigationMenuItem>
-
-            {/* Calendar */}
-            <NavigationMenuItem>
-              <NavigationMenuTrigger className="bg-transparent hover:bg-muted/50 data-open:bg-muted/50">
-                Calendar
-              </NavigationMenuTrigger>
-              <NavigationMenuContent>
-                <ul className="grid w-48 gap-1 p-2">
-                  <li>
-                    <Link href="/calendar" className={dropdownLinkStyles}>
-                      All Chapters
-                    </Link>
-                  </li>
-                  {chapters.map((chapter) => (
-                    <li key={chapter}>
-                      <Link
-                        href={`/calendar/${chapter.toLowerCase().replace(' ', '-')}`}
-                        className={dropdownLinkStyles}
-                      >
-                        {chapter}
-                      </Link>
-                    </li>
-                  ))}
-                  <li className="border-t border-border my-1" />
-                  <li>
-                    <Link href="/calendar/permanents" className={dropdownLinkStyles}>
-                      Permanents
-                    </Link>
-                  </li>
-                  <li>
-                    <Link href="/devil-week-2026" className={dropdownLinkStyles}>
-                      Devil Week 2026
-                    </Link>
-                  </li>
-                </ul>
-              </NavigationMenuContent>
-            </NavigationMenuItem>
-
-            {/* Results */}
-            <NavigationMenuItem>
-              <NavigationMenuTrigger className="bg-transparent hover:bg-muted/50 data-open:bg-muted/50">
-                Results
-              </NavigationMenuTrigger>
-              <NavigationMenuContent>
-                <ul className="grid w-48 gap-1 p-2">
-                  <li className="px-3 py-1.5 text-xs font-medium text-muted-foreground">
-                    Chapters
-                  </li>
-                  {chapters.map((chapter) => (
-                    <li key={chapter}>
-                      <Link
-                        href={`/results/${currentSeason}/${chapter.toLowerCase().replace(' ', '-')}`}
-                        className={dropdownLinkStyles}
-                      >
-                        {chapter}
-                      </Link>
-                    </li>
-                  ))}
-                  <li className="border-t border-border my-1" />
-                  <li>
+            {items.map((item, i) => {
+              if (item.style === 'cta') {
+                return (
+                  <NavigationMenuItem key={i}>
                     <Link
-                      href={`/results/${currentSeason}/permanent`}
-                      className={dropdownLinkStyles}
+                      href={item.href!}
+                      className="inline-flex items-center rounded-full bg-red-600 ml-3 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-700"
                     >
-                      Permanents
+                      {item.label}
                     </Link>
-                  </li>
-                  <li>
-                    <Link
-                      href={`/results/${mostRecentGraniteAnvilYear}/granite-anvil`}
-                      className={dropdownLinkStyles}
-                    >
-                      Granite Anvil
-                    </Link>
-                  </li>
-                  <li>
-                    <Link href={`/results/${mostRecentPbpYear}/pbp`} className={dropdownLinkStyles}>
-                      Paris-Brest-Paris
-                    </Link>
-                  </li>
-                  <li className="border-t border-border my-1" />
-                  <li>
-                    <Link href="/riders" className={dropdownLinkStyles}>
-                      Rider Directory
-                    </Link>
-                  </li>
-                  <li>
-                    <Link href="/records" className={dropdownLinkStyles}>
-                      Records
-                    </Link>
-                  </li>
-                </ul>
-              </NavigationMenuContent>
-            </NavigationMenuItem>
-
-            {/* Membership */}
-            <NavigationMenuItem>
-              <Link
-                href="/membership"
-                className="inline-flex items-center rounded-full bg-red-600 ml-3 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-700"
-              >
-                Join the club
-              </Link>
-            </NavigationMenuItem>
+                  </NavigationMenuItem>
+                )
+              }
+              if (item.children) {
+                return (
+                  <NavigationMenuItem key={i}>
+                    <NavigationMenuTrigger className="bg-transparent hover:bg-muted/50 data-open:bg-muted/50">
+                      {item.label}
+                    </NavigationMenuTrigger>
+                    <NavigationMenuContent>
+                      <ul className="grid w-52 gap-1 p-2">
+                        {item.children.map((child, j) => (
+                          <NavChildItem key={j} item={child} />
+                        ))}
+                      </ul>
+                    </NavigationMenuContent>
+                  </NavigationMenuItem>
+                )
+              }
+              return null
+            })}
           </NavigationMenuList>
         </NavigationMenu>
 
@@ -237,171 +96,86 @@ export function Navbar() {
               </SheetTitle>
             </SheetHeader>
             <nav className="flex flex-col gap-1 mt-3 px-3">
-              {/* About */}
-              <MobileNavSection title="About">
-                <Link
-                  href="/about"
-                  onClick={() => setOpen(false)}
-                  className="block px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors"
-                >
-                  About Us
-                </Link>
-                <Link
-                  href="/intro"
-                  onClick={() => setOpen(false)}
-                  className="block px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors"
-                >
-                  What is Randonneuring?
-                </Link>
-                <a
-                  href="https://blog.randonneursontario.ca"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={() => setOpen(false)}
-                  className="block px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors"
-                >
-                  Blog
-                </a>
-                <Link
-                  href="/policies"
-                  onClick={() => setOpen(false)}
-                  className="block px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors"
-                >
-                  Club Policies
-                </Link>
-                <Link
-                  href="/mailing-list"
-                  onClick={() => setOpen(false)}
-                  className="block px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors"
-                >
-                  Mailing List
-                </Link>
-                <Link
-                  href="/contact"
-                  onClick={() => setOpen(false)}
-                  className="block px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors"
-                >
-                  Contact
-                </Link>
-              </MobileNavSection>
-
-              {/* Routes */}
-              <MobileNavSection title="Routes">
-                {chapters.map((chapter) => (
-                  <Link
-                    key={chapter}
-                    href={`/routes/${chapter.toLowerCase().replace(' ', '-')}`}
-                    onClick={() => setOpen(false)}
-                    className="block px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors"
-                  >
-                    {chapter}
-                  </Link>
-                ))}
-              </MobileNavSection>
-
-              {/* Calendar */}
-              <MobileNavSection title="Calendar">
-                <Link
-                  href="/calendar"
-                  onClick={() => setOpen(false)}
-                  className="block px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors"
-                >
-                  All Chapters
-                </Link>
-                {chapters.map((chapter) => (
-                  <Link
-                    key={chapter}
-                    href={`/calendar/${chapter.toLowerCase().replace(' ', '-')}`}
-                    onClick={() => setOpen(false)}
-                    className="block px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors"
-                  >
-                    {chapter}
-                  </Link>
-                ))}
-                <div className="border-t border-border my-1" />
-                <Link
-                  href="/calendar/permanents"
-                  onClick={() => setOpen(false)}
-                  className="block px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors"
-                >
-                  Permanents
-                </Link>
-                <Link
-                  href="/devil-week-2026"
-                  onClick={() => setOpen(false)}
-                  className="block px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors"
-                >
-                  Devil Week 2026
-                </Link>
-              </MobileNavSection>
-
-              {/* Results */}
-              <MobileNavSection title="Results">
-                <div className="px-3 py-1.5 text-xs font-medium text-muted-foreground">
-                  Chapters
-                </div>
-                {chapters.map((chapter) => (
-                  <Link
-                    key={chapter}
-                    href={`/results/${currentSeason}/${chapter.toLowerCase().replace(' ', '-')}`}
-                    onClick={() => setOpen(false)}
-                    className="block px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors"
-                  >
-                    {chapter}
-                  </Link>
-                ))}
-                <div className="border-t border-border my-1" />
-                <Link
-                  href={`/results/${currentSeason}/permanent`}
-                  onClick={() => setOpen(false)}
-                  className="block px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors"
-                >
-                  Permanents
-                </Link>
-                <Link
-                  href={`/results/${mostRecentGraniteAnvilYear}/granite-anvil`}
-                  onClick={() => setOpen(false)}
-                  className="block px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors"
-                >
-                  Granite Anvil
-                </Link>
-                <Link
-                  href={`/results/${mostRecentPbpYear}/pbp`}
-                  onClick={() => setOpen(false)}
-                  className="block px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors"
-                >
-                  Paris-Brest-Paris
-                </Link>
-                <div className="border-t border-border my-1" />
-                <Link
-                  href="/riders"
-                  onClick={() => setOpen(false)}
-                  className="block px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors"
-                >
-                  Rider Directory
-                </Link>
-                <Link
-                  href="/records"
-                  onClick={() => setOpen(false)}
-                  className="block px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors"
-                >
-                  Records
-                </Link>
-              </MobileNavSection>
-
-              {/* Membership */}
-              <Link
-                href="/membership"
-                onClick={() => setOpen(false)}
-                className="mt-2 rounded-full bg-red-600 px-4 py-2.5 text-center text-sm font-medium text-white transition-colors hover:bg-red-700"
-              >
-                Join the club
-              </Link>
+              {items.map((item, i) => {
+                if (item.style === 'cta') {
+                  return (
+                    <Link
+                      key={i}
+                      href={item.href!}
+                      onClick={() => setOpen(false)}
+                      className="mt-2 rounded-full bg-red-600 px-4 py-2.5 text-center text-sm font-medium text-white transition-colors hover:bg-red-700"
+                    >
+                      {item.label}
+                    </Link>
+                  )
+                }
+                if (item.children) {
+                  return (
+                    <MobileNavSection key={i} title={item.label}>
+                      {item.children.map((child, j) => (
+                        <MobileNavChildItem key={j} item={child} onClose={() => setOpen(false)} />
+                      ))}
+                    </MobileNavSection>
+                  )
+                }
+                return null
+              })}
             </nav>
           </SheetContent>
         </Sheet>
       </div>
     </header>
+  )
+}
+
+function NavChildItem({ item }: { item: NavItem }) {
+  if (item.separator) return <li className="border-t border-border my-1" />
+  if (item.type === 'heading') {
+    return <li className="px-3 py-1.5 text-xs font-medium text-muted-foreground">{item.label}</li>
+  }
+  if (item.external) {
+    return (
+      <li>
+        <a href={item.href} target="_blank" rel="noopener noreferrer" className={dropdownLinkStyles}>
+          {item.label}
+        </a>
+      </li>
+    )
+  }
+  return (
+    <li>
+      <Link href={item.href!} className={dropdownLinkStyles}>
+        {item.label}
+      </Link>
+    </li>
+  )
+}
+
+function MobileNavChildItem({ item, onClose }: { item: NavItem; onClose: () => void }) {
+  const mobileStyles =
+    'block px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors'
+
+  if (item.separator) return <div className="border-t border-border my-1" />
+  if (item.type === 'heading') {
+    return <div className="px-3 py-1.5 text-xs font-medium text-muted-foreground">{item.label}</div>
+  }
+  if (item.external) {
+    return (
+      <a
+        href={item.href}
+        target="_blank"
+        rel="noopener noreferrer"
+        onClick={onClose}
+        className={mobileStyles}
+      >
+        {item.label}
+      </a>
+    )
+  }
+  return (
+    <Link href={item.href!} onClick={onClose} className={mobileStyles}>
+      {item.label}
+    </Link>
   )
 }
 

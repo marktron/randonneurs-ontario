@@ -62,7 +62,8 @@ randonneurs-ontario/
 │   └── seed.sql              # Development seed data
 │
 ├── content/                  # Static content
-│   └── pages/                # Markdown content for CMS pages
+│   ├── pages/                # Markdown content for CMS pages
+│   └── navigation.json       # Site navigation structure
 │
 ├── hooks/                    # React custom hooks
 ├── public/                   # Static assets (images)
@@ -214,6 +215,39 @@ HTML streamed to browser
        ↓
 Client components hydrate
 ```
+
+### Site Navigation
+
+The site navigation is data-driven, stored as `content/navigation.json` and managed via the admin tool at `/admin/navigation`.
+
+```
+Admin edits nav in /admin/navigation
+       ↓
+saveNavigation() server action
+       ↓
+   ┌───┴───────────┐
+   ↓               ↓
+Development:    Production:
+Save locally    GitHub API commit
+                   ↓
+              Vercel rebuild
+       ↓
+getResolvedNavigation() resolves templates (client-safe, JSON import)
+       ↓
+PageShell passes resolved items to Navbar
+       ↓
+Navbar renders desktop + mobile nav from data
+```
+
+**Key files:**
+- `content/navigation.json` — raw nav structure with template placeholders
+- `lib/navigation.ts` — `getResolvedNavigation()` (client-safe, imports JSON module), plus shared template resolution helpers (`expandItem`, `resolveHref`, `getTemplateVariables`)
+- `lib/content.ts` — `getNavigation()` (server-side, reads from disk via `fs`) and `getNavigationRaw()` (for admin editing)
+- `lib/actions/navigation.ts` — `saveNavigation()` server action
+- `components/navbar.tsx` — data-driven navbar renderer
+- `components/admin/navigation-editor.tsx` — admin drag-and-drop editor
+
+**Template system:** Items with `"template": "chapters"` expand into one link per chapter at read time. Variables like `{{season}}`, `{{pbpYear}}`, and `{{graniteAnvilYear}}` are resolved from environment config and computed values.
 
 ### News & Notices
 
