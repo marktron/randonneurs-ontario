@@ -166,6 +166,19 @@ function expandItem(
 }
 
 /**
+ * Read raw navigation config (unexpanded, for admin editing)
+ */
+export function getNavigationRaw(): NavigationConfigRaw | null {
+  try {
+    if (!fs.existsSync(navigationFile)) return null;
+    const raw = fs.readFileSync(navigationFile, "utf8");
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Read and resolve navigation config from content/navigation.json
  */
 export function getNavigation(): NavigationConfig {
