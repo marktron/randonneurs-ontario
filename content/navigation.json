@@ -4,23 +4,12 @@
       "label": "About",
       "children": [
         {
-          "label": "About Us",
+          "label": "About Randonneurs Ontario",
           "href": "/about"
-        },
-        {
-          "separator": true
-        },
-        {
-          "label": "About Randonneuring",
-          "type": "heading"
         },
         {
           "label": "What is Randonneuring?",
           "href": "/intro"
-        },
-        {
-          "label": "Rules",
-          "href": "/rules"
         },
         {
           "label": "Blog",
