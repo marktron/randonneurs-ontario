@@ -49,3 +49,6 @@ validation-reports
 
 # backups (used in local development)
 backups/
+
+# claude code worktrees
+.claude/worktrees/
