@@ -154,21 +154,38 @@ export function ImageUpload({
               unoptimized
             />
           </div>
+        </div>
+        <div className="flex items-center gap-3">
           <Button
             type="button"
-            variant="destructive"
-            size="icon-sm"
-            className="absolute top-2 right-2"
+            variant="outline"
+            size="sm"
+            onClick={handleBrowseClick}
+            disabled={disabled || isUploading}
+          >
+            {isUploading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Upload className="h-4 w-4 mr-2" />}
+            Replace
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="text-destructive hover:text-destructive"
             onClick={handleClear}
             disabled={disabled}
           >
-            <X className="h-4 w-4" />
-            <span className="sr-only">Remove image</span>
+            <X className="h-4 w-4 mr-1" />
+            Remove
           </Button>
         </div>
-        <p className="text-xs text-muted-foreground truncate" title={value}>
-          {value}
-        </p>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept={ALLOWED_TYPES.join(',')}
+          onChange={handleFileSelect}
+          disabled={disabled || isUploading}
+          className="sr-only"
+        />
       </div>
     )
   }

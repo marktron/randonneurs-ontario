@@ -30,6 +30,11 @@ export async function generateMetadata({ params }: PageProps) {
   return {
     title: `Register for ${event.name} ${event.distance}km`,
     description: `Register for the ${event.name} ${event.distance}km ${event.type.toLowerCase()} on ${formatDateShort(event.date)}.`,
+    ...(event.imageUrl && {
+      openGraph: {
+        images: [{ url: event.imageUrl }],
+      },
+    }),
   }
 }
 
@@ -75,7 +80,7 @@ export default async function RegisterPage({ params }: PageProps) {
     <PageShell>
       {/* Hero Section */}
       {event.imageUrl ? (
-        <div className="relative w-full h-[25vh] md:h-[40vh] min-h-[180px] md:min-h-[300px] max-h-[500px] overflow-hidden">
+        <div className="relative w-full h-[30vh] md:h-[60vh] min-h-[200px] md:min-h-[350px] max-h-[550px] overflow-hidden">
           <Image
             src={event.imageUrl}
             alt={event.name}
@@ -85,9 +90,8 @@ export default async function RegisterPage({ params }: PageProps) {
             priority
             unoptimized
           />
-          <div className="absolute inset-0 bg-gradient-to-t from-neutral-900/70 to-neutral-900/20" />
-          <div className="relative z-10 h-full flex flex-col justify-end">
-            <div className="content-container-wide pb-6 md:pb-8">
+          <div className="absolute bottom-0 left-0 right-0 z-10 bg-gradient-to-t from-neutral-900/70 to-transparent pt-16 md:pt-24">
+            <div className="content-container-wide mt-10 pb-6 md:pb-8">
               <Badge variant="secondary" className="bg-white/90 text-neutral-900 text-xs tracking-wider font-medium mb-3">
                 {event.type}
               </Badge>
