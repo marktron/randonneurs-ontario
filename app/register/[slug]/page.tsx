@@ -73,9 +73,9 @@ export default async function RegisterPage({ params }: PageProps) {
 
   return (
     <PageShell>
-      {/* Hero Image - Full bleed */}
-      {event.imageUrl && (
-        <div className="relative w-full h-[25vh] md:h-[50vh] min-h-[180px] md:min-h-[350px] max-h-[550px]">
+      {/* Hero Section */}
+      {event.imageUrl ? (
+        <div className="relative w-full h-[25vh] md:h-[40vh] min-h-[180px] md:min-h-[300px] max-h-[500px] overflow-hidden">
           <Image
             src={event.imageUrl}
             alt={event.name}
@@ -85,26 +85,48 @@ export default async function RegisterPage({ params }: PageProps) {
             priority
             unoptimized
           />
+          <div className="absolute inset-0 bg-gradient-to-t from-neutral-900/70 to-neutral-900/20" />
+          <div className="relative z-10 h-full flex flex-col justify-end">
+            <div className="content-container-wide pb-6 md:pb-8">
+              <Badge variant="secondary" className="bg-white/90 text-neutral-900 text-xs tracking-wider font-medium mb-3">
+                {event.type}
+              </Badge>
+              <h1 className="font-serif text-3xl md:text-5xl lg:text-6xl tracking-tight text-neutral-100 text-shadow-lg">
+                {event.name}
+              </h1>
+            </div>
+          </div>
         </div>
-      )}
+      ) : null}
 
-      {/* Event Header */}
+      {/* Event Header — meta info below image (or full header if no image) */}
       <header className="bg-background">
         <div className="content-container-wide pt-6 md:pt-10 pb-4 md:pb-6">
-          {/* Kicker / Overline */}
-          <div className="flex flex-wrap items-center gap-2 mb-3 md:mb-4">
-            <Badge variant="secondary" className="text-xs tracking-wider font-medium">
-              {event.type}
-            </Badge>
-            <span className="text-xs tracking-[0.15em] uppercase text-muted-foreground">
-              {event.distance} km · {event.chapterName}
-            </span>
-          </div>
+          {/* Show full header when no image */}
+          {!event.imageUrl && (
+            <>
+              <div className="flex flex-wrap items-center gap-2 mb-3 md:mb-4">
+                <Badge variant="secondary" className="text-xs tracking-wider font-medium">
+                  {event.type}
+                </Badge>
+                <span className="text-xs tracking-[0.15em] uppercase text-muted-foreground">
+                  {event.distance} km · {event.chapterName}
+                </span>
+              </div>
+              <h1 className="font-serif text-3xl md:text-5xl lg:text-6xl tracking-tight mb-4 md:mb-6">
+                {event.name}
+              </h1>
+            </>
+          )}
 
-          {/* Title */}
-          <h1 className="font-serif text-3xl md:text-5xl lg:text-6xl tracking-tight mb-4 md:mb-6">
-            {event.name}
-          </h1>
+          {/* Kicker line (shown when image exists — badge/title are on the image) */}
+          {event.imageUrl && (
+            <div className="flex flex-wrap items-center gap-2 mb-3 md:mb-4">
+              <span className="text-xs tracking-[0.15em] uppercase text-muted-foreground">
+                {event.distance} km · {event.chapterName}
+              </span>
+            </div>
+          )}
 
           {/* Meta */}
           <div className="flex flex-wrap gap-x-8 gap-y-3 text-sm">
