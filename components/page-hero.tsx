@@ -28,7 +28,7 @@ export function PageHero({ image, eyebrow, title, description }: PageHeroProps) 
     <div className="relative border-b border-border overflow-hidden">
       <Image src={resolvedImage} alt="" fill className="object-cover editorial-image" priority />
       <div className="absolute inset-0 bg-gradient-to-t from-neutral-900/70 to-neutral-900/20" />
-      <div className="relative mx-auto max-w-4xl px-6 py-16 md:py-20">
+      <div className="relative mx-auto max-w-5xl px-6 py-16 md:py-20">
         {eyebrow && <p className="eyebrow-hero text-neutral-200 text-shadow-lg">{eyebrow}</p>}
         <h1 className="font-serif text-5xl md:text-6xl lg:text-7xl tracking-tight text-neutral-100 text-shadow-lg">
           {title}

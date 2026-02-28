@@ -1,31 +1,43 @@
-import { withSentryConfig } from "@sentry/nextjs";
-import type { NextConfig } from "next";
+import { withSentryConfig } from '@sentry/nextjs'
+import type { NextConfig } from 'next'
 
 const nextConfig: NextConfig = {
   experimental: {
     serverActions: {
-      bodySizeLimit: "6mb",
+      bodySizeLimit: '6mb',
     },
   },
+  redirects: async () => [
+    {
+      source: '/who',
+      destination: '/intro',
+      permanent: true,
+    },
+    {
+      source: '/who/:path*',
+      destination: '/intro',
+      permanent: true,
+    },
+  ],
   headers: async () => [
     {
-      source: "/(.*)",
+      source: '/(.*)',
       headers: [
         {
-          key: "X-Frame-Options",
-          value: "DENY",
+          key: 'X-Frame-Options',
+          value: 'DENY',
         },
         {
-          key: "X-Content-Type-Options",
-          value: "nosniff",
+          key: 'X-Content-Type-Options',
+          value: 'nosniff',
         },
         {
-          key: "Referrer-Policy",
-          value: "strict-origin-when-cross-origin",
+          key: 'Referrer-Policy',
+          value: 'strict-origin-when-cross-origin',
         },
         {
-          key: "Permissions-Policy",
-          value: "camera=(), microphone=(), geolocation=()",
+          key: 'Permissions-Policy',
+          value: 'camera=(), microphone=(), geolocation=()',
         },
       ],
     },
@@ -34,28 +46,28 @@ const nextConfig: NextConfig = {
     remotePatterns: [
       {
         // Local Supabase storage (development)
-        protocol: "http",
-        hostname: "127.0.0.1",
-        port: "54321",
-        pathname: "/storage/v1/object/public/**",
+        protocol: 'http',
+        hostname: '127.0.0.1',
+        port: '54321',
+        pathname: '/storage/v1/object/public/**',
       },
       {
         // Supabase storage (production)
-        protocol: "https",
-        hostname: "*.supabase.co",
-        pathname: "/storage/v1/object/public/**",
+        protocol: 'https',
+        hostname: '*.supabase.co',
+        pathname: '/storage/v1/object/public/**',
       },
     ],
   },
-};
+}
 
 export default withSentryConfig(nextConfig, {
   // For all available options, see:
   // https://www.npmjs.com/package/@sentry/webpack-plugin#options
 
-  org: "randonneurs-ontario",
+  org: 'randonneurs-ontario',
 
-  project: "javascript-nextjs",
+  project: 'javascript-nextjs',
 
   // Only print logs for uploading source maps in CI
   silent: !process.env.CI,
@@ -85,4 +97,4 @@ export default withSentryConfig(nextConfig, {
       removeDebugLogging: true,
     },
   },
-});
+})
