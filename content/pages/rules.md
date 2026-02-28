@@ -2,12 +2,10 @@
 title: Rules and Regulations
 slug: rules
 description: Official rules for Randonneurs Ontario events
-lastUpdated: 2025-01-09
+lastUpdated: 2026-02-28
 ---
 
-# Rules and Regulations
-
-All Randonneurs Ontario events follow the rules established by Randonneurs Mondiaux, with additional guidelines specific to our organization.
+All Randonneurs Ontario events follow the rules established by Randonneurs Mondiaux, with additional guidelines specific to our organization. Refer to the [Club Policies](/policies) page for all regulations and policies governing Randonneurs Ontario.
 
 ## General Rules
 
