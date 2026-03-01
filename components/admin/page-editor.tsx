@@ -89,10 +89,11 @@ export function PageEditor({
       })
 
       if (result.success) {
-        toast.success(isNew ? 'Page created' : 'Page saved')
-        if (isNew) {
-          router.push(`/admin/pages/${slug}`)
-        }
+        toast.success(
+          isNew
+            ? 'Page created! It should be live at /' + slug + ' in a few minutes.'
+            : 'Page saved! Changes should be live in a few minutes.'
+        )
         router.refresh()
       } else {
         toast.error(result.error || 'Failed to save page')
