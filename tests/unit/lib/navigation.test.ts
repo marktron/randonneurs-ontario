@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest'
-import { getResolvedNavigation, expandItem, resolveHref, getTemplateVariables } from '@/lib/navigation'
+import {
+  getResolvedNavigation,
+  expandItem,
+  resolveHref,
+  getTemplateVariables,
+} from '@/lib/navigation'
 
 describe('resolveHref', () => {
   it('replaces template variables in href', () => {
@@ -56,7 +61,7 @@ describe('expandItem', () => {
   it('expands chapter templates into multiple items', () => {
     const result = expandItem(
       { label: '{{chapter}}', href: '/routes/{{chapter-slug}}', template: 'chapters' },
-      variables,
+      variables
     )
     expect(result.length).toBe(4) // 4 core chapters
     expect(result[0].label).toBe('Huron')
@@ -64,26 +69,20 @@ describe('expandItem', () => {
   })
 
   it('resolves template variables in hrefs', () => {
-    const result = expandItem(
-      { label: 'PBP', href: '/results/{{pbpYear}}/pbp' },
-      variables,
-    )
+    const result = expandItem({ label: 'PBP', href: '/results/{{pbpYear}}/pbp' }, variables)
     expect(result).toEqual([{ label: 'PBP', href: '/results/2027/pbp' }])
   })
 
   it('preserves external flag', () => {
     const result = expandItem(
       { label: 'Blog', href: 'https://blog.example.com', external: true },
-      variables,
+      variables
     )
     expect(result[0].external).toBe(true)
   })
 
   it('preserves CTA style', () => {
-    const result = expandItem(
-      { label: 'Join', href: '/membership', style: 'cta' },
-      variables,
-    )
+    const result = expandItem({ label: 'Join', href: '/membership', style: 'cta' }, variables)
     expect(result[0].style).toBe('cta')
   })
 
@@ -92,12 +91,16 @@ describe('expandItem', () => {
       {
         label: 'Results',
         children: [
-          { label: '{{chapter}}', href: '/results/{{season}}/{{chapter-slug}}', template: 'chapters' },
+          {
+            label: '{{chapter}}',
+            href: '/results/{{season}}/{{chapter-slug}}',
+            template: 'chapters',
+          },
           { separator: true },
           { label: 'PBP', href: '/results/{{pbpYear}}/pbp' },
         ],
       },
-      variables,
+      variables
     )
     expect(result).toHaveLength(1)
     const children = result[0].children!
@@ -123,8 +126,8 @@ describe('getResolvedNavigation', () => {
     const routes = nav.items.find((item) => item.label === 'Routes')
     expect(routes).toBeDefined()
     expect(routes!.children).toBeDefined()
-    // Should have expanded the chapter template into 4 chapters
-    expect(routes!.children!.length).toBe(4)
+    // 4 chapters + separator + Granite Anvil external link = 6
+    expect(routes!.children!.length).toBe(6)
     expect(routes!.children![0].label).toBe('Huron')
   })
 

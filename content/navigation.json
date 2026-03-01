@@ -28,6 +28,10 @@
           "href": "/origins"
         },
         {
+          "label": "Newsletter Archive",
+          "href": "/newsletters"
+        },
+        {
           "label": "In Memoriam",
           "href": "/in-memoriam"
         },
@@ -59,6 +63,14 @@
           "label": "{{chapter}}",
           "href": "/routes/{{chapter-slug}}",
           "template": "chapters"
+        },
+        {
+          "separator": true
+        },
+        {
+          "label": "Granite Anvil 1200",
+          "href": "http://ontariograniteanvil1200.com",
+          "external": true
         }
       ]
     },
