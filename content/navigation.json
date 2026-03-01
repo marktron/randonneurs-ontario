@@ -24,6 +24,10 @@
           "type": "heading"
         },
         {
+          "label": "Origins",
+          "href": "/origins"
+        },
+        {
           "label": "In Memoriam",
           "href": "/in-memoriam"
         },
