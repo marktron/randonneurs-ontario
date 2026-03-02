@@ -36,7 +36,11 @@ async function getAvailableSeasons(): Promise<string[]> {
   return data.map((row: { season: number }) => row.season.toString())
 }
 
-async function getEvents(season: string, chapterId?: string): Promise<EventForAdminList[]> {
+async function getEvents(
+  season: string,
+  chapterId?: string,
+  chapterSlug?: string
+): Promise<EventForAdminList[]> {
   const startDate = `${season}-01-01`
   const endDate = `${season}-12-31`
 
@@ -60,7 +64,10 @@ async function getEvents(season: string, chapterId?: string): Promise<EventForAd
     .lte('event_date', endDate)
     .order('event_date', { ascending: true })
 
-  if (chapterId) {
+  if (chapterSlug === 'permanent') {
+    // Permanents: filter by event_type instead of chapter
+    query = query.eq('event_type', 'permanent')
+  } else if (chapterId) {
     query = query.eq('chapter_id', chapterId)
   }
 
@@ -85,7 +92,8 @@ export default async function AdminEventsPage({ searchParams }: AdminEventsPageP
   // Use URL param if set, otherwise default to admin's chapter (if they have one)
   // 'all' means explicitly show all chapters (overrides admin default)
   const chapterId = params.chapter === 'all' ? null : (params.chapter ?? admin.chapter_id ?? null)
-  const events = await getEvents(season, chapterId || undefined)
+  const chapterSlug = chapterId ? chapters.find((c) => c.id === chapterId)?.slug : undefined
+  const events = await getEvents(season, chapterId || undefined, chapterSlug)
 
   const getStatusBadge = (status: string) => {
     switch (status) {
