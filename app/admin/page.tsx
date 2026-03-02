@@ -2,7 +2,14 @@ import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { requireAdmin } from '@/lib/auth/get-admin'
 import { parseLocalDate } from '@/lib/utils'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
 import { ClickableTableRow } from '@/components/admin/clickable-table-row'
 import { Calendar, Users, Route, Trophy, ArrowRight } from 'lucide-react'
 import Link from 'next/link'
@@ -34,14 +41,16 @@ async function getEventsNeedingResults(chapterId: string | null): Promise<EventF
 
   let query = getSupabaseAdmin()
     .from('events')
-    .select(`
+    .select(
+      `
       id,
       name,
       event_date,
       distance_km,
       event_type,
       chapters (name)
-    `)
+    `
+    )
     .lt('event_date', today)
     .in('status', ['scheduled', 'completed'])
     .order('event_date', { ascending: false })
@@ -59,14 +68,8 @@ async function getEventRiderCounts(eventIds: string[]): Promise<Record<string, n
   if (eventIds.length === 0) return {}
 
   const [registrationsResult, resultsResult] = await Promise.all([
-    getSupabaseAdmin()
-      .from('registrations')
-      .select('event_id, rider_id')
-      .in('event_id', eventIds),
-    getSupabaseAdmin()
-      .from('results')
-      .select('event_id, rider_id')
-      .in('event_id', eventIds),
+    getSupabaseAdmin().from('registrations').select('event_id, rider_id').in('event_id', eventIds),
+    getSupabaseAdmin().from('results').select('event_id, rider_id').in('event_id', eventIds),
   ])
 
   const counts: Record<string, Set<string>> = {}
@@ -105,15 +108,18 @@ async function getUpcomingEvents(chapterId: string | null): Promise<UpcomingEven
 
   let query = getSupabaseAdmin()
     .from('events')
-    .select(`
+    .select(
+      `
       id,
       name,
       event_date,
       start_time,
       distance_km,
       event_type,
-      chapters (name)
-    `)
+      chapters (name),
+      registrations (count)
+    `
+    )
     .eq('status', 'scheduled')
     .gte('event_date', today)
     .order('event_date', { ascending: true })
@@ -138,16 +144,14 @@ export default async function AdminDashboardPage() {
   ])
 
   // Get rider counts for events needing results
-  const eventIds = eventsNeedingResults.map(e => e.id)
+  const eventIds = eventsNeedingResults.map((e) => e.id)
   const riderCounts = await getEventRiderCounts(eventIds)
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold">Dashboard</h1>
-        <p className="text-muted-foreground">
-          Welcome back, {admin.name}
-        </p>
+        <p className="text-muted-foreground">Welcome back, {admin.name}</p>
       </div>
 
       <div className="flex flex-wrap gap-6 text-sm text-muted-foreground">
@@ -174,7 +178,9 @@ export default async function AdminDashboardPage() {
           <CardHeader>
             <CardTitle className="text-red-800">Events Needing Attention</CardTitle>
             <CardDescription>
-              {eventsNeedingResults.length} completed event{eventsNeedingResults.length !== 1 ? 's' : ''} awaiting submission{chapterId ? '' : ' (all chapters)'}
+              {eventsNeedingResults.length} completed event
+              {eventsNeedingResults.length !== 1 ? 's' : ''} awaiting submission
+              {chapterId ? '' : ' (all chapters)'}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -214,7 +220,9 @@ export default async function AdminDashboardPage() {
         <CardHeader>
           <CardTitle>Upcoming Events</CardTitle>
           <CardDescription>
-            {chapterId ? 'Next scheduled events for your chapter' : 'Next scheduled events across all chapters'}
+            {chapterId
+              ? 'Next scheduled events for your chapter'
+              : 'Next scheduled events across all chapters'}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -228,6 +236,7 @@ export default async function AdminDashboardPage() {
                     <TableHead>Event</TableHead>
                     {!chapterId && <TableHead>Chapter</TableHead>}
                     <TableHead>Date</TableHead>
+                    <TableHead>Riders</TableHead>
                     <TableHead className="text-right">Distance</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -236,7 +245,9 @@ export default async function AdminDashboardPage() {
                     <ClickableTableRow key={event.id} href={`/admin/events/${event.id}`}>
                       <TableCell>
                         <span className="font-medium">{event.name}</span>
-                        <p className="text-sm text-muted-foreground capitalize">{event.event_type}</p>
+                        <p className="text-sm text-muted-foreground capitalize">
+                          {event.event_type}
+                        </p>
                       </TableCell>
                       {!chapterId && <TableCell>{event.chapters?.name || '—'}</TableCell>}
                       <TableCell>
@@ -252,6 +263,9 @@ export default async function AdminDashboardPage() {
                             {event.start_time.slice(0, 5)}
                           </span>
                         )}
+                      </TableCell>
+                      <TableCell className="tabular-nums">
+                        {event.registrations?.[0]?.count ?? 0}
                       </TableCell>
                       <TableCell className="text-right">{event.distance_km} km</TableCell>
                     </ClickableTableRow>

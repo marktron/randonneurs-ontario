@@ -247,6 +247,7 @@ export type UpcomingEventForDashboard = Pick<
   'id' | 'name' | 'event_date' | 'start_time' | 'distance_km' | 'event_type'
 > & {
   chapters: Pick<Chapter, 'name'> | null
+  registrations: Array<{ count: number }> | null
 }
 
 /**
