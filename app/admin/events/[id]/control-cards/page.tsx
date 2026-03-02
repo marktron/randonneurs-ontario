@@ -5,15 +5,13 @@ import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { ChevronLeft } from 'lucide-react'
 import { ControlCardsForm } from '@/components/admin/control-cards-form'
-import type {
-  EventForControlCards,
-  RegistrationForControlCards,
-} from '@/types/queries'
+import type { EventForControlCards, RegistrationForControlCards } from '@/types/queries'
 
 async function getEventDetails(eventId: string): Promise<EventForControlCards | null> {
   const { data: event } = await getSupabaseAdmin()
     .from('events')
-    .select(`
+    .select(
+      `
       id,
       name,
       event_date,
@@ -23,7 +21,8 @@ async function getEventDetails(eventId: string): Promise<EventForControlCards | 
       event_type,
       chapters (id, name),
       routes (id, name, rwgps_id)
-    `)
+    `
+    )
     .eq('id', eventId)
     .single()
 
@@ -33,11 +32,13 @@ async function getEventDetails(eventId: string): Promise<EventForControlCards | 
 async function getRegistrations(eventId: string): Promise<RegistrationForControlCards[]> {
   const { data } = await getSupabaseAdmin()
     .from('registrations')
-    .select(`
+    .select(
+      `
       id,
       rider_id,
       riders (id, first_name, last_name)
-    `)
+    `
+    )
     .eq('event_id', eventId)
     .eq('status', 'registered')
     .order('registered_at', { ascending: true })
@@ -53,10 +54,7 @@ export default async function ControlCardsPage({ params }: ControlCardsPageProps
   const { id } = await params
   const admin = await requireAdmin()
 
-  const [event, registrations] = await Promise.all([
-    getEventDetails(id),
-    getRegistrations(id),
-  ])
+  const [event, registrations] = await Promise.all([getEventDetails(id), getRegistrations(id)])
 
   if (!event) {
     notFound()
@@ -98,12 +96,15 @@ export default async function ControlCardsPage({ params }: ControlCardsPageProps
           startLocation: event.start_location || '',
           chapter: event.chapters?.name || 'Randonneurs Ontario',
           rwgpsId: event.routes?.rwgps_id || null,
+          eventType: event.event_type,
         }}
-        riders={registrations.filter((r) => r.riders).map((r) => ({
-          id: r.riders!.id,
-          firstName: r.riders!.first_name,
-          lastName: r.riders!.last_name,
-        }))}
+        riders={registrations
+          .filter((r) => r.riders)
+          .map((r) => ({
+            id: r.riders!.id,
+            firstName: r.riders!.first_name,
+            lastName: r.riders!.last_name,
+          }))}
         organizer={{
           name: admin.name,
           phone: admin.phone || '',

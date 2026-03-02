@@ -5,8 +5,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Plus, Trash2, Printer, GripVertical, Download, Loader2 } from 'lucide-react'
+import { Plus, Trash2, Printer, GripVertical, Download, Loader2, Info } from 'lucide-react'
 import type { CardRider } from '@/types/control-card'
+import { reverseControls, isReversedEvent } from '@/lib/controlPoints'
 
 interface ControlInput {
   id: string
@@ -24,6 +25,7 @@ interface EventInput {
   startLocation: string
   chapter: string
   rwgpsId: string | null
+  eventType: string
 }
 
 interface OrganizerInput {
@@ -44,10 +46,20 @@ export function ControlCardsForm({ event, riders, organizer }: ControlCardsFormP
   const [organizerPhone, setOrganizerPhone] = useState(organizer?.phone || '')
   const [organizerEmail, setOrganizerEmail] = useState(organizer?.email || '')
 
-  // Controls - initialize with start and finish
+  const reversed = isReversedEvent(event.name)
+
+  // Controls - initialize with start and finish (swapped for reversed routes)
   const [controls, setControls] = useState<ControlInput[]>([
-    { id: crypto.randomUUID(), name: event.startLocation || 'Start', distance: '0' },
-    { id: crypto.randomUUID(), name: 'Finish', distance: String(event.distance) },
+    {
+      id: crypto.randomUUID(),
+      name: reversed ? 'Finish' : event.startLocation || 'Start',
+      distance: '0',
+    },
+    {
+      id: crypto.randomUUID(),
+      name: reversed ? event.startLocation || 'Start' : 'Finish',
+      distance: String(event.distance),
+    },
   ])
 
   // Extra blank cards for day-of registrations
@@ -183,8 +195,19 @@ export function ControlCardsForm({ event, riders, organizer }: ControlCardsFormP
       // Sort by distance
       newControls.sort((a, b) => parseFloat(a.distance) - parseFloat(b.distance))
 
-      setControls(newControls)
-      console.log('[RWGPS] Imported controls:', newControls)
+      // Reverse controls for reversed permanent routes
+      if (reversed) {
+        const totalDistance = Math.max(
+          ...newControls.map((c) => parseFloat(c.distance)),
+          event.distance
+        )
+        const reversedControls = reverseControls(newControls, totalDistance)
+        setControls(reversedControls)
+        console.log('[RWGPS] Imported controls (reversed):', reversedControls)
+      } else {
+        setControls(newControls)
+        console.log('[RWGPS] Imported controls:', newControls)
+      }
     } catch (error) {
       console.error('[RWGPS] Error fetching route:', error)
       setRwgpsError(error instanceof Error ? error.message : 'Failed to fetch route data')
@@ -283,6 +306,18 @@ export function ControlCardsForm({ event, riders, organizer }: ControlCardsFormP
             Define control checkpoints along the route. Times will be calculated automatically based
             on BRM rules.
           </CardDescription>
+          {(reversed || (event.eventType === 'permanent' && event.startLocation)) && (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground mt-2">
+              <Info className="h-4 w-4 shrink-0" />
+              <span>
+                {reversed && event.eventType === 'permanent' && event.startLocation
+                  ? `Controls are shown in reversed direction, starting from ${event.startLocation}.`
+                  : reversed
+                    ? 'Controls are shown in reversed direction.'
+                    : `Starting from ${event.startLocation}.`}
+              </span>
+            </div>
+          )}
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
