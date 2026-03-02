@@ -1,10 +1,10 @@
-"use client";
+'use client'
 
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 
 interface MarkdownContentProps {
-  content: string;
+  content: string
 }
 
 export function MarkdownContent({ content }: MarkdownContentProps) {
@@ -15,33 +15,19 @@ export function MarkdownContent({ content }: MarkdownContentProps) {
         components={{
           // Customize heading styles to match site design
           h1: ({ children }) => (
-            <h1 className="font-serif text-4xl tracking-tight mt-8 mb-4 first:mt-0">
-              {children}
-            </h1>
+            <h1 className="font-serif text-4xl tracking-tight mt-8 mb-4 first:mt-0">{children}</h1>
           ),
           h2: ({ children }) => (
-            <h2 className="font-serif text-2xl tracking-tight mt-8 mb-3">
-              {children}
-            </h2>
+            <h2 className="font-serif text-2xl tracking-tight mt-8 mb-3">{children}</h2>
           ),
           h3: ({ children }) => (
-            <h3 className="font-serif text-xl tracking-tight mt-6 mb-2">
-              {children}
-            </h3>
+            <h3 className="font-serif text-xl tracking-tight mt-6 mb-2">{children}</h3>
           ),
           // Style lists
-          ul: ({ children }) => (
-            <ul className="my-4 ml-6 list-disc space-y-2">{children}</ul>
-          ),
-          ol: ({ children }) => (
-            <ol className="my-4 ml-6 list-decimal space-y-2">{children}</ol>
-          ),
+          ul: ({ children }) => <ul className="my-4 ml-6 list-disc space-y-2">{children}</ul>,
+          ol: ({ children }) => <ol className="my-4 ml-6 list-decimal space-y-2">{children}</ol>,
           // Style paragraphs
-          p: ({ children }) => (
-            <p className="leading-relaxed text-foreground my-4">
-              {children}
-            </p>
-          ),
+          p: ({ children }) => <p className="leading-relaxed text-foreground my-4">{children}</p>,
           // Style links
           a: ({ href, children }) => (
             <a
@@ -50,6 +36,21 @@ export function MarkdownContent({ content }: MarkdownContentProps) {
             >
               {children}
             </a>
+          ),
+          // Style tables
+          table: ({ children }) => (
+            <div className="my-6 w-full overflow-x-auto">
+              <table className="w-full text-sm border-collapse">{children}</table>
+            </div>
+          ),
+          thead: ({ children }) => <thead className="border-b">{children}</thead>,
+          th: ({ children }) => (
+            <th className="px-3 py-2 text-left font-semibold text-foreground">{children}</th>
+          ),
+          td: ({ children }) => (
+            <td className="px-3 py-2 text-muted-foreground border-b border-border/50">
+              {children}
+            </td>
           ),
           // Style strong/bold
           strong: ({ children }) => (
@@ -60,5 +61,5 @@ export function MarkdownContent({ content }: MarkdownContentProps) {
         {content}
       </ReactMarkdown>
     </div>
-  );
+  )
 }

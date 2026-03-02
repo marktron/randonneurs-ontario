@@ -29,6 +29,7 @@ import {
   Settings,
   Megaphone,
   Navigation,
+  BookOpen,
 } from 'lucide-react'
 import { logout } from '@/lib/actions/auth'
 import { isSuperAdmin, isFullAdmin } from '@/lib/auth/roles'
@@ -104,6 +105,13 @@ const managementNavItems = [
     href: '/admin/logs',
     icon: ScrollText,
     testId: 'nav-logs',
+    requiresSuperAdmin: false,
+  },
+  {
+    title: 'Guide',
+    href: '/admin/guide',
+    icon: BookOpen,
+    testId: 'nav-guide',
     requiresSuperAdmin: false,
   },
 ]
