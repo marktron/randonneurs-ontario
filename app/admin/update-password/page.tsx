@@ -122,7 +122,6 @@ export default function UpdatePasswordPage() {
                   required
                   autoComplete="new-password"
                   disabled={isPending}
-                  minLength={8}
                 />
               </div>
 
@@ -136,7 +135,6 @@ export default function UpdatePasswordPage() {
                   required
                   autoComplete="new-password"
                   disabled={isPending}
-                  minLength={8}
                 />
               </div>
 
