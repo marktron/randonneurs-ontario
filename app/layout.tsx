@@ -1,25 +1,37 @@
-import type { Metadata } from "next";
-import { Noto_Sans, Noto_Serif } from "next/font/google";
-import "./globals.css";
+import type { Metadata } from 'next'
+import { Noto_Sans, Noto_Serif } from 'next/font/google'
+import './globals.css'
 
-const notoSans = Noto_Sans({variable:'--font-sans'});
-const notoSerif = Noto_Serif({variable:'--font-serif', subsets: ['latin']});
+const notoSans = Noto_Sans({ variable: '--font-sans' })
+const notoSerif = Noto_Serif({ variable: '--font-serif', subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL!),
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000'),
   title: {
     default: 'Randonneurs Ontario',
     template: '%s | Randonneurs Ontario',
   },
-  description: 'Long-distance cycling club in Ontario, Canada. Join us for brevets, populaires, and other randonneuring events across Toronto, Ottawa, Simcoe-Muskoka, and Huron chapters.',
-  keywords: ['randonneuring', 'cycling', 'brevet', 'populaire', 'long-distance cycling', 'Ontario', 'Toronto', 'Ottawa', 'audax'],
+  description:
+    'Long-distance cycling club in Ontario, Canada. Join us for brevets, populaires, and other randonneuring events across Toronto, Ottawa, Simcoe-Muskoka, and Huron chapters.',
+  keywords: [
+    'randonneuring',
+    'cycling',
+    'brevet',
+    'populaire',
+    'long-distance cycling',
+    'Ontario',
+    'Toronto',
+    'Ottawa',
+    'audax',
+  ],
   authors: [{ name: 'Randonneurs Ontario' }],
   openGraph: {
     type: 'website',
     locale: 'en_CA',
     siteName: 'Randonneurs Ontario',
     title: 'Randonneurs Ontario',
-    description: 'Long-distance cycling club in Ontario, Canada. Join us for brevets, populaires, and other randonneuring events.',
+    description:
+      'Long-distance cycling club in Ontario, Canada. Join us for brevets, populaires, and other randonneuring events.',
   },
   twitter: {
     card: 'summary_large_image',
@@ -30,18 +42,16 @@ export const metadata: Metadata = {
     index: true,
     follow: true,
   },
-};
+}
 
 export default function RootLayout({
   children,
 }: Readonly<{
-  children: React.ReactNode;
+  children: React.ReactNode
 }>) {
   return (
     <html lang="en" className={`${notoSans.variable} ${notoSerif.variable} antialiased`}>
-      <body>
-        {children}
-      </body>
+      <body>{children}</body>
     </html>
-  );
+  )
 }
