@@ -34,7 +34,12 @@ export interface ErrorContext {
  * @param context - Additional context for debugging
  */
 export function logError(error: unknown, context?: ErrorContext): void {
-  const errorMessage = error instanceof Error ? error.message : String(error)
+  const errorMessage =
+    error instanceof Error
+      ? error.message
+      : typeof error === 'object' && error !== null && 'message' in error
+        ? String((error as { message: unknown }).message)
+        : String(error)
   const errorObject = error instanceof Error ? error : new Error(errorMessage)
 
   // Add context to error object
@@ -253,7 +258,9 @@ export function wrapActionError<TArgs extends unknown[], TReturn>(
   context: ErrorContext,
   defaultMessage = 'An unexpected error occurred'
 ): (...args: TArgs) => Promise<ActionResult<TReturn extends ActionResult<infer U> ? U : never>> {
-  return async (...args: TArgs): Promise<ActionResult<TReturn extends ActionResult<infer U> ? U : never>> => {
+  return async (
+    ...args: TArgs
+  ): Promise<ActionResult<TReturn extends ActionResult<infer U> ? U : never>> => {
     try {
       const result = await fn(...args)
       // If result is already an ActionResult, return it

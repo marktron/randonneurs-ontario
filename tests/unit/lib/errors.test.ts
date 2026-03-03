@@ -70,6 +70,16 @@ describe('lib/errors', () => {
       expect(Sentry.captureException).toHaveBeenCalled()
       expect(console.error).toHaveBeenCalled()
     })
+
+    it('should extract message from plain objects (e.g. Supabase errors)', () => {
+      const supabaseError = { code: '42P01', message: 'relation does not exist', details: null }
+      logError(supabaseError, { operation: 'getPublishedNews' })
+
+      const capturedError: Error = (Sentry.captureException as ReturnType<typeof vi.fn>).mock
+        .calls[0][0]
+      expect(capturedError.message).toBe('relation does not exist')
+      expect(capturedError.message).not.toBe('[object Object]')
+    })
   })
 
   describe('handleActionError', () => {
