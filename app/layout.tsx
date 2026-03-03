@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import { Noto_Sans, Noto_Serif } from 'next/font/google'
+import { AuthRedirectHandler } from '@/components/auth-redirect-handler'
 import './globals.css'
 
 const notoSans = Noto_Sans({ variable: '--font-sans' })
@@ -51,7 +52,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={`${notoSans.variable} ${notoSerif.variable} antialiased`}>
-      <body>{children}</body>
+      <body>
+        <AuthRedirectHandler />
+        {children}
+      </body>
     </html>
   )
 }

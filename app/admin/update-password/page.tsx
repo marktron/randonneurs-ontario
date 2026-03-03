@@ -40,6 +40,8 @@ export default function UpdatePasswordPage() {
         if (error) {
           setPageState('invalid')
         } else {
+          // Clear the token from the URL bar — it's been consumed
+          window.history.replaceState(null, '', window.location.pathname)
           setPageState('ready')
         }
       })
