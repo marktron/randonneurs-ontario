@@ -2,10 +2,10 @@
 // The added config here will be used whenever a users loads a page in their browser.
 // https://docs.sentry.io/platforms/javascript/guides/nextjs/
 
-import * as Sentry from "@sentry/nextjs";
+import * as Sentry from '@sentry/nextjs'
 
 Sentry.init({
-  dsn: "https://d4b6e63820989882a9c3bf92bea953c0@o4510700580110336.ingest.us.sentry.io/4510700583321600",
+  dsn: 'https://d4b6e63820989882a9c3bf92bea953c0@o4510700580110336.ingest.us.sentry.io/4510700583321600',
 
   // Define how likely traces are sampled. Adjust this value in production, or use tracesSampler for greater control.
   tracesSampleRate: 1,
@@ -15,6 +15,15 @@ Sentry.init({
   // Enable sending user PII (Personally Identifiable Information)
   // https://docs.sentry.io/platforms/javascript/guides/nextjs/configuration/options/#sendDefaultPii
   sendDefaultPii: true,
-});
 
-export const onRouterTransitionStart = Sentry.captureRouterTransitionStart;
+  beforeSend(event, hint) {
+    // Ignore errors from browser extensions (e.g. runtime.sendMessage tab not found)
+    const error = hint.originalException
+    if (error instanceof Error && error.message.includes('runtime.sendMessage')) {
+      return null
+    }
+    return event
+  },
+})
+
+export const onRouterTransitionStart = Sentry.captureRouterTransitionStart
