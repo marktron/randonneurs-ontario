@@ -34,8 +34,9 @@ export async function updateSession(request: NextRequest) {
   // Check if accessing admin routes
   const isAdminRoute = request.nextUrl.pathname.startsWith('/admin')
   const isLoginPage = request.nextUrl.pathname === '/admin/login'
+  const isUpdatePasswordPage = request.nextUrl.pathname === '/admin/update-password'
 
-  if (isAdminRoute && !isLoginPage && !user) {
+  if (isAdminRoute && !isLoginPage && !isUpdatePasswordPage && !user) {
     // Not logged in, redirect to login
     const url = request.nextUrl.clone()
     url.pathname = '/admin/login'
@@ -51,7 +52,7 @@ export async function updateSession(request: NextRequest) {
   }
 
   // If logged in and accessing admin routes, verify they are an admin
-  if (isAdminRoute && !isLoginPage && user) {
+  if (isAdminRoute && !isLoginPage && !isUpdatePasswordPage && user) {
     const { data: admin } = await supabase
       .from('admins')
       .select('id, role')
