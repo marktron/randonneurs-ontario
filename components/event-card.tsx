@@ -109,14 +109,14 @@ export function EventCard({
           )}
         </div>
 
-        <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
+        <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
+          <span className="tabular-nums">{formatTime(event.startTime)}</span>
           {event.startLocation && (
             <>
-              <span>{event.startLocation}</span>
               <span className="hidden sm:inline text-muted-foreground/50">•</span>
+              <span>{event.startLocation}</span>
             </>
           )}
-          <span className="tabular-nums">{formatTime(event.startTime)}</span>
           {event.registeredCount !== undefined && event.registeredCount > 0 && (
             <>
               <span className="hidden sm:inline text-muted-foreground/50">•</span>
