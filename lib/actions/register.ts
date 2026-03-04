@@ -226,11 +226,13 @@ async function findOrCreateRider(
 }
 
 /**
- * Check if a rider is already registered for an event.
+ * Check if a rider already has a completed registration for an event.
+ * Only 'registered' status counts as a duplicate — incomplete registrations
+ * (e.g. 'incomplete: membership') should not block re-registration.
  *
  * @param eventId - Event ID
  * @param riderId - Rider ID
- * @returns true if already registered, false otherwise
+ * @returns true if already fully registered, false otherwise
  */
 async function checkDuplicateRegistration(eventId: string, riderId: string): Promise<boolean> {
   const { data: existingRegistration } = await getSupabaseAdmin()
@@ -238,13 +240,17 @@ async function checkDuplicateRegistration(eventId: string, riderId: string): Pro
     .select('id')
     .eq('event_id', eventId)
     .eq('rider_id', riderId)
+    .eq('status', 'registered')
     .single()
 
   return existingRegistration !== null
 }
 
 /**
- * Create a registration record for a rider and event.
+ * Create or update a registration record for a rider and event.
+ * Uses upsert to handle the case where an incomplete registration already
+ * exists (e.g. from a previous failed membership check), avoiding duplicate
+ * key violations on the (event_id, rider_id) unique constraint.
  *
  * @param eventId - Event ID
  * @param riderId - Rider ID
@@ -269,7 +275,7 @@ async function createRegistrationRecord(
   }
   const { error: registrationError } = await getSupabaseAdmin()
     .from('registrations')
-    .insert(insertRegistration)
+    .upsert(insertRegistration, { onConflict: 'event_id,rider_id' })
 
   if (registrationError) {
     console.error('🚨 Error creating registration:', registrationError)
