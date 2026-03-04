@@ -8,6 +8,8 @@ import { parseLocalDate, createSlug } from '@/lib/utils'
 import { getUrlSlugFromDbSlug } from '@/lib/chapter-config'
 import { createPendingResultsAndSendEmails } from '@/lib/events/complete-event'
 import { logAuditEvent } from '@/lib/audit-log'
+import { generateAcpXlsx, generateAcpCsv } from '@/lib/email/results-spreadsheet'
+import type { AcpResultRow, SpreadsheetData } from '@/lib/email/results-spreadsheet'
 import { handleActionError, handleSupabaseError, createActionResult } from '@/lib/errors'
 import type { ActionResult } from '@/types/actions'
 import type {
@@ -427,6 +429,7 @@ interface ResultForEmail {
   riders: {
     first_name: string
     last_name: string
+    gender: string | null
   }
   status: string
   finish_time: string | null
@@ -437,6 +440,7 @@ interface EventForSubmission {
   id: string
   name: string
   event_date: string
+  distance_km: number
   status: string | null
   chapters: {
     name: string
@@ -455,6 +459,7 @@ export async function submitEventResults(eventId: string): Promise<ActionResult>
         id,
         name,
         event_date,
+        distance_km,
         status,
         chapters (name)
       `
@@ -481,7 +486,7 @@ export async function submitEventResults(eventId: string): Promise<ActionResult>
       .from('results')
       .select(
         `
-        riders (first_name, last_name),
+        riders (first_name, last_name, gender),
         status,
         finish_time,
         note
@@ -531,6 +536,44 @@ ${resultLines.length > 0 ? resultLines.join('\n') : 'No results recorded.'}
 This email was sent from the Randonneurs Ontario admin system.
 `
 
+    // Generate ACP homologation spreadsheet attachment
+    const finishedResults: AcpResultRow[] = typedResults
+      .filter((r) => r.status === 'finished')
+      .map((r) => ({
+        lastName: r.riders.last_name,
+        firstName: r.riders.first_name,
+        finishTime: r.finish_time || '',
+        gender: r.riders.gender,
+      }))
+
+    const spreadsheetData: SpreadsheetData = {
+      eventName: typedEvent.name,
+      eventDate: typedEvent.event_date,
+      distanceKm: typedEvent.distance_km,
+      results: finishedResults,
+    }
+
+    let attachment: { content: string; filename: string; type: string; disposition: string }
+
+    try {
+      const xlsx = await generateAcpXlsx(spreadsheetData)
+      attachment = {
+        content: xlsx.buffer.toString('base64'),
+        filename: xlsx.filename,
+        type: xlsx.mimeType,
+        disposition: 'attachment',
+      }
+    } catch (xlsxError) {
+      console.warn('XLSX generation failed, falling back to CSV:', xlsxError)
+      const csv = generateAcpCsv(spreadsheetData)
+      attachment = {
+        content: Buffer.from(csv.content, 'utf-8').toString('base64'),
+        filename: csv.filename,
+        type: csv.mimeType,
+        disposition: 'attachment',
+      }
+    }
+
     // Send email
     if (!process.env.SENDGRID_API_KEY) {
       console.warn('SendGrid API key not configured, skipping email')
@@ -543,6 +586,7 @@ This email was sent from the Randonneurs Ontario admin system.
           replyTo: admin.email,
           subject,
           text: emailBody,
+          attachments: [attachment],
         })
       } catch (emailError) {
         console.error('Failed to send results email:', emailError)

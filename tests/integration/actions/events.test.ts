@@ -122,6 +122,21 @@ vi.mock('@/lib/email/sendgrid', () => ({
   sendgrid: {
     send: vi.fn().mockResolvedValue({}),
   },
+  fromEmail: 'no-reply@randonneurs.to',
+  suppressAdminEmails: false,
+}))
+
+vi.mock('@/lib/email/results-spreadsheet', () => ({
+  generateAcpXlsx: vi.fn().mockResolvedValue({
+    buffer: Buffer.from('mock-xlsx-content'),
+    filename: 'ACP_Homologation_Test_Event_2025-01-15.xlsx',
+    mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  }),
+  generateAcpCsv: vi.fn().mockReturnValue({
+    content: 'NOM,PRENOM\nDoe,John',
+    filename: 'ACP_Homologation_Test_Event_2025-01-15.csv',
+    mimeType: 'text/csv',
+  }),
 }))
 
 // Import after mocking
@@ -219,6 +234,64 @@ describe('submitEventResults', () => {
 
     expect(result.success).toBe(false)
     expect(result.error).toBe('Only completed events can have results submitted')
+  })
+
+  it('sends email with spreadsheet attachment when event has results', async () => {
+    // Mock event found (completed with distance_km)
+    mockModule.__mockEventFound({
+      id: 'test-event-id',
+      status: 'completed',
+      name: 'Test Event',
+      event_date: '2025-01-15',
+      distance_km: 200,
+      chapters: { name: 'Toronto' },
+    })
+
+    // Mock results query returns riders
+    mockModule.__queryBuilder.then.mockImplementationOnce((resolve) => {
+      resolve({
+        data: [
+          {
+            riders: { first_name: 'John', last_name: 'Doe', gender: 'M' },
+            status: 'finished',
+            finish_time: '10:30:00',
+            note: null,
+          },
+          {
+            riders: { first_name: 'Jane', last_name: 'Smith', gender: 'F' },
+            status: 'finished',
+            finish_time: '11:00:00',
+            note: null,
+          },
+        ],
+        error: null,
+      })
+    })
+
+    // Mock the status update
+    mockModule.__mockUpdateSuccess()
+
+    // Mock chapter query for revalidation
+    mockModule.__mockEventFound({ slug: 'toronto' })
+
+    process.env.SENDGRID_API_KEY = 'test-key'
+    const result = await submitEventResults('test-event-id')
+    delete process.env.SENDGRID_API_KEY
+
+    expect(result.success).toBe(true)
+
+    // Verify sendgrid.send was called with an attachment
+    const { sendgrid } = await import('@/lib/email/sendgrid')
+    expect(sendgrid.send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        attachments: expect.arrayContaining([
+          expect.objectContaining({
+            filename: expect.stringContaining('ACP_Homologation'),
+            disposition: 'attachment',
+          }),
+        ]),
+      })
+    )
   })
 })
 
