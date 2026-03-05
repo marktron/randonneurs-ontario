@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import {
   Dialog,
   DialogContent,
@@ -38,6 +38,23 @@ export function RiderMatchDialog({
   isPending,
 }: RiderMatchDialogProps) {
   const [selectedValue, setSelectedValue] = useState<string>('')
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const [showBottomFade, setShowBottomFade] = useState(false)
+
+  const checkScroll = useCallback(() => {
+    const el = scrollRef.current
+    if (!el) return
+    const isScrollable = el.scrollHeight > el.clientHeight
+    const isNearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 20
+    setShowBottomFade(isScrollable && !isNearBottom)
+  }, [])
+
+  useEffect(() => {
+    // Delay check until after the dialog open animation completes
+    // and the scroll container has its final dimensions
+    const timer = setTimeout(checkScroll, 150)
+    return () => clearTimeout(timer)
+  }, [candidates, checkScroll])
 
   const handleContinue = () => {
     if (!selectedValue) return
@@ -62,47 +79,61 @@ export function RiderMatchDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <RadioGroup
-          value={selectedValue}
-          onValueChange={setSelectedValue}
-          disabled={isPending}
-          className="gap-0 divide-y divide-border"
-        >
-          {/* Candidate riders */}
-          {candidates.map((candidate) => (
-            <div key={candidate.id} className="flex items-center gap-3 py-3.5">
-              <RadioGroupItem value={candidate.id} id={candidate.id} />
-              <Label
-                htmlFor={candidate.id}
-                className="flex-1 cursor-pointer flex flex-col min-[400px]:flex-row min-[400px]:items-center min-[400px]:justify-between gap-0.5"
-              >
-                <span className="font-medium">{candidate.fullName}</span>
-                <span className="text-sm text-muted-foreground">
-                  {candidate.firstSeason && <span>Since {candidate.firstSeason}</span>}
-                  {candidate.firstSeason && candidate.totalRides > 0 && (
-                    <span className="mx-1">&middot;</span>
-                  )}
-                  {candidate.totalRides > 0 && (
-                    <span>
-                      {candidate.totalRides} {candidate.totalRides === 1 ? 'ride' : 'rides'}
+        <div className="relative">
+          <div
+            ref={scrollRef}
+            onScroll={checkScroll}
+            className="max-h-[50vh] overflow-y-auto rounded-md border px-3"
+          >
+            <RadioGroup
+              value={selectedValue}
+              onValueChange={setSelectedValue}
+              disabled={isPending}
+              className="gap-0 divide-y divide-border"
+            >
+              {/* Candidate riders */}
+              {candidates.map((candidate) => (
+                <div key={candidate.id} className="flex items-center gap-3 py-3.5">
+                  <RadioGroupItem value={candidate.id} id={candidate.id} />
+                  <Label
+                    htmlFor={candidate.id}
+                    className="flex-1 cursor-pointer flex flex-col min-[400px]:flex-row min-[400px]:items-center min-[400px]:justify-between gap-0.5"
+                  >
+                    <span className="font-medium">{candidate.fullName}</span>
+                    <span className="text-sm text-muted-foreground">
+                      {candidate.firstSeason && <span>Since {candidate.firstSeason}</span>}
+                      {candidate.firstSeason && candidate.totalRides > 0 && (
+                        <span className="mx-1">&middot;</span>
+                      )}
+                      {candidate.totalRides > 0 && (
+                        <span>
+                          {candidate.totalRides} {candidate.totalRides === 1 ? 'ride' : 'rides'}
+                        </span>
+                      )}
                     </span>
-                  )}
-                </span>
-              </Label>
-            </div>
-          ))}
+                  </Label>
+                </div>
+              ))}
 
-          {/* New rider option */}
-          <div className="flex items-center gap-3 py-3.5 pt-4">
-            <RadioGroupItem value={NEW_RIDER_VALUE} id={NEW_RIDER_VALUE} />
-            <Label htmlFor={NEW_RIDER_VALUE} className="flex-1 cursor-pointer">
-              <span className="font-medium">I&apos;m a new rider</span>
-              <span className="block text-sm text-muted-foreground">
-                Create a new profile for {submittedName}
-              </span>
-            </Label>
+              {/* New rider option */}
+              <div className="flex items-center gap-3 py-3.5 pt-4">
+                <RadioGroupItem value={NEW_RIDER_VALUE} id={NEW_RIDER_VALUE} />
+                <Label htmlFor={NEW_RIDER_VALUE} className="flex-1 cursor-pointer">
+                  <span className="font-medium">I&apos;m a new rider</span>
+                  <span className="block text-sm text-muted-foreground">
+                    Create a new profile for {submittedName}
+                  </span>
+                </Label>
+              </div>
+            </RadioGroup>
           </div>
-        </RadioGroup>
+          {showBottomFade && (
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute bottom-0 left-0 right-0 h-16 rounded-b-md bg-gradient-to-t from-background via-background/80 to-transparent"
+            />
+          )}
+        </div>
 
         <DialogFooter>
           <Button
