@@ -157,8 +157,8 @@ What's Next?
 
 Don't miss any exciting Randonneuring updates by joining our mailing list or Slack.
 
-Join the Randolist: https://www.randonneursontario.ca/who/Mailing_Lists.html
-Join our Slack: https://join.slack.com/t/randonneursontario/shared_invite/zt-3ephj7rw1-S_KOqcTe2DMarv5kOvUxWQ
+Join the Randolist: ${process.env.NEXT_PUBLIC_RANDOLIST_URL}
+Join our Slack: ${process.env.NEXT_PUBLIC_SLACK_INVITE_URL}
 
 The ${data.chapterName} Chapter VP is included in this email. Just hit reply if you have any questions. We're always happy to help!
 
@@ -224,8 +224,8 @@ ${membershipWarningHtml}
   <h2 style="font-size: 18px; margin-bottom: 16px;">What's Next?</h2>
   <p>Don't miss any exciting Randonneuring updates by joining our mailing list or Slack.</p>
   <p>
-    <a href="https://www.randonneursontario.ca/who/Mailing_Lists.html" style="color: #0066cc;">Join the Randolist</a><br>
-    <a href="https://join.slack.com/t/randonneursontario/shared_invite/zt-3ephj7rw1-S_KOqcTe2DMarv5kOvUxWQ" style="color: #0066cc;">Join our Slack</a>
+    <a href="${process.env.NEXT_PUBLIC_RANDOLIST_URL}" style="color: #0066cc;">Join the Randolist</a><br>
+    <a href="${process.env.NEXT_PUBLIC_SLACK_INVITE_URL}" style="color: #0066cc;">Join our Slack</a>
   </p>
 
   <hr style="border: none; border-top: 1px solid #eee; margin: 32px 0;">
