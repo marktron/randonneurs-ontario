@@ -494,6 +494,7 @@ export async function registerForEvent(data: RegistrationData): Promise<Registra
 
     // Revalidate cache tags for registration data
     revalidateTag('registrations', 'max')
+    revalidateTag('events', 'max') // Revalidate chapter calendar caches (registration counts)
     revalidateTag(`event-${event.slug}`, 'max')
     // Also revalidate the path for immediate UI update
     revalidatePath(`/register/${event.slug}`)
@@ -1081,6 +1082,7 @@ export async function completeRegistrationWithRider(
 
   // Revalidate cache tags for registration data
   revalidateTag('registrations', 'max')
+  revalidateTag('events', 'max') // Revalidate chapter calendar caches (registration counts)
   revalidateTag(`event-${event.slug}`, 'max')
   // Also revalidate the path for immediate UI update
   revalidatePath(`/register/${event.slug}`)
