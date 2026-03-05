@@ -9,6 +9,11 @@ const nextConfig: NextConfig = {
   },
   redirects: async () => [
     {
+      source: '/who/Mailing_Lists.html',
+      destination: '/mailing-list',
+      permanent: true,
+    },
+    {
       source: '/who',
       destination: '/intro',
       permanent: true,
