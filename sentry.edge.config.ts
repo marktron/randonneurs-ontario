@@ -3,13 +3,16 @@
 // Note that this config is unrelated to the Vercel Edge Runtime and is also required when running locally.
 // https://docs.sentry.io/platforms/javascript/guides/nextjs/
 
-import * as Sentry from "@sentry/nextjs";
+import * as Sentry from '@sentry/nextjs'
 
 Sentry.init({
-  dsn: "https://d4b6e63820989882a9c3bf92bea953c0@o4510700580110336.ingest.us.sentry.io/4510700583321600",
+  dsn: 'https://d4b6e63820989882a9c3bf92bea953c0@o4510700580110336.ingest.us.sentry.io/4510700583321600',
+
+  // Only send events in production
+  enabled: process.env.NODE_ENV === 'production',
 
   // Sample 20% of traces in production to reduce costs and data volume
-  tracesSampleRate: process.env.NODE_ENV === "production" ? 0.2 : 1,
+  tracesSampleRate: process.env.NODE_ENV === 'production' ? 0.2 : 1,
 
   // Enable logs to be sent to Sentry
   enableLogs: true,
@@ -17,4 +20,4 @@ Sentry.init({
   // Disable sending user PII (Personally Identifiable Information) to minimize data exposure
   // https://docs.sentry.io/platforms/javascript/guides/nextjs/configuration/options/#sendDefaultPii
   sendDefaultPii: false,
-});
+})
