@@ -31,7 +31,8 @@ const distanceFilterOptions: { value: DistanceFilter; label: string }[] = [
   { value: '1000', label: '1000+ km' },
 ]
 
-function filterEvents(events: Event[], filter: DistanceFilter): Event[] {
+function filterEvents(events: Event[] | undefined, filter: DistanceFilter): Event[] {
+  if (!events) return []
   if (filter === 'all') return events
   return events.filter((event) => {
     const distance = parseInt(event.distance, 10)

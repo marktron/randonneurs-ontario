@@ -137,7 +137,7 @@ export function EventCard({
   )
 }
 
-export function EventList({ events }: { events: Event[] }) {
+export function EventList({ events = [] }: { events?: Event[] }) {
   // Group events by month
   const eventsByMonth = events.reduce(
     (acc, event) => {

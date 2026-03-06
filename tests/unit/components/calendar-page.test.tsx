@@ -6,7 +6,7 @@ import { describe, it, expect, vi } from 'vitest'
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { CalendarPage } from '@/components/calendar-page'
-import type { Event } from '@/components/event-card'
+import { EventList, type Event } from '@/components/event-card'
 
 // Mock dynamic import for CalendarSubscribeButton
 vi.mock('@/components/calendar-subscribe-button', () => ({
@@ -157,5 +157,19 @@ describe('CalendarPage', () => {
     expect(screen.getByText('Spring 200')).toBeInTheDocument()
     expect(screen.getByText('Spring 300')).toBeInTheDocument()
     expect(screen.getByText('Summer 600')).toBeInTheDocument()
+  })
+})
+
+describe('EventList', () => {
+  it('renders without crashing when events is undefined', () => {
+    const { container } = render(<EventList events={undefined as unknown as Event[]} />)
+
+    expect(container.querySelector('.space-y-10')).toBeInTheDocument()
+  })
+
+  it('renders without crashing when events is an empty array', () => {
+    const { container } = render(<EventList events={[]} />)
+
+    expect(container.querySelector('.space-y-10')).toBeInTheDocument()
   })
 })
