@@ -11,6 +11,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
+import { LocalTime } from '@/components/admin/local-time'
 
 interface AuditLogRow {
   id: string
@@ -45,16 +46,6 @@ const entityTypeLabels: Record<string, string> = {
   admin_user: 'Admin User',
   news: 'News',
   navigation: 'Navigation',
-}
-
-function formatDateTime(dateString: string): string {
-  return new Date(dateString).toLocaleString('en-CA', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
 }
 
 export default async function AuditLogsPage() {
@@ -101,7 +92,7 @@ export default async function AuditLogsPage() {
               return (
                 <TableRow key={log.id}>
                   <TableCell className="text-muted-foreground tabular-nums">
-                    {formatDateTime(log.created_at)}
+                    <LocalTime dateString={log.created_at} />
                   </TableCell>
                   <TableCell>{log.admins?.name || 'Unknown'}</TableCell>
                   <TableCell>
