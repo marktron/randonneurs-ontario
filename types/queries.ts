@@ -298,7 +298,7 @@ export type EventDetailForAdmin = Pick<
  */
 export type RegistrationWithRiderForAdmin = Pick<
   Registration,
-  'id' | 'rider_id' | 'registered_at' | 'status' | 'notes'
+  'id' | 'rider_id' | 'registered_at' | 'status' | 'notes' | 'team_name' | 'is_team_captain'
 > & {
   riders:
     | (Pick<

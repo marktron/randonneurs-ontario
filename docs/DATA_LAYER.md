@@ -113,6 +113,12 @@ export async function getEventBySlug(slug: string): Promise<EventDetails | null>
 
 // Get registered riders for an event
 export async function getRegisteredRiders(eventId: string): Promise<RegisteredRider[]>
+
+// Get existing teams for a fleche event (for join-team dropdown)
+export async function getFlecheTeams(eventId: string): Promise<FlecheTeam[]>
+
+// Get registered riders with team info for fleche events
+export async function getRegisteredRidersWithTeams(eventId: string): Promise<RegisteredRider[]>
 ```
 
 ### lib/data/results.ts
@@ -204,6 +210,12 @@ export async function updateRoute(id: string, data: RouteFormData)
 
 ```typescript
 export async function submitEventResults(eventId: string, results: ResultEntry[])
+
+// Update team name on a registration record (fleche admin editing)
+export async function updateRegistrationTeamName(
+  registrationId: string,
+  teamName: string | null
+): Promise<ActionResult>
 ```
 
 #### News (`lib/actions/news.ts`)

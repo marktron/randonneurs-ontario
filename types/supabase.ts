@@ -380,6 +380,7 @@ export type Database = {
         Row: {
           event_id: string
           id: string
+          is_team_captain: boolean
           notes: string | null
           registered_at: string | null
           rider_id: string
@@ -390,6 +391,7 @@ export type Database = {
         Insert: {
           event_id: string
           id?: string
+          is_team_captain?: boolean
           notes?: string | null
           registered_at?: string | null
           rider_id: string
@@ -400,6 +402,7 @@ export type Database = {
         Update: {
           event_id?: string
           id?: string
+          is_team_captain?: boolean
           notes?: string | null
           registered_at?: string | null
           rider_id?: string

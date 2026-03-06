@@ -182,6 +182,35 @@ export async function updateResult(
   return createActionResult()
 }
 
+/**
+ * Update team_name on a registration record (for fleche events).
+ * Allows admins to correct team assignments before results are entered.
+ */
+export async function updateRegistrationTeamName(
+  registrationId: string,
+  teamName: string | null
+): Promise<ActionResult> {
+  await requireAdmin()
+
+  const { error } = await getSupabaseAdmin()
+    .from('registrations')
+    .update({ team_name: teamName })
+    .eq('id', registrationId)
+
+  if (error) {
+    return handleSupabaseError(
+      error,
+      { operation: 'updateRegistrationTeamName' },
+      'Failed to update team name'
+    )
+  }
+
+  revalidatePath('/admin/events')
+  revalidateTag('registrations', 'max')
+
+  return createActionResult()
+}
+
 export async function deleteResult(resultId: string): Promise<ActionResult> {
   const admin = await requireAdmin()
 

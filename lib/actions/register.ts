@@ -56,6 +56,8 @@ export interface RegistrationData {
   notes?: string
   emergencyContactName: string
   emergencyContactPhone: string
+  teamName?: string
+  isTeamCaptain?: boolean
 }
 
 export interface RegistrationResult {
@@ -264,7 +266,9 @@ async function createRegistrationRecord(
   riderId: string,
   shareRegistration: boolean,
   notes?: string,
-  status: 'registered' | 'incomplete: membership' = 'registered'
+  status: 'registered' | 'incomplete: membership' = 'registered',
+  teamName?: string,
+  isTeamCaptain?: boolean
 ): Promise<void> {
   const insertRegistration: RegistrationInsert = {
     event_id: eventId,
@@ -272,6 +276,8 @@ async function createRegistrationRecord(
     status,
     share_registration: shareRegistration,
     notes: notes || null,
+    team_name: teamName || null,
+    is_team_captain: isTeamCaptain || false,
   }
   const { error: registrationError } = await getSupabaseAdmin()
     .from('registrations')
@@ -308,6 +314,8 @@ export async function registerForEvent(data: RegistrationData): Promise<Registra
     notes,
     emergencyContactName,
     emergencyContactPhone,
+    teamName,
+    isTeamCaptain,
   } = data
 
   // Step 1: Validate required fields
@@ -318,6 +326,26 @@ export async function registerForEvent(data: RegistrationData): Promise<Registra
   const trimmedFirstName = firstName.trim()
   const trimmedLastName = lastName.trim()
   const normalizedEmail = email.toLowerCase().trim()
+  const trimmedTeamName = teamName?.trim() || undefined
+
+  // Block duplicate team names with a helpful message
+  if (trimmedTeamName && isTeamCaptain) {
+    const { data: existingTeam } = await getSupabaseAdmin()
+      .from('registrations')
+      .select('id')
+      .eq('event_id', eventId)
+      .ilike('team_name', trimmedTeamName)
+      .eq('status', 'registered')
+      .limit(1)
+      .maybeSingle()
+
+    if (existingTeam) {
+      return {
+        success: false,
+        error: `A team named "${trimmedTeamName}" already exists. Use "Join team" to register with this team.`,
+      }
+    }
+  }
 
   // Check if event exists and is scheduled (fetch details for confirmation email)
   const { data: eventData, error: eventError } = await getSupabaseAdmin()
@@ -381,7 +409,9 @@ export async function registerForEvent(data: RegistrationData): Promise<Registra
         riderId,
         shareRegistration,
         notes,
-        'incomplete: membership'
+        'incomplete: membership',
+        trimmedTeamName,
+        isTeamCaptain
       )
 
       // Send warning email (fire-and-forget)
@@ -424,7 +454,9 @@ export async function registerForEvent(data: RegistrationData): Promise<Registra
           riderId,
           shareRegistration,
           notes,
-          'incomplete: membership'
+          'incomplete: membership',
+          trimmedTeamName,
+          isTeamCaptain
         )
 
         const chapter = event.chapters
@@ -465,7 +497,15 @@ export async function registerForEvent(data: RegistrationData): Promise<Registra
     }
 
     // Create registration
-    await createRegistrationRecord(eventId, riderId, shareRegistration, notes)
+    await createRegistrationRecord(
+      eventId,
+      riderId,
+      shareRegistration,
+      notes,
+      'registered',
+      trimmedTeamName,
+      isTeamCaptain
+    )
 
     // Send confirmation email (fire-and-forget - don't block registration on email)
     const chapter = event.chapters

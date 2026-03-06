@@ -25,7 +25,10 @@ All riders on the same team share the same `team_name` and `distance_km` values.
 
 ### Registrations table
 
-The `registrations` table has a `team_name` column for future team registration support (Phase 2).
+The `registrations` table has fleche-specific columns:
+
+- `team_name` (TEXT): The team name this rider is registered under
+- `is_team_captain` (BOOLEAN, default false): Whether this rider created the team
 
 ## How Results Display
 
@@ -65,11 +68,45 @@ The total distance stat for a season correctly accounts for fleche events by sum
 - Distance is per-team, so all members of a team should have the same distance value
 - The distance entered here is what appears in the public results, so use the verified/official distance
 
-## Phase 2 Roadmap: Team Registration
+## Registration Flow
 
-Future work will add team-based registration for fleche events:
+Fleche events use a dedicated registration form (`FlecheRegistrationForm`) that adds a team section above the standard personal details fields. The form is served at the same `/register/[slug]` URL, detected by `event.type === 'Fleche'`.
 
-- Riders register as a team with a team name
-- Team captain manages the roster
-- Registration uses the `team_name` column on the `registrations` table
-- Team validation (3-5 riders per team)
+### Team selection
+
+Riders choose between two modes:
+
+1. **Create a new team**: Enter a team name. Validated for uniqueness (case-insensitive) within the event.
+2. **Join an existing team**: Select from a dropdown of existing teams showing team name and current member count. Teams with 5+ members show a warning that additional riders are alternates.
+
+### Registration page display
+
+The "Registered" section groups riders by team (alphabetically), with unassigned riders shown last in a subdued style.
+
+### Data flow
+
+- `registerForEvent()` accepts optional `teamName` and `isTeamCaptain` fields
+- Team data is stored on the `registrations` table (`team_name`, `is_team_captain`)
+- `getFlecheTeams(eventId)` queries existing teams for the join dropdown
+- `getRegisteredRidersWithTeams(eventId)` returns riders with team info for display
+
+### Team size rules
+
+Teams have a soft limit of 3-5 riders (per ACP fleche rules). The form warns when a team has 5+ members but does not block registration, since alternates are allowed.
+
+### Admin team name editing
+
+In the admin event detail page, team names are editable on both registration and result records:
+
+- **Before results are entered**: Editing a team name in the admin updates the `registrations.team_name` column via `updateRegistrationTeamName()`. This lets admins correct team assignments before an event.
+- **After results are entered**: Editing updates the `results.team_name` column via `updateResult()`.
+- **Captain badge**: Riders who created a team (where `is_team_captain = true`) display a "Captain" badge next to their name.
+- **Pre-population**: When creating a result for a fleche rider, the team name input is pre-populated from their registration data.
+
+## Phase 3 Roadmap: Team Management
+
+Future work may add:
+
+- Team captain can edit roster (add/remove riders)
+- Team route planning integration
+- Pre-event team validation (minimum 3 riders)

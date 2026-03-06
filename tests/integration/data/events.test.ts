@@ -266,6 +266,46 @@ describe('getEventsByChapter', () => {
     // Verify permanent events are excluded
     expect(mockModule.__queryBuilder.neq).toHaveBeenCalledWith('event_type', 'permanent')
   })
+
+  it('includes fleche events from all chapters', async () => {
+    // First query: chapter events
+    mockModule.__mockEventsFound([
+      {
+        id: 'event-1',
+        slug: 'spring-200-2025',
+        event_date: '2025-05-15',
+        name: 'Spring 200',
+        event_type: 'brevet',
+        distance_km: 200,
+        start_location: 'Toronto',
+        start_time: '08:00',
+        registrations: [{ count: 3 }],
+      },
+    ])
+    // Second query: fleche events
+    mockModule.__mockEventsFound([
+      {
+        id: 'fleche-1',
+        slug: 'fleche-2025',
+        event_date: '2025-04-19',
+        name: 'Flèche',
+        event_type: 'fleche',
+        distance_km: 360,
+        start_location: 'Various',
+        start_time: '06:00',
+        registrations: [{ count: 8 }],
+      },
+    ])
+
+    const result = await getEventsByChapter('toronto')
+
+    expect(result).toHaveLength(2)
+    // Sorted by date: fleche (April) before brevet (May)
+    expect(result[0].id).toBe('fleche-1')
+    expect(result[0].type).toBe('Fleche')
+    expect(result[1].id).toBe('event-1')
+    expect(result[1].type).toBe('Brevet')
+  })
 })
 
 describe('getPermanentEvents', () => {

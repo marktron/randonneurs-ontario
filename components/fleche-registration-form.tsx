@@ -1,0 +1,605 @@
+'use client'
+
+import { useState, useTransition, useEffect, useRef } from 'react'
+import { useRouter } from 'next/navigation'
+import Link from 'next/link'
+import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
+import { Label } from '@/components/ui/label'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Button } from '@/components/ui/button'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { registerForEvent, completeRegistrationWithRider } from '@/lib/actions/register'
+import { RiderMatchDialog } from '@/components/rider-match-dialog'
+import type { RiderMatchCandidate } from '@/lib/actions/rider-match'
+import { getUpcomingEventsByEventId, type UpcomingEvent } from '@/lib/actions/rider-results'
+import { format } from 'date-fns'
+import { ArrowRight, AlertTriangle } from 'lucide-react'
+import { MembershipErrorModal } from '@/components/membership-error-modal'
+import type { FlecheTeam } from '@/lib/data/events'
+
+const STORAGE_KEY = 'ro-registration'
+
+interface SavedRegistrationData {
+  firstName: string
+  lastName: string
+  email: string
+  gender: string
+  shareRegistration: boolean
+  emergencyContactName: string
+  emergencyContactPhone: string
+}
+
+function getSavedData(): SavedRegistrationData | null {
+  if (typeof window === 'undefined') return null
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY)
+    return saved ? JSON.parse(saved) : null
+  } catch {
+    return null
+  }
+}
+
+function saveData(data: SavedRegistrationData): void {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
+  } catch {
+    // Ignore storage errors
+  }
+}
+
+interface FlecheRegistrationFormProps {
+  eventId: string
+  existingTeams: FlecheTeam[]
+  /** "card" shows border/title container, "plain" for use in drawers/modals */
+  variant?: 'card' | 'plain'
+}
+
+export function FlecheRegistrationForm({
+  eventId,
+  existingTeams,
+  variant = 'card',
+}: FlecheRegistrationFormProps) {
+  const router = useRouter()
+  const [isPending, startTransition] = useTransition()
+
+  // Team state
+  const [teamMode, setTeamMode] = useState<'create' | 'join'>(
+    existingTeams.length > 0 ? 'join' : 'create'
+  )
+  const [newTeamName, setNewTeamName] = useState('')
+  const [selectedTeam, setSelectedTeam] = useState('')
+
+  // Personal details state
+  const [firstName, setFirstName] = useState('')
+  const [lastName, setLastName] = useState('')
+  const [email, setEmail] = useState('')
+  const [shareRegistration, setShareRegistration] = useState(false)
+  const [gender, setGender] = useState<string>('')
+  const [emergencyContactName, setEmergencyContactName] = useState('')
+  const [emergencyContactPhone, setEmergencyContactPhone] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const [success, setSuccess] = useState(false)
+
+  // Membership error state
+  const [membershipErrorVariant, setMembershipErrorVariant] = useState<
+    'no-membership' | 'trial-used' | null
+  >(null)
+
+  // Fuzzy matching state
+  const [matchDialogOpen, setMatchDialogOpen] = useState(false)
+  const [matchCandidates, setMatchCandidates] = useState<RiderMatchCandidate[]>([])
+  const [pendingNotes, setPendingNotes] = useState<string>('')
+
+  // Upcoming events state
+  const [upcomingEvents, setUpcomingEvents] = useState<UpcomingEvent[]>([])
+  const [loadingEvents, setLoadingEvents] = useState(false)
+
+  const errorRef = useRef<HTMLDivElement>(null)
+  const successRef = useRef<HTMLDivElement>(null)
+
+  // Load saved data on mount
+  useEffect(() => {
+    const saved = getSavedData()
+    if (saved) {
+      setFirstName(saved.firstName)
+      setLastName(saved.lastName)
+      setEmail(saved.email)
+      setGender(saved.gender)
+      setShareRegistration(saved.shareRegistration)
+      setEmergencyContactName(saved.emergencyContactName || '')
+      setEmergencyContactPhone(saved.emergencyContactPhone || '')
+    }
+  }, [])
+
+  // Scroll error into view when it appears
+  useEffect(() => {
+    if (error && errorRef.current) {
+      errorRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+    }
+  }, [error])
+
+  // Move focus to success message when registration completes
+  useEffect(() => {
+    if (success && successRef.current) {
+      successRef.current.focus()
+    }
+  }, [success])
+
+  const resolvedTeamName = teamMode === 'create' ? newTeamName.trim() : selectedTeam
+  const selectedTeamInfo = existingTeams.find((t) => t.teamName === selectedTeam)
+
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    setError(null)
+
+    if (!resolvedTeamName) {
+      setError(teamMode === 'create' ? 'Please enter a team name' : 'Please select a team')
+      return
+    }
+
+    const formData = new FormData(e.currentTarget)
+    const notes = formData.get('notes') as string
+
+    startTransition(async () => {
+      const result = await registerForEvent({
+        eventId,
+        firstName,
+        lastName,
+        email,
+        gender: gender || undefined,
+        shareRegistration,
+        notes: notes || undefined,
+        emergencyContactName,
+        emergencyContactPhone,
+        teamName: resolvedTeamName,
+        isTeamCaptain: teamMode === 'create',
+      })
+
+      if (result.success) {
+        saveData({
+          firstName,
+          lastName,
+          email,
+          gender,
+          shareRegistration,
+          emergencyContactName,
+          emergencyContactPhone,
+        })
+        setSuccess(true)
+        router.refresh()
+
+        setLoadingEvents(true)
+        getUpcomingEventsByEventId(eventId, 3)
+          .then((eventsResult) => {
+            if (eventsResult.success && eventsResult.data) {
+              setUpcomingEvents(eventsResult.data)
+            }
+          })
+          .catch(() => {})
+          .finally(() => setLoadingEvents(false))
+      } else if (result.needsRiderMatch && result.matchCandidates) {
+        setMatchCandidates(result.matchCandidates)
+        setPendingNotes(notes || '')
+        setMatchDialogOpen(true)
+      } else if (result.membershipError) {
+        setMembershipErrorVariant(result.membershipError)
+      } else {
+        setError(result.error || 'Registration failed')
+      }
+    })
+  }
+
+  async function handleRiderSelection(riderId: string | null) {
+    startTransition(async () => {
+      const result = await completeRegistrationWithRider({
+        eventId,
+        selectedRiderId: riderId,
+        firstName,
+        lastName,
+        email,
+        gender: gender || undefined,
+        shareRegistration,
+        notes: pendingNotes || undefined,
+        emergencyContactName,
+        emergencyContactPhone,
+      })
+
+      if (result.success) {
+        setMatchDialogOpen(false)
+        saveData({
+          firstName,
+          lastName,
+          email,
+          gender,
+          shareRegistration,
+          emergencyContactName,
+          emergencyContactPhone,
+        })
+        setSuccess(true)
+        router.refresh()
+      } else if (result.membershipError) {
+        setMatchDialogOpen(false)
+        setMembershipErrorVariant(result.membershipError)
+      } else {
+        setMatchDialogOpen(false)
+        setError(result.error || 'Registration failed')
+      }
+    })
+  }
+
+  const wrapperClassName =
+    variant === 'card'
+      ? 'lg:sticky lg:top-24 rounded-2xl border border-border bg-card p-6 md:p-8'
+      : undefined
+
+  if (success) {
+    return (
+      <div className={wrapperClassName}>
+        <div
+          ref={successRef}
+          tabIndex={-1}
+          role="status"
+          className="text-center py-8"
+          data-testid="registration-success"
+        >
+          <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-green-100 dark:bg-green-900/30 mb-4">
+            <svg
+              aria-hidden="true"
+              className="w-6 h-6 text-green-600 dark:text-green-400"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M5 13l4 4L19 7"
+              />
+            </svg>
+          </div>
+          <h2 className="font-serif text-2xl tracking-tight mb-2">You're registered!</h2>
+          <p className="text-sm text-muted-foreground">Team: {resolvedTeamName}</p>
+        </div>
+
+        {loadingEvents && (
+          <div className="border-t border-border pt-6 mt-6" role="status">
+            <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+              <div
+                className="w-4 h-4 border-2 border-muted-foreground border-t-transparent rounded-full animate-spin"
+                aria-hidden="true"
+              />
+              Loading upcoming events…
+            </div>
+          </div>
+        )}
+
+        {!loadingEvents && upcomingEvents.length > 0 && (
+          <div className="border-t border-border pt-6 mt-6">
+            <h3 className="font-medium text-sm mb-4 text-center">More Upcoming Events</h3>
+            <div className="space-y-3">
+              {upcomingEvents.map((event) => (
+                <UpcomingEventCard key={event.id} event={event} />
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  return (
+    <div className={wrapperClassName}>
+      {variant === 'card' && <h2 className="font-serif text-2xl tracking-tight mb-6">Register</h2>}
+
+      <form className="space-y-5" onSubmit={handleSubmit}>
+        {error && (
+          <div
+            ref={errorRef}
+            role="alert"
+            className="p-3 rounded-lg bg-destructive/10 text-destructive text-sm"
+            data-testid="registration-error"
+          >
+            {error}
+          </div>
+        )}
+
+        {/* Team Section */}
+        <fieldset className="space-y-4">
+          <legend className="text-sm font-medium mb-1">
+            Team
+            <span className="block text-xs text-muted-foreground font-normal mt-1">
+              Fleche teams have 3–5 riders. Create a new team or join an existing one.
+            </span>
+          </legend>
+
+          <div className="flex gap-2" role="group" aria-label="Team option">
+            <Button
+              type="button"
+              variant={teamMode === 'create' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setTeamMode('create')}
+              disabled={isPending}
+              aria-pressed={teamMode === 'create'}
+            >
+              Create team
+            </Button>
+            <Button
+              type="button"
+              variant={teamMode === 'join' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setTeamMode('join')}
+              disabled={isPending || existingTeams.length === 0}
+              aria-pressed={teamMode === 'join'}
+            >
+              Join team
+            </Button>
+          </div>
+
+          {teamMode === 'create' ? (
+            <div className="space-y-2">
+              <Label htmlFor="teamName">Team name</Label>
+              <Input
+                id="teamName"
+                type="text"
+                placeholder="Enter your team name"
+                required
+                disabled={isPending}
+                value={newTeamName}
+                onChange={(e) => setNewTeamName(e.target.value)}
+              />
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <Label htmlFor="joinTeam">Select a team</Label>
+              <Select value={selectedTeam} onValueChange={setSelectedTeam} disabled={isPending}>
+                <SelectTrigger id="joinTeam" className="w-full">
+                  <SelectValue placeholder="Choose a team…" />
+                </SelectTrigger>
+                <SelectContent>
+                  {existingTeams.map((team) => (
+                    <SelectItem key={team.teamName} value={team.teamName}>
+                      {team.teamName} ({team.memberCount}{' '}
+                      {team.memberCount === 1 ? 'rider' : 'riders'})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {selectedTeamInfo && selectedTeamInfo.memberCount >= 5 && (
+                <div
+                  role="status"
+                  className="flex items-start gap-2 p-2 rounded bg-amber-50 dark:bg-amber-950/30 text-amber-800 dark:text-amber-200 text-xs"
+                >
+                  <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" aria-hidden="true" />
+                  <span>
+                    This team already has {selectedTeamInfo.memberCount} riders. Additional riders
+                    register as alternates.
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
+        </fieldset>
+
+        <div className="border-t border-border pt-5" />
+
+        {/* Name */}
+        <div className="grid grid-cols-1 min-[400px]:grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label htmlFor="firstName">First name</Label>
+            <Input
+              id="firstName"
+              name="firstName"
+              type="text"
+              placeholder="First"
+              required
+              autoComplete="given-name"
+              disabled={isPending}
+              value={firstName}
+              onChange={(e) => setFirstName(e.target.value)}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="lastName">Last name</Label>
+            <Input
+              id="lastName"
+              name="lastName"
+              type="text"
+              placeholder="Last"
+              required
+              autoComplete="family-name"
+              disabled={isPending}
+              value={lastName}
+              onChange={(e) => setLastName(e.target.value)}
+            />
+          </div>
+        </div>
+
+        {/* Email */}
+        <div className="space-y-2">
+          <Label htmlFor="email">Email address</Label>
+          <Input
+            id="email"
+            name="email"
+            type="email"
+            inputMode="email"
+            placeholder="you@example.com"
+            required
+            autoComplete="email"
+            disabled={isPending}
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+          />
+        </div>
+
+        {/* Gender */}
+        <div className="space-y-2">
+          <Label htmlFor="gender">
+            Gender
+            <span className="text-muted-foreground font-normal ml-1">(optional)</span>
+          </Label>
+          <Select
+            key={gender || 'empty'}
+            value={gender}
+            onValueChange={setGender}
+            disabled={isPending}
+          >
+            <SelectTrigger id="gender" className="w-full">
+              <SelectValue placeholder="Select…" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="M">Male</SelectItem>
+              <SelectItem value="F">Female</SelectItem>
+              <SelectItem value="X">Non-binary / Other</SelectItem>
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground">
+            Audax Club Parisien uses this for ridership statistics.
+          </p>
+        </div>
+
+        {/* Emergency Contact */}
+        <fieldset className="bg-muted/50 border border-border rounded-lg p-4 space-y-3">
+          <legend className="text-sm font-medium">Emergency contact</legend>
+          <div className="grid grid-cols-1 min-[400px]:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="emergencyContactName">Name</Label>
+              <Input
+                id="emergencyContactName"
+                name="emergencyContactName"
+                type="text"
+                placeholder="Name"
+                required
+                autoComplete="off"
+                disabled={isPending}
+                value={emergencyContactName}
+                onChange={(e) => setEmergencyContactName(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="emergencyContactPhone">Phone</Label>
+              <Input
+                id="emergencyContactPhone"
+                name="emergencyContactPhone"
+                type="tel"
+                inputMode="tel"
+                placeholder="Phone number"
+                required
+                autoComplete="off"
+                disabled={isPending}
+                value={emergencyContactPhone}
+                onChange={(e) => setEmergencyContactPhone(e.target.value)}
+              />
+            </div>
+          </div>
+        </fieldset>
+
+        {/* Notes */}
+        <div className="space-y-2">
+          <Label htmlFor="notes">
+            Notes for the organizer
+            <span className="text-muted-foreground font-normal ml-1">(optional)</span>
+          </Label>
+          <Textarea
+            id="notes"
+            name="notes"
+            placeholder="Any special requirements or information…"
+            rows={3}
+            disabled={isPending}
+          />
+        </div>
+
+        {/* Share Registration */}
+        <div className="space-y-2">
+          <div className="flex items-start gap-3">
+            <Checkbox
+              id="share"
+              checked={shareRegistration}
+              onCheckedChange={(checked) => setShareRegistration(checked === true)}
+              className="mt-0.5"
+              disabled={isPending}
+            />
+            <div className="space-y-1">
+              <Label htmlFor="share" className="cursor-pointer">
+                Share my registration
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                Share your name with other riders before the event. All riders will appear on the
+                results after the event.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Submit */}
+        <Button
+          type="submit"
+          className="w-full h-12"
+          size="lg"
+          disabled={isPending}
+          data-testid="registration-submit"
+        >
+          {isPending ? 'Registering…' : 'Register'}
+        </Button>
+      </form>
+
+      <RiderMatchDialog
+        open={matchDialogOpen}
+        onOpenChange={setMatchDialogOpen}
+        candidates={matchCandidates}
+        submittedFirstName={firstName}
+        submittedLastName={lastName}
+        onSelectRider={(riderId) => handleRiderSelection(riderId)}
+        onCreateNew={() => handleRiderSelection(null)}
+        isPending={isPending}
+      />
+
+      <MembershipErrorModal
+        open={membershipErrorVariant !== null}
+        onClose={() => setMembershipErrorVariant(null)}
+        variant={membershipErrorVariant || 'no-membership'}
+      />
+    </div>
+  )
+}
+
+interface UpcomingEventCardProps {
+  event: UpcomingEvent
+}
+
+function UpcomingEventCard({ event }: UpcomingEventCardProps) {
+  return (
+    <div className="flex items-center gap-4 p-3 rounded-lg border border-border bg-muted/30">
+      <div className="flex-shrink-0 text-center w-14">
+        <div className="text-xs text-muted-foreground uppercase">
+          {format(new Date(event.date + 'T00:00:00'), 'MMM')}
+        </div>
+        <div className="text-lg font-medium tabular-nums">
+          {format(new Date(event.date + 'T00:00:00'), 'd')}
+        </div>
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="font-medium text-sm truncate">{event.name}</div>
+        <div className="text-xs text-muted-foreground mt-0.5 tabular-nums">{event.distance} km</div>
+        {event.startLocation && (
+          <div className="text-xs text-muted-foreground truncate">{event.startLocation}</div>
+        )}
+      </div>
+      <Link
+        href={`/register/${event.slug}`}
+        className="flex-shrink-0 inline-flex items-center gap-1 text-sm text-primary hover:underline"
+        aria-label={`Register for ${event.name}`}
+      >
+        Register
+        <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+      </Link>
+    </div>
+  )
+}

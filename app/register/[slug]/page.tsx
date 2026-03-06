@@ -5,7 +5,13 @@ import { PageShell } from '@/components/page-shell'
 import { RegisterCTA } from '@/components/register-cta'
 import { MarkdownContent } from '@/components/markdown-content'
 import { RwgpsEmbed } from '@/components/rwgps-embed'
-import { getEventBySlug, getRegisteredRiders } from '@/lib/data/events'
+import {
+  getEventBySlug,
+  getRegisteredRiders,
+  getFlecheTeams,
+  getRegisteredRidersWithTeams,
+  type RegisteredRider,
+} from '@/lib/data/events'
 import { MapPinIcon, CalendarIcon } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 
@@ -27,9 +33,16 @@ export async function generateMetadata({ params }: PageProps) {
     }
   }
 
+  const isFlecheMeta = event.type === 'Fleche'
+  const flecheTitle = isFlecheMeta
+    ? `${new Date(event.date + 'T00:00:00').getFullYear()} Flèche${event.startLocation ? ` – ${event.startLocation}` : ''}`
+    : null
+
   return {
-    title: `Register for ${event.name} ${event.distance}km`,
-    description: `Register for the ${event.name} ${event.distance}km ${event.type.toLowerCase()} on ${formatDateShort(event.date)}.`,
+    title: `Register for ${flecheTitle || `${event.name} ${event.distance}km`}`,
+    description: isFlecheMeta
+      ? `Register your team for the ${flecheTitle} on ${formatDateShort(event.date)}.`
+      : `Register for the ${event.name} ${event.distance}km ${event.type.toLowerCase()} on ${formatDateShort(event.date)}.`,
     ...(event.imageUrl && {
       openGraph: {
         images: [{ url: event.imageUrl }],
@@ -74,7 +87,14 @@ export default async function RegisterPage({ params }: PageProps) {
     notFound()
   }
 
-  const registeredRiders = await getRegisteredRiders(event.id)
+  const isFleche = event.type === 'Fleche'
+  const flecheDisplayName = isFleche
+    ? `${new Date(event.date + 'T00:00:00').getFullYear()} Flèche${event.startLocation ? ` – ${event.startLocation}` : ''}`
+    : null
+  const [registeredRiders, flecheTeams] = await Promise.all([
+    isFleche ? getRegisteredRidersWithTeams(event.id) : getRegisteredRiders(event.id),
+    isFleche ? getFlecheTeams(event.id) : Promise.resolve([]),
+  ])
 
   return (
     <PageShell>
@@ -92,11 +112,14 @@ export default async function RegisterPage({ params }: PageProps) {
           />
           <div className="absolute bottom-0 left-0 right-0 z-10 bg-gradient-to-t from-neutral-900/70 to-transparent pt-16 md:pt-24">
             <div className="content-container-wide mt-10 pb-6 md:pb-8">
-              <Badge variant="secondary" className="bg-white/90 text-neutral-900 text-xs tracking-wider font-medium mb-3">
+              <Badge
+                variant="secondary"
+                className="bg-white/90 text-neutral-900 text-xs tracking-wider font-medium mb-3"
+              >
                 {event.type}
               </Badge>
               <h1 className="font-serif text-3xl md:text-5xl lg:text-6xl tracking-tight text-neutral-100 text-shadow-lg">
-                {event.name}
+                {flecheDisplayName || event.name}
               </h1>
             </div>
           </div>
@@ -113,18 +136,20 @@ export default async function RegisterPage({ params }: PageProps) {
                 <Badge variant="secondary" className="text-xs tracking-wider font-medium">
                   {event.type}
                 </Badge>
-                <span className="text-xs tracking-[0.15em] uppercase text-muted-foreground">
-                  {event.distance} km · {event.chapterName}
-                </span>
+                {!isFleche && (
+                  <span className="text-xs tracking-[0.15em] uppercase text-muted-foreground">
+                    {event.distance} km · {event.chapterName}
+                  </span>
+                )}
               </div>
               <h1 className="font-serif text-3xl md:text-5xl lg:text-6xl tracking-tight mb-4 md:mb-6">
-                {event.name}
+                {flecheDisplayName || event.name}
               </h1>
             </>
           )}
 
           {/* Kicker line (shown when image exists — badge/title are on the image) */}
-          {event.imageUrl && (
+          {event.imageUrl && !isFleche && (
             <div className="flex flex-wrap items-center gap-2 mb-3 md:mb-4">
               <span className="text-xs tracking-[0.15em] uppercase text-muted-foreground">
                 {event.distance} km · {event.chapterName}
@@ -160,7 +185,12 @@ export default async function RegisterPage({ params }: PageProps) {
 
           {/* Mobile Register CTA */}
           <div className="lg:hidden mt-6">
-            <RegisterCTA eventId={event.id} isPermanent={event.type === 'Permanent'} />
+            <RegisterCTA
+              eventId={event.id}
+              isPermanent={event.type === 'Permanent'}
+              isFleche={isFleche}
+              existingTeams={flecheTeams}
+            />
           </div>
         </div>
       </header>
@@ -234,13 +264,17 @@ export default async function RegisterPage({ params }: PageProps) {
                 </span>
               </div>
               {registeredRiders.length > 0 ? (
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 sm:gap-x-8 gap-y-1">
-                  {registeredRiders.map((rider, index) => (
-                    <p key={index} className="text-sm py-1.5 border-b border-border/50 truncate">
-                      {rider.name}
-                    </p>
-                  ))}
-                </div>
+                isFleche ? (
+                  <FlecheRegisteredRiders riders={registeredRiders} />
+                ) : (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 sm:gap-x-8 gap-y-1">
+                    {registeredRiders.map((rider, index) => (
+                      <p key={index} className="text-sm py-1.5 border-b border-border/50 truncate">
+                        {rider.name}
+                      </p>
+                    ))}
+                  </div>
+                )
               ) : (
                 <p className="text-sm text-muted-foreground">
                   No riders registered yet. Be the first!
@@ -251,10 +285,72 @@ export default async function RegisterPage({ params }: PageProps) {
 
           {/* Right Column - Registration Form (desktop only) */}
           <div className="hidden lg:block lg:w-[400px] lg:shrink-0">
-            <RegisterCTA eventId={event.id} isPermanent={event.type === 'Permanent'} />
+            <RegisterCTA
+              eventId={event.id}
+              isPermanent={event.type === 'Permanent'}
+              isFleche={isFleche}
+              existingTeams={flecheTeams}
+            />
           </div>
         </div>
       </div>
     </PageShell>
+  )
+}
+
+function FlecheRegisteredRiders({ riders }: { riders: RegisteredRider[] }) {
+  // Group riders by team
+  const teamMap = new Map<string, RegisteredRider[]>()
+  const unassigned: RegisteredRider[] = []
+
+  for (const rider of riders) {
+    if (rider.teamName) {
+      const existing = teamMap.get(rider.teamName) || []
+      existing.push(rider)
+      teamMap.set(rider.teamName, existing)
+    } else {
+      unassigned.push(rider)
+    }
+  }
+
+  const teams = Array.from(teamMap.entries()).sort(([a], [b]) => a.localeCompare(b))
+
+  return (
+    <div className="space-y-6">
+      {teams.map(([teamName, teamRiders]) => (
+        <div key={teamName}>
+          <div className="flex items-baseline justify-between mb-2">
+            <h3 className="font-serif text-lg tracking-tight">{teamName}</h3>
+            <span className="text-xs tabular-nums text-muted-foreground">
+              {teamRiders.length} {teamRiders.length === 1 ? 'rider' : 'riders'}
+            </span>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 sm:gap-x-8 gap-y-1">
+            {teamRiders.map((rider, index) => (
+              <p key={index} className="text-sm py-1.5 border-b border-border/50 truncate">
+                {rider.name}
+              </p>
+            ))}
+          </div>
+        </div>
+      ))}
+      {unassigned.length > 0 && (
+        <div className="text-muted-foreground">
+          <div className="flex items-baseline justify-between mb-2">
+            <h3 className="font-serif text-lg tracking-tight">Unassigned</h3>
+            <span className="text-xs tabular-nums text-muted-foreground">
+              {unassigned.length} {unassigned.length === 1 ? 'rider' : 'riders'}
+            </span>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 sm:gap-x-8 gap-y-1">
+            {unassigned.map((rider, index) => (
+              <p key={index} className="text-sm py-1.5 border-b border-border/50 truncate">
+                {rider.name}
+              </p>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
   )
 }

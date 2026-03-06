@@ -30,7 +30,12 @@ import {
 import { Loader2, Check, Plus, CheckCircle2, Globe, FileText, Mail } from 'lucide-react'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
-import { createResult, updateResult, type ResultStatus } from '@/lib/actions/results'
+import {
+  createResult,
+  updateResult,
+  updateRegistrationTeamName,
+  type ResultStatus,
+} from '@/lib/actions/results'
 import { formatFinishTime, buildParticipantMailtoUrl } from '@/lib/utils'
 import { SubmitResultsButton } from './submit-results-button'
 import { AddRiderDialog } from './add-rider-dialog'
@@ -42,6 +47,8 @@ interface Registration {
   registered_at: string | null
   status: string | null
   notes: string | null
+  team_name: string | null
+  is_team_captain: boolean
   riders: {
     id: string
     first_name: string
@@ -89,6 +96,8 @@ interface Participant {
   hasRegistration: boolean
   registrationStatus: string | null
   membershipType: string | null // membership type for event's season, if any
+  registrationTeamName: string | null
+  isTeamCaptain: boolean
 }
 
 interface EventResultsManagerProps {
@@ -120,15 +129,26 @@ interface RiderRowProps {
   eventType: string
   season: number | null
   distanceKm: number
+  registrationId: string | null
 }
 
-function RiderRow({ participant, result, eventId, eventType, season, distanceKm }: RiderRowProps) {
+function RiderRow({
+  participant,
+  result,
+  eventId,
+  eventType,
+  season,
+  distanceKm,
+  registrationId,
+}: RiderRowProps) {
   const [isPending, startTransition] = useTransition()
   const [localStatus, setLocalStatus] = useState<ResultStatus>(
     (result?.status as ResultStatus) || 'pending'
   )
   const [localTime, setLocalTime] = useState(formatFinishTime(result?.finish_time ?? null))
-  const [localTeamName, setLocalTeamName] = useState(result?.team_name ?? '')
+  const [localTeamName, setLocalTeamName] = useState(
+    result?.team_name ?? participant.registrationTeamName ?? ''
+  )
   const [localDistance, setLocalDistance] = useState(
     result?.distance_km?.toString() ?? distanceKm.toString()
   )
@@ -167,10 +187,11 @@ function RiderRow({ participant, result, eventId, eventType, season, distanceKm 
           riderId: participant.riderId,
           status: newStatus,
           finishTime: newStatus === 'finished' ? localTime || null : null,
-          teamName: null,
+          teamName: localTeamName || null,
           note: null,
           season: season ?? new Date().getFullYear(),
-          distanceKm,
+          distanceKm:
+            isFleche && localDistance ? parseFloat(localDistance) || distanceKm : distanceKm,
         })
         if (res.success) {
           flashSaved()
@@ -208,22 +229,38 @@ function RiderRow({ participant, result, eventId, eventType, season, distanceKm 
   }
 
   const handleTeamNameBlur = () => {
-    if (!result || localTeamName === (result.team_name ?? '')) return
+    if (result) {
+      // Update the result record
+      if (localTeamName === (result.team_name ?? '')) return
 
-    startTransition(async () => {
-      const res = await updateResult(result.id, {
-        status: result.status as ResultStatus,
-        finishTime: result.finish_time,
-        teamName: localTeamName || null,
-        note: result.note,
+      startTransition(async () => {
+        const res = await updateResult(result.id, {
+          status: result.status as ResultStatus,
+          finishTime: result.finish_time,
+          teamName: localTeamName || null,
+          note: result.note,
+        })
+        if (res.success) {
+          flashSaved()
+        } else {
+          toast.error(res.error || 'Failed to update team name')
+          setLocalTeamName(result.team_name ?? '')
+        }
       })
-      if (res.success) {
-        flashSaved()
-      } else {
-        toast.error(res.error || 'Failed to update team name')
-        setLocalTeamName(result.team_name ?? '')
-      }
-    })
+    } else if (registrationId) {
+      // No result yet — update the registration record
+      if (localTeamName === (participant.registrationTeamName ?? '')) return
+
+      startTransition(async () => {
+        const res = await updateRegistrationTeamName(registrationId, localTeamName || null)
+        if (res.success) {
+          flashSaved()
+        } else {
+          toast.error(res.error || 'Failed to update team name')
+          setLocalTeamName(participant.registrationTeamName ?? '')
+        }
+      })
+    }
   }
 
   const handleDistanceBlur = () => {
@@ -265,8 +302,18 @@ function RiderRow({ participant, result, eventId, eventType, season, distanceKm 
                 Trial
               </Badge>
             )}
+          {isFleche && participant.isTeamCaptain && (
+            <Badge variant="outline" className="ml-2">
+              Captain
+            </Badge>
+          )}
           {participant.email && (
             <p className="text-xs text-muted-foreground">{participant.email}</p>
+          )}
+          {isFleche && participant.registrationTeamName && (
+            <p className="text-xs text-muted-foreground">
+              Registered team: {participant.registrationTeamName}
+            </p>
           )}
           {participant.emergencyContactName && (
             <p className="text-xs text-muted-foreground">
@@ -460,6 +507,8 @@ export function EventResultsManager({
         hasRegistration: true,
         registrationStatus: reg.status,
         membershipType: currentMembership?.type ?? null,
+        registrationTeamName: reg.team_name,
+        isTeamCaptain: reg.is_team_captain,
       }
     })
 
@@ -477,6 +526,8 @@ export function EventResultsManager({
       hasRegistration: false,
       registrationStatus: null,
       membershipType: null,
+      registrationTeamName: null,
+      isTeamCaptain: false,
     }))
 
   const allParticipants = [...participantsFromRegistrations, ...participantsFromResultsOnly]
@@ -484,8 +535,14 @@ export function EventResultsManager({
   // All rider IDs already in the event (for filtering in add rider dialog)
   const existingRiderIds = new Set(allParticipants.map((p) => p.riderId))
 
-  // Sort by last name ascending
+  // Sort participants: for fleche, group by team name first, then by last name
   const sortedParticipants = [...allParticipants].sort((a, b) => {
+    if (isFleche) {
+      const aTeam = a.registrationTeamName ?? resultsByRiderId.get(a.riderId)?.team_name ?? ''
+      const bTeam = b.registrationTeamName ?? resultsByRiderId.get(b.riderId)?.team_name ?? ''
+      const teamCompare = aTeam.localeCompare(bTeam)
+      if (teamCompare !== 0) return teamCompare
+    }
     const lastNameCompare = a.lastName.localeCompare(b.lastName)
     if (lastNameCompare !== 0) return lastNameCompare
     return a.firstName.localeCompare(b.firstName)
@@ -568,6 +625,7 @@ export function EventResultsManager({
                     eventType={eventType}
                     season={season}
                     distanceKm={distanceKm}
+                    registrationId={participant.hasRegistration ? participant.id : null}
                   />
                 ))}
               </TableBody>

@@ -67,27 +67,39 @@ const getEventsByChapterInner = cache(async (urlSlug: string): Promise<Event[]> 
 
   // Fetch upcoming events for this chapter using a join, ordered by date
   const today = new Date().toISOString().split('T')[0]
-  const { data: events, error: eventsError } = await getSupabase()
-    .from('events')
-    .select('*, registrations(count), chapters!inner(slug)')
-    .eq('chapters.slug', dbSlug)
-    .eq('registrations.status', 'registered')
-    .eq('status', 'scheduled')
-    .neq('event_type', 'permanent')
-    .gte('event_date', today)
-    .order('event_date', { ascending: true })
-    .order('distance_km', { ascending: false })
 
-  if (eventsError) {
+  // Fetch chapter events and fleche events in parallel
+  // Fleche events are shown on all chapter calendars since every chapter participates
+  const [chapterResult, flecheResult] = await Promise.all([
+    getSupabase()
+      .from('events')
+      .select('*, registrations(count), chapters!inner(slug)')
+      .eq('chapters.slug', dbSlug)
+      .eq('registrations.status', 'registered')
+      .eq('status', 'scheduled')
+      .neq('event_type', 'permanent')
+      .neq('event_type', 'fleche')
+      .gte('event_date', today)
+      .order('event_date', { ascending: true })
+      .order('distance_km', { ascending: false }),
+    getSupabase()
+      .from('events')
+      .select('*, registrations(count)')
+      .eq('registrations.status', 'registered')
+      .eq('status', 'scheduled')
+      .eq('event_type', 'fleche')
+      .gte('event_date', today),
+  ])
+
+  if (chapterResult.error) {
     return handleDataError(
-      eventsError,
+      chapterResult.error,
       { operation: 'getEventsByChapter', context: { urlSlug } },
       []
     )
   }
 
-  // Transform to Event type
-  return (events as EventWithRegistrationCount[]).map((event) => ({
+  const transformEvent = (event: EventWithRegistrationCount) => ({
     id: event.id,
     slug: event.slug,
     date: event.event_date,
@@ -97,7 +109,19 @@ const getEventsByChapterInner = cache(async (urlSlug: string): Promise<Event[]> 
     startLocation: event.start_location || '',
     startTime: event.start_time || '08:00',
     registeredCount: event.registrations?.[0]?.count ?? 0,
-  }))
+  })
+
+  const chapterEvents = (chapterResult.data as EventWithRegistrationCount[]).map(transformEvent)
+  const flecheEvents = flecheResult.error
+    ? []
+    : ((flecheResult.data || []) as EventWithRegistrationCount[]).map(transformEvent)
+
+  // Merge and sort by date, then distance descending
+  return [...chapterEvents, ...flecheEvents].sort((a, b) => {
+    const dateCompare = a.date.localeCompare(b.date)
+    if (dateCompare !== 0) return dateCompare
+    return parseInt(b.distance, 10) - parseInt(a.distance, 10)
+  })
 })
 
 export async function getEventsByChapter(urlSlug: string): Promise<Event[]> {
@@ -232,6 +256,16 @@ export interface EventDetails {
  */
 export interface RegisteredRider {
   name: string // "John D." or "Anonymous" if share_registration is false
+  teamName?: string | null
+}
+
+/**
+ * Team info for fleche event registration pages.
+ */
+export interface FlecheTeam {
+  teamName: string
+  memberCount: number
+  captain: string | null // "Jane D." format
 }
 
 // ============================================================================
@@ -274,6 +308,105 @@ export async function getRegisteredRiders(eventId: string): Promise<RegisteredRi
   return unstable_cache(
     async () => getRegisteredRidersInner(eventId),
     [`registered-riders-${eventId}`],
+    {
+      tags: ['registrations', `event-${eventId}`],
+    }
+  )()
+}
+
+/**
+ * Get existing teams for a fleche event's registration page.
+ * Returns team names with member counts and captain display names.
+ */
+const getFlecheTeamsInner = cache(async (eventId: string): Promise<FlecheTeam[]> => {
+  const { data: registrations, error } = await getSupabase()
+    .from('registrations')
+    .select('team_name, is_team_captain, riders(first_name, last_name)')
+    .eq('event_id', eventId)
+    .eq('status', 'registered')
+    .not('team_name', 'is', null)
+
+  if (error || !registrations) {
+    return handleDataError(error, { operation: 'getFlecheTeams', context: { eventId } }, [])
+  }
+
+  // Group by team_name
+  const teamMap = new Map<string, { count: number; captain: string | null }>()
+
+  for (const reg of registrations as Array<{
+    team_name: string | null
+    is_team_captain: boolean
+    riders: { first_name: string; last_name: string } | null
+  }>) {
+    if (!reg.team_name) continue
+    const existing = teamMap.get(reg.team_name) || { count: 0, captain: null }
+    existing.count++
+    if (reg.is_team_captain && reg.riders) {
+      const lastInitial = reg.riders.last_name ? `${reg.riders.last_name.charAt(0)}.` : ''
+      existing.captain = `${reg.riders.first_name} ${lastInitial}`.trim()
+    }
+    teamMap.set(reg.team_name, existing)
+  }
+
+  return Array.from(teamMap.entries())
+    .map(([teamName, info]) => ({
+      teamName,
+      memberCount: info.count,
+      captain: info.captain,
+    }))
+    .sort((a, b) => a.teamName.localeCompare(b.teamName))
+})
+
+export async function getFlecheTeams(eventId: string): Promise<FlecheTeam[]> {
+  return unstable_cache(async () => getFlecheTeamsInner(eventId), [`fleche-teams-${eventId}`], {
+    tags: ['registrations', `event-${eventId}`],
+  })()
+}
+
+/**
+ * Get registered riders with team info for fleche events.
+ * Returns riders grouped by team for display on the registration page.
+ */
+const getRegisteredRidersWithTeamsInner = cache(
+  async (eventId: string): Promise<RegisteredRider[]> => {
+    const { data: registrations, error } = await getSupabase()
+      .from('registrations')
+      .select('team_name, share_registration, riders(first_name, last_name)')
+      .eq('event_id', eventId)
+      .eq('status', 'registered')
+
+    if (error || !registrations) {
+      return handleDataError(
+        error,
+        { operation: 'getRegisteredRidersWithTeams', context: { eventId } },
+        []
+      )
+    }
+
+    return (
+      registrations as Array<{
+        team_name: string | null
+        share_registration: boolean | null
+        riders: { first_name: string; last_name: string } | null
+      }>
+    ).map((reg) => {
+      if (!reg.share_registration || !reg.riders) {
+        return { name: 'Anonymous', teamName: reg.team_name }
+      }
+      const firstName = reg.riders.first_name || ''
+      const lastInitial = reg.riders.last_name ? `${reg.riders.last_name.charAt(0)}.` : ''
+      return {
+        name: `${firstName} ${lastInitial}`.trim(),
+        teamName: reg.team_name,
+      }
+    })
+  }
+)
+
+export async function getRegisteredRidersWithTeams(eventId: string): Promise<RegisteredRider[]> {
+  return unstable_cache(
+    async () => getRegisteredRidersWithTeamsInner(eventId),
+    [`registered-riders-teams-${eventId}`],
     {
       tags: ['registrations', `event-${eventId}`],
     }
