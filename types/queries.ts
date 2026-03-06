@@ -67,7 +67,10 @@ export type EventWithRegistrationCountAndChapter = Event & {
 /**
  * Event with route slug for results queries
  */
-export type EventWithRouteSlug = Pick<Event, 'id' | 'name' | 'event_date' | 'distance_km'> & {
+export type EventWithRouteSlug = Pick<
+  Event,
+  'id' | 'name' | 'event_date' | 'distance_km' | 'event_type' | 'start_location'
+> & {
   routes: Pick<Route, 'slug'> | null
 }
 
@@ -78,7 +81,14 @@ export type EventWithPublicResults = EventWithRouteSlug & {
   public_results: Array<
     Pick<
       PublicResult,
-      'id' | 'finish_time' | 'status' | 'team_name' | 'rider_slug' | 'first_name' | 'last_name'
+      | 'id'
+      | 'finish_time'
+      | 'status'
+      | 'team_name'
+      | 'distance_km'
+      | 'rider_slug'
+      | 'first_name'
+      | 'last_name'
     >
   > | null
 }
@@ -315,6 +325,7 @@ export type ResultWithRiderForAdmin = Pick<
   | 'finish_time'
   | 'status'
   | 'team_name'
+  | 'distance_km'
   | 'note'
   | 'gpx_url'
   | 'gpx_file_path'

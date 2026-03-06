@@ -37,6 +37,12 @@ export interface RiderResult {
   isFirstBrevet: boolean
 }
 
+export interface TeamResult {
+  teamName: string
+  distance: string
+  riders: RiderResult[]
+}
+
 export interface EventResult {
   id?: string
   date: string
@@ -44,6 +50,9 @@ export interface EventResult {
   distance: string
   riders: RiderResult[]
   routeSlug: string | null
+  eventType?: string
+  startLocation?: string | null
+  teams?: TeamResult[]
 }
 
 // Re-export ChapterMeta as alias for backwards compatibility
@@ -77,12 +86,12 @@ const getAvailableYearsInner = cache(async (urlSlug: string): Promise<number[]> 
       .eq('collection', urlSlug)
       .limit(2000)
     events = data
-  } else if (urlSlug === 'permanent') {
-    // Permanent results: query by event_type instead of chapter
+  } else if (urlSlug === 'permanent' || urlSlug === 'fleche') {
+    // Permanent/Fleche results: query by event_type instead of chapter
     const { data } = await getSupabase()
       .from('events')
       .select('id, season, results(season)')
-      .eq('event_type', 'permanent')
+      .eq('event_type', urlSlug)
       .limit(2000)
     events = data
   } else {
@@ -154,10 +163,10 @@ const getChapterResultsInner = cache(
         .from('events')
         .select(
           `
-        id, name, event_date, distance_km,
+        id, name, event_date, distance_km, event_type, start_location,
         routes (slug),
         public_results (
-          id, finish_time, status, team_name, rider_slug, first_name, last_name
+          id, finish_time, status, team_name, distance_km, rider_slug, first_name, last_name
         )
       `
         )
@@ -167,20 +176,20 @@ const getChapterResultsInner = cache(
         .order('event_date', { ascending: true })
       events = result.data
       eventsError = result.error
-    } else if (urlSlug === 'permanent') {
-      // Permanent results: query by event_type instead of chapter
+    } else if (urlSlug === 'permanent' || urlSlug === 'fleche') {
+      // Permanent/Fleche results: query by event_type instead of chapter
       const result = await getSupabase()
         .from('events')
         .select(
           `
-        id, name, event_date, distance_km,
+        id, name, event_date, distance_km, event_type, start_location,
         routes (slug),
         public_results (
-          id, finish_time, status, team_name, rider_slug, first_name, last_name
+          id, finish_time, status, team_name, distance_km, rider_slug, first_name, last_name
         )
       `
         )
-        .eq('event_type', 'permanent')
+        .eq('event_type', urlSlug)
         .gte('event_date', `${year}-01-01`)
         .lte('event_date', `${year}-12-31`)
         .order('event_date', { ascending: true })
@@ -192,16 +201,17 @@ const getChapterResultsInner = cache(
         .from('events')
         .select(
           `
-        id, name, event_date, distance_km,
+        id, name, event_date, distance_km, event_type, start_location,
         routes (slug),
         chapters!inner(slug),
         public_results (
-          id, finish_time, status, team_name, rider_slug, first_name, last_name
+          id, finish_time, status, team_name, distance_km, rider_slug, first_name, last_name
         )
       `
         )
         .eq('chapters.slug', dbSlug)
         .neq('event_type', 'permanent')
+        .neq('event_type', 'fleche')
         .gte('event_date', `${year}-01-01`)
         .lte('event_date', `${year}-12-31`)
 
@@ -258,6 +268,8 @@ const getChapterResultsInner = cache(
       // Skip events with no results
       if (!eventResultsList || eventResultsList.length === 0) continue
 
+      const isFleche = event.event_type === 'fleche'
+
       const riders: RiderResult[] = eventResultsList.map((result) => {
         const name = `${result.first_name} ${result.last_name}`.trim() || 'Unknown'
         const slug = result.rider_slug
@@ -276,6 +288,49 @@ const getChapterResultsInner = cache(
         return aLastName.localeCompare(bLastName)
       })
 
+      // Build team grouping for fleche events
+      let teams: TeamResult[] | undefined
+      if (isFleche) {
+        const teamMap = new Map<string, { distance: string; riders: RiderResult[] }>()
+
+        for (const result of eventResultsList) {
+          const teamName = result.team_name || 'Unknown Team'
+          const name = `${result.first_name} ${result.last_name}`.trim() || 'Unknown'
+          const slug = result.rider_slug
+          const statusStr = formatStatus(result.status ?? 'pending')
+          const time = statusStr ?? formatFinishTime(result.finish_time as string | null) ?? ''
+          const isFirstBrevet = result.id ? firstBrevetResultIds.has(result.id) : false
+          const distance = result.distance_km?.toString() ?? event.distance_km.toString()
+
+          if (!teamMap.has(teamName)) {
+            teamMap.set(teamName, { distance, riders: [] })
+          }
+          teamMap.get(teamName)!.riders.push({ name, slug, time, isFirstBrevet })
+        }
+
+        // Sort riders within each team by last name
+        for (const team of teamMap.values()) {
+          team.riders.sort((a, b) => {
+            const aLastName = a.name.split(' ').pop() || a.name
+            const bLastName = b.name.split(' ').pop() || b.name
+            return aLastName.localeCompare(bLastName)
+          })
+        }
+
+        // Sort teams: by distance descending, "Unknown Team" last
+        teams = Array.from(teamMap.entries())
+          .sort(([nameA, a], [nameB, b]) => {
+            if (nameA === 'Unknown Team') return 1
+            if (nameB === 'Unknown Team') return -1
+            return parseFloat(b.distance) - parseFloat(a.distance)
+          })
+          .map(([teamName, data]) => ({
+            teamName,
+            distance: data.distance,
+            riders: data.riders,
+          }))
+      }
+
       eventResults.push({
         id: event.id,
         date: event.event_date,
@@ -283,6 +338,9 @@ const getChapterResultsInner = cache(
         distance: event.distance_km.toString(),
         riders,
         routeSlug: event.routes?.slug ?? null,
+        eventType: event.event_type,
+        startLocation: event.start_location,
+        teams,
       })
     }
 
@@ -323,6 +381,7 @@ export interface RiderEventResult {
   note: string | null
   chapterSlug: string | null
   eventType: string
+  teamName: string | null
   awards: RiderEventAward[]
 }
 
@@ -385,6 +444,7 @@ const getRiderResultsInner = cache(async (slug: string): Promise<RiderYearResult
       finish_time,
       status,
       note,
+      team_name,
       season,
       events (
         name,
@@ -420,6 +480,7 @@ const getRiderResultsInner = cache(async (slug: string): Promise<RiderYearResult
   // Type for the query result with awards
   type ResultWithAwards = ResultWithEvent & {
     id: string
+    team_name: string | null
     result_awards: Array<{
       awards: { id: string; title: string; description: string | null } | null
     }> | null
@@ -457,6 +518,7 @@ const getRiderResultsInner = cache(async (slug: string): Promise<RiderYearResult
       note: result.note,
       chapterSlug,
       eventType: event.event_type,
+      teamName: result.team_name ?? null,
       awards,
     }
 

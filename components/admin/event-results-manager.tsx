@@ -59,6 +59,7 @@ interface Result {
   finish_time: string | null
   status: string | null
   team_name: string | null
+  distance_km: number
   note: string | null
   // Rider submission fields
   gpx_url: string | null
@@ -94,6 +95,7 @@ interface EventResultsManagerProps {
   eventId: string
   eventName: string
   eventDate: string
+  eventType: string
   eventStatus: string | null
   isPastEvent: boolean
   season: number | null
@@ -115,17 +117,23 @@ interface RiderRowProps {
   participant: Participant
   result: Result | null
   eventId: string
+  eventType: string
   season: number | null
   distanceKm: number
 }
 
-function RiderRow({ participant, result, eventId, season, distanceKm }: RiderRowProps) {
+function RiderRow({ participant, result, eventId, eventType, season, distanceKm }: RiderRowProps) {
   const [isPending, startTransition] = useTransition()
   const [localStatus, setLocalStatus] = useState<ResultStatus>(
     (result?.status as ResultStatus) || 'pending'
   )
   const [localTime, setLocalTime] = useState(formatFinishTime(result?.finish_time ?? null))
+  const [localTeamName, setLocalTeamName] = useState(result?.team_name ?? '')
+  const [localDistance, setLocalDistance] = useState(
+    result?.distance_km?.toString() ?? distanceKm.toString()
+  )
   const [showSaved, setShowSaved] = useState(false)
+  const isFleche = eventType === 'fleche'
 
   const riderName = `${participant.firstName} ${participant.lastName}`
 
@@ -199,6 +207,47 @@ function RiderRow({ participant, result, eventId, season, distanceKm }: RiderRow
     }
   }
 
+  const handleTeamNameBlur = () => {
+    if (!result || localTeamName === (result.team_name ?? '')) return
+
+    startTransition(async () => {
+      const res = await updateResult(result.id, {
+        status: result.status as ResultStatus,
+        finishTime: result.finish_time,
+        teamName: localTeamName || null,
+        note: result.note,
+      })
+      if (res.success) {
+        flashSaved()
+      } else {
+        toast.error(res.error || 'Failed to update team name')
+        setLocalTeamName(result.team_name ?? '')
+      }
+    })
+  }
+
+  const handleDistanceBlur = () => {
+    if (!result) return
+    const newDistance = parseFloat(localDistance)
+    if (isNaN(newDistance) || newDistance === result.distance_km) return
+
+    startTransition(async () => {
+      const res = await updateResult(result.id, {
+        status: result.status as ResultStatus,
+        finishTime: result.finish_time,
+        teamName: result.team_name,
+        note: result.note,
+        distanceKm: newDistance,
+      })
+      if (res.success) {
+        flashSaved()
+      } else {
+        toast.error(res.error || 'Failed to update distance')
+        setLocalDistance(result.distance_km.toString())
+      }
+    })
+  }
+
   return (
     <TableRow className={isPending ? 'opacity-60' : undefined}>
       <TableCell className="font-medium">
@@ -257,6 +306,34 @@ function RiderRow({ participant, result, eventId, season, distanceKm }: RiderRow
           className="w-[80px] h-8 font-mono"
         />
       </TableCell>
+      {isFleche && (
+        <>
+          <TableCell>
+            <Input
+              type="text"
+              placeholder="Team name"
+              value={localTeamName}
+              onChange={(e) => setLocalTeamName(e.target.value)}
+              onBlur={handleTeamNameBlur}
+              onKeyDown={handleTimeKeyDown}
+              disabled={isPending}
+              className="w-[140px] h-8"
+            />
+          </TableCell>
+          <TableCell>
+            <Input
+              type="text"
+              placeholder="km"
+              value={localDistance}
+              onChange={(e) => setLocalDistance(e.target.value)}
+              onBlur={handleDistanceBlur}
+              onKeyDown={handleTimeKeyDown}
+              disabled={isPending}
+              className="w-[80px] h-8 font-mono"
+            />
+          </TableCell>
+        </>
+      )}
       <TableCell>
         {/* Evidence - Strava/GPX links, Control Card thumbnails */}
         {result &&
@@ -349,6 +426,7 @@ export function EventResultsManager({
   eventId,
   eventName,
   eventDate,
+  eventType,
   eventStatus,
   isPastEvent,
   season,
@@ -356,6 +434,7 @@ export function EventResultsManager({
   registrations,
   results,
 }: EventResultsManagerProps) {
+  const isFleche = eventType === 'fleche'
   const [addRiderOpen, setAddRiderOpen] = useState(false)
   const [isSubmitted, setIsSubmitted] = useState(eventStatus === 'submitted')
 
@@ -472,6 +551,8 @@ export function EventResultsManager({
                   <TableHead>Rider</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Time</TableHead>
+                  {isFleche && <TableHead>Team</TableHead>}
+                  {isFleche && <TableHead>Distance</TableHead>}
                   <TableHead>Evidence</TableHead>
                   <TableHead>Note</TableHead>
                   <TableHead className="w-[50px]"></TableHead>
@@ -484,6 +565,7 @@ export function EventResultsManager({
                     participant={participant}
                     result={resultsByRiderId.get(participant.riderId) || null}
                     eventId={eventId}
+                    eventType={eventType}
                     season={season}
                     distanceKm={distanceKm}
                   />

@@ -67,6 +67,7 @@ async function getResults(eventId: string): Promise<ResultWithRiderForAdmin[]> {
       finish_time,
       status,
       team_name,
+      distance_km,
       note,
       gpx_url,
       gpx_file_path,
@@ -190,6 +191,7 @@ export default async function EventDetailPage({ params, searchParams }: EventPag
         eventId={event.id}
         eventName={event.name}
         eventDate={event.event_date}
+        eventType={event.event_type}
         eventStatus={event.status}
         isPastEvent={event.event_date < new Date().toISOString().split('T')[0]}
         season={event.season}

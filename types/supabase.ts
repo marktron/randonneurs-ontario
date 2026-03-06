@@ -385,6 +385,7 @@ export type Database = {
           rider_id: string
           share_registration: boolean | null
           status: string | null
+          team_name: string | null
         }
         Insert: {
           event_id: string
@@ -394,6 +395,7 @@ export type Database = {
           rider_id: string
           share_registration?: boolean | null
           status?: string | null
+          team_name?: string | null
         }
         Update: {
           event_id?: string
@@ -403,6 +405,7 @@ export type Database = {
           rider_id?: string
           share_registration?: boolean | null
           status?: string | null
+          team_name?: string | null
         }
         Relationships: [
           {

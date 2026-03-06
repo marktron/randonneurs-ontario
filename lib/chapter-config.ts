@@ -61,6 +61,12 @@ const resultsOnlyChapters: Record<string, ChapterInfo> = {
     description: 'Results from miscellaneous events.',
     dbSlug: 'other',
   },
+  fleche: {
+    slug: 'fleche',
+    name: 'Flèche',
+    description: 'Results from 24-hour team events.',
+    dbSlug: 'fleche',
+  },
   permanent: {
     slug: 'permanent',
     name: 'Permanents',

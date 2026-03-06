@@ -111,6 +111,10 @@
           "separator": true
         },
         {
+          "label": "Fleche",
+          "href": "/results/{{season}}/fleche"
+        },
+        {
           "label": "Permanents",
           "href": "/results/{{season}}/permanent"
         },

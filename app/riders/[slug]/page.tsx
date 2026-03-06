@@ -67,6 +67,9 @@ function getDisplayNote(result: RiderEventResult): string | null {
   if (result.eventType === 'permanent') {
     parts.push('Permanent')
   }
+  if (result.teamName) {
+    parts.push(`Team: ${result.teamName}`)
+  }
   if (result.note) {
     parts.push(result.note)
   }

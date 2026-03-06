@@ -47,6 +47,18 @@ export function ResultsPage({
 
   const totalStarters = events.reduce((acc, event) => acc + event.riders.length, 0)
   const totalDistance = events.reduce((acc, event) => {
+    if (event.teams && event.teams.length > 0) {
+      // For fleche events, sum actual per-team distances times finishers
+      return (
+        acc +
+        event.teams.reduce((teamAcc, team) => {
+          const finishers = team.riders.filter(
+            (r) => !['DNF', 'DNS', 'OTL', 'DQ'].includes(r.time)
+          ).length
+          return teamAcc + (finishers > 0 ? parseFloat(team.distance) : 0)
+        }, 0)
+      )
+    }
     const finishers = event.riders.filter(
       (r) => !['DNF', 'DNS', 'OTL', 'DQ'].includes(r.time)
     ).length
@@ -173,6 +185,7 @@ export function ResultsPage({
             {events.map((event) => {
               // Count riders excluding DNS
               const participants = event.riders.filter((r) => r.time !== 'DNS')
+              const isFleche = event.teams && event.teams.length > 0
 
               return (
                 <article
@@ -184,7 +197,9 @@ export function ResultsPage({
                   {/* Event Header */}
                   <header className="mb-6">
                     <h2 className="font-serif text-2xl md:text-3xl tracking-tight">
-                      {event.routeSlug ? (
+                      {isFleche ? (
+                        <>Flèche Destination: {event.startLocation || 'TBD'}</>
+                      ) : event.routeSlug ? (
                         <Link
                           href={`/routes/${chapterSlug}/${event.routeSlug}`}
                           className="hover:text-primary transition-colors"
@@ -198,41 +213,87 @@ export function ResultsPage({
                       )}
                     </h2>
                     <p className="text-sm text-muted-foreground mt-1">
-                      {formatFullDate(event.date)} · {event.distance} km · {participants.length}{' '}
-                      {participants.length === 1 ? 'rider' : 'riders'}
+                      {formatFullDate(event.date)}
+                      {isFleche
+                        ? ` · ${event.teams!.length} ${event.teams!.length === 1 ? 'team' : 'teams'} · ${participants.length} ${participants.length === 1 ? 'rider' : 'riders'}`
+                        : ` · ${event.distance} km · ${participants.length} ${participants.length === 1 ? 'rider' : 'riders'}`}
                     </p>
                   </header>
 
-                  {/* Riders Grid */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-1">
-                    {participants.map((rider, index) => (
-                      <div
-                        key={`${rider.name}-${index}`}
-                        className="flex items-center justify-between py-1.5 border-b border-border/50 group gap-2"
-                      >
-                        <div className="flex items-center gap-1.5 min-w-0">
-                          <Link
-                            href={`/riders/${rider.slug}`}
-                            className="text-sm hover:text-primary transition-colors truncate"
-                          >
-                            {rider.name}
-                          </Link>
-                          {rider.isFirstBrevet && (
-                            <AwardBadge award={{ title: 'First Brevet' }} className="shrink-0" />
-                          )}
-                        </div>
-                        <span
-                          className={`text-sm tabular-nums shrink-0 ${
-                            rider.time === 'DNF' || rider.time === 'DNS'
-                              ? 'text-muted-foreground/60'
-                              : 'text-muted-foreground'
-                          }`}
+                  {isFleche ? (
+                    /* Fleche: Team-grouped layout */
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-10">
+                      {event.teams!.map((team) => (
+                        <div
+                          key={team.teamName}
+                          className={`${team.teamName === 'Unknown Team' ? 'opacity-60' : ''}`}
                         >
-                          {rider.time}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
+                          {/* Team name + distance */}
+                          <div className="flex items-baseline justify-between gap-2 mb-2">
+                            <h3 className="font-serif text-lg tracking-tight">{team.teamName}</h3>
+                            <span className="font-serif text-lg tracking-tight tabular-nums text-muted-foreground shrink-0">
+                              {team.distance} km
+                            </span>
+                          </div>
+                          {/* Riders */}
+                          <div className="border-t border-border">
+                            {team.riders.map((rider, index) => {
+                              const isDnf = ['DNF', 'DNS', 'OTL', 'DQ'].includes(rider.time)
+                              return (
+                                <div
+                                  key={`${rider.name}-${index}`}
+                                  className="flex items-center justify-between py-1.5 border-b border-border/50"
+                                >
+                                  <Link
+                                    href={`/riders/${rider.slug}`}
+                                    className="text-sm hover:text-primary transition-colors"
+                                  >
+                                    {rider.name}
+                                  </Link>
+                                  {isDnf && (
+                                    <span className="text-xs tabular-nums text-muted-foreground">
+                                      {rider.time}
+                                    </span>
+                                  )}
+                                </div>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    /* Non-fleche: Flat rider grid */
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-1">
+                      {participants.map((rider, index) => (
+                        <div
+                          key={`${rider.name}-${index}`}
+                          className="flex items-center justify-between py-1.5 border-b border-border/50 group gap-2"
+                        >
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <Link
+                              href={`/riders/${rider.slug}`}
+                              className="text-sm hover:text-primary transition-colors truncate"
+                            >
+                              {rider.name}
+                            </Link>
+                            {rider.isFirstBrevet && (
+                              <AwardBadge award={{ title: 'First Brevet' }} className="shrink-0" />
+                            )}
+                          </div>
+                          <span
+                            className={`text-sm tabular-nums shrink-0 ${
+                              rider.time === 'DNF' || rider.time === 'DNS'
+                                ? 'text-muted-foreground/60'
+                                : 'text-muted-foreground'
+                            }`}
+                          >
+                            {rider.time}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </article>
               )
             })}

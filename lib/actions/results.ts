@@ -60,6 +60,7 @@ export interface UpdateResultData {
   status?: ResultStatus
   teamName?: string | null
   note?: string | null
+  distanceKm?: number
 }
 
 export async function createResult(data: CreateResultData): Promise<ActionResult> {
@@ -133,6 +134,7 @@ export async function updateResult(
     status: data.status,
     team_name: data.teamName,
     note: data.note,
+    ...(data.distanceKm !== undefined && { distance_km: data.distanceKm }),
   }
 
   const { error } = await getSupabaseAdmin().from('results').update(updateData).eq('id', resultId)
