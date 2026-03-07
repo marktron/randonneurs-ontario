@@ -8,6 +8,8 @@ import { parseLocalDate, createSlug } from '@/lib/utils'
 import { getUrlSlugFromDbSlug } from '@/lib/chapter-config'
 import { createPendingResultsAndSendEmails } from '@/lib/events/complete-event'
 import { logAuditEvent } from '@/lib/audit-log'
+import { generateAcpXlsx, generateAcpCsv } from '@/lib/email/results-spreadsheet'
+import type { AcpResultRow, SpreadsheetData } from '@/lib/email/results-spreadsheet'
 import { handleActionError, handleSupabaseError, createActionResult } from '@/lib/errors'
 import type { ActionResult } from '@/types/actions'
 import type {
@@ -427,6 +429,7 @@ interface ResultForEmail {
   riders: {
     first_name: string
     last_name: string
+    gender: string | null
   }
   status: string
   finish_time: string | null
@@ -437,6 +440,8 @@ interface EventForSubmission {
   id: string
   name: string
   event_date: string
+  distance_km: number
+  event_type: string
   status: string | null
   chapters: {
     name: string
@@ -455,6 +460,8 @@ export async function submitEventResults(eventId: string): Promise<ActionResult>
         id,
         name,
         event_date,
+        distance_km,
+        event_type,
         status,
         chapters (name)
       `
@@ -481,7 +488,7 @@ export async function submitEventResults(eventId: string): Promise<ActionResult>
       .from('results')
       .select(
         `
-        riders (first_name, last_name),
+        riders (first_name, last_name, gender),
         status,
         finish_time,
         note
@@ -496,26 +503,34 @@ export async function submitEventResults(eventId: string): Promise<ActionResult>
 
     const typedResults = (results || []) as ResultForEmail[]
 
-    // Build email content
-    const eventDate = parseLocalDate(typedEvent.event_date).toLocaleDateString('en-CA', {
-      weekday: 'long',
-      month: 'long',
-      day: 'numeric',
-      year: 'numeric',
-    })
+    // Only finishers with a finish time are included in email and spreadsheet
+    const finishedResults = typedResults.filter((r) => r.status === 'finished' && r.finish_time)
 
-    const chapterName = typedEvent.chapters?.name || 'Unknown'
-    const subject = `Results for ${typedEvent.name} - ${eventDate} (${chapterName} chapter)`
+    // Send results email only for brevets and fleches
+    const requiresEmail = typedEvent.event_type === 'brevet' || typedEvent.event_type === 'fleche'
 
-    const resultLines = typedResults.map((r) => {
-      const name = `${r.riders.first_name} ${r.riders.last_name}`
-      const status = r.status.toUpperCase()
-      const time = r.finish_time || '-'
-      const note = r.note ? ` | Note: ${r.note}` : ''
-      return `${name}: ${status}${r.status === 'finished' ? ` (${time})` : ''}${note}`
-    })
+    if (requiresEmail) {
+      const eventDate = parseLocalDate(typedEvent.event_date).toLocaleDateString('en-CA', {
+        weekday: 'long',
+        month: 'long',
+        day: 'numeric',
+        year: 'numeric',
+      })
 
-    const emailBody = `Results for ${typedEvent.name}
+      const chapterName = typedEvent.chapters?.name || 'Unknown'
+      const subject = `Results for ${typedEvent.name} - ${eventDate} (${chapterName} chapter)`
+
+      const sortedForEmail = [...finishedResults].sort((a, b) =>
+        a.riders.last_name.localeCompare(b.riders.last_name)
+      )
+
+      const resultLines = sortedForEmail.map((r) => {
+        const name = `${r.riders.first_name} ${r.riders.last_name}`
+        const time = r.finish_time || '-'
+        return `${name}: ${time}`
+      })
+
+      const emailBody = `Results for ${typedEvent.name}
 ${eventDate}
 ${chapterName} chapter
 
@@ -523,30 +538,69 @@ Submitted by: ${admin.name} (${admin.email})
 
 ---
 
-RESULTS (${typedResults.length} rider${typedResults.length !== 1 ? 's' : ''}):
+RESULTS (${finishedResults.length} finisher${finishedResults.length !== 1 ? 's' : ''}):
 
-${resultLines.length > 0 ? resultLines.join('\n') : 'No results recorded.'}
+${resultLines.length > 0 ? resultLines.join('\n') : 'No finishers recorded.'}
 
 ---
 This email was sent from the Randonneurs Ontario admin system.
 `
 
-    // Send email
-    if (!process.env.SENDGRID_API_KEY) {
-      console.warn('SendGrid API key not configured, skipping email')
-    } else {
+      // Generate ACP homologation spreadsheet attachment
+      const acpRows: AcpResultRow[] = finishedResults.map((r) => ({
+        lastName: r.riders.last_name,
+        firstName: r.riders.first_name,
+        finishTime: r.finish_time || '',
+        gender: r.riders.gender,
+      }))
+
+      const spreadsheetData: SpreadsheetData = {
+        eventName: typedEvent.name,
+        eventDate: typedEvent.event_date,
+        distanceKm: typedEvent.distance_km,
+        chapterName: chapterName,
+        results: acpRows,
+      }
+
+      let attachment: { content: string; filename: string; type: string; disposition: string }
+
       try {
-        await sendgrid.send({
-          to: suppressAdminEmails ? admin.email : 'vp-toronto@randonneursontario.ca',
-          cc: suppressAdminEmails ? undefined : admin.email,
-          from: fromEmail,
-          replyTo: admin.email,
-          subject,
-          text: emailBody,
-        })
-      } catch (emailError) {
-        console.error('Failed to send results email:', emailError)
-        return { success: false, error: 'Failed to send email. Please try again.' }
+        const xlsx = await generateAcpXlsx(spreadsheetData)
+        attachment = {
+          content: xlsx.buffer.toString('base64'),
+          filename: xlsx.filename,
+          type: xlsx.mimeType,
+          disposition: 'attachment',
+        }
+      } catch (xlsxError) {
+        console.warn('XLSX generation failed, falling back to CSV:', xlsxError)
+        const csv = generateAcpCsv(spreadsheetData)
+        attachment = {
+          content: Buffer.from(csv.content, 'utf-8').toString('base64'),
+          filename: csv.filename,
+          type: csv.mimeType,
+          disposition: 'attachment',
+        }
+      }
+
+      // Send email
+      if (!process.env.SENDGRID_API_KEY) {
+        console.warn('SendGrid API key not configured, skipping email')
+      } else {
+        try {
+          await sendgrid.send({
+            to: suppressAdminEmails ? admin.email : 'vp-toronto@randonneursontario.ca',
+            cc: suppressAdminEmails ? undefined : admin.email,
+            from: fromEmail,
+            replyTo: admin.email,
+            subject,
+            text: emailBody,
+            attachments: [attachment],
+          })
+        } catch (emailError) {
+          console.error('Failed to send results email:', emailError)
+          return { success: false, error: 'Failed to send email. Please try again.' }
+        }
       }
     }
 
