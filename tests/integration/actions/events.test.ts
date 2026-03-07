@@ -129,12 +129,12 @@ vi.mock('@/lib/email/sendgrid', () => ({
 vi.mock('@/lib/email/results-spreadsheet', () => ({
   generateAcpXlsx: vi.fn().mockResolvedValue({
     buffer: Buffer.from('mock-xlsx-content'),
-    filename: 'ACP_Homologation_Test_Event_2025-01-15.xlsx',
+    filename: '20250115-Test_Event200.xlsx',
     mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   }),
   generateAcpCsv: vi.fn().mockReturnValue({
     content: 'NOM,PRENOM\nDoe,John',
-    filename: 'ACP_Homologation_Test_Event_2025-01-15.csv',
+    filename: '20250115-Test_Event200.csv',
     mimeType: 'text/csv',
   }),
 }))
@@ -236,11 +236,12 @@ describe('submitEventResults', () => {
     expect(result.error).toBe('Only completed events can have results submitted')
   })
 
-  it('sends email with spreadsheet attachment when event has results', async () => {
-    // Mock event found (completed with distance_km)
+  it('sends email with spreadsheet attachment for brevet events', async () => {
+    // Mock event found (completed brevet with distance_km)
     mockModule.__mockEventFound({
       id: 'test-event-id',
       status: 'completed',
+      event_type: 'brevet',
       name: 'Test Event',
       event_date: '2025-01-15',
       distance_km: 200,
@@ -286,12 +287,54 @@ describe('submitEventResults', () => {
       expect.objectContaining({
         attachments: expect.arrayContaining([
           expect.objectContaining({
-            filename: expect.stringContaining('ACP_Homologation'),
+            filename: expect.stringMatching(/^\d{8}-.+\.xlsx$/),
             disposition: 'attachment',
           }),
         ]),
       })
     )
+  })
+
+  it('does not send email for populaire events', async () => {
+    mockModule.__mockEventFound({
+      id: 'test-event-id',
+      status: 'completed',
+      event_type: 'populaire',
+      name: 'Test Populaire',
+      event_date: '2025-01-15',
+      distance_km: 100,
+      chapters: { name: 'Toronto' },
+    })
+
+    // Mock results query
+    mockModule.__queryBuilder.then.mockImplementationOnce((resolve) => {
+      resolve({
+        data: [
+          {
+            riders: { first_name: 'John', last_name: 'Doe', gender: 'M' },
+            status: 'finished',
+            finish_time: '5:30:00',
+            note: null,
+          },
+        ],
+        error: null,
+      })
+    })
+
+    // Mock the status update
+    mockModule.__mockUpdateSuccess()
+
+    // Mock chapter query for revalidation
+    mockModule.__mockEventFound({ slug: 'toronto' })
+
+    process.env.SENDGRID_API_KEY = 'test-key'
+    const result = await submitEventResults('test-event-id')
+    delete process.env.SENDGRID_API_KEY
+
+    expect(result.success).toBe(true)
+
+    const { sendgrid } = await import('@/lib/email/sendgrid')
+    expect(sendgrid.send).not.toHaveBeenCalled()
   })
 })
 

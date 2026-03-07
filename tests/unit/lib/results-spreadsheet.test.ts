@@ -24,6 +24,7 @@ const sampleData: SpreadsheetData = {
   eventName: 'Spring 200',
   eventDate: '2025-04-15',
   distanceKm: 200,
+  chapterName: 'Toronto',
   results: sampleResults,
 }
 
@@ -39,99 +40,118 @@ describe('generateAcpXlsx', () => {
 
   it('generates correct filename', async () => {
     const result = await generateAcpXlsx(sampleData)
-    expect(result.filename).toBe('ACP_Homologation_Spring_200_2025-04-15.xlsx')
+    expect(result.filename).toBe('20250415-Spring-200-200.xlsx')
   })
 
   it('sanitizes special characters in filename', async () => {
     const data = { ...sampleData, eventName: 'Brevet / Populaire (Spring)' }
     const result = await generateAcpXlsx(data)
-    expect(result.filename).toBe(
-      'ACP_Homologation_Brevet___Populaire__Spring__2025-04-15.xlsx'
-    )
+    expect(result.filename).toBe('20250415-Brevet-Populaire-Spring-200.xlsx')
   })
 
-  it('includes event name and distance in header', async () => {
+  // ── Header rows (rows 1-3) ──
+
+  it('has CLUB ORGANISATEUR label in row 1', async () => {
     const result = await generateAcpXlsx(sampleData)
     const workbook = await loadXlsx(result.buffer)
-
     const sheet = workbook.getWorksheet('Homologation')!
-    expect(sheet.getRow(1).getCell(1).value).toBe('Spring 200 — 200km')
+    expect(sheet.getRow(1).getCell(2).value).toBe('CLUB ORGANISATEUR')
   })
 
-  it('includes event date in header', async () => {
+  it('has club name with chapter in row 2', async () => {
     const result = await generateAcpXlsx(sampleData)
     const workbook = await loadXlsx(result.buffer)
-
     const sheet = workbook.getWorksheet('Homologation')!
-    expect(sheet.getRow(2).getCell(1).value).toBe('2025-04-15')
+    expect(sheet.getRow(2).getCell(2).value).toBe('Randonneurs Ontario Toronto')
   })
 
-  it('includes column headers in row 4', async () => {
+  it('includes event date in row 2', async () => {
     const result = await generateAcpXlsx(sampleData)
     const workbook = await loadXlsx(result.buffer)
-
     const sheet = workbook.getWorksheet('Homologation')!
-    const headerRow = sheet.getRow(4)
-    expect(headerRow.getCell(1).value).toBe('NOM')
-    expect(headerRow.getCell(2).value).toBe('PRENOM')
-    expect(headerRow.getCell(3).value).toBe('CLUB DU PARTICIPANT')
-    expect(headerRow.getCell(5).value).toBe('CODE ACP')
-    expect(headerRow.getCell(6).value).toBe('TEMPS')
-    expect(headerRow.getCell(7).value).toBe('Medal (x)')
-    expect(headerRow.getCell(8).value).toBe('(F)')
+    expect(sheet.getRow(2).getCell(6).value).toBe('2025-04-15')
   })
+
+  it('includes distance in row 2', async () => {
+    const result = await generateAcpXlsx(sampleData)
+    const workbook = await loadXlsx(result.buffer)
+    const sheet = workbook.getWorksheet('Homologation')!
+    expect(sheet.getRow(2).getCell(7).value).toBe('200 km')
+  })
+
+  it('includes column headers in row 3', async () => {
+    const result = await generateAcpXlsx(sampleData)
+    const workbook = await loadXlsx(result.buffer)
+    const sheet = workbook.getWorksheet('Homologation')!
+    const headerRow = sheet.getRow(3)
+    expect(headerRow.getCell(2).value).toBe('NOM')
+    expect(headerRow.getCell(3).value).toBe('PRENOM')
+    expect(headerRow.getCell(4).value).toBe('CLUB DU PARTICIPANT')
+    expect(headerRow.getCell(6).value).toBe('CODE ACP')
+    expect(headerRow.getCell(7).value).toBe('TEMPS')
+    expect(headerRow.getCell(8).value).toBe('(x)')
+    expect(headerRow.getCell(9).value).toBe('(F)')
+  })
+
+  // ── Data rows (starting at row 4) ──
 
   it('sorts results by last name alphabetically', async () => {
     const result = await generateAcpXlsx(sampleData)
     const workbook = await loadXlsx(result.buffer)
-
     const sheet = workbook.getWorksheet('Homologation')!
-    // Data starts at row 5 (after title, date, blank, headers)
-    expect(sheet.getRow(5).getCell(1).value).toBe('Russwurm')
-    expect(sheet.getRow(6).getCell(1).value).toBe('Smith')
-    expect(sheet.getRow(7).getCell(1).value).toBe('Wiechers-Maxwell')
+    // Data starts at row 4
+    expect(sheet.getRow(4).getCell(2).value).toBe('Russwurm')
+    expect(sheet.getRow(5).getCell(2).value).toBe('Smith')
+    expect(sheet.getRow(6).getCell(2).value).toBe('Wiechers-Maxwell')
   })
 
   it('marks female riders with F in gender column', async () => {
     const result = await generateAcpXlsx(sampleData)
     const workbook = await loadXlsx(result.buffer)
-
     const sheet = workbook.getWorksheet('Homologation')!
-    // Russwurm (row 5) - F
-    expect(sheet.getRow(5).getCell(8).value).toBe('F')
-    // Smith (row 6) - M, should be blank
-    expect(sheet.getRow(6).getCell(8).value).toBe('')
-    // Wiechers-Maxwell (row 7) - F
-    expect(sheet.getRow(7).getCell(8).value).toBe('F')
+    // Col I (9) is gender
+    expect(sheet.getRow(4).getCell(9).value).toBe('F') // Russwurm
+    expect(sheet.getRow(5).getCell(9).value).toBe('') // Smith (M)
+    expect(sheet.getRow(6).getCell(9).value).toBe('F') // Wiechers-Maxwell
   })
 
-  it('strips seconds from finish time', async () => {
+  it('formats finish time as Xh MM', async () => {
     const result = await generateAcpXlsx(sampleData)
     const workbook = await loadXlsx(result.buffer)
-
     const sheet = workbook.getWorksheet('Homologation')!
-    expect(sheet.getRow(6).getCell(6).value).toBe('10:30')
+    // Col G (7) is TEMPS — Smith has 10:30:00
+    expect(sheet.getRow(5).getCell(7).value).toBe('10h 30')
+  })
+
+  it('preserves leading zero in minutes', async () => {
+    const data: SpreadsheetData = {
+      ...sampleData,
+      results: [{ lastName: 'Doe', firstName: 'Jane', finishTime: '9:01:00', gender: 'F' }],
+    }
+    const result = await generateAcpXlsx(data)
+    const workbook = await loadXlsx(result.buffer)
+    const sheet = workbook.getWorksheet('Homologation')!
+    expect(sheet.getRow(4).getCell(7).value).toBe('9h 01')
   })
 
   it('sets club to Randonneurs Ontario for all rows', async () => {
     const result = await generateAcpXlsx(sampleData)
     const workbook = await loadXlsx(result.buffer)
-
     const sheet = workbook.getWorksheet('Homologation')!
-    expect(sheet.getRow(5).getCell(3).value).toBe('Randonneurs Ontario')
-    expect(sheet.getRow(6).getCell(3).value).toBe('Randonneurs Ontario')
-    expect(sheet.getRow(7).getCell(3).value).toBe('Randonneurs Ontario')
+    // Col D (4) is CLUB DU PARTICIPANT
+    expect(sheet.getRow(4).getCell(4).value).toBe('Randonneurs Ontario')
+    expect(sheet.getRow(5).getCell(4).value).toBe('Randonneurs Ontario')
+    expect(sheet.getRow(6).getCell(4).value).toBe('Randonneurs Ontario')
   })
 
   it('handles empty results', async () => {
     const data = { ...sampleData, results: [] }
     const result = await generateAcpXlsx(data)
     const workbook = await loadXlsx(result.buffer)
-
     const sheet = workbook.getWorksheet('Homologation')!
-    // Should have header rows but no data rows
-    expect(sheet.getRow(4).getCell(1).value).toBe('NOM')
-    expect(sheet.getRow(5).getCell(1).value).toBeNull()
+    // Should have 3 header rows but no data rows
+    expect(sheet.getRow(3).getCell(2).value).toBe('NOM')
+    expect(sheet.getRow(4).getCell(2).value).toBeNull()
   })
 
   it('handles null gender', async () => {
@@ -141,9 +161,41 @@ describe('generateAcpXlsx', () => {
     }
     const result = await generateAcpXlsx(data)
     const workbook = await loadXlsx(result.buffer)
-
     const sheet = workbook.getWorksheet('Homologation')!
-    expect(sheet.getRow(5).getCell(8).value).toBe('')
+    expect(sheet.getRow(4).getCell(9).value).toBe('')
+  })
+
+  // ── Styling ──
+
+  it('uses Arial 9pt font on data cells', async () => {
+    const result = await generateAcpXlsx(sampleData)
+    const workbook = await loadXlsx(result.buffer)
+    const sheet = workbook.getWorksheet('Homologation')!
+    const cell = sheet.getRow(4).getCell(2)
+    expect(cell.font.name).toBe('Arial')
+    expect(cell.font.size).toBe(9)
+  })
+
+  it('uses center alignment on data cells', async () => {
+    const result = await generateAcpXlsx(sampleData)
+    const workbook = await loadXlsx(result.buffer)
+    const sheet = workbook.getWorksheet('Homologation')!
+    const cell = sheet.getRow(4).getCell(2)
+    expect(cell.alignment?.horizontal).toBe('center')
+    expect(cell.alignment?.vertical).toBe('middle')
+  })
+
+  it('uses medium border on outer frame', async () => {
+    const result = await generateAcpXlsx(sampleData)
+    const workbook = await loadXlsx(result.buffer)
+    const sheet = workbook.getWorksheet('Homologation')!
+    // Top-left corner
+    const a1 = sheet.getCell('A1')
+    expect(a1.border?.left?.style).toBe('medium')
+    expect(a1.border?.top?.style).toBe('medium')
+    // Right edge of header
+    const i3 = sheet.getCell('I3')
+    expect(i3.border?.right?.style).toBe('medium')
   })
 })
 
@@ -171,25 +223,23 @@ describe('generateAcpCsv', () => {
     expect(lines[2]).toMatch(/,$/)
   })
 
-  it('strips seconds from finish time', () => {
+  it('formats finish time as Xh MM', () => {
     const result = generateAcpCsv(sampleData)
     const lines = result.content.split('\n')
-    expect(lines[2]).toContain('10:30')
-    expect(lines[2]).not.toContain('10:30:00')
+    expect(lines[2]).toContain('10h 30')
+    expect(lines[2]).not.toContain('10:30')
   })
 
   it('generates correct filename', () => {
     const result = generateAcpCsv(sampleData)
-    expect(result.filename).toBe('ACP_Homologation_Spring_200_2025-04-15.csv')
+    expect(result.filename).toBe('20250415-Spring-200-200.csv')
     expect(result.mimeType).toBe('text/csv')
   })
 
   it('escapes fields containing commas', () => {
     const data: SpreadsheetData = {
       ...sampleData,
-      results: [
-        { lastName: 'Smith, Jr.', firstName: 'John', finishTime: '10:00:00', gender: 'M' },
-      ],
+      results: [{ lastName: 'Smith, Jr.', firstName: 'John', finishTime: '10:00:00', gender: 'M' }],
     }
     const result = generateAcpCsv(data)
     const lines = result.content.split('\n')
@@ -199,9 +249,7 @@ describe('generateAcpCsv', () => {
   it('escapes fields containing quotes', () => {
     const data: SpreadsheetData = {
       ...sampleData,
-      results: [
-        { lastName: 'O"Brien', firstName: 'Pat', finishTime: '10:00:00', gender: 'M' },
-      ],
+      results: [{ lastName: 'O"Brien', firstName: 'Pat', finishTime: '10:00:00', gender: 'M' }],
     }
     const result = generateAcpCsv(data)
     const lines = result.content.split('\n')
