@@ -1,6 +1,6 @@
 # Event Results Spreadsheet (ACP Homologation)
 
-When an admin submits results for a **brevet** or **fleche** event, the system generates an ACP (Audax Club Parisien) homologation spreadsheet and attaches it to the email sent to the VP of Brevet Administration. Populaire and permanent events do not send an email.
+When an admin submits results for a **brevet**, **fleche**, or **populaire** event, the system generates an ACP (Audax Club Parisien) homologation spreadsheet and attaches it to the email sent to the VP of Brevet Administration. Permanent events do not send an email.
 
 ## Format
 

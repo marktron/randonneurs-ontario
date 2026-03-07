@@ -295,14 +295,14 @@ describe('submitEventResults', () => {
     )
   })
 
-  it('does not send email for populaire events', async () => {
+  it('does not send email for permanent events', async () => {
     mockModule.__mockEventFound({
       id: 'test-event-id',
       status: 'completed',
-      event_type: 'populaire',
-      name: 'Test Populaire',
+      event_type: 'permanent',
+      name: 'Test Permanent',
       event_date: '2025-01-15',
-      distance_km: 100,
+      distance_km: 200,
       chapters: { name: 'Toronto' },
     })
 
@@ -313,7 +313,7 @@ describe('submitEventResults', () => {
           {
             riders: { first_name: 'John', last_name: 'Doe', gender: 'M' },
             status: 'finished',
-            finish_time: '5:30:00',
+            finish_time: '10:30:00',
             note: null,
           },
         ],

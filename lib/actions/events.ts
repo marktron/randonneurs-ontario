@@ -506,8 +506,8 @@ export async function submitEventResults(eventId: string): Promise<ActionResult>
     // Only finishers with a finish time are included in email and spreadsheet
     const finishedResults = typedResults.filter((r) => r.status === 'finished' && r.finish_time)
 
-    // Send results email only for brevets and fleches
-    const requiresEmail = typedEvent.event_type === 'brevet' || typedEvent.event_type === 'fleche'
+    // Send results email for brevets, fleches, and populaires (not permanents)
+    const requiresEmail = typedEvent.event_type !== 'permanent'
 
     if (requiresEmail) {
       const eventDate = parseLocalDate(typedEvent.event_date).toLocaleDateString('en-CA', {
