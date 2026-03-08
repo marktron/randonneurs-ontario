@@ -15,7 +15,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { searchRiders, createRider, type RiderSearchResult } from '@/lib/actions/riders'
-import { createResult } from '@/lib/actions/results'
+import { createResult, addRegistration } from '@/lib/actions/results'
 import { toast } from 'sonner'
 import { Loader2, Plus, Search, UserPlus } from 'lucide-react'
 
@@ -23,6 +23,7 @@ interface AddRiderDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   eventId: string
+  eventStatus: string | null
   season: number | null
   distanceKm: number
   existingRiderIds: Set<string>
@@ -32,10 +33,12 @@ export function AddRiderDialog({
   open,
   onOpenChange,
   eventId,
+  eventStatus,
   season,
   distanceKm,
   existingRiderIds,
 }: AddRiderDialogProps) {
+  const isScheduled = eventStatus === 'scheduled'
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [mode, setMode] = useState<'search' | 'create'>('search')
@@ -93,20 +96,22 @@ export function AddRiderDialog({
     if (!selectedRider) return
 
     startTransition(async () => {
-      const result = await createResult({
-        eventId,
-        riderId: selectedRider.id,
-        status: 'pending',
-        season: season ?? new Date().getFullYear(),
-        distanceKm,
-      })
+      const res = isScheduled
+        ? await addRegistration({ eventId, riderId: selectedRider.id })
+        : await createResult({
+            eventId,
+            riderId: selectedRider.id,
+            status: 'pending',
+            season: season ?? new Date().getFullYear(),
+            distanceKm,
+          })
 
-      if (result.success) {
+      if (res.success) {
         toast.success(`Added ${selectedRider.first_name} ${selectedRider.last_name}`)
         router.refresh()
         onOpenChange(false)
       } else {
-        toast.error(result.error || 'Failed to add rider')
+        toast.error(res.error || 'Failed to add rider')
       }
     })
   }
@@ -130,21 +135,23 @@ export function AddRiderDialog({
         return
       }
 
-      // Then create the result
-      const resultRes = await createResult({
-        eventId,
-        riderId: createRes.riderId,
-        status: 'pending',
-        season: season ?? new Date().getFullYear(),
-        distanceKm,
-      })
+      // Then add to event as registration or result
+      const addRes = isScheduled
+        ? await addRegistration({ eventId, riderId: createRes.riderId })
+        : await createResult({
+            eventId,
+            riderId: createRes.riderId,
+            status: 'pending',
+            season: season ?? new Date().getFullYear(),
+            distanceKm,
+          })
 
-      if (resultRes.success) {
+      if (addRes.success) {
         toast.success(`Added ${firstName} ${lastName}`)
         router.refresh()
         onOpenChange(false)
       } else {
-        toast.error(resultRes.error || 'Failed to add rider to event')
+        toast.error(addRes.error || 'Failed to add rider to event')
       }
     })
   }
@@ -154,7 +161,12 @@ export function AddRiderDialog({
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Add Rider</DialogTitle>
-          <DialogDescription>Search for an existing rider or create a new one.</DialogDescription>
+          <DialogDescription>
+            Search for an existing rider or create a new one.
+            {isScheduled
+              ? ' They will be added as a registration.'
+              : ' They will be added to the results.'}
+          </DialogDescription>
         </DialogHeader>
 
         {mode === 'search' ? (

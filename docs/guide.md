@@ -81,7 +81,7 @@ For each rider, you can:
 - **Add a note** if needed.
 - **View rider-submitted evidence**: if a rider submitted their own result, you'll see their GPX file and control card photos.
 
-You can also add riders who didn't pre-register using the "Add Rider" button. Search by name to find them in the system. This should probably never need to be used.
+You can also add riders using the "Add Rider" button, which is available for both scheduled and completed events. For scheduled events, this adds a registration; for completed events, it adds a result entry. Search by name to find an existing rider, or create a new rider directly from the dialog.
 
 When all results are entered, use the "Submit Results" button to have the system send the results to the VP of Ride Administration (you will be cc'd on the email). This changes the event status to "submitted."
 

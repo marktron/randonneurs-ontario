@@ -576,7 +576,9 @@ export function EventResultsManager({
               </a>
             </Button>
           )}
-          {isPastEvent && (
+          {(eventStatus === 'scheduled' ||
+            eventStatus === 'completed' ||
+            eventStatus === 'submitted') && (
             <Button variant="outline" size="sm" onClick={() => setAddRiderOpen(true)}>
               <Plus className="mr-2 h-4 w-4" />
               Add Rider
@@ -651,6 +653,7 @@ export function EventResultsManager({
         open={addRiderOpen}
         onOpenChange={setAddRiderOpen}
         eventId={eventId}
+        eventStatus={eventStatus}
         season={season}
         distanceKm={distanceKm}
         existingRiderIds={existingRiderIds}

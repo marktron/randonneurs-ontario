@@ -8,6 +8,7 @@ import { logAuditEvent } from '@/lib/audit-log'
 import { handleSupabaseError, createActionResult } from '@/lib/errors'
 import type { ActionResult } from '@/types/actions'
 import type {
+  RegistrationInsert,
   ResultInsert,
   ResultUpdate,
   ResultWithEventId,
@@ -118,6 +119,67 @@ export async function createResult(data: CreateResultData): Promise<ActionResult
     entityType: 'result',
     entityId: eventId,
     description: `Created result for ${eventName}: ${riderName}, status ${status}`,
+  })
+
+  return createActionResult()
+}
+
+export interface AddRegistrationData {
+  eventId: string
+  riderId: string
+}
+
+export async function addRegistration(data: AddRegistrationData): Promise<ActionResult> {
+  const admin = await requireAdmin()
+
+  const { eventId, riderId } = data
+
+  // Check if registration already exists for this rider/event
+  const { data: existing } = await getSupabaseAdmin()
+    .from('registrations')
+    .select('id')
+    .eq('event_id', eventId)
+    .eq('rider_id', riderId)
+    .single()
+
+  if (existing) {
+    return { success: false, error: 'This rider is already registered for this event' }
+  }
+
+  const insertData: RegistrationInsert = {
+    event_id: eventId,
+    rider_id: riderId,
+    status: 'registered',
+  }
+
+  const { error } = await getSupabaseAdmin().from('registrations').insert(insertData)
+
+  if (error) {
+    return handleSupabaseError(
+      error,
+      { operation: 'addRegistration' },
+      'Failed to add registration'
+    )
+  }
+
+  revalidatePath(`/admin/events/${eventId}`)
+
+  // Look up names for audit log
+  const [{ data: eventData }, { data: riderData }] = await Promise.all([
+    getSupabaseAdmin().from('events').select('name').eq('id', eventId).single(),
+    getSupabaseAdmin().from('riders').select('first_name, last_name').eq('id', riderId).single(),
+  ])
+  const eventName = (eventData as { name: string } | null)?.name || eventId
+  const riderName = riderData
+    ? `${(riderData as { first_name: string; last_name: string }).first_name} ${(riderData as { first_name: string; last_name: string }).last_name}`
+    : riderId
+
+  await logAuditEvent({
+    adminId: admin.id,
+    action: 'create',
+    entityType: 'result',
+    entityId: eventId,
+    description: `Added registration for ${eventName}: ${riderName}`,
   })
 
   return createActionResult()

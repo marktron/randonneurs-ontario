@@ -92,14 +92,12 @@ vi.mock('@/lib/supabase-server', () => {
 })
 
 vi.mock('@/lib/auth/get-admin', () => ({
-  requireAdmin: vi
-    .fn()
-    .mockResolvedValue({
-      id: 'admin-1',
-      email: 'admin@test.com',
-      name: 'Test Admin',
-      role: 'admin',
-    }),
+  requireAdmin: vi.fn().mockResolvedValue({
+    id: 'admin-1',
+    email: 'admin@test.com',
+    name: 'Test Admin',
+    role: 'admin',
+  }),
 }))
 
 vi.mock('next/cache', () => ({
@@ -112,7 +110,13 @@ vi.mock('@/lib/chapter-config', () => ({
 }))
 
 // Import after mocks
-import { createResult, updateResult, deleteResult, createBulkResults } from '@/lib/actions/results'
+import {
+  createResult,
+  updateResult,
+  deleteResult,
+  createBulkResults,
+  addRegistration,
+} from '@/lib/actions/results'
 
 const mockModule = await vi.importMock<{
   __queryBuilder: Record<string, ReturnType<typeof vi.fn>>
@@ -295,6 +299,53 @@ describe('deleteResult', () => {
     })
 
     const result = await deleteResult('result-1')
+
+    expect(result.success).toBe(false)
+    expect(result.error).toBeDefined()
+  })
+})
+
+describe('addRegistration', () => {
+  beforeEach(() => {
+    mockModule.__reset()
+    vi.clearAllMocks()
+  })
+
+  it('returns error when registration already exists', async () => {
+    mockModule.__mockExistingResult({ id: 'reg-1' })
+
+    const result = await addRegistration({
+      eventId: 'event-1',
+      riderId: 'rider-1',
+    })
+
+    expect(result.success).toBe(false)
+    expect(result.error).toBe('This rider is already registered for this event')
+  })
+
+  it('creates registration successfully when no duplicate', async () => {
+    mockModule.__mockNoExistingResult()
+    mockModule.__mockInsertSuccess()
+
+    const result = await addRegistration({
+      eventId: 'event-1',
+      riderId: 'rider-1',
+    })
+
+    expect(result.success).toBe(true)
+  })
+
+  it('handles database errors', async () => {
+    mockModule.__mockNoExistingResult()
+    mockModule.__mockInsertError({
+      code: '23503',
+      message: 'foreign key violation',
+    })
+
+    const result = await addRegistration({
+      eventId: 'invalid-event',
+      riderId: 'rider-1',
+    })
 
     expect(result.success).toBe(false)
     expect(result.error).toBeDefined()
