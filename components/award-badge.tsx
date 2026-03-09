@@ -1,6 +1,6 @@
 import { cn } from '@/lib/utils'
 import { devData } from '@/lib/dev-data'
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 
 const colorClassesMap = {
   'Completed Devil Week': 'bg-red-200 dark:bg-red-800 text-red-800 dark:text-red-200',
@@ -75,14 +75,12 @@ export function AwardBadge({ award, className }: AwardBadgeProps) {
   }
 
   return (
-    <TooltipProvider>
-      <Tooltip>
-        <TooltipTrigger asChild>{badge}</TooltipTrigger>
-        <TooltipContent>
-          <p className="max-w-xs">{description}</p>
-        </TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
+    <Tooltip>
+      <TooltipTrigger asChild>{badge}</TooltipTrigger>
+      <TooltipContent>
+        <p className="max-w-xs">{description}</p>
+      </TooltipContent>
+    </Tooltip>
   )
 }
 
@@ -142,14 +140,12 @@ export function AwardSummary({ awards, className, prepend }: AwardSummaryProps) 
         }
 
         return (
-          <TooltipProvider key={award.title}>
-            <Tooltip>
-              <TooltipTrigger asChild>{badge}</TooltipTrigger>
-              <TooltipContent>
-                <p className="max-w-xs">{description}</p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
+          <Tooltip key={award.title}>
+            <TooltipTrigger asChild>{badge}</TooltipTrigger>
+            <TooltipContent>
+              <p className="max-w-xs">{description}</p>
+            </TooltipContent>
+          </Tooltip>
         )
       })}
     </div>

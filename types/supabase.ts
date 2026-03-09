@@ -828,6 +828,13 @@ export type Database = {
           season: number
         }[]
       }
+      get_event_rider_counts: {
+        Args: { event_ids: string[] }
+        Returns: {
+          event_id: string
+          rider_count: number
+        }[]
+      }
       get_granite_anvil_completion_counts: {
         Args: { limit_count?: number }
         Returns: {

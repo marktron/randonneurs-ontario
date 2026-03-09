@@ -55,12 +55,9 @@ async function getEvents(
       event_type,
       status,
       chapter_id,
-      chapters (name),
-      registrations (count),
-      results (count)
+      chapters (name)
     `
     )
-    .in('registrations.status', ['registered', 'incomplete: membership'])
     .gte('event_date', startDate)
     .lte('event_date', endDate)
     .order('event_date', { ascending: true })
@@ -74,7 +71,29 @@ async function getEvents(
 
   const { data } = await query.limit(200)
 
-  return (data as EventForAdminList[]) ?? []
+  const events = (data as EventForAdminList[]) ?? []
+
+  if (events.length === 0) return events
+
+  // Get deduplicated rider counts across registrations and results
+  const eventIds = events.map((e) => e.id)
+  const { data: counts } = await getSupabaseAdmin().rpc('get_event_rider_counts', {
+    event_ids: eventIds,
+  })
+
+  if (counts) {
+    const countMap = new Map(
+      (counts as Array<{ event_id: string; rider_count: number }>).map((c) => [
+        c.event_id,
+        c.rider_count,
+      ])
+    )
+    for (const event of events) {
+      event.rider_count = countMap.get(event.id) ?? 0
+    }
+  }
+
+  return events
 }
 
 interface AdminEventsPageProps {
@@ -169,9 +188,7 @@ export default async function AdminEventsPage({ searchParams }: AdminEventsPageP
                     })}
                   </TableCell>
                   <TableCell>{event.distance_km} km</TableCell>
-                  <TableCell className="tabular-nums">
-                    {(event.registrations?.[0]?.count ?? 0) + (event.results?.[0]?.count ?? 0)}
-                  </TableCell>
+                  <TableCell className="tabular-nums">{event.rider_count ?? 0}</TableCell>
                   <TableCell>{getStatusBadge(event.status ?? 'scheduled')}</TableCell>
                 </ClickableTableRow>
               ))
