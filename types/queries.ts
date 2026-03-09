@@ -71,7 +71,7 @@ export type EventWithRouteSlug = Pick<
   Event,
   'id' | 'name' | 'event_date' | 'distance_km' | 'event_type' | 'start_location'
 > & {
-  routes: Pick<Route, 'slug'> | null
+  routes: (Pick<Route, 'slug'> & { chapters?: Pick<Chapter, 'slug'> | null }) | null
 }
 
 /**

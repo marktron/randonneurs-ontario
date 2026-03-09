@@ -248,6 +248,112 @@ describe('getChapterResults', () => {
 
     expect(result).toEqual([])
   })
+
+  it('includes routeChapterSlug from route chapters for permanent results', async () => {
+    const mockEvents = [
+      {
+        id: 'perm-event-1',
+        name: 'Frosty',
+        event_date: '2025-03-11',
+        distance_km: 200,
+        event_type: 'permanent',
+        start_location: 'Goderich',
+        routes: { slug: 'frosty-200', chapters: { slug: 'huron' } },
+        public_results: [
+          {
+            id: 'result-1',
+            finish_time: '8:56',
+            status: 'finished',
+            team_name: null,
+            distance_km: null,
+            rider_slug: 'eric-darcy',
+            first_name: 'Eric',
+            last_name: "D'Arcy",
+          },
+        ],
+      },
+    ]
+
+    // Mock events query
+    mockModule.__mockEventsFound(mockEvents)
+    // Mock awards query (empty)
+    mockModule.__mockEventsFound([])
+
+    const result = await getChapterResults('permanent', 2025)
+
+    expect(result).toHaveLength(1)
+    expect(result[0].routeSlug).toBe('frosty-200')
+    expect(result[0].routeChapterSlug).toBe('huron')
+  })
+
+  it('returns null routeChapterSlug when route has no chapter', async () => {
+    const mockEvents = [
+      {
+        id: 'perm-event-2',
+        name: 'Some Route',
+        event_date: '2025-04-01',
+        distance_km: 200,
+        event_type: 'permanent',
+        start_location: null,
+        routes: { slug: 'some-route-200', chapters: null },
+        public_results: [
+          {
+            id: 'result-2',
+            finish_time: '10:00',
+            status: 'finished',
+            team_name: null,
+            distance_km: null,
+            rider_slug: 'test-rider',
+            first_name: 'Test',
+            last_name: 'Rider',
+          },
+        ],
+      },
+    ]
+
+    mockModule.__mockEventsFound(mockEvents)
+    mockModule.__mockEventsFound([])
+
+    const result = await getChapterResults('permanent', 2025)
+
+    expect(result).toHaveLength(1)
+    expect(result[0].routeChapterSlug).toBeNull()
+  })
+
+  it('converts db chapter slug to URL slug for routeChapterSlug', async () => {
+    const mockEvents = [
+      {
+        id: 'perm-event-3',
+        name: 'Some Simcoe Route',
+        event_date: '2025-06-01',
+        distance_km: 200,
+        event_type: 'permanent',
+        start_location: null,
+        routes: { slug: 'simcoe-route-200', chapters: { slug: 'simcoe' } },
+        public_results: [
+          {
+            id: 'result-3',
+            finish_time: '9:00',
+            status: 'finished',
+            team_name: null,
+            distance_km: null,
+            rider_slug: 'test-rider',
+            first_name: 'Test',
+            last_name: 'Rider',
+          },
+        ],
+      },
+    ]
+
+    mockModule.__mockEventsFound(mockEvents)
+    mockModule.__mockEventsFound([])
+
+    const result = await getChapterResults('permanent', 2025)
+
+    expect(result).toHaveLength(1)
+    // 'simcoe' db slug should be converted to 'simcoe-muskoka' URL slug
+    expect(result[0].routeChapterSlug).toBe('simcoe-muskoka')
+  })
 })
 
 describe('getRiderBySlug', () => {

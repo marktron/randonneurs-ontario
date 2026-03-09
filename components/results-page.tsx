@@ -182,14 +182,14 @@ export function ResultsPage({
           </p>
         ) : (
           <div className="space-y-16">
-            {events.map((event) => {
+            {events.map((event, index) => {
               // Count riders excluding DNS
               const participants = event.riders.filter((r) => r.time !== 'DNS')
               const isFleche = event.teams && event.teams.length > 0
 
               return (
                 <article
-                  key={`${event.date}-${event.name}-${event.distance}`}
+                  key={event.id ?? `${event.date}-${event.name}-${index}`}
                   id={`event-${event.date}`}
                   className="scroll-mt-24"
                   {...devData('events', event.id)}
@@ -201,7 +201,7 @@ export function ResultsPage({
                         <>Flèche Destination: {event.startLocation || 'TBD'}</>
                       ) : event.routeSlug ? (
                         <Link
-                          href={`/routes/${chapterSlug}/${event.routeSlug}`}
+                          href={`/routes/${event.routeChapterSlug ?? chapterSlug}/${event.routeSlug}`}
                           className="hover:text-primary transition-colors"
                         >
                           {event.name} {event.distance}

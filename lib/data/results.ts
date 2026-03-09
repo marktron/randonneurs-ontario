@@ -50,6 +50,7 @@ export interface EventResult {
   distance: string
   riders: RiderResult[]
   routeSlug: string | null
+  routeChapterSlug?: string | null
   eventType?: string
   startLocation?: string | null
   teams?: TeamResult[]
@@ -183,7 +184,7 @@ const getChapterResultsInner = cache(
         .select(
           `
         id, name, event_date, distance_km, event_type, start_location,
-        routes (slug),
+        routes (slug, chapters (slug)),
         public_results (
           id, finish_time, status, team_name, distance_km, rider_slug, first_name, last_name
         )
@@ -338,6 +339,9 @@ const getChapterResultsInner = cache(
         distance: event.distance_km.toString(),
         riders,
         routeSlug: event.routes?.slug ?? null,
+        routeChapterSlug: event.routes?.chapters?.slug
+          ? getUrlSlugFromDbSlug(event.routes.chapters.slug)
+          : null,
         eventType: event.event_type,
         startLocation: event.start_location,
         teams,
