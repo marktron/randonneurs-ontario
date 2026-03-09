@@ -125,6 +125,23 @@ export interface GraniteAnvilRecords {
 }
 
 /**
+ * A recipient of a specific award (e.g., Randonneur 5000/10000)
+ */
+export interface AwardRecipient {
+  riderSlug: string
+  riderName: string
+  awardYear: number
+}
+
+/**
+ * Award recipient records
+ */
+export interface AwardRecipientRecords {
+  r10000: AwardRecipient[]
+  r5000: AwardRecipient[]
+}
+
+/**
  * All records data combined
  */
 export interface AllRecords {

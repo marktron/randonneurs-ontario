@@ -80,6 +80,11 @@ const mockStreakRecords = [
 ]
 
 // RPC response mapping
+const mockAwardRecipients = [
+  { rider_slug: 'john-doe', rider_name: 'John Doe', award_year: 2020 },
+  { rider_slug: 'jane-smith', rider_name: 'Jane Smith', award_year: 2022 },
+]
+
 const rpcResponses: Record<string, unknown[]> = {
   get_rider_completion_counts: mockRiderRecords,
   get_rider_distance_totals: mockRiderRecords,
@@ -100,6 +105,7 @@ const rpcResponses: Record<string, unknown[]> = {
   get_granite_anvil_fastest_times: mockTimeRecords,
   get_rider_longest_streaks: mockStreakRecords,
   get_rider_sr_streaks: mockStreakRecords,
+  get_award_recipients: mockAwardRecipients,
 }
 
 // Mock supabase module
@@ -122,6 +128,7 @@ import {
   getRouteRecords,
   getPbpRecords,
   getGraniteAnvilRecords,
+  getAwardRecipients,
 } from '@/lib/data/records'
 
 describe('Records Data Module', () => {
@@ -344,6 +351,32 @@ describe('Records Data Module', () => {
       const calledFunctions = rpcCalls.map((c) => c.functionName)
       expect(calledFunctions).toContain('get_granite_anvil_completion_counts')
       expect(calledFunctions).toContain('get_granite_anvil_fastest_times')
+    })
+  })
+
+  describe('getAwardRecipients', () => {
+    it('returns correctly structured award recipients', async () => {
+      const result = await getAwardRecipients()
+
+      expect(result).toHaveProperty('r10000')
+      expect(result).toHaveProperty('r5000')
+
+      expect(result.r10000[0]).toMatchObject({
+        riderSlug: expect.any(String),
+        riderName: expect.any(String),
+        awardYear: expect.any(Number),
+      })
+    })
+
+    it('calls RPC with correct award slugs', async () => {
+      await getAwardRecipients()
+
+      const calledFunctions = rpcCalls.filter((c) => c.functionName === 'get_award_recipients')
+      expect(calledFunctions).toHaveLength(2)
+
+      const slugs = calledFunctions.map((c) => (c.params as { p_award_slug: string }).p_award_slug)
+      expect(slugs).toContain('r-10000')
+      expect(slugs).toContain('r-5000')
     })
   })
 })

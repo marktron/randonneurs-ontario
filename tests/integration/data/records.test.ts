@@ -40,7 +40,12 @@ vi.mock('@/lib/utils', () => ({
 
 vi.stubEnv('NEXT_PUBLIC_CURRENT_SEASON', '2025')
 
-import { getLifetimeRecords, getSeasonRecords, getCurrentSeasonDistance } from '@/lib/data/records'
+import {
+  getLifetimeRecords,
+  getSeasonRecords,
+  getCurrentSeasonDistance,
+  getAwardRecipients,
+} from '@/lib/data/records'
 
 describe('getLifetimeRecords', () => {
   beforeEach(() => {
@@ -102,5 +107,57 @@ describe('getCurrentSeasonDistance', () => {
         p_season: 2025,
       })
     )
+  })
+})
+
+describe('getAwardRecipients', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('returns empty arrays when no data', async () => {
+    const result = await getAwardRecipients()
+
+    expect(result.r10000).toEqual([])
+    expect(result.r5000).toEqual([])
+  })
+
+  it('calls RPC with correct award slugs', async () => {
+    const mock = await vi.importMock<{ __rpcMock: ReturnType<typeof vi.fn> }>('@/lib/supabase')
+    await getAwardRecipients()
+
+    expect(mock.__rpcMock).toHaveBeenCalledWith('get_award_recipients', {
+      p_award_slug: 'r-10000',
+    })
+    expect(mock.__rpcMock).toHaveBeenCalledWith('get_award_recipients', {
+      p_award_slug: 'r-5000',
+    })
+  })
+
+  it('transforms data correctly', async () => {
+    const mock = await vi.importMock<{ __rpcMock: ReturnType<typeof vi.fn> }>('@/lib/supabase')
+    mock.__rpcMock.mockResolvedValue({
+      data: [{ rider_slug: 'jane-doe', rider_name: 'Jane Doe', award_year: 2020 }],
+      error: null,
+    })
+
+    const result = await getAwardRecipients()
+
+    expect(result.r10000).toEqual([
+      { riderSlug: 'jane-doe', riderName: 'Jane Doe', awardYear: 2020 },
+    ])
+  })
+
+  it('handles RPC errors gracefully', async () => {
+    const mock = await vi.importMock<{ __rpcMock: ReturnType<typeof vi.fn> }>('@/lib/supabase')
+    mock.__rpcMock.mockResolvedValueOnce({
+      data: null,
+      error: { message: 'RPC error' },
+    })
+
+    const result = await getAwardRecipients()
+
+    expect(result.r10000).toEqual([])
+    expect(result.r5000).toEqual([])
   })
 })

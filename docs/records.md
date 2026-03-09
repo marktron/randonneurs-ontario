@@ -28,6 +28,15 @@ Only streaks that could still be active are shown (ending in current or previous
 
 Streaks that ended more than one season ago are excluded since they can no longer be extended.
 
+### ACP Awards
+
+Recipients of distance awards from Audax Club Parisien. These lists show all recipients (not ranked), sorted by most recent first. Initially limited to 10 entries with a "Show all" toggle to expand the full list.
+
+| Record           | Description                                  |
+| ---------------- | -------------------------------------------- |
+| Randonneur 10000 | 10,000+ km in ACP/RM events within six years |
+| Randonneur 5000  | 5,000+ km in ACP/RM events within four years |
+
 ### Season Records
 
 Best single-season performances.
@@ -92,6 +101,9 @@ Records are cached at two different intervals:
 - Award counts use `result_awards` junction table with award slugs:
   - `completed-devil-week`
   - `super-randonneur`
+- Award recipient lists use `result_awards` with slugs:
+  - `r-10000` (Randonneur 10000)
+  - `r-5000` (Randonneur 5000)
 
 ### Files
 
@@ -101,6 +113,7 @@ Records are cached at two different intervals:
 - **Components**:
   - `components/record-section.tsx` - Section container with title
   - `components/record-table.tsx` - Record tables with mobile card fallback
+  - `components/award-recipient-table.tsx` - Client component for award recipient lists with expand/collapse
 
 ### Event Types Included
 

@@ -381,7 +381,7 @@ export type Database = {
           cancelled_at: string | null
           event_id: string
           id: string
-          is_team_captain: boolean
+          is_team_captain: boolean | null
           management_token: string | null
           notes: string | null
           registered_at: string | null
@@ -394,7 +394,7 @@ export type Database = {
           cancelled_at?: string | null
           event_id: string
           id?: string
-          is_team_captain?: boolean
+          is_team_captain?: boolean | null
           management_token?: string | null
           notes?: string | null
           registered_at?: string | null
@@ -407,7 +407,7 @@ export type Database = {
           cancelled_at?: string | null
           event_id?: string
           id?: string
-          is_team_captain?: boolean
+          is_team_captain?: boolean | null
           management_token?: string | null
           notes?: string | null
           registered_at?: string | null
@@ -779,6 +779,14 @@ export type Database = {
       }
     }
     Functions: {
+      get_award_recipients: {
+        Args: { p_award_slug: string }
+        Returns: {
+          award_year: number
+          rider_name: string
+          rider_slug: string
+        }[]
+      }
       get_best_season_distances: {
         Args: { limit_count?: number }
         Returns: {

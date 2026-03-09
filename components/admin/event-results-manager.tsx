@@ -60,7 +60,7 @@ interface Registration {
   status: string | null
   notes: string | null
   team_name: string | null
-  is_team_captain: boolean
+  is_team_captain: boolean | null
   riders: {
     id: string
     first_name: string
@@ -109,7 +109,7 @@ interface Participant {
   registrationStatus: string | null
   membershipType: string | null // membership type for event's season, if any
   registrationTeamName: string | null
-  isTeamCaptain: boolean
+  isTeamCaptain: boolean | null
 }
 
 interface CancelledRegistration {

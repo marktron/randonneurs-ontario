@@ -13,6 +13,8 @@ const colorClassesMap = {
   'Paris-Brest-Paris': 'bg-blue-200 dark:bg-blue-800 text-blue-800 dark:text-blue-200',
   'Granite Anvil': 'bg-fuchsia-200 dark:bg-fuchsia-800 text-fuchsia-800 dark:text-fuchsia-200',
   'Course Record': 'bg-linear-to-tr from-amber-600 to-yellow-500 text-white dark:text-amber-950',
+  'Randonneur 5000': 'bg-teal-200 dark:bg-teal-800 text-teal-800 dark:text-teal-200',
+  'Randonneur 10000': 'bg-purple-200 dark:bg-purple-800 text-purple-800 dark:text-purple-200',
   default: 'bg-zinc-200 dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200',
 } as const
 
@@ -27,6 +29,10 @@ const defaultDescriptions: Record<string, string> = {
   'Paris-Brest-Paris': 'Completed Paris-Brest-Paris',
   'Course Record': 'Fastest recorded time for this route',
   'Granite Anvil': 'Completed the Granite Anvil 1200km brevet',
+  'Randonneur 5000':
+    'Awarded by ACP to recognize finishing ACP and Randonneurs Mondiaux events totaling at least 5000 km within a four-year period.',
+  'Randonneur 10000':
+    'Awarded by ACP to recognize finishing ACP and Randonneurs Mondiaux events totaling at least 10000 km within a six-year period.',
 }
 
 export interface Award {

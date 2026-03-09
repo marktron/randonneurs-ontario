@@ -8,6 +8,7 @@ import {
   RouteRecordTable,
   StreakRecordTable,
 } from '@/components/record-table'
+import { AwardRecipientTable } from '@/components/award-recipient-table'
 import {
   getLifetimeRecords,
   getSeasonRecords,
@@ -16,6 +17,7 @@ import {
   getRouteRecords,
   getPbpRecords,
   getGraniteAnvilRecords,
+  getAwardRecipients,
 } from '@/lib/data/records'
 
 export const revalidate = 3600 // Revalidate every hour (driven by current season data)
@@ -30,16 +32,25 @@ export const metadata = {
 
 export default async function RecordsPage() {
   // Fetch all records in parallel
-  const [lifetime, season, currentSeasonDistance, club, routes, pbp, graniteAnvil] =
-    await Promise.all([
-      getLifetimeRecords(),
-      getSeasonRecords(),
-      getCurrentSeasonDistance(),
-      getClubAchievements(),
-      getRouteRecords(),
-      getPbpRecords(),
-      getGraniteAnvilRecords(),
-    ])
+  const [
+    lifetime,
+    season,
+    currentSeasonDistance,
+    club,
+    routes,
+    pbp,
+    graniteAnvil,
+    awardRecipients,
+  ] = await Promise.all([
+    getLifetimeRecords(),
+    getSeasonRecords(),
+    getCurrentSeasonDistance(),
+    getClubAchievements(),
+    getRouteRecords(),
+    getPbpRecords(),
+    getGraniteAnvilRecords(),
+    getAwardRecipients(),
+  ])
 
   const formatDistance = (km: number) => `${km.toLocaleString()} km`
 
@@ -47,7 +58,7 @@ export default async function RecordsPage() {
     <PageShell>
       <div className="content-container pt-20 md:pt-28">
         <h1 className="font-serif text-4xl md:text-5xl lg:text-6xl tracking-tight">Club Records</h1>
-        <p className="mt-6 text-lg text-muted-foreground leading-relaxed max-w-2xl">
+        <p className="mt-6 text-lg text-muted-foreground leading-relaxed">
           Celebrating the achievements and milestones of our randonneuring community.
         </p>
       </div>
@@ -106,6 +117,38 @@ export default async function RecordsPage() {
             currentSeason={parseInt(currentSeason, 10)}
             valueLabel="Seasons"
           />
+        </div>
+      </RecordSection>
+
+      <RecordSection
+        title="ACP Awards"
+        description={
+          <>
+            Recipients of the{' '}
+            <a
+              href="https://www.audax-club-parisien.com/en/our-organizations/randonneur-10000-en/"
+              className="underline hover:text-foreground"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Randonneur 10000
+            </a>{' '}
+            and{' '}
+            <a
+              href="https://www.audax-club-parisien.com/en/our-organizations/randonneur-5000-en/"
+              className="underline hover:text-foreground"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Randonneur 5000
+            </a>{' '}
+            distance awards from Audax Club Parisien.
+          </>
+        }
+      >
+        <div className="grid gap-10 lg:grid-cols-2">
+          <AwardRecipientTable title="Randonneur 10000" recipients={awardRecipients.r10000} />
+          <AwardRecipientTable title="Randonneur 5000" recipients={awardRecipients.r5000} />
         </div>
       </RecordSection>
 
