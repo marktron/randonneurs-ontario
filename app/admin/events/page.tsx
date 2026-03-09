@@ -60,6 +60,7 @@ async function getEvents(
       results (count)
     `
     )
+    .in('registrations.status', ['registered', 'incomplete: membership'])
     .gte('event_date', startDate)
     .lte('event_date', endDate)
     .order('event_date', { ascending: true })

@@ -125,6 +125,11 @@ function buildRouteUrl(
   return `https://randonneursontario.ca/routes/${chapterSlug}/${routeSlug}`
 }
 
+function buildManagementUrl(managementToken: string): string {
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://randonneursontario.ca'
+  return `${baseUrl}/registration/manage/${managementToken}`
+}
+
 /**
  * Result type for findOrCreateRider helper
  */
@@ -269,7 +274,7 @@ async function createRegistrationRecord(
   status: 'registered' | 'incomplete: membership' = 'registered',
   teamName?: string,
   isTeamCaptain?: boolean
-): Promise<void> {
+): Promise<string> {
   const insertRegistration: RegistrationInsert = {
     event_id: eventId,
     rider_id: riderId,
@@ -279,14 +284,18 @@ async function createRegistrationRecord(
     team_name: teamName || null,
     is_team_captain: isTeamCaptain || false,
   }
-  const { error: registrationError } = await getSupabaseAdmin()
+  const { data: registration, error: registrationError } = await getSupabaseAdmin()
     .from('registrations')
     .upsert(insertRegistration, { onConflict: 'event_id,rider_id' })
+    .select('management_token')
+    .single()
 
-  if (registrationError) {
+  if (registrationError || !registration) {
     console.error('🚨 Error creating registration:', registrationError)
     throw new Error('Failed to complete registration')
   }
+
+  return (registration as { management_token: string }).management_token
 }
 
 // ============================================================================
@@ -404,7 +413,7 @@ export async function registerForEvent(data: RegistrationData): Promise<Registra
 
     if (!membershipResult.found) {
       // Create incomplete registration
-      await createRegistrationRecord(
+      const mgmtToken = await createRegistrationRecord(
         eventId,
         riderId,
         shareRegistration,
@@ -431,6 +440,7 @@ export async function registerForEvent(data: RegistrationData): Promise<Registra
         routeUrl: buildRouteUrl(chapter?.slug, event.routes?.slug),
         notes: notes || undefined,
         membershipStatus: 'none',
+        managementUrl: buildManagementUrl(mgmtToken),
       }).catch((error) => {
         logError(error, {
           operation: 'registerForEvent.sendEmail',
@@ -449,7 +459,7 @@ export async function registerForEvent(data: RegistrationData): Promise<Registra
     if (membershipResult.type === 'Trial Member') {
       const trialUsed = await isTrialUsed(riderId)
       if (trialUsed) {
-        await createRegistrationRecord(
+        const mgmtToken = await createRegistrationRecord(
           eventId,
           riderId,
           shareRegistration,
@@ -475,6 +485,7 @@ export async function registerForEvent(data: RegistrationData): Promise<Registra
           routeUrl: buildRouteUrl(chapter?.slug, event.routes?.slug),
           notes: notes || undefined,
           membershipStatus: 'trial-used',
+          managementUrl: buildManagementUrl(mgmtToken),
         }).catch((error) => {
           logError(error, {
             operation: 'registerForEvent.sendEmail',
@@ -497,7 +508,7 @@ export async function registerForEvent(data: RegistrationData): Promise<Registra
     }
 
     // Create registration
-    await createRegistrationRecord(
+    const mgmtToken = await createRegistrationRecord(
       eventId,
       riderId,
       shareRegistration,
@@ -525,6 +536,7 @@ export async function registerForEvent(data: RegistrationData): Promise<Registra
       notes: notes || undefined,
       membershipType: membershipResult.type,
       membershipStatus: 'valid',
+      managementUrl: buildManagementUrl(mgmtToken),
     }).catch((error) => {
       logError(error, {
         operation: 'registerForEvent.sendEmail',
@@ -723,7 +735,7 @@ export async function registerForPermanent(
 
     if (!membershipResult.found) {
       // Create incomplete registration
-      await createRegistrationRecord(
+      const mgmtToken = await createRegistrationRecord(
         eventId,
         riderId,
         shareRegistration,
@@ -748,6 +760,7 @@ export async function registerForPermanent(
         routeUrl: buildRouteUrl(chapter?.slug, route.slug),
         notes: notes || undefined,
         membershipStatus: 'none',
+        managementUrl: buildManagementUrl(mgmtToken),
       }).catch((error) => {
         logError(error, {
           operation: 'registerForPermanent.sendEmail',
@@ -766,7 +779,7 @@ export async function registerForPermanent(
     if (membershipResult.type === 'Trial Member') {
       const trialUsed = await isTrialUsed(riderId)
       if (trialUsed) {
-        await createRegistrationRecord(
+        const mgmtToken = await createRegistrationRecord(
           eventId,
           riderId,
           shareRegistration,
@@ -790,6 +803,7 @@ export async function registerForPermanent(
           routeUrl: buildRouteUrl(chapter?.slug, route.slug),
           notes: notes || undefined,
           membershipStatus: 'trial-used',
+          managementUrl: buildManagementUrl(mgmtToken),
         }).catch((error) => {
           logError(error, {
             operation: 'registerForPermanent.sendEmail',
@@ -812,7 +826,7 @@ export async function registerForPermanent(
     }
 
     // Create registration
-    await createRegistrationRecord(eventId, riderId, shareRegistration, notes)
+    const mgmtToken = await createRegistrationRecord(eventId, riderId, shareRegistration, notes)
 
     // Send confirmation email (fire-and-forget)
     const chapter = route.chapters
@@ -832,6 +846,7 @@ export async function registerForPermanent(
       notes: notes || undefined,
       membershipType: membershipResult.type,
       membershipStatus: 'valid',
+      managementUrl: buildManagementUrl(mgmtToken),
     }).catch((error) => {
       logError(error, {
         operation: 'registerForPermanent.sendEmail',
@@ -1011,7 +1026,7 @@ export async function completeRegistrationWithRider(
   const membershipResult = await getMembershipForRider(riderId, trimmedFirstName, trimmedLastName)
 
   if (!membershipResult.found) {
-    await createRegistrationRecord(
+    const mgmtToken = await createRegistrationRecord(
       eventId,
       riderId,
       shareRegistration,
@@ -1034,6 +1049,7 @@ export async function completeRegistrationWithRider(
       routeUrl: buildRouteUrl(chapter?.slug, event.routes?.slug),
       notes: notes || undefined,
       membershipStatus: 'none',
+      managementUrl: buildManagementUrl(mgmtToken),
     }).catch((error) => {
       logError(error, {
         operation: 'completeRegistrationWithRider.sendEmail',
@@ -1050,7 +1066,7 @@ export async function completeRegistrationWithRider(
   if (membershipResult.type === 'Trial Member') {
     const trialUsed = await isTrialUsed(riderId)
     if (trialUsed) {
-      await createRegistrationRecord(
+      const mgmtToken = await createRegistrationRecord(
         eventId,
         riderId,
         shareRegistration,
@@ -1073,6 +1089,7 @@ export async function completeRegistrationWithRider(
         routeUrl: buildRouteUrl(chapter?.slug, event.routes?.slug),
         notes: notes || undefined,
         membershipStatus: 'trial-used',
+        managementUrl: buildManagementUrl(mgmtToken),
       }).catch((error) => {
         logError(error, {
           operation: 'completeRegistrationWithRider.sendEmail',
@@ -1088,8 +1105,9 @@ export async function completeRegistrationWithRider(
   }
 
   // Create registration
+  let mgmtToken: string
   try {
-    await createRegistrationRecord(eventId, riderId, shareRegistration, notes)
+    mgmtToken = await createRegistrationRecord(eventId, riderId, shareRegistration, notes)
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Failed to complete registration'
     return { success: false, error: errorMessage }
@@ -1113,6 +1131,7 @@ export async function completeRegistrationWithRider(
     notes: notes || undefined,
     membershipType: membershipResult.type,
     membershipStatus: 'valid',
+    managementUrl: buildManagementUrl(mgmtToken),
   }).catch((error) => {
     logError(error, {
       operation: 'completeRegistrationWithRider.sendEmail',

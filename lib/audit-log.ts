@@ -6,6 +6,7 @@ export type AuditEntityType =
   | 'route'
   | 'rider'
   | 'result'
+  | 'registration'
   | 'page'
   | 'admin_user'
   | 'news'

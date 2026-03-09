@@ -27,13 +27,25 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Loader2, Check, Plus, CheckCircle2, Globe, FileText, Mail } from 'lucide-react'
+import { Loader2, Check, Plus, CheckCircle2, Globe, FileText, Mail, UserX } from 'lucide-react'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog'
 import { Badge } from '@/components/ui/badge'
 import {
   createResult,
   updateResult,
   updateRegistrationTeamName,
+  adminCancelRegistration,
   type ResultStatus,
 } from '@/lib/actions/results'
 import { formatFinishTime, buildParticipantMailtoUrl } from '@/lib/utils'
@@ -100,6 +112,17 @@ interface Participant {
   isTeamCaptain: boolean
 }
 
+interface CancelledRegistration {
+  id: string
+  rider_id: string
+  cancelled_at: string | null
+  riders: {
+    first_name: string
+    last_name: string
+    email: string | null
+  } | null
+}
+
 interface EventResultsManagerProps {
   eventId: string
   eventName: string
@@ -110,6 +133,7 @@ interface EventResultsManagerProps {
   season: number | null
   distanceKm: number
   registrations: Registration[]
+  cancelledRegistrations: CancelledRegistration[]
   results: Result[]
 }
 
@@ -127,9 +151,15 @@ interface RiderRowProps {
   result: Result | null
   eventId: string
   eventType: string
+  eventStatus: string | null
   season: number | null
   distanceKm: number
   registrationId: string | null
+  onRegistrationCancelled: (
+    registrationId: string,
+    riderName: string,
+    riderEmail: string | null
+  ) => void
 }
 
 function RiderRow({
@@ -137,9 +167,11 @@ function RiderRow({
   result,
   eventId,
   eventType,
+  eventStatus,
   season,
   distanceKm,
   registrationId,
+  onRegistrationCancelled,
 }: RiderRowProps) {
   const [isPending, startTransition] = useTransition()
   const [localStatus, setLocalStatus] = useState<ResultStatus>(
@@ -459,11 +491,61 @@ function RiderRow({
         {result?.rider_notes && <p className="text-muted-foreground">{result.rider_notes}</p>}
       </TableCell>
       <TableCell>
-        {isPending ? (
-          <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-        ) : showSaved ? (
-          <Check className="h-4 w-4 text-green-600" />
-        ) : null}
+        <div className="flex items-center gap-1">
+          {isPending ? (
+            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+          ) : showSaved ? (
+            <Check className="h-4 w-4 text-green-600" />
+          ) : null}
+          {registrationId &&
+            participant.hasRegistration &&
+            (participant.registrationStatus === 'registered' ||
+              participant.registrationStatus === 'incomplete: membership') &&
+            eventStatus === 'scheduled' &&
+            !result && (
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                    title="Cancel registration"
+                    disabled={isPending}
+                  >
+                    <UserX className="h-4 w-4" />
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Cancel registration?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      This will cancel the registration for <strong>{riderName}</strong>. The rider
+                      will no longer appear in the registration list.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Keep</AlertDialogCancel>
+                    <AlertDialogAction
+                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                      onClick={() => {
+                        startTransition(async () => {
+                          const res = await adminCancelRegistration(registrationId)
+                          if (res.success) {
+                            onRegistrationCancelled(registrationId, riderName, participant.email)
+                            toast.success(`Registration cancelled for ${riderName}`)
+                          } else {
+                            toast.error(res.error || 'Failed to cancel registration')
+                          }
+                        })
+                      }}
+                    >
+                      Cancel Registration
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            )}
+        </div>
       </TableCell>
     </TableRow>
   )
@@ -479,11 +561,32 @@ export function EventResultsManager({
   season,
   distanceKm,
   registrations,
+  cancelledRegistrations: initialCancelledRegistrations,
   results,
 }: EventResultsManagerProps) {
   const isFleche = eventType === 'fleche'
   const [addRiderOpen, setAddRiderOpen] = useState(false)
   const [isSubmitted, setIsSubmitted] = useState(eventStatus === 'submitted')
+  const [cancelledRegistrationIds, setCancelledRegistrationIds] = useState<Set<string>>(new Set())
+  const [localCancelled, setLocalCancelled] = useState<CancelledRegistration[]>([])
+
+  const handleRegistrationCancelled = useCallback(
+    (registrationId: string, riderName: string, riderEmail: string | null) => {
+      setCancelledRegistrationIds((prev) => new Set([...prev, registrationId]))
+      const [firstName, ...lastParts] = riderName.split(' ')
+      const lastName = lastParts.join(' ')
+      setLocalCancelled((prev) => [
+        ...prev,
+        {
+          id: registrationId,
+          rider_id: '',
+          cancelled_at: new Date().toISOString(),
+          riders: { first_name: firstName, last_name: lastName, email: riderEmail },
+        },
+      ])
+    },
+    []
+  )
 
   // Create a map of rider_id -> result for quick lookup
   const resultsByRiderId = new Map(results.map((r) => [r.rider_id, r]))
@@ -492,7 +595,7 @@ export function EventResultsManager({
   const registeredRiderIds = new Set(registrations.map((r) => r.rider_id))
 
   const participantsFromRegistrations: Participant[] = registrations
-    .filter((reg) => reg.riders)
+    .filter((reg) => reg.riders && !cancelledRegistrationIds.has(reg.id))
     .map((reg) => {
       const currentMembership = reg.riders!.memberships?.find((m) => m.season === season)
       return {
@@ -625,15 +728,67 @@ export function EventResultsManager({
                     result={resultsByRiderId.get(participant.riderId) || null}
                     eventId={eventId}
                     eventType={eventType}
+                    eventStatus={eventStatus}
                     season={season}
                     distanceKm={distanceKm}
                     registrationId={participant.hasRegistration ? participant.id : null}
+                    onRegistrationCancelled={handleRegistrationCancelled}
                   />
                 ))}
               </TableBody>
             </Table>
           </div>
         )}
+
+        {/* Cancelled registrations section */}
+        {(() => {
+          const allCancelled = [
+            ...initialCancelledRegistrations.filter(
+              (c) => !localCancelled.some((lc) => lc.id === c.id)
+            ),
+            ...localCancelled,
+          ]
+          if (allCancelled.length === 0) return null
+          return (
+            <div className="mt-6">
+              <h3 className="text-sm font-medium text-muted-foreground mb-2">
+                Cancelled ({allCancelled.length})
+              </h3>
+              <div className="rounded-md border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Rider</TableHead>
+                      <TableHead>Email</TableHead>
+                      <TableHead>Cancelled</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {allCancelled.map((reg) => (
+                      <TableRow key={reg.id} className="text-muted-foreground">
+                        <TableCell>
+                          {reg.riders
+                            ? `${reg.riders.first_name} ${reg.riders.last_name}`
+                            : 'Unknown rider'}
+                        </TableCell>
+                        <TableCell>{reg.riders?.email ?? '—'}</TableCell>
+                        <TableCell>
+                          {reg.cancelled_at
+                            ? new Date(reg.cancelled_at).toLocaleDateString('en-CA', {
+                                month: 'short',
+                                day: 'numeric',
+                                year: 'numeric',
+                              })
+                            : '—'}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+          )
+        })()}
       </CardContent>
 
       {/* Footer actions - Submit for completed events */}

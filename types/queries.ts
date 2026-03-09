@@ -316,6 +316,16 @@ export type RegistrationWithRiderForAdmin = Pick<
 }
 
 /**
+ * Cancelled registration with rider for admin event page
+ */
+export type CancelledRegistrationForAdmin = Pick<
+  Registration,
+  'id' | 'rider_id' | 'cancelled_at'
+> & {
+  riders: Pick<Rider, 'first_name' | 'last_name' | 'email'> | null
+}
+
+/**
  * Result with rider for admin event page
  */
 export type ResultWithRiderForAdmin = Pick<

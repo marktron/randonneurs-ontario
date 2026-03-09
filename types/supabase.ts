@@ -378,9 +378,11 @@ export type Database = {
       }
       registrations: {
         Row: {
+          cancelled_at: string | null
           event_id: string
           id: string
           is_team_captain: boolean
+          management_token: string | null
           notes: string | null
           registered_at: string | null
           rider_id: string
@@ -389,9 +391,11 @@ export type Database = {
           team_name: string | null
         }
         Insert: {
+          cancelled_at?: string | null
           event_id: string
           id?: string
           is_team_captain?: boolean
+          management_token?: string | null
           notes?: string | null
           registered_at?: string | null
           rider_id: string
@@ -400,9 +404,11 @@ export type Database = {
           team_name?: string | null
         }
         Update: {
+          cancelled_at?: string | null
           event_id?: string
           id?: string
           is_team_captain?: boolean
+          management_token?: string | null
           notes?: string | null
           registered_at?: string | null
           rider_id?: string

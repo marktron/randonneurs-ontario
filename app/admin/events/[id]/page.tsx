@@ -13,6 +13,7 @@ import type {
   EventDetailForAdmin,
   RegistrationWithRiderForAdmin,
   ResultWithRiderForAdmin,
+  CancelledRegistrationForAdmin,
 } from '@/types/queries'
 
 async function getEventDetails(eventId: string): Promise<EventDetailForAdmin | null> {
@@ -57,6 +58,26 @@ async function getRegistrations(eventId: string): Promise<RegistrationWithRiderF
     .order('registered_at', { ascending: true })
 
   return (data as RegistrationWithRiderForAdmin[]) ?? []
+}
+
+async function getCancelledRegistrations(
+  eventId: string
+): Promise<CancelledRegistrationForAdmin[]> {
+  const { data } = await getSupabaseAdmin()
+    .from('registrations')
+    .select(
+      `
+      id,
+      rider_id,
+      cancelled_at,
+      riders (first_name, last_name, email)
+    `
+    )
+    .eq('event_id', eventId)
+    .eq('status', 'cancelled')
+    .order('cancelled_at', { ascending: true })
+
+  return (data as CancelledRegistrationForAdmin[]) ?? []
 }
 
 async function getResults(eventId: string): Promise<ResultWithRiderForAdmin[]> {
@@ -104,9 +125,10 @@ export default async function EventDetailPage({ params, searchParams }: EventPag
   await requireAdmin()
   const backUrl = buildBackUrl(search.from_season, search.from_chapter)
 
-  const [event, registrations, results] = await Promise.all([
+  const [event, registrations, cancelledRegistrations, results] = await Promise.all([
     getEventDetails(id),
     getRegistrations(id),
+    getCancelledRegistrations(id),
     getResults(id),
   ])
 
@@ -199,6 +221,7 @@ export default async function EventDetailPage({ params, searchParams }: EventPag
         season={event.season}
         distanceKm={event.distance_km}
         registrations={registrations}
+        cancelledRegistrations={cancelledRegistrations}
         results={results}
       />
     </div>

@@ -49,7 +49,7 @@ export async function createPendingResultsAndSendEmails(
   // Get registrations for this event
   const { data: registrations, error: regError } = await supabase
     .from('registrations')
-    .select('id, rider_id, riders(id, first_name, last_name, email)')
+    .select('id, rider_id, management_token, riders(id, first_name, last_name, email)')
     .eq('event_id', event.id)
     .eq('status', 'registered')
 
@@ -73,9 +73,11 @@ export async function createPendingResultsAndSendEmails(
   const existingRiderIds = new Set(typedExistingResults.map((r) => r.rider_id))
 
   // Filter registrations that don't have results yet and have email
-  const typedRegistrations = (registrations || []) as RegistrationWithRider[]
+  const typedRegistrations = (registrations || []) as (RegistrationWithRider & {
+    management_token: string | null
+  })[]
   const registrationsNeedingResults = typedRegistrations.filter(
-    reg => !existingRiderIds.has(reg.rider_id) && reg.riders?.email
+    (reg) => !existingRiderIds.has(reg.rider_id) && reg.riders?.email
   )
 
   // Calculate season from event date
@@ -89,6 +91,7 @@ export async function createPendingResultsAndSendEmails(
       status: 'pending',
       season: eventYear,
       distance_km: event.distance_km,
+      ...(reg.management_token ? { submission_token: reg.management_token } : {}),
     }
 
     const { data: result, error: createError } = await supabase
@@ -99,7 +102,9 @@ export async function createPendingResultsAndSendEmails(
 
     if (createError || !result) {
       const riderName = reg.riders ? `${reg.riders.first_name} ${reg.riders.last_name}` : 'Unknown'
-      errors.push(`Failed to create result for ${riderName}: ${createError?.message || 'Unknown error'}`)
+      errors.push(
+        `Failed to create result for ${riderName}: ${createError?.message || 'Unknown error'}`
+      )
       continue
     }
 

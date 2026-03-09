@@ -83,6 +83,8 @@ For each rider, you can:
 
 You can also add riders using the "Add Rider" button, which is available for both scheduled and completed events. For scheduled events, this adds a registration; for completed events, it adds a result entry. Search by name to find an existing rider, or create a new rider directly from the dialog.
 
+If a registration has been cancelled (by the rider or an admin), it appears in a "Cancelled" section below the main table showing the rider's name, email, and cancellation date. This gives you a complete picture of who registered, even if they later cancelled. Cancelled riders are not included in the rider count or email list.
+
 When all results are entered, use the "Submit Results" button to have the system send the results to the VP of Ride Administration (you will be cc'd on the email). This changes the event status to "submitted."
 
 ## Routes

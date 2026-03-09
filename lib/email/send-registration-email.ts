@@ -1,5 +1,10 @@
 import { sendgrid, fromEmail, suppressAdminEmails } from './sendgrid'
-import { buildRegistrationConfirmationEmail, type RegistrationEmailData } from './templates'
+import {
+  buildRegistrationConfirmationEmail,
+  buildCancellationConfirmationEmail,
+  type RegistrationEmailData,
+  type CancellationEmailData,
+} from './templates'
 import { getVpEmail } from './vp-emails'
 import { logError } from '@/lib/errors'
 
@@ -36,6 +41,41 @@ export async function sendRegistrationConfirmationEmail(
   } catch (error) {
     logError(error, {
       operation: 'sendRegistrationConfirmationEmail',
+    })
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown email error',
+    }
+  }
+}
+
+export async function sendCancellationConfirmationEmail(
+  data: CancellationEmailData
+): Promise<SendEmailResult> {
+  if (!process.env.SENDGRID_API_KEY) {
+    console.warn('SendGrid API key not configured, skipping email')
+    return { success: true }
+  }
+
+  const { subject, text, html } = buildCancellationConfirmationEmail(data)
+  const vpEmail = getVpEmail(data.chapterSlug)
+
+  try {
+    await sendgrid.send({
+      to: data.registrantEmail,
+      from: fromEmail,
+      replyTo: suppressAdminEmails ? undefined : vpEmail || undefined,
+      cc: suppressAdminEmails ? undefined : vpEmail || undefined,
+      subject,
+      text,
+      html,
+    })
+
+    console.log('Cancellation email sent successfully')
+    return { success: true }
+  } catch (error) {
+    logError(error, {
+      operation: 'sendCancellationConfirmationEmail',
     })
     return {
       success: false,

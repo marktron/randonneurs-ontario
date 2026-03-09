@@ -273,6 +273,76 @@ export async function updateRegistrationTeamName(
   return createActionResult()
 }
 
+export async function adminCancelRegistration(registrationId: string): Promise<ActionResult> {
+  const admin = await requireAdmin()
+
+  // Fetch registration with rider and event info for audit log
+  const { data: registration, error: fetchError } = await getSupabaseAdmin()
+    .from('registrations')
+    .select('id, status, event_id, riders (first_name, last_name), events (name, slug)')
+    .eq('id', registrationId)
+    .single()
+
+  if (fetchError || !registration) {
+    return handleSupabaseError(
+      fetchError,
+      { operation: 'adminCancelRegistration' },
+      'Registration not found'
+    )
+  }
+
+  const reg = registration as {
+    id: string
+    status: string | null
+    event_id: string
+    riders: { first_name: string; last_name: string } | null
+    events: { name: string; slug: string } | null
+  }
+
+  if (reg.status !== 'registered' && reg.status !== 'incomplete: membership') {
+    return { success: false, error: 'This registration has already been cancelled' }
+  }
+
+  const { error: updateError } = await getSupabaseAdmin()
+    .from('registrations')
+    .update({
+      status: 'cancelled',
+      cancelled_at: new Date().toISOString(),
+    })
+    .eq('id', registrationId)
+
+  if (updateError) {
+    return handleSupabaseError(
+      updateError,
+      { operation: 'adminCancelRegistration' },
+      'Failed to cancel registration'
+    )
+  }
+
+  revalidatePath('/admin/events')
+  revalidateTag('registrations', 'max')
+  revalidateTag('events', 'max')
+  if (reg.events?.slug) {
+    revalidateTag(`event-${reg.events.slug}`, 'max')
+    revalidatePath(`/register/${reg.events.slug}`)
+  }
+
+  const riderName = reg.riders
+    ? `${reg.riders.first_name} ${reg.riders.last_name}`
+    : 'Unknown rider'
+  const eventName = reg.events?.name || reg.event_id
+
+  await logAuditEvent({
+    adminId: admin.id,
+    action: 'update',
+    entityType: 'registration',
+    entityId: registrationId,
+    description: `Cancelled registration for ${eventName}: ${riderName}`,
+  })
+
+  return createActionResult()
+}
+
 export async function deleteResult(resultId: string): Promise<ActionResult> {
   const admin = await requireAdmin()
 

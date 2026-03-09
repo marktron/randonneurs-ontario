@@ -25,6 +25,7 @@ export interface RegistrationEmailData {
   notes?: string
   membershipType?: string
   membershipStatus?: 'valid' | 'none' | 'trial-used'
+  managementUrl?: string
 }
 
 export function buildRegistrationConfirmationEmail(data: RegistrationEmailData): {
@@ -46,6 +47,7 @@ export function buildRegistrationConfirmationEmail(data: RegistrationEmailData):
     notes: data.notes ? escapeHtml(data.notes) : '(none)',
     membershipType: data.membershipType ? escapeHtml(data.membershipType) : '',
     routeUrl: data.routeUrl ? escapeHtml(data.routeUrl) : '',
+    managementUrl: data.managementUrl ? escapeHtml(data.managementUrl) : '',
   }
 
   // Membership warning for text version
@@ -138,7 +140,7 @@ Start time: ${data.eventTime} ${data.eventDate}
 Start location: ${data.eventLocation}
 ${membershipTypeRow}
 ${notesSection}
-
+${data.managementUrl ? `\nNeed to cancel or review your registration? ${data.managementUrl}\n` : ''}
 --------------------
 Brevet Rules
 --------------------
@@ -208,7 +210,15 @@ ${membershipWarningHtml}
       <td style="padding: 8px 0; border-bottom: 1px solid #eee;">${safe.notes}</td>
     </tr>
   </table>
-
+${
+  data.managementUrl
+    ? `
+  <p style="margin: 16px 0;">
+    Need to cancel or review your registration? <a href="${safe.managementUrl}" style="color: #0066cc;">Manage your registration</a>
+  </p>
+`
+    : ''
+}
   <h2 style="font-size: 18px; margin-bottom: 16px;">Brevet Rules</h2>
   <ul style="padding-left: 20px; margin: 0 0 24px 0;">
     <li>Be an active member of Randonneurs Ontario and Ontario Cycling.</li>
@@ -348,6 +358,95 @@ https://randonneursontario.ca
   <p>If you have any questions, please contact your chapter VP.</p>
 
   <p>Thanks for riding with us!</p>
+
+  <p>
+    <strong>Randonneurs Ontario</strong><br>
+    <a href="https://randonneursontario.ca" style="color: #0066cc;">randonneursontario.ca</a>
+  </p>
+</body>
+</html>
+  `.trim()
+
+  return { subject, text, html }
+}
+
+// ============================================================================
+// Cancellation Confirmation Email
+// ============================================================================
+
+export interface CancellationEmailData {
+  registrantName: string
+  registrantEmail: string
+  eventName: string
+  eventDate: string
+  eventDistance: number
+  eventType: string
+  chapterName: string
+  chapterSlug: string
+  registerUrl: string
+}
+
+export function buildCancellationConfirmationEmail(data: CancellationEmailData): {
+  subject: string
+  text: string
+  html: string
+} {
+  const rideName = `${data.eventName} ${data.eventDistance}km`
+  const subject = `Registration Cancelled: ${rideName}`
+
+  const safe = {
+    registrantName: escapeHtml(data.registrantName),
+    rideName: escapeHtml(rideName),
+    eventDate: escapeHtml(data.eventDate),
+    chapterName: escapeHtml(data.chapterName),
+    registerUrl: escapeHtml(data.registerUrl),
+  }
+
+  const text = `
+Hi ${data.registrantName},
+
+Your registration for the ${rideName} has been cancelled.
+
+Event: ${rideName}
+Date: ${data.eventDate}
+
+If you cancelled by mistake, you can re-register at:
+${data.registerUrl}
+
+If you have any questions, please contact your chapter VP.
+
+Randonneurs Ontario
+https://randonneursontario.ca
+  `.trim()
+
+  const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+  <p>Hi ${safe.registrantName},</p>
+
+  <p>Your registration for the <strong>${safe.rideName}</strong> has been cancelled.</p>
+
+  <table style="width: 100%; border-collapse: collapse; margin: 24px 0;">
+    <tr>
+      <td style="padding: 8px 0; border-bottom: 1px solid #eee; font-weight: 600; width: 120px;">Event</td>
+      <td style="padding: 8px 0; border-bottom: 1px solid #eee;">${safe.rideName}</td>
+    </tr>
+    <tr>
+      <td style="padding: 8px 0; font-weight: 600;">Date</td>
+      <td style="padding: 8px 0;">${safe.eventDate}</td>
+    </tr>
+  </table>
+
+  <p>If you cancelled by mistake, you can <a href="${safe.registerUrl}" style="color: #0066cc;">re-register for this event</a>.</p>
+
+  <hr style="border: none; border-top: 1px solid #eee; margin: 32px 0;">
+
+  <p>The ${safe.chapterName} Chapter VP is included in this email. Just hit reply if you have any questions.</p>
 
   <p>
     <strong>Randonneurs Ontario</strong><br>
