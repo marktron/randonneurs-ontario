@@ -174,18 +174,31 @@ async function findOrCreateRider(
   // Find existing rider by email
   const { data: existingRider } = await getSupabaseAdmin()
     .from('riders')
-    .select('id')
+    .select('id, first_name, last_name')
     .eq('email', normalizedEmail)
     .single()
 
   if (existingRider) {
-    const typedRider = existingRider as RiderIdOnly
-    const riderId = typedRider.id
+    const rider = existingRider as { id: string; first_name: string; last_name: string }
+    const riderId = rider.id
 
-    // Update rider info if they provided more details
+    // Log to rider_merges so admins can see when someone registers with
+    // a different name but the same email (e.g. shared/mistyped email)
+    const mergeInsert: RiderMergeInsert = {
+      rider_id: riderId,
+      submitted_first_name: trimmedFirstName,
+      submitted_last_name: trimmedLastName,
+      submitted_email: normalizedEmail,
+      previous_first_name: rider.first_name,
+      previous_last_name: rider.last_name,
+      previous_email: normalizedEmail,
+      merge_source: 'registration',
+    }
+    await getSupabaseAdmin().from('rider_merges').insert(mergeInsert)
+
+    // Update supplementary rider info only — never overwrite the name,
+    // as someone registering with the same email may not be the same person
     const updateData: RiderUpdate = {
-      first_name: trimmedFirstName,
-      last_name: trimmedLastName,
       gender: parsedGender,
       emergency_contact_name: emergencyContactName || null,
       emergency_contact_phone: emergencyContactPhone || null,

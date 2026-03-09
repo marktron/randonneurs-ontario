@@ -27,7 +27,10 @@ Each entry includes:
 
 Navigate to **Admin > Management > Audit Log** (`/admin/logs`). This page is restricted to super admins only.
 
-The log displays the 100 most recent entries, ordered newest first.
+The page has two tabs:
+
+- **Admin Actions** — The 100 most recent admin actions, ordered newest first.
+- **Rider Merges** — The 100 most recent rider merge/link events from registration. Shows who registered, what name they submitted, and the previous name on the rider record. Rows where the submitted name differs from the previous name are highlighted in red, indicating a potential mismatch (e.g. someone registering with the wrong email).
 
 ## Technical details
 

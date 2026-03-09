@@ -5,6 +5,7 @@ import { parseLocalDate, formatFinishTime } from '@/lib/utils'
 import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
 import { ChevronLeft, Clock } from 'lucide-react'
+import { RiderEditForm } from '@/components/admin/rider-edit-form'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -122,49 +123,57 @@ export default async function RiderDetailPage({ params }: RiderPageProps) {
         Back to Riders
       </Link>
 
-      <div>
-        <h1 className="text-3xl font-bold">
-          {rider.first_name} {rider.last_name}
-        </h1>
-        <p className="text-muted-foreground">{rider.email || 'No email on file'}</p>
-      </div>
+      <h1 className="text-3xl font-bold">
+        {rider.first_name} {rider.last_name}
+      </h1>
 
-      <div className="grid gap-4 md:grid-cols-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>Gender</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <p className="text-lg font-medium">{rider.gender || '—'}</p>
-          </CardContent>
-        </Card>
+      <div className="grid gap-6 lg:grid-cols-[1fr_auto]">
+        <RiderEditForm
+          rider={{
+            id: rider.id,
+            first_name: rider.first_name,
+            last_name: rider.last_name,
+            email: rider.email,
+          }}
+        />
 
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>Registrations</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <p className="text-lg font-medium">{registrations.length}</p>
-          </CardContent>
-        </Card>
+        <div className="grid gap-4 grid-cols-2 lg:grid-cols-1 lg:w-48">
+          <Card>
+            <CardHeader className="pb-2">
+              <CardDescription>Gender</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <p className="text-lg font-medium">{rider.gender || '—'}</p>
+            </CardContent>
+          </Card>
 
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>Results</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <p className="text-lg font-medium">{results.length}</p>
-          </CardContent>
-        </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardDescription>Registrations</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <p className="text-lg font-medium">{registrations.length}</p>
+            </CardContent>
+          </Card>
 
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>Total Distance</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <p className="text-lg font-medium">{totalDistance.toLocaleString()} km</p>
-          </CardContent>
-        </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardDescription>Results</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <p className="text-lg font-medium">{results.length}</p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-2">
+              <CardDescription>Total Distance</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <p className="text-lg font-medium">{totalDistance.toLocaleString()} km</p>
+            </CardContent>
+          </Card>
+        </div>
       </div>
 
       {/* Results */}

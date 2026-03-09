@@ -106,7 +106,13 @@ vi.mock('@/lib/utils/rider-search', () => ({
 }))
 
 // Import after mocking
-import { searchRiders, createRider, mergeRiders, getRiderCounts } from '@/lib/actions/riders'
+import {
+  searchRiders,
+  createRider,
+  updateRider,
+  mergeRiders,
+  getRiderCounts,
+} from '@/lib/actions/riders'
 
 const mockModule = await vi.importMock<{
   __queryBuilder: Record<string, ReturnType<typeof vi.fn>>
@@ -286,6 +292,76 @@ describe('getRiderCounts', () => {
     expect(result['rider-1'].results).toBe(0)
     expect(result['rider-2'].registrations).toBe(0)
     expect(result['rider-2'].results).toBe(0)
+  })
+})
+
+describe('updateRider', () => {
+  beforeEach(() => {
+    mockModule.__reset()
+    vi.clearAllMocks()
+  })
+
+  describe('validation', () => {
+    it('returns error when firstName is empty', async () => {
+      const result = await updateRider('rider-1', {
+        firstName: '',
+        lastName: 'Doe',
+        email: 'john@example.com',
+      })
+
+      expect(result.success).toBe(false)
+      expect(result.error).toBe('First name and last name are required')
+    })
+
+    it('returns error when lastName is whitespace only', async () => {
+      const result = await updateRider('rider-1', {
+        firstName: 'John',
+        lastName: '   ',
+        email: 'john@example.com',
+      })
+
+      expect(result.success).toBe(false)
+      expect(result.error).toBe('First name and last name are required')
+    })
+  })
+
+  describe('duplicate email check', () => {
+    it('returns error when email is used by another rider', async () => {
+      mockModule.__mockRiderFound({ id: 'other-rider' })
+
+      const result = await updateRider('rider-1', {
+        firstName: 'John',
+        lastName: 'Doe',
+        email: 'taken@example.com',
+      })
+
+      expect(result.success).toBe(false)
+      expect(result.error).toBe('Another rider already has this email address')
+    })
+  })
+
+  describe('successful update', () => {
+    it('updates rider without email', async () => {
+      const result = await updateRider('rider-1', {
+        firstName: 'John',
+        lastName: 'Doe',
+        email: null,
+      })
+
+      expect(result.success).toBe(true)
+    })
+
+    it('updates rider with email when no duplicate exists', async () => {
+      mockModule.__mockRiderNotFound()
+
+      const result = await updateRider('rider-1', {
+        firstName: 'John',
+        lastName: 'Doe',
+        email: 'john@example.com',
+      })
+
+      expect(result.success).toBe(true)
+    })
   })
 })
 

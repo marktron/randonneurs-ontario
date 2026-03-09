@@ -46,7 +46,7 @@ The current schema only allows `registered` and `cancelled`. Add a migration to 
 ### Registration flow (step-by-step)
 
 1. Validate input.
-2. Find or create rider. Join to `memberships` on `(rider_id, season)` to get current-season membership in the same query.
+2. Find or create rider. Join to `memberships` on `(rider_id, season)` to get current-season membership in the same query. If the rider is found by email, their name is never overwritten (only gender and emergency contact are updated). A `rider_merges` audit entry is always created so admins can spot mismatches (e.g. someone registering with a different name but the same email).
 3. If rider match needed (fuzzy name match), return match candidates and stop.
 4. If we have a membership row for current season, skip to step 7. Otherwise, call CCN API with registrant's full name.
 5. If CCN returns a result: insert into `memberships`, then continue.

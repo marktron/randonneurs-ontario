@@ -113,6 +113,61 @@ export async function createRider(data: CreateRiderData): Promise<CreateRiderRes
   return { success: true, riderId: typedNewRider.id }
 }
 
+export interface UpdateRiderData {
+  firstName: string
+  lastName: string
+  email?: string | null
+}
+
+export async function updateRider(riderId: string, data: UpdateRiderData): Promise<ActionResult> {
+  const admin = await requireAdmin()
+
+  const { firstName, lastName, email } = data
+  const trimmedFirst = firstName.trim()
+  const trimmedLast = lastName.trim()
+  const normalizedEmail = email?.trim().toLowerCase() || null
+
+  if (!trimmedFirst || !trimmedLast) {
+    return { success: false, error: 'First name and last name are required' }
+  }
+
+  // If email is being set, check it's not already used by another rider
+  if (normalizedEmail) {
+    const { data: existing } = await getSupabaseAdmin()
+      .from('riders')
+      .select('id')
+      .eq('email', normalizedEmail)
+      .neq('id', riderId)
+      .single()
+
+    if (existing) {
+      return { success: false, error: 'Another rider already has this email address' }
+    }
+  }
+
+  const updateData: RiderUpdate = {
+    first_name: trimmedFirst,
+    last_name: trimmedLast,
+    email: normalizedEmail,
+  }
+
+  const { error } = await getSupabaseAdmin().from('riders').update(updateData).eq('id', riderId)
+
+  if (error) {
+    return handleSupabaseError(error, { operation: 'updateRider' }, 'Failed to update rider')
+  }
+
+  await logAuditEvent({
+    adminId: admin.id,
+    action: 'update',
+    entityType: 'rider',
+    entityId: riderId,
+    description: `Updated rider: ${trimmedFirst} ${trimmedLast}`,
+  })
+
+  return { success: true }
+}
+
 export interface RiderData {
   firstName: string
   lastName: string
