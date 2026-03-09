@@ -69,10 +69,14 @@ export async function savePage(input: SavePageInput): Promise<SavePageResult> {
     }
   }
 
-  // Check for reserved slugs (existing routes)
-  const reservedSlugs = getReservedSlugs()
-  if (reservedSlugs.includes(slug)) {
-    return { success: false, error: `"${slug}" is reserved and cannot be used as a page slug` }
+  // Check for reserved slugs (existing routes), but only for new pages
+  const contentFilePath = path.join(process.cwd(), 'content/pages', `${slug}.md`)
+  const isExistingPage = fs.existsSync(contentFilePath)
+  if (!isExistingPage) {
+    const reservedSlugs = getReservedSlugs()
+    if (reservedSlugs.includes(slug)) {
+      return { success: false, error: `"${slug}" is reserved and cannot be used as a page slug` }
+    }
   }
 
   // Build markdown file content with frontmatter

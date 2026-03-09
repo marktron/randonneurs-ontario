@@ -1,3 +1,4 @@
+import fs from 'fs'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 // Mock requireAdmin to always pass
@@ -134,6 +135,21 @@ describe('savePage', () => {
 
       expect(result.success).toBe(false)
       expect(result.error).toBe('"calendar" is reserved and cannot be used as a page slug')
+    })
+
+    it('allows saving an existing content page even if slug matches a route', async () => {
+      // Simulate that the content file already exists
+      vi.spyOn(fs, 'existsSync').mockReturnValueOnce(true)
+
+      const result = await savePage({
+        slug: 'about',
+        title: 'About Us',
+        description: 'About the club',
+        content: 'About content',
+      })
+
+      expect(result.success).toBe(true)
+      vi.restoreAllMocks()
     })
   })
 
