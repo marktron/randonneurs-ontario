@@ -140,11 +140,11 @@ function YearSection({ yearData }: { yearData: RiderYearResults }) {
 
       {/* Desktop: Table */}
       <div className="hidden md:block">
-        <Table>
+        <Table className="table-fixed">
           <TableHeader>
             <TableRow>
               <TableHead className="w-[130px]">Date</TableHead>
-              <TableHead>Event</TableHead>
+              <TableHead className="w-[40%]">Event</TableHead>
               <TableHead className="w-[100px]">Distance</TableHead>
               <TableHead className="w-[80px]">Time</TableHead>
               <TableHead>Notes</TableHead>
