@@ -2,7 +2,7 @@
  * @vitest-environment happy-dom
  */
 
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { CalendarPage } from '@/components/calendar-page'
@@ -88,10 +88,29 @@ describe('CalendarPage', () => {
     events: sampleEvents,
   }
 
+  beforeEach(() => {
+    localStorage.clear()
+  })
+
   it('renders the distance filter dropdown', () => {
     render(<CalendarPage {...defaultProps} />)
 
     expect(screen.getByRole('combobox')).toBeInTheDocument()
+  })
+
+  it('renders the view toggle', () => {
+    render(<CalendarPage {...defaultProps} />)
+
+    expect(screen.getByRole('group', { name: 'Calendar view' })).toBeInTheDocument()
+    expect(screen.getByRole('radio', { name: 'List view' })).toBeInTheDocument()
+    expect(screen.getByRole('radio', { name: 'Grid view' })).toBeInTheDocument()
+  })
+
+  it('shows list view by default', () => {
+    render(<CalendarPage {...defaultProps} />)
+
+    const listToggle = screen.getByRole('radio', { name: 'List view' })
+    expect(listToggle).toHaveAttribute('data-state', 'on')
   })
 
   it('shows all events by default', () => {
@@ -101,6 +120,41 @@ describe('CalendarPage', () => {
     expect(screen.getByText('Spring 200')).toBeInTheDocument()
     expect(screen.getByText('Spring 300')).toBeInTheDocument()
     expect(screen.getByText('Summer 600')).toBeInTheDocument()
+  })
+
+  it('switches to grid view when grid toggle is clicked', async () => {
+    const user = userEvent.setup()
+    render(<CalendarPage {...defaultProps} />)
+
+    await user.click(screen.getByRole('radio', { name: 'Grid view' }))
+
+    const gridToggle = screen.getByRole('radio', { name: 'Grid view' })
+    expect(gridToggle).toHaveAttribute('data-state', 'on')
+  })
+
+  it('persists view preference to localStorage', async () => {
+    const user = userEvent.setup()
+    render(<CalendarPage {...defaultProps} />)
+
+    await user.click(screen.getByRole('radio', { name: 'Grid view' }))
+
+    expect(localStorage.getItem('ro-calendar-view')).toBe('grid')
+  })
+
+  it('restores view preference from localStorage', () => {
+    localStorage.setItem('ro-calendar-view', 'grid')
+    render(<CalendarPage {...defaultProps} />)
+
+    const gridToggle = screen.getByRole('radio', { name: 'Grid view' })
+    expect(gridToggle).toHaveAttribute('data-state', 'on')
+  })
+
+  it('ignores invalid localStorage values', () => {
+    localStorage.setItem('ro-calendar-view', 'invalid')
+    render(<CalendarPage {...defaultProps} />)
+
+    const listToggle = screen.getByRole('radio', { name: 'List view' })
+    expect(listToggle).toHaveAttribute('data-state', 'on')
   })
 
   it('filters to 200 km events', async () => {
@@ -157,5 +211,21 @@ describe('CalendarPage', () => {
     expect(screen.getByText('Spring 200')).toBeInTheDocument()
     expect(screen.getByText('Spring 300')).toBeInTheDocument()
     expect(screen.getByText('Summer 600')).toBeInTheDocument()
+  })
+
+  it('applies distance filter in grid view too', async () => {
+    const user = userEvent.setup()
+    render(<CalendarPage {...defaultProps} />)
+
+    // Switch to grid view
+    await user.click(screen.getByRole('radio', { name: 'Grid view' }))
+
+    // Filter to 200 km
+    await user.click(screen.getByRole('combobox'))
+    await user.click(screen.getByRole('option', { name: '200 km' }))
+
+    // Only the 200km event text should appear
+    expect(screen.getAllByText(/Spring 200/).length).toBeGreaterThan(0)
+    expect(screen.queryAllByText(/Spring 100/)).toHaveLength(0)
   })
 })

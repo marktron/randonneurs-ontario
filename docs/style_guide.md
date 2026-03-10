@@ -68,7 +68,7 @@ Use shadcn primitives, but style them to feel “print” rather than “SaaS”
 - Event card (brevets/populaires): date, distance, start, registration status
 - Registration form: step-by-step sections, calm validation, strong summary panel
 - Results table: sticky header, zebra subtle, responsive row “cardification” on mobile
-- Schedule view: list-first (fast scanning), optional calendar overlay later
+- Schedule view: list and grid views with toggle; preference saved to localStorage
 - Badge system: status (open/closed/waitlist), series, distance
 
 **Interaction principles**
