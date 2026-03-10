@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import dynamic from 'next/dynamic'
-import { ListIcon, GridIcon } from 'lucide-react'
+import { ListIcon, CalendarDaysIcon } from 'lucide-react'
 import { PageShell } from '@/components/page-shell'
 import { PageHero } from '@/components/page-hero'
 import { EventList, type Event } from '@/components/event-card'
@@ -129,7 +129,7 @@ export function CalendarPage({
               <span className="sr-only sm:not-sr-only sm:ml-1 text-xs">List</span>
             </ToggleGroupItem>
             <ToggleGroupItem value="grid" aria-label="Grid view">
-              <GridIcon className="size-4" />
+              <CalendarDaysIcon className="size-4" />
               <span className="sr-only sm:not-sr-only sm:ml-1 text-xs">Grid</span>
             </ToggleGroupItem>
           </ToggleGroup>

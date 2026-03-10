@@ -218,24 +218,22 @@ export function CalendarGridView({ events }: { events: Event[] }) {
                   </div>
                   {/* Event details below week row on mobile */}
                   {weekEvents.length > 0 && (
-                    <div className="border-b border-border/30 py-2 px-2 space-y-1.5">
+                    <div className="border-b border-border/30 bg-muted/30 py-1.5 px-3 space-y-0.5">
                       {weekEvents.flatMap(({ date, events: dayEvents }) =>
                         dayEvents.map((event, ei) => {
-                          const shortDate = date.toLocaleDateString('en-US', {
+                          const dayAbbr = date.toLocaleDateString('en-US', {
                             weekday: 'short',
-                            month: 'short',
-                            day: 'numeric',
                           })
                           return (
                             <Link
                               key={`${toDateKey(date)}-${ei}`}
                               href={`/register/${event.slug}`}
-                              className="flex items-baseline gap-2 text-sm py-1"
+                              className="flex items-center gap-2 text-sm py-1.5 active:bg-muted/50 -mx-1 px-1 rounded"
                             >
-                              <span className="text-xs text-muted-foreground tabular-nums shrink-0 w-20">
-                                {shortDate}
+                              <span className="text-xs text-muted-foreground tabular-nums shrink-0 w-10 text-center">
+                                {dayAbbr} {date.getDate()}
                               </span>
-                              <span className="font-medium truncate">{event.name}</span>
+                              <span className="font-medium truncate min-w-0">{event.name}</span>
                               <Badge
                                 variant="outline"
                                 className="text-[9px] tracking-wider shrink-0 ml-auto"
