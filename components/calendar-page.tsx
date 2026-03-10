@@ -137,7 +137,7 @@ export function CalendarPage({
             value={distanceFilter}
             onValueChange={(value) => setDistanceFilter(value as DistanceFilter)}
           >
-            <SelectTrigger size="sm">
+            <SelectTrigger size="sm" aria-label="Filter by distance">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -150,17 +150,24 @@ export function CalendarPage({
           </Select>
           <CalendarSubscribeButton chapter={chapterSlug} />
         </div>
-        {filteredEvents.length > 0 ? (
-          view === 'list' ? (
-            <EventList events={filteredEvents} />
+        <div aria-live="polite" aria-atomic="true">
+          <p className="sr-only">
+            {filteredEvents.length === 0
+              ? 'No events match the selected filter.'
+              : `Showing ${filteredEvents.length} event${filteredEvents.length !== 1 ? 's' : ''} in ${view} view.`}
+          </p>
+          {filteredEvents.length > 0 ? (
+            view === 'list' ? (
+              <EventList events={filteredEvents} />
+            ) : (
+              <CalendarGridView events={filteredEvents} />
+            )
           ) : (
-            <CalendarGridView events={filteredEvents} />
-          )
-        ) : (
-          <div className="text-center py-12 text-muted-foreground">
-            <p>No events match the selected filter.</p>
-          </div>
-        )}
+            <div className="text-center py-12 text-muted-foreground">
+              <p>No events match the selected filter.</p>
+            </div>
+          )}
+        </div>
       </div>
     </PageShell>
   )

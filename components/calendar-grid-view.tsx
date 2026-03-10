@@ -88,8 +88,21 @@ function toDateKey(date: Date): string {
   return `${y}-${m}-${d}`
 }
 
+function formatDateLong(date: Date): string {
+  return date.toLocaleDateString('en-US', {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+  })
+}
+
+function eventLinkLabel(event: Event, date: Date): string {
+  return `${event.name}, ${event.distance} km, ${formatDateLong(date)}, ${formatTime(event.startTime)}${event.chapterName ? `, ${event.chapterName}` : ''}`
+}
+
 export function CalendarGridView({ events }: { events: Event[] }) {
   const grids = useMemo(() => buildMonthGrids(events), [events])
+  const todayKey = useMemo(() => toDateKey(new Date()), [])
 
   return (
     <div className="space-y-12 sm:space-y-16">
@@ -101,61 +114,74 @@ export function CalendarGridView({ events }: { events: Event[] }) {
 
           {/* Desktop grid */}
           <div className="hidden sm:block">
-            <div className="grid grid-cols-7 border-b border-border/60">
-              {DAYS_OF_WEEK.map((day) => (
-                <div
-                  key={day}
-                  className="py-2 text-center text-[11px] font-medium tracking-[0.15em] text-muted-foreground uppercase"
-                >
-                  {day}
-                </div>
-              ))}
-            </div>
-            {grid.weeks.map((week, wi) => (
-              <div key={wi} className="grid grid-cols-7 border-b border-border/40">
-                {week.map((date, di) => {
-                  const dayEvents = date ? grid.events.get(toDateKey(date)) : undefined
-                  const isToday = date && toDateKey(date) === toDateKey(new Date())
-                  return (
-                    <div
-                      key={di}
-                      className={`min-h-[5.5rem] p-1.5 border-r last:border-r-0 border-border/30 ${
-                        date ? 'bg-background' : 'bg-muted/30'
-                      }`}
+            <table
+              role="grid"
+              aria-label={grid.label}
+              className="w-full table-fixed border-collapse"
+            >
+              <thead>
+                <tr className="border-b border-border/60">
+                  {DAYS_OF_WEEK.map((day) => (
+                    <th
+                      key={day}
+                      scope="col"
+                      className="py-2 text-center text-[11px] font-medium tracking-[0.15em] text-muted-foreground uppercase"
                     >
-                      {date && (
-                        <>
-                          <div
-                            className={`text-sm tabular-nums mb-1 ${
-                              isToday ? 'font-semibold text-primary' : 'text-muted-foreground'
-                            }`}
-                          >
-                            {date.getDate()}
-                          </div>
-                          {dayEvents?.map((event, ei) => (
-                            <Link
-                              key={ei}
-                              href={`/register/${event.slug}`}
-                              className="block mb-1 last:mb-0"
-                            >
-                              <div className="rounded px-1.5 py-1 text-[11px] leading-tight bg-muted/70 hover:bg-muted transition-colors border border-border/40">
-                                <div className="font-medium truncate">
-                                  {event.distance} km — {event.name}
-                                </div>
-                                <div className="text-muted-foreground mt-0.5 truncate">
-                                  {formatTime(event.startTime)}
-                                  {event.chapterName && ` · ${event.chapterName}`}
-                                </div>
+                      {day}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {grid.weeks.map((week, wi) => (
+                  <tr key={wi} className="border-b border-border/40">
+                    {week.map((date, di) => {
+                      const dayEvents = date ? grid.events.get(toDateKey(date)) : undefined
+                      const isToday = date && toDateKey(date) === todayKey
+                      return (
+                        <td
+                          key={di}
+                          aria-current={isToday ? 'date' : undefined}
+                          className={`h-[5.5rem] align-top p-1.5 border-r last:border-r-0 border-border/30 ${
+                            date ? 'bg-background' : 'bg-muted/30'
+                          }`}
+                        >
+                          {date && (
+                            <>
+                              <div
+                                className={`text-sm tabular-nums mb-1 ${
+                                  isToday ? 'font-semibold text-primary' : 'text-muted-foreground'
+                                }`}
+                              >
+                                {date.getDate()}
                               </div>
-                            </Link>
-                          ))}
-                        </>
-                      )}
-                    </div>
-                  )
-                })}
-              </div>
-            ))}
+                              {dayEvents?.map((event, ei) => (
+                                <Link
+                                  key={ei}
+                                  href={`/register/${event.slug}`}
+                                  aria-label={eventLinkLabel(event, date)}
+                                  className="block mb-1 last:mb-0"
+                                >
+                                  <div className="rounded px-1.5 py-1 text-[11px] leading-tight bg-muted/70 hover:bg-muted transition-colors border border-border/40">
+                                    <div className="font-medium truncate">
+                                      {event.distance} km — {event.name}
+                                    </div>
+                                    <div className="text-muted-foreground mt-0.5 truncate">
+                                      {formatTime(event.startTime)}
+                                      {event.chapterName && ` · ${event.chapterName}`}
+                                    </div>
+                                  </div>
+                                </Link>
+                              ))}
+                            </>
+                          )}
+                        </td>
+                      )
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
 
           {/* Mobile: compact week rows with event dots */}
@@ -187,12 +213,13 @@ export function CalendarGridView({ events }: { events: Event[] }) {
                     {week.map((date, di) => {
                       const dayEvents = date ? grid.events.get(toDateKey(date)) : undefined
                       const hasEvents = dayEvents && dayEvents.length > 0
-                      const isToday = date && toDateKey(date) === toDateKey(new Date())
+                      const isToday = date && toDateKey(date) === todayKey
                       return (
                         <div key={di} className={`py-2.5 text-center ${date ? '' : 'bg-muted/20'}`}>
                           {date && (
                             <div className="flex flex-col items-center gap-1">
                               <span
+                                aria-current={isToday ? 'date' : undefined}
                                 className={`text-sm tabular-nums ${
                                   isToday
                                     ? 'font-semibold text-primary'
@@ -204,11 +231,16 @@ export function CalendarGridView({ events }: { events: Event[] }) {
                                 {date.getDate()}
                               </span>
                               {hasEvents && (
-                                <div className="flex gap-0.5">
-                                  {dayEvents.map((_, ei) => (
-                                    <span key={ei} className="w-1 h-1 rounded-full bg-primary" />
-                                  ))}
-                                </div>
+                                <>
+                                  <div className="flex gap-0.5" aria-hidden="true">
+                                    {dayEvents.map((_, ei) => (
+                                      <span key={ei} className="w-1 h-1 rounded-full bg-primary" />
+                                    ))}
+                                  </div>
+                                  <span className="sr-only">
+                                    {dayEvents.length} event{dayEvents.length !== 1 ? 's' : ''}
+                                  </span>
+                                </>
                               )}
                             </div>
                           )}
@@ -228,6 +260,7 @@ export function CalendarGridView({ events }: { events: Event[] }) {
                             <Link
                               key={`${toDateKey(date)}-${ei}`}
                               href={`/register/${event.slug}`}
+                              aria-label={eventLinkLabel(event, date)}
                               className="flex items-center gap-2 text-sm py-1.5 active:bg-muted/50 -mx-1 px-1 rounded"
                             >
                               <span className="text-xs text-muted-foreground tabular-nums shrink-0 w-10 text-center">
@@ -236,7 +269,7 @@ export function CalendarGridView({ events }: { events: Event[] }) {
                               <span className="font-medium truncate min-w-0">{event.name}</span>
                               <Badge
                                 variant="outline"
-                                className="text-[9px] tracking-wider shrink-0 ml-auto"
+                                className="text-[10px] tracking-wider shrink-0 ml-auto"
                               >
                                 {event.distance} km
                               </Badge>

@@ -190,7 +190,10 @@ describe('CalendarPage', () => {
     await user.click(screen.getByRole('combobox'))
     await user.click(screen.getByRole('option', { name: '400 km' }))
 
-    expect(screen.getByText('No events match the selected filter.')).toBeInTheDocument()
+    const matches = screen.getAllByText('No events match the selected filter.')
+    // One visible, one in the sr-only live region
+    expect(matches.length).toBeGreaterThanOrEqual(1)
+    expect(matches.some((el) => !el.classList.contains('sr-only'))).toBe(true)
   })
 
   it('can switch back to all distances', async () => {
