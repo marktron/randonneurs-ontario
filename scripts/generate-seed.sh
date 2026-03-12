@@ -59,7 +59,8 @@ cat > "$SEED_FILE" << 'EOF'
 -- 5. events
 -- 6. results
 -- 7. result_awards
--- 8. registrations
+-- 8. rider_awards
+-- 9. registrations
 --
 -- Note: admins table is NOT included (requires auth.users)
 -- Use scripts/create-admin.ts to create admin users after seeding.
@@ -83,6 +84,7 @@ echo "  routes:        $(grep -c "INSERT INTO public.routes" "$SEED_FILE" || ech
 echo "  events:        $(grep -c "INSERT INTO public.events" "$SEED_FILE" || echo 0)"
 echo "  results:       $(grep -c "INSERT INTO public.results" "$SEED_FILE" || echo 0)"
 echo "  result_awards: $(grep -c "INSERT INTO public.result_awards" "$SEED_FILE" || echo 0)"
+echo "  rider_awards:  $(grep -c "INSERT INTO public.rider_awards" "$SEED_FILE" || echo 0)"
 echo "  registrations: $(grep -c "INSERT INTO public.registrations" "$SEED_FILE" || echo 0)"
 echo ""
 echo "File size: $(du -h "$SEED_FILE" | cut -f1)"

@@ -125,6 +125,11 @@ function YearSection({ yearData }: { yearData: RiderYearResults }) {
           {yearData.completedCount} completed ride{yearData.completedCount !== 1 ? 's' : ''}{' '}
           &middot; {yearData.totalDistanceKm.toLocaleString()} km
         </p>
+        {yearData.seasonAwards && yearData.seasonAwards.length > 0 && (
+          <div className="mt-2">
+            <AwardBadgeList awards={yearData.seasonAwards} />
+          </div>
+        )}
       </header>
 
       {/* Mobile: Stacked cards */}
@@ -209,20 +214,23 @@ export default async function RiderPage({ params }: RiderPageProps) {
   const totalCompletedRides = yearResults.reduce((sum, y) => sum + y.completedCount, 0)
   const totalDistanceKm = yearResults.reduce((sum, y) => sum + y.totalDistanceKm, 0)
 
-  // Aggregate all awards across all results (excluding First Brevet from header)
+  // Aggregate all awards across all results and season awards (excluding First Brevet from header)
   // Devil Week only counts once per year
   const devilWeekYears = new Set<number>()
-  const allAwards = yearResults.flatMap((year) =>
-    year.results.flatMap((result) =>
-      (result.awards ?? []).filter((award) => {
-        if (award.title === 'Completed Devil Week') {
-          if (devilWeekYears.has(year.year)) return false
-          devilWeekYears.add(year.year)
-        }
-        return true
-      })
-    )
-  )
+  const allAwards = [
+    ...yearResults.flatMap((year) =>
+      year.results.flatMap((result) =>
+        (result.awards ?? []).filter((award) => {
+          if (award.title === 'Completed Devil Week') {
+            if (devilWeekYears.has(year.year)) return false
+            devilWeekYears.add(year.year)
+          }
+          return true
+        })
+      )
+    ),
+    ...yearResults.flatMap((yr) => yr.seasonAwards ?? []),
+  ]
   const aggregatedAwards = aggregateAwards(allAwards).filter(
     (award) => award.title !== 'First Brevet'
   )

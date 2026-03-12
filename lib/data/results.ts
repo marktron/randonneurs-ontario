@@ -394,6 +394,7 @@ export interface RiderYearResults {
   completedCount: number
   totalDistanceKm: number
   results: RiderEventResult[]
+  seasonAwards: RiderEventAward[]
 }
 
 const getRiderBySlugInner = cache(async (slug: string): Promise<RiderInfo | null> => {
@@ -482,6 +483,29 @@ const getRiderResultsInner = cache(async (slug: string): Promise<RiderYearResult
 
   if (!results) return []
 
+  // Query season-scoped awards (e.g., Super Randonneur) from rider_awards
+  const { data: seasonAwardsData } = await getSupabase()
+    .from('rider_awards')
+    .select('season, awards(id, title, description)')
+    .eq('rider_id', rider.id)
+
+  // Group season awards by year
+  const seasonAwardsByYear = new Map<number, RiderEventAward[]>()
+  if (seasonAwardsData) {
+    for (const sa of seasonAwardsData) {
+      if (!sa.awards) continue
+      const award: RiderEventAward = {
+        id: sa.awards.id,
+        title: sa.awards.title,
+        description: sa.awards.description,
+      }
+      if (!seasonAwardsByYear.has(sa.season)) {
+        seasonAwardsByYear.set(sa.season, [])
+      }
+      seasonAwardsByYear.get(sa.season)!.push(award)
+    }
+  }
+
   // Type for the query result with awards
   type ResultWithAwards = ResultWithEvent & {
     id: string
@@ -556,6 +580,7 @@ const getRiderResultsInner = cache(async (slug: string): Promise<RiderYearResult
       completedCount,
       totalDistanceKm,
       results: events,
+      seasonAwards: seasonAwardsByYear.get(year) ?? [],
     })
   }
 

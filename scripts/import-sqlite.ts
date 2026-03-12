@@ -473,11 +473,21 @@ async function importResults(
   return { inserted, skipped }
 }
 
+// SR award title — used to split season-scoped awards from result-scoped awards
+const SR_AWARD_TITLE = 'Super Randonneur'
+
 async function importResultAwards(
   resultIds: Map<string, string>,
   awardIds: Map<string, string>
 ): Promise<{ inserted: number; skipped: number }> {
   console.log('\n--- Importing Result Awards ---')
+
+  // Look up the SR award ID to skip it (SR goes into rider_awards instead)
+  const srAwardSqliteId = (
+    sqlite.prepare('SELECT id FROM awards WHERE title = ?').get(SR_AWARD_TITLE) as
+      | { id: string }
+      | undefined
+  )?.id
 
   const sqliteResultAwards = sqlite.prepare('SELECT * FROM result_awards').all() as Array<{
     result_id: string
@@ -486,6 +496,7 @@ async function importResultAwards(
 
   let inserted = 0
   let skipped = 0
+  let srSkipped = 0
   const batchSize = 100
 
   for (let i = 0; i < sqliteResultAwards.length; i += batchSize) {
@@ -496,6 +507,12 @@ async function importResultAwards(
     }> = []
 
     for (const ra of batch) {
+      // Skip Super Randonneur — handled by importRiderAwards
+      if (ra.award_ref === srAwardSqliteId) {
+        srSkipped++
+        continue
+      }
+
       const resultId = resultIds.get(ra.result_id)
       const awardId = awardIds.get(ra.award_ref)
 
@@ -530,7 +547,86 @@ async function importResultAwards(
     }
   }
 
-  console.log(`Result Awards: ${inserted} inserted, ${skipped} skipped`)
+  console.log(
+    `Result Awards: ${inserted} inserted, ${skipped} skipped, ${srSkipped} SR skipped (handled by importRiderAwards)`
+  )
+  return { inserted, skipped }
+}
+
+async function importRiderAwards(
+  resultIds: Map<string, string>,
+  awardIds: Map<string, string>,
+  riderIds: Map<string, string>
+): Promise<{ inserted: number; skipped: number }> {
+  console.log('\n--- Importing Rider Awards (season-scoped) ---')
+
+  // Look up the SR award in SQLite
+  const srAward = sqlite.prepare('SELECT id FROM awards WHERE title = ?').get(SR_AWARD_TITLE) as
+    | { id: string }
+    | undefined
+
+  if (!srAward) {
+    console.log('No Super Randonneur award found in SQLite, skipping')
+    return { inserted: 0, skipped: 0 }
+  }
+
+  const srAwardId = awardIds.get(srAward.id)
+  if (!srAwardId) {
+    console.log('Super Randonneur award ID not mapped, skipping')
+    return { inserted: 0, skipped: 0 }
+  }
+
+  // Get all SR result_awards joined with results to get rider_id and season
+  const srResultAwards = sqlite
+    .prepare(
+      `
+    SELECT DISTINCT r.rider_ref, res.season
+    FROM result_awards r
+    JOIN results res ON r.result_id = res.id
+    WHERE r.award_ref = ? AND res.season IS NOT NULL
+  `
+    )
+    .all(srAward.id) as Array<{ rider_ref: string; season: number }>
+
+  let inserted = 0
+  let skipped = 0
+
+  const riderAwardsToInsert: Array<{
+    rider_id: string
+    award_id: string
+    season: number
+  }> = []
+
+  for (const ra of srResultAwards) {
+    const riderId = riderIds.get(ra.rider_ref)
+    if (!riderId) {
+      skipped++
+      continue
+    }
+
+    riderAwardsToInsert.push({
+      rider_id: riderId,
+      award_id: srAwardId,
+      season: ra.season,
+    })
+  }
+
+  // Insert in batches
+  const batchSize = 100
+  for (let i = 0; i < riderAwardsToInsert.length; i += batchSize) {
+    const batch = riderAwardsToInsert.slice(i, i + batchSize)
+
+    const { error } = await supabase.from('rider_awards').insert(batch)
+
+    if (error) {
+      console.error(`Error inserting rider_awards batch:`, error.message)
+      skipped += batch.length
+    } else {
+      inserted += batch.length
+    }
+  }
+
+  console.log(`Rider Awards: ${inserted} inserted, ${skipped} skipped`)
   return { inserted, skipped }
 }
 
@@ -563,6 +659,7 @@ async function main() {
   await importEvents(eventIds, chapterIds, routeIds, brevetDistances)
   await importResults(resultIds, eventIds, riderIds, brevetDistances)
   await importResultAwards(resultIds, awardIds)
+  await importRiderAwards(resultIds, awardIds, riderIds)
 
   // Final summary
   console.log('\n===========================================')
@@ -585,6 +682,9 @@ async function main() {
   const { count: awardsCount } = await supabase
     .from('awards')
     .select('*', { count: 'exact', head: true })
+  const { count: riderAwardsCount } = await supabase
+    .from('rider_awards')
+    .select('*', { count: 'exact', head: true })
 
   console.log('\nFinal database counts:')
   console.log(`  Riders: ${ridersCount}`)
@@ -592,6 +692,7 @@ async function main() {
   console.log(`  Events: ${eventsCount}`)
   console.log(`  Results: ${resultsCount}`)
   console.log(`  Awards: ${awardsCount}`)
+  console.log(`  Rider Awards: ${riderAwardsCount}`)
 
   sqlite.close()
 }
