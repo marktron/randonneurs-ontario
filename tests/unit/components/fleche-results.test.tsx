@@ -118,6 +118,38 @@ describe('Fleche results display', () => {
     expect(dnfElements.length).toBeGreaterThan(0)
   })
 
+  it('hides distance for teams where all riders DNF', () => {
+    const eventWithAllDnfTeam: EventResult = {
+      ...baseFlecheEvent,
+      teams: [
+        {
+          teamName: 'Speed Demons',
+          distance: '412',
+          riders: [
+            { name: 'Alice Anderson', slug: 'alice-anderson', time: '', isFirstBrevet: false },
+          ],
+        },
+        {
+          teamName: 'All DNF Team',
+          distance: '370',
+          riders: [
+            { name: 'Fred Chagnon', slug: 'fred-chagnon', time: 'DNF', isFirstBrevet: false },
+            { name: 'David Cole', slug: 'david-cole', time: 'DNF', isFirstBrevet: false },
+          ],
+        },
+      ],
+    }
+
+    render(<ResultsPage {...defaultProps} events={[eventWithAllDnfTeam]} />)
+
+    // Speed Demons (not all DNF) should show distance
+    const speedDemonsHeader = screen.getByText('Speed Demons').closest('div')!
+    expect(within(speedDemonsHeader).getByText('412 km')).toBeInTheDocument()
+    // All DNF Team should not show distance
+    const allDnfHeader = screen.getByText('All DNF Team').closest('div')!
+    expect(within(allDnfHeader).queryByText('370 km')).not.toBeInTheDocument()
+  })
+
   it('renders Unknown Team with subdued styling', () => {
     const eventWithUnknownTeam: EventResult = {
       ...baseFlecheEvent,

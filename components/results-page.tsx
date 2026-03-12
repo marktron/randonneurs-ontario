@@ -223,44 +223,51 @@ export function ResultsPage({
                   {isFleche ? (
                     /* Fleche: Team-grouped layout */
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-10">
-                      {event.teams!.map((team) => (
-                        <div
-                          key={team.teamName}
-                          className={`${team.teamName === 'Unknown Team' ? 'opacity-60' : ''}`}
-                        >
-                          {/* Team name + distance */}
-                          <div className="flex items-baseline justify-between gap-2 mb-2">
-                            <h3 className="font-serif text-lg tracking-tight">{team.teamName}</h3>
-                            <span className="font-serif text-lg tracking-tight tabular-nums text-muted-foreground shrink-0">
-                              {team.distance} km
-                            </span>
-                          </div>
-                          {/* Riders */}
-                          <div className="border-t border-border">
-                            {team.riders.map((rider, index) => {
-                              const isDnf = ['DNF', 'DNS', 'OTL', 'DQ'].includes(rider.time)
-                              return (
-                                <div
-                                  key={`${rider.name}-${index}`}
-                                  className="flex items-center justify-between py-1.5 border-b border-border/50"
-                                >
-                                  <Link
-                                    href={`/riders/${rider.slug}`}
-                                    className="text-sm hover:text-primary transition-colors"
+                      {event.teams!.map((team) => {
+                        const allDnf = team.riders.every((r) =>
+                          ['DNF', 'DNS', 'OTL', 'DQ'].includes(r.time)
+                        )
+                        return (
+                          <div
+                            key={team.teamName}
+                            className={`${team.teamName === 'Unknown Team' ? 'opacity-60' : ''}`}
+                          >
+                            {/* Team name + distance */}
+                            <div className="flex items-baseline justify-between gap-2 mb-2">
+                              <h3 className="font-serif text-lg tracking-tight">{team.teamName}</h3>
+                              {!allDnf && (
+                                <span className="font-serif text-lg tracking-tight tabular-nums text-muted-foreground shrink-0">
+                                  {team.distance} km
+                                </span>
+                              )}
+                            </div>
+                            {/* Riders */}
+                            <div className="border-t border-border">
+                              {team.riders.map((rider, index) => {
+                                const isDnf = ['DNF', 'DNS', 'OTL', 'DQ'].includes(rider.time)
+                                return (
+                                  <div
+                                    key={`${rider.name}-${index}`}
+                                    className="flex items-center justify-between py-1.5 border-b border-border/50"
                                   >
-                                    {rider.name}
-                                  </Link>
-                                  {isDnf && (
-                                    <span className="text-xs tabular-nums text-muted-foreground">
-                                      {rider.time}
-                                    </span>
-                                  )}
-                                </div>
-                              )
-                            })}
+                                    <Link
+                                      href={`/riders/${rider.slug}`}
+                                      className="text-sm hover:text-primary transition-colors"
+                                    >
+                                      {rider.name}
+                                    </Link>
+                                    {isDnf && (
+                                      <span className="text-xs tabular-nums text-muted-foreground">
+                                        {rider.time}
+                                      </span>
+                                    )}
+                                  </div>
+                                )
+                              })}
+                            </div>
                           </div>
-                        </div>
-                      ))}
+                        )
+                      })}
                     </div>
                   ) : (
                     /* Non-fleche: Flat rider grid */
