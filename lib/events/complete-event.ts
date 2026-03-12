@@ -149,6 +149,9 @@ export async function createPendingResultsAndSendEmails(
           subject,
           text,
           html,
+          trackingSettings: {
+            clickTracking: { enable: false },
+          },
         })
         emailsSent++
         console.log(`Sent result submission email for event ${event.name}`)

@@ -596,6 +596,9 @@ This email was sent from the Randonneurs Ontario admin system.
             subject,
             text: emailBody,
             attachments: [attachment],
+            trackingSettings: {
+              clickTracking: { enable: false },
+            },
           })
         } catch (emailError) {
           console.error('Failed to send results email:', emailError)

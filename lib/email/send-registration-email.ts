@@ -34,6 +34,9 @@ export async function sendRegistrationConfirmationEmail(
       subject,
       text,
       html,
+      trackingSettings: {
+        clickTracking: { enable: false },
+      },
     })
 
     console.log('Registration email sent successfully')
@@ -69,6 +72,9 @@ export async function sendCancellationConfirmationEmail(
       subject,
       text,
       html,
+      trackingSettings: {
+        clickTracking: { enable: false },
+      },
     })
 
     console.log('Cancellation email sent successfully')
