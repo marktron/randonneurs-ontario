@@ -121,15 +121,15 @@ function YearSection({ yearData }: { yearData: RiderYearResults }) {
     <section className="space-y-4">
       <header>
         <h2 className="font-serif text-3xl md:text-4xl tracking-tight">{yearData.year}</h2>
-        <p className="text-muted-foreground mt-1">
-          {yearData.completedCount} completed ride{yearData.completedCount !== 1 ? 's' : ''}{' '}
-          &middot; {yearData.totalDistanceKm.toLocaleString()} km
-        </p>
-        {yearData.seasonAwards && yearData.seasonAwards.length > 0 && (
-          <div className="mt-2">
-            <AwardBadgeList awards={yearData.seasonAwards} />
-          </div>
-        )}
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1">
+          <p className="text-muted-foreground">
+            {yearData.completedCount} completed ride{yearData.completedCount !== 1 ? 's' : ''}{' '}
+            &middot; {yearData.totalDistanceKm.toLocaleString()} km
+          </p>
+          {yearData.seasonAwards && yearData.seasonAwards.length > 0 && (
+            <AwardSummary awards={aggregateAwards(yearData.seasonAwards)} />
+          )}
+        </div>
       </header>
 
       {/* Mobile: Stacked cards */}

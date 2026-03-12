@@ -63,7 +63,7 @@ CREATE POLICY "rider_awards_delete_admin" ON rider_awards
 -- 4. Migrate SR data from result_awards to rider_awards
 -- ============================================
 INSERT INTO rider_awards (rider_id, award_id, season)
-SELECT DISTINCT res.rider_id, ra.award_id, res.season
+SELECT res.rider_id, ra.award_id, res.season
 FROM result_awards ra
 JOIN results res ON ra.result_id = res.id
 JOIN awards a ON ra.award_id = a.id

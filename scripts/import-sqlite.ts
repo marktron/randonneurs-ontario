@@ -473,8 +473,15 @@ async function importResults(
   return { inserted, skipped }
 }
 
-// SR award title — used to split season-scoped awards from result-scoped awards
-const SR_AWARD_TITLE = 'Super Randonneur'
+// Season-scoped award titles — these go into rider_awards instead of result_awards
+const SEASON_AWARD_TITLES = [
+  'Super Randonneur',
+  'Randonneur 5000',
+  'Randonneur 10000',
+  'Ontario Explorer',
+  'O-5000',
+  'Ontario Rover',
+]
 
 async function importResultAwards(
   resultIds: Map<string, string>,
@@ -482,12 +489,14 @@ async function importResultAwards(
 ): Promise<{ inserted: number; skipped: number }> {
   console.log('\n--- Importing Result Awards ---')
 
-  // Look up the SR award ID to skip it (SR goes into rider_awards instead)
-  const srAwardSqliteId = (
-    sqlite.prepare('SELECT id FROM awards WHERE title = ?').get(SR_AWARD_TITLE) as
+  // Look up season-scoped award IDs to skip them (they go into rider_awards instead)
+  const seasonAwardSqliteIds = new Set<string>()
+  for (const title of SEASON_AWARD_TITLES) {
+    const award = sqlite.prepare('SELECT id FROM awards WHERE title = ?').get(title) as
       | { id: string }
       | undefined
-  )?.id
+    if (award) seasonAwardSqliteIds.add(award.id)
+  }
 
   const sqliteResultAwards = sqlite.prepare('SELECT * FROM result_awards').all() as Array<{
     result_id: string
@@ -507,8 +516,8 @@ async function importResultAwards(
     }> = []
 
     for (const ra of batch) {
-      // Skip Super Randonneur — handled by importRiderAwards
-      if (ra.award_ref === srAwardSqliteId) {
+      // Skip season-scoped awards — handled by importRiderAwards
+      if (seasonAwardSqliteIds.has(ra.award_ref)) {
         srSkipped++
         continue
       }
@@ -548,7 +557,7 @@ async function importResultAwards(
   }
 
   console.log(
-    `Result Awards: ${inserted} inserted, ${skipped} skipped, ${srSkipped} SR skipped (handled by importRiderAwards)`
+    `Result Awards: ${inserted} inserted, ${skipped} skipped, ${srSkipped} season-scoped skipped (handled by importRiderAwards)`
   )
   return { inserted, skipped }
 }
@@ -560,34 +569,6 @@ async function importRiderAwards(
 ): Promise<{ inserted: number; skipped: number }> {
   console.log('\n--- Importing Rider Awards (season-scoped) ---')
 
-  // Look up the SR award in SQLite
-  const srAward = sqlite.prepare('SELECT id FROM awards WHERE title = ?').get(SR_AWARD_TITLE) as
-    | { id: string }
-    | undefined
-
-  if (!srAward) {
-    console.log('No Super Randonneur award found in SQLite, skipping')
-    return { inserted: 0, skipped: 0 }
-  }
-
-  const srAwardId = awardIds.get(srAward.id)
-  if (!srAwardId) {
-    console.log('Super Randonneur award ID not mapped, skipping')
-    return { inserted: 0, skipped: 0 }
-  }
-
-  // Get all SR result_awards joined with results to get rider_id and season
-  const srResultAwards = sqlite
-    .prepare(
-      `
-    SELECT DISTINCT r.rider_ref, res.season
-    FROM result_awards r
-    JOIN results res ON r.result_id = res.id
-    WHERE r.award_ref = ? AND res.season IS NOT NULL
-  `
-    )
-    .all(srAward.id) as Array<{ rider_ref: string; season: number }>
-
   let inserted = 0
   let skipped = 0
 
@@ -597,18 +578,50 @@ async function importRiderAwards(
     season: number
   }> = []
 
-  for (const ra of srResultAwards) {
-    const riderId = riderIds.get(ra.rider_ref)
-    if (!riderId) {
-      skipped++
+  for (const title of SEASON_AWARD_TITLES) {
+    const sqliteAward = sqlite.prepare('SELECT id FROM awards WHERE title = ?').get(title) as
+      | { id: string }
+      | undefined
+
+    if (!sqliteAward) {
+      console.log(`  No "${title}" award found in SQLite, skipping`)
       continue
     }
 
-    riderAwardsToInsert.push({
-      rider_id: riderId,
-      award_id: srAwardId,
-      season: ra.season,
-    })
+    const supabaseAwardId = awardIds.get(sqliteAward.id)
+    if (!supabaseAwardId) {
+      console.log(`  "${title}" award ID not mapped, skipping`)
+      continue
+    }
+
+    // Get all result_awards for this award joined with results to get rider_id and season
+    const awardResults = sqlite
+      .prepare(
+        `
+      SELECT r.rider_ref, res.season
+      FROM result_awards r
+      JOIN results res ON r.result_id = res.id
+      WHERE r.award_ref = ? AND res.season IS NOT NULL
+    `
+      )
+      .all(sqliteAward.id) as Array<{ rider_ref: string; season: number }>
+
+    let awardCount = 0
+    for (const ra of awardResults) {
+      const riderId = riderIds.get(ra.rider_ref)
+      if (!riderId) {
+        skipped++
+        continue
+      }
+
+      riderAwardsToInsert.push({
+        rider_id: riderId,
+        award_id: supabaseAwardId,
+        season: ra.season,
+      })
+      awardCount++
+    }
+    console.log(`  ${title}: ${awardCount} entries`)
   }
 
   // Insert in batches
