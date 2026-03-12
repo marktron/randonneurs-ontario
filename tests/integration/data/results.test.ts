@@ -490,6 +490,41 @@ describe('getRiderResults', () => {
     expect(result[1].year).toBe(2024)
   })
 
+  it('uses result distance_km for fleche events instead of event distance', async () => {
+    const mockRider = { id: 'rider-1' }
+
+    const mockResults = [
+      {
+        id: 'result-fleche',
+        finish_time: null,
+        status: 'finished',
+        note: null,
+        team_name: 'Gravelly Badgers',
+        season: 2025,
+        distance_km: 412,
+        events: {
+          name: 'Flèche',
+          event_date: '2025-05-18',
+          distance_km: 360,
+          event_type: 'fleche',
+          chapters: { slug: 'toronto' },
+        },
+        result_awards: [],
+      },
+    ]
+
+    mockModule.__mockRiderFound(mockRider)
+    mockModule.__mockEventsFound(mockResults)
+
+    const result = await getRiderResults('fleche-rider')
+
+    expect(result).toHaveLength(1)
+    // Should use the result's distance (412), not the event's distance (360)
+    expect(result[0].results[0].distanceKm).toBe(412)
+    // Total distance should also use the result's distance
+    expect(result[0].totalDistanceKm).toBe(412)
+  })
+
   it('calculates completed count and total distance', async () => {
     const mockRider = {
       id: 'rider-1',

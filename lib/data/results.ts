@@ -450,6 +450,7 @@ const getRiderResultsInner = cache(async (slug: string): Promise<RiderYearResult
       note,
       team_name,
       season,
+      distance_km,
       events (
         name,
         event_date,
@@ -485,6 +486,7 @@ const getRiderResultsInner = cache(async (slug: string): Promise<RiderYearResult
   type ResultWithAwards = ResultWithEvent & {
     id: string
     team_name: string | null
+    distance_km: number | null
     result_awards: Array<{
       awards: { id: string; title: string; description: string | null } | null
     }> | null
@@ -512,11 +514,15 @@ const getRiderResultsInner = cache(async (slug: string): Promise<RiderYearResult
         description: ra.awards!.description,
       }))
 
+    // For fleche events, use the result's distance (each team rides a different distance)
+    const distanceKm =
+      event.event_type === 'fleche' && result.distance_km ? result.distance_km : event.distance_km
+
     const eventResult: RiderEventResult = {
       id: result.id,
       date: event.event_date,
       eventName: event.name,
-      distanceKm: event.distance_km,
+      distanceKm,
       time: formatFinishTime(result.finish_time),
       status: result.status,
       note: result.note,
