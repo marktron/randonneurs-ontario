@@ -6,6 +6,10 @@ const nextConfig: NextConfig = {
     serverActions: {
       bodySizeLimit: '6mb',
     },
+    staleTimes: {
+      dynamic: 0,
+      static: 30,
+    },
   },
   redirects: async () => [
     {
