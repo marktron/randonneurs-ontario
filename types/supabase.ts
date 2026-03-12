@@ -109,7 +109,7 @@ export type Database = {
       }
       awards: {
         Row: {
-          award_type: string | null
+          award_type: string
           created_at: string | null
           description: string | null
           id: string
@@ -118,7 +118,7 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
-          award_type?: string | null
+          award_type?: string
           created_at?: string | null
           description?: string | null
           id?: string
@@ -127,7 +127,7 @@ export type Database = {
           updated_at?: string | null
         }
         Update: {
-          award_type?: string | null
+          award_type?: string
           created_at?: string | null
           description?: string | null
           id?: string
@@ -555,6 +555,58 @@ export type Database = {
           },
           {
             foreignKeyName: 'results_rider_id_fkey'
+            columns: ['rider_id']
+            isOneToOne: false
+            referencedRelation: 'riders'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      rider_awards: {
+        Row: {
+          award_id: string
+          created_at: string | null
+          id: string
+          note: string | null
+          rider_id: string
+          season: number
+          updated_at: string | null
+        }
+        Insert: {
+          award_id: string
+          created_at?: string | null
+          id?: string
+          note?: string | null
+          rider_id: string
+          season: number
+          updated_at?: string | null
+        }
+        Update: {
+          award_id?: string
+          created_at?: string | null
+          id?: string
+          note?: string | null
+          rider_id?: string
+          season?: number
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'rider_awards_award_id_fkey'
+            columns: ['award_id']
+            isOneToOne: false
+            referencedRelation: 'awards'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'rider_awards_rider_id_fkey'
+            columns: ['rider_id']
+            isOneToOne: false
+            referencedRelation: 'public_riders'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'rider_awards_rider_id_fkey'
             columns: ['rider_id']
             isOneToOne: false
             referencedRelation: 'riders'
