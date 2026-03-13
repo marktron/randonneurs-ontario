@@ -50,29 +50,40 @@ Exports:
 
 Add `"test:integration-real": "vitest run --config vitest.config.integration-real.mts"` to `package.json`.
 
+### Module isolation
+
+These tests run in a separate Vitest process (via separate config) to avoid the module-level Supabase singleton being initialized with fake env vars from the main test setup. The main `vitest.config.mts` already excludes these tests by accident of naming (`tests/integration/**` does not match `tests/integration-real/`), but we add `tests/integration-real` to the main config's `exclude` array explicitly for safety.
+
 ## Test Data
 
 ### Deterministic UUIDs (non-overlapping with E2E `00000000-e2e0-*` range)
 
-| Entity         | UUID                                   |
-| -------------- | -------------------------------------- |
-| rider          | `00000000-1nt0-4000-a000-000000000001` |
-| route          | `00000000-1nt0-4000-a000-000000000002` |
-| completedEvent | `00000000-1nt0-4000-a000-000000000003` |
-| scheduledEvent | `00000000-1nt0-4000-a000-000000000004` |
-| finishedResult | `00000000-1nt0-4000-a000-000000000005` |
-| dnsResult      | `00000000-1nt0-4000-a000-000000000006` |
-| registration   | `00000000-1nt0-4000-a000-000000000007` |
-| membership     | `00000000-1nt0-4000-a000-000000000008` |
+Uses hex prefix `1a10` (valid UUID hex, distinct from E2E `e2e0`).
+
+| Entity           | UUID                                   |
+| ---------------- | -------------------------------------- |
+| rider            | `00000000-1a10-4000-a000-000000000001` |
+| route            | `00000000-1a10-4000-a000-000000000002` |
+| completedEvent   | `00000000-1a10-4000-a000-000000000003` |
+| scheduledEvent   | `00000000-1a10-4000-a000-000000000004` |
+| finishedResult   | `00000000-1a10-4000-a000-000000000005` |
+| dnsResult        | `00000000-1a10-4000-a000-000000000006` |
+| registration     | `00000000-1a10-4000-a000-000000000007` |
+| membership       | `00000000-1a10-4000-a000-000000000008` |
+| pendingResult    | `00000000-1a10-4000-a000-000000000009` |
+| dnfResult        | `00000000-1a10-4000-a000-00000000000a` |
+| pastRegistration | `00000000-1a10-4000-a000-00000000000b` |
 
 ### Setup (beforeAll)
 
-Seed in dependency order:
+Explicitly set `process.env.NEXT_PUBLIC_CURRENT_SEASON = '2026'` in `beforeAll` so tests are deterministic regardless of env file contents.
 
-1. Rider: `{ first_name: 'IntTest', last_name: 'Rider', slug: 'inttest-rider' }`
-2. Route: `{ name: 'IntTest Route', chapter_id: TORONTO_CHAPTER_ID, distance_km: 200 }`
-3. Completed event: past date, `status: 'completed'`
-4. Scheduled event: future date, `status: 'scheduled'`
+Seed in dependency order (all NOT NULL columns included):
+
+1. Rider: `{ id, first_name: 'IntTest', last_name: 'Rider', slug: 'inttest-rider' }`
+2. Route: `{ id, slug: 'inttest-route', name: 'IntTest Route', chapter_id: TORONTO_CHAPTER_ID, distance_km: 200, is_active: true }`
+3. Completed event: `{ id, slug: 'inttest-completed-200km-...', name: 'IntTest Completed', chapter_id: TORONTO_CHAPTER_ID, route_id, event_type: 'brevet', distance_km: 200, event_date: pastDate, status: 'completed' }`
+4. Scheduled event: `{ id, slug: 'inttest-scheduled-200km-...', name: 'IntTest Scheduled', chapter_id: TORONTO_CHAPTER_ID, route_id, event_type: 'brevet', distance_km: 200, event_date: futureDate, status: 'scheduled' }`
 
 ### Teardown (afterAll)
 
@@ -85,7 +96,9 @@ Delete in reverse dependency order: memberships → results → registrations �
 
 ## Test Cases
 
-### `getMembershipForRider` (5 tests)
+### `getMembershipForRider` (6 tests)
+
+CCN client is mocked via `vi.mock('@/lib/ccn/client')` at the top of the test file. Each test configures the mock return value as needed.
 
 **Test 1: returns cached membership from DB**
 
@@ -102,51 +115,80 @@ Delete in reverse dependency order: memberships → results → registrations �
 - Assert: `searchCCNMembership` was called with `('IntTest', 'Rider')`
 - Assert: Query `memberships` table — row exists with `rider_id`, `season: 2026`, `membership_id: 99`
 
-**Test 3: returns found:false when CCN has no match**
+**Test 3: second call uses DB cache, not CCN**
+
+- Setup: Mock `searchCCNMembership` → `{ found: true, membershipId: 99, type: 'Individual Membership' }`
+- Act: Call `getMembershipForRider` twice for the same rider
+- Assert: `searchCCNMembership` was called exactly once (first call)
+- Assert: Second call returns same result from DB cache
+
+**Test 4: returns found:false when CCN has no match**
 
 - Setup: No membership row. Mock `searchCCNMembership` → `{ found: false }`
 - Act: Call `getMembershipForRider(riderId, 'IntTest', 'Rider')`
 - Assert: Returns `{ found: false }`
 - Assert: Query `memberships` table — no row inserted
 
-**Test 4: propagates CCN API error**
+**Test 5: propagates CCN API error**
 
 - Setup: No membership row. Mock `searchCCNMembership` → throws `Error('CCN API error: 500')`
 - Act: Call `getMembershipForRider(riderId, 'IntTest', 'Rider')`
 - Assert: Rejects with error matching 'CCN API error'
 - Assert: Query `memberships` table — no row inserted
 
-**Test 5: throws when CCN_ENDPOINT not set**
+**Test 6: throws when CCN_ENDPOINT not set**
 
 - Setup: No membership row. Mock `searchCCNMembership` → throws `Error('CCN_ENDPOINT environment variable not set')`
 - Act: Call `getMembershipForRider(riderId, 'IntTest', 'Rider')`
 - Assert: Rejects with error matching 'CCN_ENDPOINT'
+- Note: This tests error propagation from CCN client, not the env var check itself (which is tested in `ccn-client.test.ts`)
 
-### `isTrialUsed` (4 tests)
+### `isTrialUsed` (7 tests)
 
-**Test 6: returns true when rider has finished result in current season**
+**Test 7: returns true when rider has finished result**
 
 - Setup: Insert result `{ rider_id, event_id: completedEvent, status: 'finished', season: 2026, distance_km: 200 }`
 - Act: Call `isTrialUsed(riderId)`
 - Assert: Returns `true`
 
-**Test 7: returns true when rider has upcoming registration**
+**Test 8: returns true when rider has DNF result**
+
+- Setup: Insert result `{ rider_id, event_id: completedEvent, status: 'dnf', season: 2026, distance_km: 200 }`
+- Act: Call `isTrialUsed(riderId)`
+- Assert: Returns `true`
+- Rationale: Verifies the `.in('status', ['finished', 'dnf', 'otl', 'dq'])` filter includes non-finished counting statuses
+
+**Test 9: returns true when rider has upcoming registration**
 
 - Setup: Insert registration `{ rider_id, event_id: scheduledEvent, status: 'registered' }`
 - Act: Call `isTrialUsed(riderId)`
 - Assert: Returns `true`
 
-**Test 8: returns false when rider has no results or registrations**
+**Test 10: returns false when rider has no results or registrations**
 
 - Setup: No results or registrations for rider
 - Act: Call `isTrialUsed(riderId)`
 - Assert: Returns `false`
 
-**Test 9: returns false when rider has only DNS result**
+**Test 11: returns false when rider has only DNS result**
 
 - Setup: Insert result `{ rider_id, event_id: completedEvent, status: 'dns', season: 2026, distance_km: 200 }`
 - Act: Call `isTrialUsed(riderId)`
 - Assert: Returns `false`
+
+**Test 12: returns false when rider has only pending result**
+
+- Setup: Insert result `{ rider_id, event_id: completedEvent, status: 'pending', season: 2026, distance_km: 200 }`
+- Act: Call `isTrialUsed(riderId)`
+- Assert: Returns `false`
+- Rationale: `pending` is the default status before results are submitted; must not count as trial usage
+
+**Test 13: returns false when rider has registration for past event only**
+
+- Setup: Insert registration `{ rider_id, event_id: completedEvent, status: 'registered' }` (completedEvent has a past date)
+- Act: Call `isTrialUsed(riderId)`
+- Assert: Returns `false`
+- Rationale: Verifies the `gte('events.event_date', today)` filter excludes past events
 
 ## Files Changed
 
