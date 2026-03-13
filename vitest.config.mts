@@ -13,7 +13,7 @@ export default defineConfig({
       'tests/integration/**/*.test.ts',
       'tests/integration/**/*.test.tsx',
     ],
-    exclude: ['node_modules', 'tests/e2e'],
+    exclude: ['node_modules', 'tests/e2e', 'tests/integration-real'],
     // Use node environment for unit/integration tests (no DOM needed for server actions)
     // Component tests can override with // @vitest-environment happy-dom
     environment: 'node',
