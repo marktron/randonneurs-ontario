@@ -34,6 +34,14 @@ export async function UpcomingRides() {
     })
   )
 
+  // Sort by earliest upcoming event date, then alphabetically by name
+  chapters.sort((a, b) => {
+    const dateA = a.events[0]?.date ?? ''
+    const dateB = b.events[0]?.date ?? ''
+    if (dateA !== dateB) return dateA.localeCompare(dateB)
+    return a.name.localeCompare(b.name)
+  })
+
   return (
     <aside className="w-full">
       <h2 className="font-serif text-2xl tracking-tight mb-4">Upcoming Rides</h2>
