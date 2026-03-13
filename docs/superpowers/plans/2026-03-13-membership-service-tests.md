@@ -328,7 +328,12 @@ Remove the placeholder test. Add this inside the outer `describe`:
 
 ```typescript
 describe('getMembershipForRider', () => {
-  const { searchCCNMembership } = vi.mocked(await import('@/lib/ccn/client'))
+  let searchCCNMembership: ReturnType<typeof vi.fn>
+
+  beforeAll(async () => {
+    const mod = await import('@/lib/ccn/client')
+    searchCCNMembership = vi.mocked(mod.searchCCNMembership)
+  })
 
   afterEach(async () => {
     // Clean up any memberships created during tests
@@ -461,7 +466,7 @@ describe('getMembershipForRider', () => {
 })
 ```
 
-Note: The `await import(...)` at the top of the describe block uses top-level await. If this causes issues with the test runner, move the import and `vi.mocked()` call into each test or use `beforeAll` to set it up.
+Note: The `searchCCNMembership` mock is set up in `beforeAll` via dynamic import because `describe` callbacks cannot be async.
 
 - [ ] **Step 2: Run the getMembershipForRider tests**
 
