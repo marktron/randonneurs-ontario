@@ -60,12 +60,15 @@ export async function getMembershipForRider(
   }
 
   // Cache in database
-  await supabase.from('memberships').insert({
+  const { error } = await supabase.from('memberships').insert({
     rider_id: riderId,
     season: currentSeason,
     membership_id: ccnResult.membershipId,
     type: ccnResult.type,
   })
+  if (error) {
+    console.error(`Failed to cache membership for rider ${riderId}:`, error.message)
+  }
 
   return {
     found: true,

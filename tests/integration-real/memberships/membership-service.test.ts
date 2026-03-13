@@ -19,6 +19,9 @@ const IDS = {
   pastRegistration: '00000000-1a10-4000-a000-00000000000b',
   otlResult: '00000000-1a10-4000-a000-00000000000c',
   cancelledRegistration: '00000000-1a10-4000-a000-00000000000d',
+  dqResult: '00000000-1a10-4000-a000-00000000000e',
+  otherRider: '00000000-1a10-4000-a000-00000000000f',
+  otherRiderResult: '00000000-1a10-4000-a000-000000000010',
 }
 
 function daysFromNow(days: number): string {
@@ -37,22 +40,21 @@ describe('membership service (real DB)', () => {
 
     // Clean up any leftover test data (in case a previous run crashed)
     const eventIds = [IDS.completedEvent, IDS.scheduledEvent]
-    await supabase.from('memberships').delete().eq('rider_id', IDS.rider)
+    const riderIds = [IDS.rider, IDS.otherRider]
+    await supabase.from('memberships').delete().in('rider_id', riderIds)
     await supabase.from('results').delete().in('event_id', eventIds)
     await supabase.from('registrations').delete().in('event_id', eventIds)
     await supabase.from('events').delete().in('id', eventIds)
     await supabase.from('routes').delete().eq('id', IDS.route)
-    await supabase.from('riders').delete().eq('id', IDS.rider)
+    await supabase.from('riders').delete().in('id', riderIds)
 
     // Seed in dependency order
     await checked(
-      supabase.from('riders').insert({
-        id: IDS.rider,
-        slug: 'inttest-rider',
-        first_name: 'IntTest',
-        last_name: 'Rider',
-      }),
-      'insert rider'
+      supabase.from('riders').insert([
+        { id: IDS.rider, slug: 'inttest-rider', first_name: 'IntTest', last_name: 'Rider' },
+        { id: IDS.otherRider, slug: 'inttest-other', first_name: 'Other', last_name: 'Rider' },
+      ]),
+      'insert riders'
     )
 
     await checked(
@@ -100,12 +102,13 @@ describe('membership service (real DB)', () => {
 
   afterAll(async () => {
     const eventIds = [IDS.completedEvent, IDS.scheduledEvent]
-    await supabase.from('memberships').delete().eq('rider_id', IDS.rider)
+    const riderIds = [IDS.rider, IDS.otherRider]
+    await supabase.from('memberships').delete().in('rider_id', riderIds)
     await supabase.from('results').delete().in('event_id', eventIds)
     await supabase.from('registrations').delete().in('event_id', eventIds)
     await supabase.from('events').delete().in('id', eventIds)
     await supabase.from('routes').delete().eq('id', IDS.route)
-    await supabase.from('riders').delete().eq('id', IDS.rider)
+    await supabase.from('riders').delete().in('id', riderIds)
   })
 
   describe('getMembershipForRider', () => {
@@ -328,6 +331,42 @@ describe('membership service (real DB)', () => {
       const { isTrialUsed } = await import('@/lib/memberships/service')
       const result = await isTrialUsed(IDS.rider)
       expect(result).toBe(true)
+    })
+
+    it('returns true when rider has DQ result', async () => {
+      await checked(
+        supabase.from('results').insert({
+          id: IDS.dqResult,
+          rider_id: IDS.rider,
+          event_id: IDS.completedEvent,
+          status: 'dq',
+          season: 2026,
+          distance_km: 200,
+        }),
+        'insert dq result'
+      )
+
+      const { isTrialUsed } = await import('@/lib/memberships/service')
+      const result = await isTrialUsed(IDS.rider)
+      expect(result).toBe(true)
+    })
+
+    it("does not count another rider's result", async () => {
+      await checked(
+        supabase.from('results').insert({
+          id: IDS.otherRiderResult,
+          rider_id: IDS.otherRider,
+          event_id: IDS.completedEvent,
+          status: 'finished',
+          season: 2026,
+          distance_km: 200,
+        }),
+        'insert other rider result'
+      )
+
+      const { isTrialUsed } = await import('@/lib/memberships/service')
+      const result = await isTrialUsed(IDS.rider)
+      expect(result).toBe(false)
     })
 
     it('returns false when rider has only DNS result', async () => {
