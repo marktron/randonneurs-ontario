@@ -106,8 +106,141 @@ describe('membership service (real DB)', () => {
     await supabase.from('riders').delete().eq('id', IDS.rider)
   })
 
-  it('placeholder — seed data exists', async () => {
-    const { data } = await supabase.from('riders').select('first_name').eq('id', IDS.rider).single()
-    expect(data?.first_name).toBe('IntTest')
+  describe('getMembershipForRider', () => {
+    let searchCCNMembership: ReturnType<typeof vi.fn>
+
+    beforeAll(async () => {
+      const mod = await import('@/lib/ccn/client')
+      searchCCNMembership = vi.mocked(mod.searchCCNMembership)
+    })
+
+    afterEach(async () => {
+      // Clean up any memberships created during tests
+      await supabase.from('memberships').delete().eq('rider_id', IDS.rider)
+      vi.resetAllMocks()
+    })
+
+    it('returns cached membership from DB', async () => {
+      // Seed a membership row
+      await checked(
+        supabase.from('memberships').insert({
+          id: IDS.membership,
+          rider_id: IDS.rider,
+          season: 2026,
+          membership_id: 42,
+          type: 'Individual Membership',
+        }),
+        'insert membership'
+      )
+
+      const { getMembershipForRider } = await import('@/lib/memberships/service')
+      const result = await getMembershipForRider(IDS.rider, 'IntTest', 'Rider')
+
+      expect(result).toEqual({
+        found: true,
+        membershipId: 42,
+        type: 'Individual Membership',
+      })
+      expect(searchCCNMembership).not.toHaveBeenCalled()
+    })
+
+    it('fetches from CCN when not cached, caches in DB', async () => {
+      searchCCNMembership.mockResolvedValue({
+        found: true,
+        membershipId: 99,
+        type: 'Individual Membership',
+      })
+
+      const { getMembershipForRider } = await import('@/lib/memberships/service')
+      const result = await getMembershipForRider(IDS.rider, 'IntTest', 'Rider')
+
+      expect(result).toEqual({
+        found: true,
+        membershipId: 99,
+        type: 'Individual Membership',
+      })
+      expect(searchCCNMembership).toHaveBeenCalledWith('IntTest', 'Rider')
+
+      // Verify the membership was cached in DB
+      const { data } = await supabase
+        .from('memberships')
+        .select('membership_id, type, season')
+        .eq('rider_id', IDS.rider)
+        .eq('season', 2026)
+        .single()
+
+      expect(data).toMatchObject({
+        membership_id: 99,
+        type: 'Individual Membership',
+        season: 2026,
+      })
+    })
+
+    it('second call uses DB cache, not CCN', async () => {
+      searchCCNMembership.mockResolvedValue({
+        found: true,
+        membershipId: 99,
+        type: 'Individual Membership',
+      })
+
+      const { getMembershipForRider } = await import('@/lib/memberships/service')
+
+      // First call — hits CCN, caches in DB
+      const result1 = await getMembershipForRider(IDS.rider, 'IntTest', 'Rider')
+      expect(result1.found).toBe(true)
+      expect(searchCCNMembership).toHaveBeenCalledTimes(1)
+
+      // Second call — should use DB cache
+      const result2 = await getMembershipForRider(IDS.rider, 'IntTest', 'Rider')
+      expect(result2).toEqual(result1)
+      expect(searchCCNMembership).toHaveBeenCalledTimes(1) // still 1
+    })
+
+    it('returns found:false when CCN has no match', async () => {
+      searchCCNMembership.mockResolvedValue({ found: false })
+
+      const { getMembershipForRider } = await import('@/lib/memberships/service')
+      const result = await getMembershipForRider(IDS.rider, 'IntTest', 'Rider')
+
+      expect(result).toEqual({ found: false })
+
+      // Verify nothing was cached
+      const { data } = await supabase
+        .from('memberships')
+        .select('id')
+        .eq('rider_id', IDS.rider)
+        .eq('season', 2026)
+
+      expect(data).toEqual([])
+    })
+
+    it('propagates CCN API error', async () => {
+      searchCCNMembership.mockRejectedValue(new Error('CCN API error: 500'))
+
+      const { getMembershipForRider } = await import('@/lib/memberships/service')
+
+      await expect(getMembershipForRider(IDS.rider, 'IntTest', 'Rider')).rejects.toThrow(
+        'CCN API error'
+      )
+
+      // Verify nothing was cached
+      const { data } = await supabase
+        .from('memberships')
+        .select('id')
+        .eq('rider_id', IDS.rider)
+        .eq('season', 2026)
+
+      expect(data).toEqual([])
+    })
+
+    it('throws when CCN_ENDPOINT not set', async () => {
+      searchCCNMembership.mockRejectedValue(new Error('CCN_ENDPOINT environment variable not set'))
+
+      const { getMembershipForRider } = await import('@/lib/memberships/service')
+
+      await expect(getMembershipForRider(IDS.rider, 'IntTest', 'Rider')).rejects.toThrow(
+        'CCN_ENDPOINT'
+      )
+    })
   })
 })
