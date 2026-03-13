@@ -541,7 +541,7 @@ Completed 2026-03-13. Added 13 real-database integration tests for `lib/membersh
 
 **Infrastructure:** Separate Vitest config (`vitest.config.integration-real.mts`) runs tests against real local Supabase while mocking only the external CCN API. Tests live in `tests/integration-real/` and are excluded from the main test suite. Run via `npm run test:integration-real`.
 
-**Tests added (13 total):**
+**Tests added (15 total):**
 
 `getMembershipForRider` (6 tests):
 
@@ -552,14 +552,16 @@ Completed 2026-03-13. Added 13 real-database integration tests for `lib/membersh
 - CCN API error propagates, nothing cached
 - CCN_ENDPOINT missing error propagates
 
-`isTrialUsed` (7 tests):
+`isTrialUsed` (9 tests):
 
 - Finished result → true
 - DNF result → true
+- OTL result → true
 - Upcoming registration → true
 - No activity → false
 - DNS-only result → false
 - Pending-only result → false
+- Cancelled registration for future event → false
 - Past-event registration only → false
 
 ---

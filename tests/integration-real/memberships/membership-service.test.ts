@@ -17,6 +17,8 @@ const IDS = {
   pendingResult: '00000000-1a10-4000-a000-000000000009',
   dnfResult: '00000000-1a10-4000-a000-00000000000a',
   pastRegistration: '00000000-1a10-4000-a000-00000000000b',
+  otlResult: '00000000-1a10-4000-a000-00000000000c',
+  cancelledRegistration: '00000000-1a10-4000-a000-00000000000d',
 }
 
 function daysFromNow(days: number): string {
@@ -310,6 +312,24 @@ describe('membership service (real DB)', () => {
       expect(result).toBe(false)
     })
 
+    it('returns true when rider has OTL result', async () => {
+      await checked(
+        supabase.from('results').insert({
+          id: IDS.otlResult,
+          rider_id: IDS.rider,
+          event_id: IDS.completedEvent,
+          status: 'otl',
+          season: 2026,
+          distance_km: 200,
+        }),
+        'insert otl result'
+      )
+
+      const { isTrialUsed } = await import('@/lib/memberships/service')
+      const result = await isTrialUsed(IDS.rider)
+      expect(result).toBe(true)
+    })
+
     it('returns false when rider has only DNS result', async () => {
       await checked(
         supabase.from('results').insert({
@@ -339,6 +359,22 @@ describe('membership service (real DB)', () => {
           distance_km: 200,
         }),
         'insert pending result'
+      )
+
+      const { isTrialUsed } = await import('@/lib/memberships/service')
+      const result = await isTrialUsed(IDS.rider)
+      expect(result).toBe(false)
+    })
+
+    it('returns false when rider has cancelled registration for future event', async () => {
+      await checked(
+        supabase.from('registrations').insert({
+          id: IDS.cancelledRegistration,
+          rider_id: IDS.rider,
+          event_id: IDS.scheduledEvent, // future date
+          status: 'cancelled',
+        }),
+        'insert cancelled registration'
       )
 
       const { isTrialUsed } = await import('@/lib/memberships/service')
