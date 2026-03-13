@@ -243,4 +243,123 @@ describe('membership service (real DB)', () => {
       )
     })
   })
+
+  describe('isTrialUsed', () => {
+    afterEach(async () => {
+      // Clean up results and registrations created during tests
+      const eventIds = [IDS.completedEvent, IDS.scheduledEvent]
+      await supabase.from('results').delete().in('event_id', eventIds)
+      await supabase.from('registrations').delete().in('event_id', eventIds)
+    })
+
+    it('returns true when rider has finished result', async () => {
+      await checked(
+        supabase.from('results').insert({
+          id: IDS.finishedResult,
+          rider_id: IDS.rider,
+          event_id: IDS.completedEvent,
+          status: 'finished',
+          season: 2026,
+          distance_km: 200,
+        }),
+        'insert finished result'
+      )
+
+      const { isTrialUsed } = await import('@/lib/memberships/service')
+      const result = await isTrialUsed(IDS.rider)
+      expect(result).toBe(true)
+    })
+
+    it('returns true when rider has DNF result', async () => {
+      await checked(
+        supabase.from('results').insert({
+          id: IDS.dnfResult,
+          rider_id: IDS.rider,
+          event_id: IDS.completedEvent,
+          status: 'dnf',
+          season: 2026,
+          distance_km: 200,
+        }),
+        'insert dnf result'
+      )
+
+      const { isTrialUsed } = await import('@/lib/memberships/service')
+      const result = await isTrialUsed(IDS.rider)
+      expect(result).toBe(true)
+    })
+
+    it('returns true when rider has upcoming registration', async () => {
+      await checked(
+        supabase.from('registrations').insert({
+          id: IDS.registration,
+          rider_id: IDS.rider,
+          event_id: IDS.scheduledEvent,
+          status: 'registered',
+        }),
+        'insert registration'
+      )
+
+      const { isTrialUsed } = await import('@/lib/memberships/service')
+      const result = await isTrialUsed(IDS.rider)
+      expect(result).toBe(true)
+    })
+
+    it('returns false when rider has no results or registrations', async () => {
+      const { isTrialUsed } = await import('@/lib/memberships/service')
+      const result = await isTrialUsed(IDS.rider)
+      expect(result).toBe(false)
+    })
+
+    it('returns false when rider has only DNS result', async () => {
+      await checked(
+        supabase.from('results').insert({
+          id: IDS.dnsResult,
+          rider_id: IDS.rider,
+          event_id: IDS.completedEvent,
+          status: 'dns',
+          season: 2026,
+          distance_km: 200,
+        }),
+        'insert dns result'
+      )
+
+      const { isTrialUsed } = await import('@/lib/memberships/service')
+      const result = await isTrialUsed(IDS.rider)
+      expect(result).toBe(false)
+    })
+
+    it('returns false when rider has only pending result', async () => {
+      await checked(
+        supabase.from('results').insert({
+          id: IDS.pendingResult,
+          rider_id: IDS.rider,
+          event_id: IDS.completedEvent,
+          status: 'pending',
+          season: 2026,
+          distance_km: 200,
+        }),
+        'insert pending result'
+      )
+
+      const { isTrialUsed } = await import('@/lib/memberships/service')
+      const result = await isTrialUsed(IDS.rider)
+      expect(result).toBe(false)
+    })
+
+    it('returns false when rider has registration for past event only', async () => {
+      await checked(
+        supabase.from('registrations').insert({
+          id: IDS.pastRegistration,
+          rider_id: IDS.rider,
+          event_id: IDS.completedEvent, // past date
+          status: 'registered',
+        }),
+        'insert past registration'
+      )
+
+      const { isTrialUsed } = await import('@/lib/memberships/service')
+      const result = await isTrialUsed(IDS.rider)
+      expect(result).toBe(false)
+    })
+  })
 })
