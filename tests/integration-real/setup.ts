@@ -2,7 +2,9 @@ import { vi } from 'vitest'
 import { config } from 'dotenv'
 import path from 'path'
 
-// Load real env vars from .env.development.local (highest priority) then .env.local
+// Load real env vars from .env.development.local and .env.local
+// Uses dotenv directly because @next/env's loadEnvConfig is CJS-only
+// and doesn't work in Vitest's ESM worker context
 config({ path: path.resolve(process.cwd(), '.env.development.local'), override: true })
 config({ path: path.resolve(process.cwd(), '.env.local') })
 
