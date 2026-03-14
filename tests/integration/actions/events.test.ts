@@ -395,7 +395,7 @@ describe('submitEventResults', () => {
       (c) => c.table === 'events' && c.method === 'update'
     )
     expect(updateCalls.length).toBeGreaterThanOrEqual(1)
-    const updateData = updateCalls[0].args![0]
+    const updateData = updateCalls[0].args![0] as Record<string, unknown>
     expect(updateData).toMatchObject({ status: 'submitted' })
   })
 
@@ -446,7 +446,7 @@ describe('submitEventResults', () => {
       (c) => c.table === 'events' && c.method === 'update'
     )
     expect(updateCalls.length).toBeGreaterThanOrEqual(1)
-    const updateData = updateCalls[0].args![0]
+    const updateData = updateCalls[0].args![0] as Record<string, unknown>
     expect(updateData).toMatchObject({ status: 'submitted' })
   })
 })
@@ -536,7 +536,7 @@ describe('createEvent', () => {
         (c) => c.table === 'events' && c.method === 'insert'
       )
       expect(insertCalls).toHaveLength(1)
-      const insertData = insertCalls[0].args![0]
+      const insertData = insertCalls[0].args![0] as Record<string, unknown>
       expect(insertData).toMatchObject({
         name: 'Test Brevet',
         event_type: 'brevet',
@@ -600,7 +600,7 @@ describe('updateEvent', () => {
       (c) => c.table === 'events' && c.method === 'update'
     )
     expect(updateCalls).toHaveLength(1)
-    const updateData = updateCalls[0].args![0]
+    const updateData = updateCalls[0].args![0] as Record<string, unknown>
     expect(updateData).toMatchObject({
       name: 'Updated Name',
       start_time: '09:00',
@@ -629,7 +629,7 @@ describe('updateEvent', () => {
       (c) => c.table === 'events' && c.method === 'update'
     )
     expect(updateCalls).toHaveLength(1)
-    const updateData = updateCalls[0].args![0]
+    const updateData = updateCalls[0].args![0] as Record<string, unknown>
     expect(updateData).toMatchObject({
       start_location: 'New Location',
     })

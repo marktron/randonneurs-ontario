@@ -100,7 +100,7 @@ test.describe('Complete Registration Flow', () => {
     } else if (hasError) {
       await expect(errorToast).toBeVisible()
     } else {
-      expect.fail(
+      throw new Error(
         'Registration submission produced no visible outcome (no success, dialog, or error)'
       )
     }
@@ -258,7 +258,7 @@ test.describe('Complete Registration Flow', () => {
     } else if (hasError) {
       await expect(errorToast).toBeVisible()
     } else {
-      expect.fail(
+      throw new Error(
         'Registration submission produced no visible outcome (no success, dialog, or error)'
       )
     }
@@ -317,7 +317,7 @@ test.describe('Complete Registration Flow', () => {
     const hasInvalid = (await invalidInputs.count()) > 0
 
     if (!hasError && !hasInvalid) {
-      expect.fail(
+      throw new Error(
         'No validation error shown for missing route/date — expected form-message or :invalid inputs'
       )
     }

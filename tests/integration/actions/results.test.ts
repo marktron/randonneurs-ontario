@@ -191,7 +191,7 @@ describe('createResult', () => {
     )
     expect(insertCalls).toHaveLength(1)
 
-    const insertData = insertCalls[0].args![0]
+    const insertData = insertCalls[0].args![0] as Record<string, unknown>
     expect(insertData).toMatchObject({
       event_id: 'event-1',
       rider_id: 'rider-1',
@@ -250,7 +250,7 @@ describe('createResult', () => {
     )
     expect(insertCalls).toHaveLength(1)
 
-    const insertData = insertCalls[0].args![0]
+    const insertData = insertCalls[0].args![0] as Record<string, unknown>
     expect(insertData.status).toBe('dnf')
     expect(insertData.finish_time).toBeNull()
   })
@@ -285,7 +285,7 @@ describe('updateResult', () => {
     )
     expect(updateCalls).toHaveLength(1)
 
-    const updateData = updateCalls[0].args![0]
+    const updateData = updateCalls[0].args![0] as Record<string, unknown>
     expect(updateData).toMatchObject({
       status: 'finished',
       finish_time: '14:00',
@@ -317,7 +317,7 @@ describe('updateResult', () => {
     )
     expect(updateCalls).toHaveLength(1)
 
-    const updateData = updateCalls[0].args![0]
+    const updateData = updateCalls[0].args![0] as Record<string, unknown>
     expect(updateData.finish_time).toBe('14:00')
     expect(updateData.status).toBeUndefined()
   })

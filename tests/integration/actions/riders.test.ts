@@ -242,7 +242,7 @@ describe('createRider', () => {
         (c) => c.table === 'riders' && c.method === 'insert'
       )
       expect(insertCalls).toHaveLength(1)
-      const insertData = insertCalls[0].args![0]
+      const insertData = insertCalls[0].args![0] as Record<string, unknown>
       expect(insertData.first_name).toBe('John')
       expect(insertData.last_name).toBe('Doe')
       expect(insertData.slug).toBeDefined()
@@ -268,7 +268,7 @@ describe('createRider', () => {
         (c) => c.table === 'riders' && c.method === 'insert'
       )
       expect(insertCalls).toHaveLength(1)
-      const insertData = insertCalls[0].args![0]
+      const insertData = insertCalls[0].args![0] as Record<string, unknown>
       expect(insertData.email).toBe('john@example.com')
     })
   })
@@ -386,7 +386,7 @@ describe('updateRider', () => {
         (c) => c.table === 'riders' && c.method === 'update'
       )
       expect(updateCalls).toHaveLength(1)
-      const updateData = updateCalls[0].args![0]
+      const updateData = updateCalls[0].args![0] as Record<string, unknown>
       expect(updateData.first_name).toBe('John')
     })
 
@@ -406,7 +406,7 @@ describe('updateRider', () => {
         (c) => c.table === 'riders' && c.method === 'update'
       )
       expect(updateCalls).toHaveLength(1)
-      const updateData = updateCalls[0].args![0]
+      const updateData = updateCalls[0].args![0] as Record<string, unknown>
       expect(updateData.email).toBe('john@example.com')
     })
   })

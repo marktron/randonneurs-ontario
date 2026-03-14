@@ -191,7 +191,7 @@ describe('createRoute', () => {
       )
       expect(insertCalls).toHaveLength(1)
 
-      const insertData = insertCalls[0].args![0]
+      const insertData = insertCalls[0].args![0] as Record<string, unknown>
       expect(insertData).toMatchObject({
         name: 'Test Route Name',
         slug: 'test-route-name',
@@ -308,7 +308,7 @@ describe('updateRoute', () => {
     )
     expect(updateCalls).toHaveLength(1)
 
-    const updateData = updateCalls[0].args![0]
+    const updateData = updateCalls[0].args![0] as Record<string, unknown>
     expect(updateData.name).toBe('Updated Name')
 
     const { revalidatePath } = await import('next/cache')
@@ -396,7 +396,7 @@ describe('toggleRouteActive', () => {
     )
     expect(updateCalls).toHaveLength(1)
 
-    const updateData = updateCalls[0].args![0]
+    const updateData = updateCalls[0].args![0] as Record<string, unknown>
     expect(updateData.is_active).toBeDefined()
 
     const { revalidatePath } = await import('next/cache')
