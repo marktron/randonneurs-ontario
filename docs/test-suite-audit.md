@@ -474,7 +474,7 @@ Add a GitHub Actions job that:
 | 4        | 3.2          | Yes        | Membership service tests                              | Critical business gate with zero coverage                                     |
 | 5        | 3.1          | Yes        | Registration flow integration tests                   | Most important user-facing flow                                               |
 | 6        | 4.1-4.3      | Yes        | Strengthen existing assertions                        | Quick wins across the board                                                   |
-| 7        | 3.3          |            | Event status transition tests                         | Complex cascade logic with high risk                                          |
+| 7        | 3.3          | Yes        | Event status transition tests                         | Complex cascade logic with high risk                                          |
 | 8        | 3.4          |            | Authorization tests                                   | Security boundary                                                             |
 | 9        | 5            |            | Real database integration tests                       | Eliminates mock void permanently                                              |
 
@@ -648,6 +648,21 @@ Completed 2026-03-13. Added 24 assertions to existing mock-based integration tes
 - `routes.test.ts`: createRoute, updateRoute, toggleRouteActive verify `revalidatePath('/admin/routes')`
 
 **Out of scope:** `register.test.ts` (success paths covered by Phase 3.1 integration-real), `manage-registration.test.ts` (mock infrastructure too thin), `rider-results.test.ts` (already reasonably strong)
+
+## Phase 3.3: Event Status Transition Tests
+
+Completed 2026-03-13. Added 5 tests to `tests/integration/actions/events.test.ts` covering status transition edge cases.
+
+**`updateEventStatus` (2 new tests):**
+
+- Re-completion (completed → completed) does NOT trigger `createPendingResultsAndSendEmails`
+- Result deletion failure during cancellation returns error, does not update status
+
+**`submitEventResults` (3 new tests):**
+
+- Cancelled event rejected with correct error message
+- Successful submission verifies `status: 'submitted'` written via `__calls` tracking
+- Zero finishers (all DNF) still sends email and updates status
 
 ---
 
