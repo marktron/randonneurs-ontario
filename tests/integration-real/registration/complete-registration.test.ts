@@ -207,17 +207,23 @@ describe('completeRegistrationWithRider (real DB)', () => {
     // Registration created
     const { data: reg } = await supabase
       .from('registrations')
-      .select('status, rider_id')
+      .select('status, rider_id, share_registration, notes')
       .eq('event_id', IDS.scheduledEvent)
       .eq('rider_id', IDS.rider)
       .single()
     expect(reg?.status).toBe('registered')
+    expect(reg?.share_registration).toBe(false)
+    expect(reg?.notes).toBeNull()
 
     // Email sent
     expect(sendEmail).toHaveBeenCalledTimes(1)
     assertEmailPayload(sendEmail, {
       membershipStatus: 'valid',
       registrantName: 'Updated Name',
+      registrantEmail: 'completer@example.com',
+      eventName: 'IntTest Complete Brevet',
+      eventDistance: 200,
+      eventLocation: 'Test Start',
     })
     assertManagementUrl(sendEmail)
   })

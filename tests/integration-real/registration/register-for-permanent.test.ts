@@ -176,16 +176,20 @@ describe('registerForPermanent (real DB)', () => {
 
     const { data: reg } = await supabase
       .from('registrations')
-      .select('status, rider_id')
+      .select('status, rider_id, share_registration, notes')
       .eq('event_id', event!.id)
       .eq('rider_id', IDS.rider)
       .single()
     expect(reg?.status).toBe('registered')
+    expect(reg?.share_registration).toBe(false)
+    expect(reg?.notes).toBeNull()
 
     expect(sendEmail).toHaveBeenCalledTimes(1)
     assertEmailPayload(sendEmail, {
       membershipStatus: 'valid',
       registrantName: 'Test Rider',
+      registrantEmail: 'test-rider@example.com',
+      eventName: 'IntTest Perm Route',
       eventDistance: 200,
       eventType: 'Permanent',
     })
@@ -254,6 +258,7 @@ describe('registerForPermanent (real DB)', () => {
     )
 
     expect(result.success).toBe(false)
+    expect(result.error).toBe('Record not found')
   })
 
   it('inactive route returns error', async () => {
@@ -263,6 +268,7 @@ describe('registerForPermanent (real DB)', () => {
     )
 
     expect(result.success).toBe(false)
+    expect(result.error).toBe('Record not found')
   })
 
   it('missing required fields returns error', async () => {

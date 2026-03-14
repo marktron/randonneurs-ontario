@@ -164,19 +164,25 @@ describe('registerForEvent (real DB)', () => {
     // Verify registration in DB
     const { data: reg } = await supabase
       .from('registrations')
-      .select('status, rider_id')
+      .select('status, rider_id, share_registration, notes, team_name, is_team_captain')
       .eq('event_id', IDS.scheduledEvent)
       .eq('rider_id', IDS.rider)
       .single()
     expect(reg?.status).toBe('registered')
+    expect(reg?.share_registration).toBe(false)
+    expect(reg?.notes).toBeNull()
+    expect(reg?.team_name).toBeNull()
+    expect(reg?.is_team_captain).toBe(false)
 
     // Verify email
     expect(sendEmail).toHaveBeenCalledTimes(1)
     assertEmailPayload(sendEmail, {
       membershipStatus: 'valid',
       registrantName: 'Test Rider',
+      registrantEmail: 'test-rider@example.com',
       eventName: 'IntTest Reg Brevet',
       eventDistance: 200,
+      eventLocation: 'Test Start',
     })
     assertManagementUrl(sendEmail)
   })
@@ -324,7 +330,7 @@ describe('registerForEvent (real DB)', () => {
     )
 
     expect(result.success).toBe(false)
-    expect(result.error).toBeTruthy()
+    expect(result.error).toBe('Event not found')
   })
 
   it('completed event returns error', async () => {

@@ -605,6 +605,23 @@ Completed 2026-03-13. Added 33 real-database integration tests for all three reg
 - Each file uses isolated UUID prefixes (`1a20`, `1a21`, `1a22`) to avoid collisions
 - Shared helpers in `tests/integration-real/registration/helpers.ts`
 
+### Phase 3.1 Post-Implementation Audit
+
+Audited 2026-03-13. Identified 7 issues; 3 fixed immediately, 4 deferred.
+
+**Fixed 2026-03-13:**
+
+1. **Weak error assertions.** `register-for-event.test.ts` "event not found" used `toBeTruthy()` (passes for any error). Changed to `toBe('Event not found')`. Added `toBe('Record not found')` to `register-for-permanent.test.ts` invalid route and inactive route tests.
+2. **Registration fields not verified in DB.** Happy-path tests only selected `status, rider_id`. Added `share_registration`, `notes`, `team_name`, `is_team_captain` to DB queries with assertions matching input data.
+3. **Email payload missing critical fields.** `assertEmailPayload` calls only checked `membershipStatus` and `registrantName`. Added `registrantEmail`, `eventName`, `eventDistance`, `eventLocation` to happy-path assertions across all three files.
+
+**Deferred:**
+
+1. **No test for incomplete-to-registered upgrade (upsert flow).** `createRegistrationRecord` uses `upsert` with `onConflict: 'event_id,rider_id'`. If a rider gets "incomplete: membership" and re-registers with valid membership, the status should upgrade. No test covers this. Add to Phase 4 or as a standalone addition.
+2. **No test for email failure resilience.** The mock always resolves. No test verifies that registration succeeds when `sendRegistrationConfirmationEmail` rejects (the fire-and-forget `.catch()` pattern). If someone removed the `.catch()`, unhandled rejections in production would go undetected.
+3. **`completeRegistrationWithRider` has no outer try/catch around `getMembershipForRider`.** The other two actions catch CCN errors and return `{ success: false, error: 'Registration failed' }`. This one lets the error propagate as an unhandled rejection. The test codifies this inconsistency with `rejects.toThrow()`. Production fix: add try/catch to match the other two actions.
+4. **Membership caching not verified in registration tests.** After CCN lookup, `getMembershipForRider` caches results in the `memberships` table. No registration test verifies this row was created. Note: this is already covered by `membership-service.test.ts` ("fetches from CCN when not cached, caches in DB"), so risk is low.
+
 ---
 
 ## What's Already Good
