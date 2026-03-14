@@ -158,6 +158,7 @@ describe('completeRegistrationWithRider (real DB)', () => {
   afterAll(async () => {
     await supabase.from('rider_merges').delete().in('rider_id', [IDS.rider])
     await supabase.from('memberships').delete().in('rider_id', [IDS.rider])
+    await supabase.from('results').delete().in('event_id', [IDS.scheduledEvent, IDS.completedEvent])
     await supabase
       .from('registrations')
       .delete()
