@@ -473,7 +473,7 @@ Add a GitHub Actions job that:
 | 3        | 2            | Yes        | E2E seeding + remove skip gates + fix broken locators | Makes E2E tests actually run in CI                                            |
 | 4        | 3.2          | Yes        | Membership service tests                              | Critical business gate with zero coverage                                     |
 | 5        | 3.1          | Yes        | Registration flow integration tests                   | Most important user-facing flow                                               |
-| 6        | 4.1-4.3      |            | Strengthen existing assertions                        | Quick wins across the board                                                   |
+| 6        | 4.1-4.3      | Yes        | Strengthen existing assertions                        | Quick wins across the board                                                   |
 | 7        | 3.3          |            | Event status transition tests                         | Complex cascade logic with high risk                                          |
 | 8        | 3.4          |            | Authorization tests                                   | Security boundary                                                             |
 | 9        | 5            |            | Real database integration tests                       | Eliminates mock void permanently                                              |
@@ -621,6 +621,31 @@ Audited 2026-03-13. Identified 7 issues; 3 fixed immediately, 4 deferred.
 2. **No test for email failure resilience.** The mock always resolves. No test verifies that registration succeeds when `sendRegistrationConfirmationEmail` rejects (the fire-and-forget `.catch()` pattern). If someone removed the `.catch()`, unhandled rejections in production would go undetected.
 3. **`completeRegistrationWithRider` has no outer try/catch around `getMembershipForRider`.** The other two actions catch CCN errors and return `{ success: false, error: 'Registration failed' }`. This one lets the error propagate as an unhandled rejection. The test codifies this inconsistency with `rejects.toThrow()`. Production fix: add try/catch to match the other two actions.
 4. **Membership caching not verified in registration tests.** After CCN lookup, `getMembershipForRider` caches results in the `memberships` table. No registration test verifies this row was created. Note: this is already covered by `membership-service.test.ts` ("fetches from CCN when not cached, caches in DB"), so risk is low.
+
+---
+
+## Phase 4: Strengthen Existing Assertions
+
+Completed 2026-03-13. Added 24 assertions to existing mock-based integration tests across 4 files.
+
+**4.1 Data shape assertions (14 additions):**
+
+- `events.test.ts`: createEvent insert data, updateEvent update data (full + partial)
+- `results.test.ts`: createResult insert data, null finish time, updateResult update data (full + partial)
+- `riders.test.ts`: createRider insert data (with/without email), updateRider update data (with/without email)
+- `routes.test.ts`: createRoute insert data, updateRoute update data, toggleRouteActive update data
+
+**4.2 Email/side-effect verification (1 addition):**
+
+- `events.test.ts`: updateEventStatus → completed verifies `createPendingResultsAndSendEmails` called with event data
+
+**4.3 Cache revalidation verification (9 additions):**
+
+- `events.test.ts`: createEvent, updateEvent, updateEventStatus verify `revalidatePath('/admin/events')`
+- `results.test.ts`: createResult, updateResult, deleteResult verify `revalidatePath` called
+- `routes.test.ts`: createRoute, updateRoute, toggleRouteActive verify `revalidatePath('/admin/routes')`
+
+**Out of scope:** `register.test.ts` (success paths covered by Phase 3.1 integration-real), `manage-registration.test.ts` (mock infrastructure too thin), `rider-results.test.ts` (already reasonably strong)
 
 ---
 
