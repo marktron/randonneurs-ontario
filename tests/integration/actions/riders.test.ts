@@ -10,6 +10,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 // Mock dependencies before imports
 vi.mock('@/lib/supabase-server', () => {
+  // Track all requests for assertions
+  const calls: Array<{ table: string; method: string; args?: unknown[] }> = []
+  let currentTable = ''
+
   const createQueryBuilder = () => {
     const builder: Record<string, ReturnType<typeof vi.fn>> = {}
     const methods = [
@@ -33,7 +37,10 @@ vi.mock('@/lib/supabase-server', () => {
     ]
 
     methods.forEach((method) => {
-      builder[method] = vi.fn(() => builder)
+      builder[method] = vi.fn((...args) => {
+        calls.push({ table: currentTable, method, args })
+        return builder
+      })
     })
 
     builder.single = vi.fn().mockResolvedValue({ data: null, error: { code: 'PGRST116' } })
@@ -48,10 +55,15 @@ vi.mock('@/lib/supabase-server', () => {
 
   return {
     getSupabaseAdmin: vi.fn(() => ({
-      from: vi.fn(() => queryBuilder),
+      from: vi.fn((table: string) => {
+        currentTable = table
+        return queryBuilder
+      }),
     })),
+    __calls: calls,
     __queryBuilder: queryBuilder,
     __reset: () => {
+      calls.length = 0
       queryBuilder.single.mockReset()
       queryBuilder.single.mockResolvedValue({ data: null, error: { code: 'PGRST116' } })
       queryBuilder.then.mockReset()
@@ -115,6 +127,7 @@ import {
 } from '@/lib/actions/riders'
 
 const mockModule = await vi.importMock<{
+  __calls: Array<{ table: string; method: string; args?: unknown[] }>
   __queryBuilder: Record<string, ReturnType<typeof vi.fn>>
   __reset: () => void
   __mockRidersFound: (riders: unknown[]) => void
@@ -223,6 +236,16 @@ describe('createRider', () => {
 
       expect(result.success).toBe(true)
       expect(result.riderId).toBe('new-rider-id')
+
+      // Verify insert was called on the riders table
+      const insertCalls = mockModule.__calls.filter(
+        (c) => c.table === 'riders' && c.method === 'insert'
+      )
+      expect(insertCalls).toHaveLength(1)
+      const insertData = insertCalls[0].args![0]
+      expect(insertData.first_name).toBe('John')
+      expect(insertData.last_name).toBe('Doe')
+      expect(insertData.slug).toBeDefined()
     })
 
     it('creates rider successfully with email', async () => {
@@ -239,6 +262,14 @@ describe('createRider', () => {
 
       expect(result.success).toBe(true)
       expect(result.riderId).toBe('new-rider-id')
+
+      // Verify insert was called on the riders table
+      const insertCalls = mockModule.__calls.filter(
+        (c) => c.table === 'riders' && c.method === 'insert'
+      )
+      expect(insertCalls).toHaveLength(1)
+      const insertData = insertCalls[0].args![0]
+      expect(insertData.email).toBe('john@example.com')
     })
   })
 
@@ -349,6 +380,14 @@ describe('updateRider', () => {
       })
 
       expect(result.success).toBe(true)
+
+      // Verify update was called on the riders table
+      const updateCalls = mockModule.__calls.filter(
+        (c) => c.table === 'riders' && c.method === 'update'
+      )
+      expect(updateCalls).toHaveLength(1)
+      const updateData = updateCalls[0].args![0]
+      expect(updateData.first_name).toBe('John')
     })
 
     it('updates rider with email when no duplicate exists', async () => {
@@ -361,6 +400,14 @@ describe('updateRider', () => {
       })
 
       expect(result.success).toBe(true)
+
+      // Verify update was called on the riders table
+      const updateCalls = mockModule.__calls.filter(
+        (c) => c.table === 'riders' && c.method === 'update'
+      )
+      expect(updateCalls).toHaveLength(1)
+      const updateData = updateCalls[0].args![0]
+      expect(updateData.email).toBe('john@example.com')
     })
   })
 })
@@ -416,9 +463,28 @@ describe('mergeRiders', () => {
         },
       })
 
-      // The mock setup may not fully support the chain, but validation passes
-      // Full success path is tested in E2E
       expect(result.success).toBe(true)
+
+      // Verify the 4 DB operations: update registrations, update results, delete riders, update target rider
+      const regUpdates = mockModule.__calls.filter(
+        (c) => c.table === 'registrations' && c.method === 'update'
+      )
+      expect(regUpdates).toHaveLength(1)
+
+      const resultUpdates = mockModule.__calls.filter(
+        (c) => c.table === 'results' && c.method === 'update'
+      )
+      expect(resultUpdates).toHaveLength(1)
+
+      const riderDeletes = mockModule.__calls.filter(
+        (c) => c.table === 'riders' && c.method === 'delete'
+      )
+      expect(riderDeletes).toHaveLength(1)
+
+      const riderUpdates = mockModule.__calls.filter(
+        (c) => c.table === 'riders' && c.method === 'update'
+      )
+      expect(riderUpdates).toHaveLength(1)
     })
 
     it('accepts valid merge with 3 riders', async () => {
@@ -434,6 +500,27 @@ describe('mergeRiders', () => {
       })
 
       expect(result.success).toBe(true)
+
+      // Same 4 operations regardless of merge count
+      const regUpdates = mockModule.__calls.filter(
+        (c) => c.table === 'registrations' && c.method === 'update'
+      )
+      expect(regUpdates).toHaveLength(1)
+
+      const resultUpdates = mockModule.__calls.filter(
+        (c) => c.table === 'results' && c.method === 'update'
+      )
+      expect(resultUpdates).toHaveLength(1)
+
+      const riderDeletes = mockModule.__calls.filter(
+        (c) => c.table === 'riders' && c.method === 'delete'
+      )
+      expect(riderDeletes).toHaveLength(1)
+
+      const riderUpdates = mockModule.__calls.filter(
+        (c) => c.table === 'riders' && c.method === 'update'
+      )
+      expect(riderUpdates).toHaveLength(1)
     })
   })
 })

@@ -417,6 +417,26 @@ describe('createEvent', () => {
       if (result.success) {
         expect(result.data?.id).toBe('new-event-id')
       }
+
+      // Verify insert was called on the events table
+      const insertCalls = mockModule.__calls.filter(
+        (c) => c.table === 'events' && c.method === 'insert'
+      )
+      expect(insertCalls).toHaveLength(1)
+      const insertData = insertCalls[0].args![0]
+      expect(insertData).toMatchObject({
+        name: 'Test Brevet',
+        event_type: 'brevet',
+        distance_km: 200,
+        event_date: '2025-06-15',
+        start_time: '08:00',
+        start_location: 'Toronto',
+      })
+      expect(insertData.slug).toBeDefined()
+
+      // Verify cache was revalidated
+      const { revalidatePath } = await import('next/cache')
+      expect(revalidatePath).toHaveBeenCalledWith('/admin/events')
     })
   })
 
@@ -461,6 +481,20 @@ describe('updateEvent', () => {
     })
 
     expect(result.success).toBe(true)
+
+    // Verify update was called on the events table
+    const updateCalls = mockModule.__calls.filter(
+      (c) => c.table === 'events' && c.method === 'update'
+    )
+    expect(updateCalls).toHaveLength(1)
+    const updateData = updateCalls[0].args![0]
+    expect(updateData).toMatchObject({
+      name: 'Updated Name',
+      start_time: '09:00',
+    })
+
+    const { revalidatePath } = await import('next/cache')
+    expect(revalidatePath).toHaveBeenCalledWith('/admin/events')
   })
 
   it('handles partial updates', async () => {
@@ -476,6 +510,18 @@ describe('updateEvent', () => {
     })
 
     expect(result.success).toBe(true)
+
+    // Verify update was called on the events table
+    const updateCalls = mockModule.__calls.filter(
+      (c) => c.table === 'events' && c.method === 'update'
+    )
+    expect(updateCalls).toHaveLength(1)
+    const updateData = updateCalls[0].args![0]
+    expect(updateData).toMatchObject({
+      start_location: 'New Location',
+    })
+    // Should not contain fields that weren't submitted
+    expect(updateData.name).toBeUndefined()
   })
 
   it('returns error when update fails', async () => {
@@ -524,6 +570,26 @@ describe('updateEventStatus', () => {
     const result = await updateEventStatus('event-1', 'completed')
 
     expect(result.success).toBe(true)
+
+    // Verify update was called on the events table
+    const updateCalls = mockModule.__calls.filter(
+      (c) => c.table === 'events' && c.method === 'update'
+    )
+    expect(updateCalls.length).toBeGreaterThanOrEqual(1)
+
+    // Verify createPendingResultsAndSendEmails was called
+    const { createPendingResultsAndSendEmails } = await import('@/lib/events/complete-event')
+    expect(createPendingResultsAndSendEmails).toHaveBeenCalledTimes(1)
+    expect(createPendingResultsAndSendEmails).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'event-1',
+        name: 'Test Event',
+      })
+    )
+
+    // Verify cache was revalidated
+    const { revalidatePath } = await import('next/cache')
+    expect(revalidatePath).toHaveBeenCalledWith('/admin/events')
   })
 
   it('updates status to cancelled successfully', async () => {
@@ -544,5 +610,16 @@ describe('updateEventStatus', () => {
     const result = await updateEventStatus('event-1', 'cancelled')
 
     expect(result.success).toBe(true)
+
+    // Verify results were deleted and status was updated on events table
+    const deleteCalls = mockModule.__calls.filter(
+      (c) => c.table === 'results' && c.method === 'delete'
+    )
+    expect(deleteCalls.length).toBeGreaterThanOrEqual(1)
+
+    const updateCalls = mockModule.__calls.filter(
+      (c) => c.table === 'events' && c.method === 'update'
+    )
+    expect(updateCalls.length).toBeGreaterThanOrEqual(1)
   })
 })
