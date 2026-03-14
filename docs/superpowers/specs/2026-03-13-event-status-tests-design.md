@@ -30,7 +30,7 @@ All changes go into the existing `events.test.ts` file, inside the existing `des
 
 ### Test 1: Re-completion does NOT trigger pending result creation
 
-**What it tests:** `updateEventStatus('event-1', 'completed')` when event is already `status: 'completed'`. The guard at `register.ts:384` checks `typedEvent.status === 'scheduled'` — only that transition triggers `createPendingResultsAndSendEmails`.
+**What it tests:** `updateEventStatus('event-1', 'completed')` when event is already `status: 'completed'`. The guard at `events.ts:384` checks `typedEvent.status === 'scheduled'` — only that transition triggers `createPendingResultsAndSendEmails`.
 
 **Why it matters:** Without this test, someone could remove the `&& typedEvent.status === 'scheduled'` guard and pending results would be created twice, sending duplicate emails to riders.
 
