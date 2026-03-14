@@ -261,4 +261,192 @@ describe('registerForEvent (real DB)', () => {
     // No email sent
     expect(sendEmail).not.toHaveBeenCalled()
   })
+
+  it('returns needsRiderMatch when searchRiderCandidates finds candidates', async () => {
+    searchRiderCandidates.mockResolvedValue({
+      candidates: [
+        {
+          id: '00000000-1a20-4000-a000-000000000020',
+          first_name: 'Test',
+          last_name: 'Rider',
+          city: 'Toronto',
+        },
+      ],
+    })
+
+    const { registerForEvent } = await import('@/lib/actions/register')
+    const result = await registerForEvent(
+      buildRegistrationData({
+        eventId: IDS.scheduledEvent,
+        email: 'unknown@example.com', // no email match → triggers fuzzy search
+      })
+    )
+
+    expect(result.success).toBe(false)
+    expect(result.needsRiderMatch).toBe(true)
+    expect(result.matchCandidates).toHaveLength(1)
+
+    // No registration created
+    const { data: regs } = await supabase
+      .from('registrations')
+      .select('id')
+      .eq('event_id', IDS.scheduledEvent)
+    expect(regs).toEqual([])
+  })
+
+  it('duplicate registration returns error', async () => {
+    searchCCNMembership.mockResolvedValue({
+      found: true,
+      membershipId: 42,
+      type: 'Individual Membership',
+    })
+
+    const { registerForEvent } = await import('@/lib/actions/register')
+
+    // First registration succeeds
+    const result1 = await registerForEvent(buildRegistrationData({ eventId: IDS.scheduledEvent }))
+    expect(result1.success).toBe(true)
+
+    // Second registration returns duplicate error
+    const result2 = await registerForEvent(buildRegistrationData({ eventId: IDS.scheduledEvent }))
+    expect(result2.success).toBe(false)
+    expect(result2.error).toContain('already registered')
+  })
+
+  it('event not found returns error', async () => {
+    const { registerForEvent } = await import('@/lib/actions/register')
+    const result = await registerForEvent(
+      buildRegistrationData({ eventId: '00000000-0000-0000-0000-000000000000' })
+    )
+
+    expect(result.success).toBe(false)
+    expect(result.error).toBeTruthy()
+  })
+
+  it('completed event returns error', async () => {
+    const { registerForEvent } = await import('@/lib/actions/register')
+    const result = await registerForEvent(buildRegistrationData({ eventId: IDS.completedEvent }))
+
+    expect(result.success).toBe(false)
+    expect(result.error).toBe('Registration is not open for this event')
+  })
+
+  it('missing required fields returns error', async () => {
+    const { registerForEvent } = await import('@/lib/actions/register')
+    const result = await registerForEvent(
+      buildRegistrationData({ eventId: IDS.scheduledEvent, firstName: '' })
+    )
+
+    expect(result.success).toBe(false)
+    expect(result.error).toBe('Missing required fields')
+  })
+
+  it('duplicate team name as captain returns error', async () => {
+    searchCCNMembership.mockResolvedValue({
+      found: true,
+      membershipId: 42,
+      type: 'Individual Membership',
+    })
+
+    const { registerForEvent } = await import('@/lib/actions/register')
+
+    // First captain registration
+    await registerForEvent(
+      buildRegistrationData({
+        eventId: IDS.scheduledEvent,
+        teamName: 'Speed Demons',
+        isTeamCaptain: true,
+      })
+    )
+
+    // Second captain with same team name (case-insensitive)
+    const result = await registerForEvent(
+      buildRegistrationData({
+        eventId: IDS.scheduledEvent,
+        email: 'other@example.com',
+        firstName: 'Other',
+        teamName: 'speed demons',
+        isTeamCaptain: true,
+      })
+    )
+
+    expect(result.success).toBe(false)
+    expect(result.error).toContain('speed demons')
+    expect(result.error).toContain('already exists')
+  })
+
+  it('new rider created when no email match and no fuzzy match', async () => {
+    searchCCNMembership.mockResolvedValue({
+      found: true,
+      membershipId: 42,
+      type: 'Individual Membership',
+    })
+
+    const { registerForEvent } = await import('@/lib/actions/register')
+    const result = await registerForEvent(
+      buildRegistrationData({
+        eventId: IDS.scheduledEvent,
+        email: 'new-rider@example.com',
+        firstName: 'New',
+        lastName: 'Person',
+      })
+    )
+
+    expect(result.success).toBe(true)
+
+    // Verify new rider exists in DB
+    const { data: rider } = await supabase
+      .from('riders')
+      .select('first_name, last_name, email, slug')
+      .eq('email', 'new-rider@example.com')
+      .single()
+
+    expect(rider).toBeTruthy()
+    expect(rider!.first_name).toBe('New')
+    expect(rider!.last_name).toBe('Person')
+    expect(rider!.slug).toMatch(/^new-rider-[a-z0-9]+$/)
+  })
+
+  it('existing rider found by email — reuses rider, creates audit entry', async () => {
+    searchCCNMembership.mockResolvedValue({
+      found: true,
+      membershipId: 42,
+      type: 'Individual Membership',
+    })
+
+    const { registerForEvent } = await import('@/lib/actions/register')
+    const result = await registerForEvent(
+      buildRegistrationData({
+        eventId: IDS.scheduledEvent,
+        // Same email as seeded rider but different name
+        email: 'test-rider@example.com',
+        firstName: 'Different',
+        lastName: 'Name',
+      })
+    )
+
+    expect(result.success).toBe(true)
+
+    // Verify rider_merges audit entry was created
+    const { data: merges } = await supabase
+      .from('rider_merges')
+      .select('submitted_first_name, submitted_last_name, previous_first_name, previous_last_name')
+      .eq('rider_id', IDS.rider)
+
+    expect(merges).toHaveLength(1)
+    expect(merges![0]).toMatchObject({
+      submitted_first_name: 'Different',
+      submitted_last_name: 'Name',
+      previous_first_name: 'Test',
+      previous_last_name: 'Rider',
+    })
+
+    // Registration should be linked to the existing rider
+    const { data: reg } = await supabase
+      .from('registrations')
+      .select('rider_id')
+      .eq('event_id', IDS.scheduledEvent)
+      .single()
+    expect(reg?.rider_id).toBe(IDS.rider)
+  })
 })
