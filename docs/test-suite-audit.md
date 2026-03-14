@@ -67,11 +67,11 @@ getSupabaseAdmin: vi.fn(() => ({
 
 The integration tests for server actions test that empty/invalid inputs return errors. They do not test the actual business logic paths.
 
-**`register.test.ts`**: 6 tests — all are "returns error for missing/empty X". Zero tests for a successful registration that verifies the right data was written, the right email was sent, or the right cache was revalidated.
+`**register.test.ts`\*\*: 6 tests — all are "returns error for missing/empty X". Zero tests for a successful registration that verifies the right data was written, the right email was sent, or the right cache was revalidated.
 
-**`manage-registration.test.ts`**: 3 tests — all are "returns error for non-existent token". Zero tests for successful cancellation, early result creation, or cancellation email delivery.
+`**manage-registration.test.ts**`: 3 tests — all are "returns error for non-existent token". Zero tests for successful cancellation, early result creation, or cancellation email delivery.
 
-**`rider-results.test.ts`**: Validation tests (empty token, invalid status, missing time) plus a success test that only asserts `result.success === true` — never checks what was written.
+`**rider-results.test.ts**`: Validation tests (empty token, invalid status, missing time) plus a success test that only asserts `result.success === true` — never checks what was written.
 
 ### 3. Success Paths Assert Only the Return Code
 
@@ -472,7 +472,7 @@ Add a GitHub Actions job that:
 | 2        | 1.1          | Yes        | Add query verification to existing mocks              | Highest ratio of value to effort — adds real assertions to existing tests     |
 | 3        | 2            | Yes        | E2E seeding + remove skip gates + fix broken locators | Makes E2E tests actually run in CI                                            |
 | 4        | 3.2          | Yes        | Membership service tests                              | Critical business gate with zero coverage                                     |
-| 5        | 3.1          |            | Registration flow integration tests                   | Most important user-facing flow                                               |
+| 5        | 3.1          | Yes        | Registration flow integration tests                   | Most important user-facing flow                                               |
 | 6        | 4.1-4.3      |            | Strengthen existing assertions                        | Quick wins across the board                                                   |
 | 7        | 3.3          |            | Event status transition tests                         | Complex cascade logic with high risk                                          |
 | 8        | 3.4          |            | Authorization tests                                   | Security boundary                                                             |
@@ -486,21 +486,16 @@ Completed 2026-03-13. Post-implementation review identified these remaining weak
 
 ### Deferred to Phase 2 (requires test data seeding)
 
-1. ~~**`disables form when results already submitted` always skips in practice.**~~ **Fixed 2026-03-13 (Phase 2).** globalSetup now seeds a separate submitted-result with its own token. The test uses `getTestData()?.submittedResult.submissionToken` and asserts the "Results Already Submitted" heading is visible.
-
+1. ~~`**disables form when results already submitted` always skips in practice.\*\*~~ **Fixed 2026-03-13 (Phase 2).** globalSetup now seeds a separate submitted-result with its own token. The test uses `getTestData()?.submittedResult.submissionToken` and asserts the "Results Already Submitted" heading is visible.
 2. ~~**GPX and control card upload tests may fail if default status is not "finished".**~~ **Fixed 2026-03-13.** Upload tests now select "finished" status before looking for file inputs. Upload assertions now check for the uploaded filename instead of matching static button labels.
 
 ### Deferred to Phase 4 (strengthen existing assertions)
 
-3. **`permanent registration requires route and date selection` does not check _which_ fields are invalid.** The test verifies that _some_ validation error appears but not that the route or date field specifically is flagged. If a completely unrelated field showed an error, the test would still pass. Fix: assert that the route/date combobox or its container has a validation message.
-
-4. **`Promise.race` + `.catch(() => {})` in registration tests adds ~15s wall time on failure.** When all three `waitFor` calls time out, the catch swallows the rejection and execution falls through to `isVisible()` checks + `expect.fail()`. The final assertion is sound but the test takes 15+ seconds to reach it. Fix: restructure to let the race throw and provide a better timeout error message. Lower priority — will become moot when Phase 2 seeding makes these tests deterministic.
-
-5. **`shows rider match dialog when needed` accepts any of 3 outcomes.** The test name says it verifies the rider match dialog, but it passes on success, dialog, OR error. A broken dialog feature passes as long as registration succeeds or errors. Fix: when the dialog branch is hit, assert specific dialog content (e.g., text matching "match" or candidate rider names) rather than just `[role="dialog"]`.
-
-6. ~~**Weak locators in admin-workflows.spec.ts.**~~ **Fixed 2026-03-13 (Phase 2 locator fixes).** Replaced `h1, main` with specific `h1` locators, `h1, form` with `form.first()`, `nav, [role="navigation"]` with specific `getByTestId` sidebar link assertions. See Phase 2 locator fix notes below.
-
-7. **Dead `registerButton` variable declarations** on lines 80 and 174 of `registration-flow.spec.ts`. Cleanup only — no confidence impact.
+1. `**permanent registration requires route and date selection` does not check _which_ fields are invalid.\** The test verifies that *some\* validation error appears but not that the route or date field specifically is flagged. If a completely unrelated field showed an error, the test would still pass. Fix: assert that the route/date combobox or its container has a validation message.
+2. `**Promise.race` + `.catch(() => {})` in registration tests adds ~15s wall time on failure.\*\* When all three `waitFor` calls time out, the catch swallows the rejection and execution falls through to `isVisible()` checks + `expect.fail()`. The final assertion is sound but the test takes 15+ seconds to reach it. Fix: restructure to let the race throw and provide a better timeout error message. Lower priority — will become moot when Phase 2 seeding makes these tests deterministic.
+3. `**shows rider match dialog when needed` accepts any of 3 outcomes.\*\* The test name says it verifies the rider match dialog, but it passes on success, dialog, OR error. A broken dialog feature passes as long as registration succeeds or errors. Fix: when the dialog branch is hit, assert specific dialog content (e.g., text matching "match" or candidate rider names) rather than just `[role="dialog"]`.
+4. ~~**Weak locators in admin-workflows.spec.ts.**~~ **Fixed 2026-03-13 (Phase 2 locator fixes).** Replaced `h1, main` with specific `h1` locators, `h1, form` with `form.first()`, `nav, [role="navigation"]` with specific `getByTestId` sidebar link assertions. See Phase 2 locator fix notes below.
+5. **Dead `registerButton` variable declarations** on lines 80 and 174 of `registration-flow.spec.ts`. Cleanup only — no confidence impact.
 
 ## Phase 2 Post-Implementation Issues
 
@@ -511,29 +506,28 @@ Completed 2026-03-13. Post-implementation review of the E2E seeding infrastructu
 ### Fixed 2026-03-13
 
 1. **globalSetup discarded Supabase errors.** Every `insert`/`upsert`/`delete` ignored `{ error }`. If an operation failed (RLS, constraint violation, wrong schema), setup continued silently and downstream tests failed with confusing timeouts. Fix: added `checked()` wrapper that throws on any Supabase error.
-
 2. **Duplicated IDS constant between setup and teardown.** If someone updated one and not the other, teardown would leave orphan data. Fix: extracted `E2E_IDS` to shared `helpers/test-data.ts`.
-
 3. **Admin tests had no safety-net skip.** After removing the env var guards, admin tests would timeout for 60s each if globalSetup failed. Fix: added `if (!getTestData()) test.skip()` check in each `beforeEach` and the login test.
 
 ### Fixed 2026-03-13 (Phase 2 locator fixes)
 
-3. ~~**Six strict-mode locator violations now visible.**~~ **Fixed.** All 9 broken locators repaired. Suite now runs 63 pass / 0 fail / 3 skip. Specific fixes:
-   - `admin-workflows.spec.ts` dashboard: `getByText(/events/i)` → `locator('span', { hasText: /[\d,]+ events/ })` (avoids matching card descriptions)
-   - `admin-workflows.spec.ts` sidebar: `locator('nav, [role="navigation"]')` → three `getByTestId('nav-*')` assertions (shadcn Sidebar uses `<div>`, not `<nav>`)
-   - `admin-workflows.spec.ts` create event: `locator('form')` → `locator('form').first()` (logout form is a second `<form>`)
-   - `admin-workflows.spec.ts` event details: `locator('h1, main')` → `locator('h1')`
-   - `admin-workflows.spec.ts` news: removed homepage cache checks (Next.js `unstable_cache` doesn't reliably invalidate in dev); workflow now verified entirely through admin panel
-   - `admin-workflows.spec.ts` results nav: added `{ timeout: 30000 }` for dev-mode compilation delay
-   - `result-submission.spec.ts` valid token: `locator('h1, main')` → `locator('h1')`
-   - `result-submission.spec.ts` finish status: `text=/finished|dnf|dns/i` → `getByRole('option').first()`
-   - `result-submission.spec.ts` GPX upload: `getByText('test-route.gpx')` → `locator('a[href*="gpx"]')` (server renames uploaded files)
-   - `result-submission.spec.ts` control card: `getByText('control-card.jpg')` → `locator('a[href*="control_card"]')` (same rename issue)
-   - `result-submission.spec.ts` time validation: `text=/time|required|finish/i` → `locator('#finishHours:invalid, #finishMinutes:invalid')` (HTML5 required validation)
+1. ~~**Six strict-mode locator violations now visible.**~~ **Fixed.** All 9 broken locators repaired. Suite now runs 63 pass / 0 fail / 3 skip. Specific fixes:
+
+- `admin-workflows.spec.ts` dashboard: `getByText(/events/i)` → `locator('span', { hasText: /[\d,]+ events/ })` (avoids matching card descriptions)
+- `admin-workflows.spec.ts` sidebar: `locator('nav, [role="navigation"]')` → three `getByTestId('nav-*')` assertions (shadcn Sidebar uses `<div>`, not `<nav>`)
+- `admin-workflows.spec.ts` create event: `locator('form')` → `locator('form').first()` (logout form is a second `<form>`)
+- `admin-workflows.spec.ts` event details: `locator('h1, main')` → `locator('h1')`
+- `admin-workflows.spec.ts` news: removed homepage cache checks (Next.js `unstable_cache` doesn't reliably invalidate in dev); workflow now verified entirely through admin panel
+- `admin-workflows.spec.ts` results nav: added `{ timeout: 30000 }` for dev-mode compilation delay
+- `result-submission.spec.ts` valid token: `locator('h1, main')` → `locator('h1')`
+- `result-submission.spec.ts` finish status: `text=/finished|dnf|dns/i` → `getByRole('option').first()`
+- `result-submission.spec.ts` GPX upload: `getByText('test-route.gpx')` → `locator('a[href*="gpx"]')` (server renames uploaded files)
+- `result-submission.spec.ts` control card: `getByText('control-card.jpg')` → `locator('a[href*="control_card"]')` (same rename issue)
+- `result-submission.spec.ts` time validation: `text=/time|required|finish/i` → `locator('#finishHours:invalid, #finishMinutes:invalid')` (HTML5 required validation)
 
 ### Deferred
 
-6. **News teardown uses `ilike('title', 'Test Announcement%')`.** Could delete user-created news items that happen to start with the same prefix. Should use a deterministic slug or more specific pattern.
+1. **News teardown uses `ilike('title', 'Test Announcement%')`.** Could delete user-created news items that happen to start with the same prefix. Should use a deterministic slug or more specific pattern.
 
 ## Phase 3.2: Membership Service Tests
 
@@ -564,15 +558,62 @@ Completed 2026-03-13. Added 13 real-database integration tests for `lib/membersh
 - Cancelled registration for future event → false
 - Past-event registration only → false
 
+## Phase 3.1: Registration Flow Integration Tests
+
+Completed 2026-03-13. Added 33 real-database integration tests for all three registration server actions in `lib/actions/register.ts` — the most important user-facing flow. Previous coverage: 6 mock-only tests checking input validation (step 1 of 13 registration steps).
+
+**Tests added (33 total across 3 files + 1 helpers file):**
+
+`register-for-event.test.ts` (12 tests):
+
+- Happy path with valid membership → registered, email with `membershipStatus: valid`
+- CCN not-found → incomplete membership, email with `membershipStatus: none`
+- Trial used → incomplete membership, email with `membershipStatus: trial-used`
+- CCN API error → Registration failed, no record created
+- Rider match candidates → `needsRiderMatch: true`, no registration
+- Duplicate registration → error
+- Event not found, completed event, missing fields → errors
+- Duplicate team name → captain error
+- New rider creation (slug verified)
+- Existing rider by email → reuses rider, creates `rider_merges` audit entry
+
+`register-for-permanent.test.ts` (11 tests):
+
+- Happy path → dynamic event creation with correct slug pattern
+- Second registration → reuses existing event
+- Date validation (< 14 days), invalid route, inactive route, missing fields → errors
+- Reversed direction → event name includes "(Reversed)"
+- Cross-direction → reuses same event (direction not in slug)
+- No membership, trial used → incomplete registration
+- Duplicate → permanent-specific error
+
+`complete-registration.test.ts` (10 tests):
+
+- selectedRiderId provided → updates rider fields, creates registration
+- Audit log → `rider_merges` with before/after fields
+- selectedRiderId null → creates new rider with slug
+- No membership, trial used → incomplete registration
+- CCN error → unhandled rejection (no outer try/catch)
+- Event not found, completed event, invalid rider, missing fields → errors
+
+**What's mocked:** SendGrid email (assert payload), CCN membership API, rider search (fuzzy match)
+**What's real:** All Supabase database operations (riders, events, routes, registrations, results, memberships, rider_merges)
+
+**Infrastructure notes:**
+
+- `fileParallelism: false` in vitest config — registration tests share email addresses through `findOrCreateRider`, requiring sequential execution
+- Each file uses isolated UUID prefixes (`1a20`, `1a21`, `1a22`) to avoid collisions
+- Shared helpers in `tests/integration-real/registration/helpers.ts`
+
 ---
 
 ## What's Already Good
 
 To be fair, several areas of the test suite are solid:
 
-- **`tests/unit/lib/security.test.ts`**: XSS prevention in email templates is thorough with real payloads
-- **`tests/integration/error-handling.test.ts`**: Error propagation, Sentry integration, and user-friendly messages are well-tested
-- **`tests/unit/components/registration-form.test.tsx`**: Good coverage of rendering, user interaction, localStorage, and error display
-- **`tests/integration/actions/my-rides.test.ts`**: Actually verifies data transformation, sorting, and edge cases (null fields, cancelled events)
-- **`tests/integration/api/complete-events.test.ts`**: Auth checks and BRM closing time calculations are correctly tested
-- **`tests/unit/lib/fuzzy-match.test.ts`**, **`comparator.test.ts`**, **`matcher.test.ts`**: Pure function tests that genuinely verify algorithmic correctness
+- `**tests/unit/lib/security.test.ts`\*\*: XSS prevention in email templates is thorough with real payloads
+- `**tests/integration/error-handling.test.ts**`: Error propagation, Sentry integration, and user-friendly messages are well-tested
+- `**tests/unit/components/registration-form.test.tsx**`: Good coverage of rendering, user interaction, localStorage, and error display
+- `**tests/integration/actions/my-rides.test.ts**`: Actually verifies data transformation, sorting, and edge cases (null fields, cancelled events)
+- `**tests/integration/api/complete-events.test.ts**`: Auth checks and BRM closing time calculations are correctly tested
+- `**tests/unit/lib/fuzzy-match.test.ts**`, `**comparator.test.ts**`, `**matcher.test.ts**`: Pure function tests that genuinely verify algorithmic correctness

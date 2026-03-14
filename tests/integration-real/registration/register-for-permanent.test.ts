@@ -42,6 +42,8 @@ describe('registerForPermanent (real DB)', () => {
     // Clean up
     await supabase.from('rider_merges').delete().eq('rider_id', IDS.rider)
     await supabase.from('memberships').delete().eq('rider_id', IDS.rider)
+    await supabase.from('results').delete().eq('rider_id', IDS.rider)
+    await supabase.from('registrations').delete().eq('rider_id', IDS.rider)
     const { data: events } = await supabase
       .from('events')
       .select('id')
@@ -51,6 +53,13 @@ describe('registerForPermanent (real DB)', () => {
       await supabase.from('registrations').delete().in('event_id', eventIds)
       await supabase.from('events').delete().in('id', eventIds)
     }
+    // Clean up trial-used temp event (slug doesn't match permanent-* pattern)
+    await supabase.from('results').delete().eq('event_id', '00000000-1a21-4000-a000-000000000010')
+    await supabase
+      .from('registrations')
+      .delete()
+      .eq('event_id', '00000000-1a21-4000-a000-000000000010')
+    await supabase.from('events').delete().eq('id', '00000000-1a21-4000-a000-000000000010')
     await supabase.from('routes').delete().in('id', [IDS.route, IDS.inactiveRoute])
     await supabase.from('riders').delete().eq('id', IDS.rider)
 
@@ -112,6 +121,8 @@ describe('registerForPermanent (real DB)', () => {
   afterAll(async () => {
     await supabase.from('rider_merges').delete().eq('rider_id', IDS.rider)
     await supabase.from('memberships').delete().eq('rider_id', IDS.rider)
+    await supabase.from('results').delete().eq('rider_id', IDS.rider)
+    await supabase.from('registrations').delete().eq('rider_id', IDS.rider)
     const { data: events } = await supabase
       .from('events')
       .select('id')
@@ -121,6 +132,13 @@ describe('registerForPermanent (real DB)', () => {
       await supabase.from('registrations').delete().in('event_id', eventIds)
       await supabase.from('events').delete().in('id', eventIds)
     }
+    // Clean up trial-used temp event
+    await supabase.from('results').delete().eq('event_id', '00000000-1a21-4000-a000-000000000010')
+    await supabase
+      .from('registrations')
+      .delete()
+      .eq('event_id', '00000000-1a21-4000-a000-000000000010')
+    await supabase.from('events').delete().eq('id', '00000000-1a21-4000-a000-000000000010')
     await supabase.from('routes').delete().in('id', [IDS.route, IDS.inactiveRoute])
     await supabase.from('riders').delete().eq('id', IDS.rider)
     await supabase.from('riders').delete().eq('email', 'new-rider@example.com')

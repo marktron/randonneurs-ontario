@@ -49,6 +49,8 @@ describe('registerForEvent (real DB)', () => {
     // Clean up leftover test data
     await supabase.from('rider_merges').delete().eq('rider_id', IDS.rider)
     await supabase.from('memberships').delete().eq('rider_id', IDS.rider)
+    await supabase.from('results').delete().eq('rider_id', IDS.rider)
+    await supabase.from('registrations').delete().eq('rider_id', IDS.rider)
     await supabase
       .from('registrations')
       .delete()
@@ -134,6 +136,8 @@ describe('registerForEvent (real DB)', () => {
   afterAll(async () => {
     await supabase.from('rider_merges').delete().eq('rider_id', IDS.rider)
     await supabase.from('memberships').delete().eq('rider_id', IDS.rider)
+    await supabase.from('results').delete().eq('rider_id', IDS.rider)
+    await supabase.from('registrations').delete().eq('rider_id', IDS.rider)
     await supabase
       .from('registrations')
       .delete()
