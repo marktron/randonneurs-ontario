@@ -489,12 +489,14 @@ Completed 2026-03-13. Post-implementation review identified these remaining weak
 1. ~~`**disables form when results already submitted` always skips in practice.\*\*~~ **Fixed 2026-03-13 (Phase 2).** globalSetup now seeds a separate submitted-result with its own token. The test uses `getTestData()?.submittedResult.submissionToken` and asserts the "Results Already Submitted" heading is visible.
 2. ~~**GPX and control card upload tests may fail if default status is not "finished".**~~ **Fixed 2026-03-13.** Upload tests now select "finished" status before looking for file inputs. Upload assertions now check for the uploaded filename instead of matching static button labels.
 
-### Deferred to Phase 4 (strengthen existing assertions)
+### Remaining E2E assertion weaknesses (from Phase 1.2 review)
 
-1. `**permanent registration requires route and date selection` does not check _which_ fields are invalid.\** The test verifies that *some\* validation error appears but not that the route or date field specifically is flagged. If a completely unrelated field showed an error, the test would still pass. Fix: assert that the route/date combobox or its container has a validation message.
-2. `**Promise.race` + `.catch(() => {})` in registration tests adds ~15s wall time on failure.\*\* When all three `waitFor` calls time out, the catch swallows the rejection and execution falls through to `isVisible()` checks + `expect.fail()`. The final assertion is sound but the test takes 15+ seconds to reach it. Fix: restructure to let the race throw and provide a better timeout error message. Lower priority — will become moot when Phase 2 seeding makes these tests deterministic.
-3. `**shows rider match dialog when needed` accepts any of 3 outcomes.\*\* The test name says it verifies the rider match dialog, but it passes on success, dialog, OR error. A broken dialog feature passes as long as registration succeeds or errors. Fix: when the dialog branch is hit, assert specific dialog content (e.g., text matching "match" or candidate rider names) rather than just `[role="dialog"]`.
-4. ~~**Weak locators in admin-workflows.spec.ts.**~~ **Fixed 2026-03-13 (Phase 2 locator fixes).** Replaced `h1, main` with specific `h1` locators, `h1, form` with `form.first()`, `nav, [role="navigation"]` with specific `getByTestId` sidebar link assertions. See Phase 2 locator fix notes below.
+These are E2E test issues in `registration-flow.spec.ts`, not mock-based integration test issues. Originally mislabeled as "Deferred to Phase 4" but Phase 4 targeted integration tests. These remain open.
+
+1. **Permanent registration validation** does not check _which_ fields are invalid. The test verifies that _some_ validation error appears but not that the route or date field specifically is flagged. Fix: assert that the route/date combobox or its container has a validation message.
+2. **`Promise.race` + `.catch(() => {})` adds ~15s wall time on failure.** When all three `waitFor` calls time out, the catch swallows the rejection and execution falls through to `isVisible()` checks + `expect.fail()`. Fix: restructure to let the race throw and provide a better timeout error message.
+3. **Rider match dialog test accepts any of 3 outcomes.** The test passes on success, dialog, OR error. Fix: when the dialog branch is hit, assert specific dialog content (e.g., text matching "match" or candidate rider names) rather than just `[role="dialog"]`.
+4. ~~**Weak locators in admin-workflows.spec.ts.**~~ **Fixed 2026-03-13 (Phase 2 locator fixes).**
 5. **Dead `registerButton` variable declarations** on lines 80 and 174 of `registration-flow.spec.ts`. Cleanup only — no confidence impact.
 
 ## Phase 2 Post-Implementation Issues
