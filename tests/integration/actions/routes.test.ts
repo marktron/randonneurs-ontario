@@ -11,6 +11,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 // Mock dependencies before imports
 vi.mock('@/lib/supabase-server', () => {
+  // Track all requests for assertions
+  const calls: Array<{ table: string; method: string; args?: unknown[] }> = []
+  let currentTable = ''
+
   const createQueryBuilder = () => {
     const builder: Record<string, ReturnType<typeof vi.fn>> = {}
     const methods = [
@@ -35,7 +39,10 @@ vi.mock('@/lib/supabase-server', () => {
     ]
 
     methods.forEach((method) => {
-      builder[method] = vi.fn(() => builder)
+      builder[method] = vi.fn((...args) => {
+        calls.push({ table: currentTable, method, args })
+        return builder
+      })
     })
 
     // Terminal methods
@@ -51,10 +58,15 @@ vi.mock('@/lib/supabase-server', () => {
 
   return {
     getSupabaseAdmin: vi.fn(() => ({
-      from: vi.fn(() => queryBuilder),
+      from: vi.fn((table: string) => {
+        currentTable = table
+        return queryBuilder
+      }),
     })),
+    __calls: calls,
     __queryBuilder: queryBuilder,
     __reset: () => {
+      calls.length = 0
       queryBuilder.single.mockReset()
       queryBuilder.single.mockResolvedValue({ data: null, error: { code: 'PGRST116' } })
       queryBuilder.then.mockReset()
@@ -124,6 +136,7 @@ import {
 } from '@/lib/actions/routes'
 
 const mockModule = await vi.importMock<{
+  __calls: Array<{ table: string; method: string; args?: unknown[] }>
   __queryBuilder: Record<string, ReturnType<typeof vi.fn>>
   __reset: () => void
   __mockRouteFound: (route: unknown) => void
@@ -170,8 +183,22 @@ describe('createRoute', () => {
         slug: 'test-route-name',
       })
 
-      // Should not fail validation
-      expect(result.error).not.toBe('Route name is required')
+      expect(result.success).toBe(true)
+
+      // Verify insert was called on the routes table
+      const insertCalls = mockModule.__calls.filter(
+        (c) => c.table === 'routes' && c.method === 'insert'
+      )
+      expect(insertCalls).toHaveLength(1)
+
+      const insertData = insertCalls[0].args![0]
+      expect(insertData).toMatchObject({
+        name: 'Test Route Name',
+        slug: 'test-route-name',
+      })
+
+      const { revalidatePath } = await import('next/cache')
+      expect(revalidatePath).toHaveBeenCalledWith('/admin/routes')
     })
   })
 
@@ -274,6 +301,18 @@ describe('updateRoute', () => {
     })
 
     expect(result.success).toBe(true)
+
+    // Verify update was called on the routes table
+    const updateCalls = mockModule.__calls.filter(
+      (c) => c.table === 'routes' && c.method === 'update'
+    )
+    expect(updateCalls).toHaveLength(1)
+
+    const updateData = updateCalls[0].args![0]
+    expect(updateData.name).toBe('Updated Name')
+
+    const { revalidatePath } = await import('next/cache')
+    expect(revalidatePath).toHaveBeenCalledWith('/admin/routes')
   })
 
   it('handles duplicate slug error on update', async () => {
@@ -318,6 +357,12 @@ describe('deleteRoute', () => {
     const result = await deleteRoute('route-1')
 
     expect(result.success).toBe(true)
+
+    // Verify delete was called on the routes table
+    const deleteCalls = mockModule.__calls.filter(
+      (c) => c.table === 'routes' && c.method === 'delete'
+    )
+    expect(deleteCalls).toHaveLength(1)
   })
 
   it('returns error when route not found', async () => {
@@ -344,6 +389,18 @@ describe('toggleRouteActive', () => {
     const result = await toggleRouteActive('route-1', true)
 
     expect(result.success).toBe(true)
+
+    // Verify update was called on the routes table
+    const updateCalls = mockModule.__calls.filter(
+      (c) => c.table === 'routes' && c.method === 'update'
+    )
+    expect(updateCalls).toHaveLength(1)
+
+    const updateData = updateCalls[0].args![0]
+    expect(updateData.is_active).toBeDefined()
+
+    const { revalidatePath } = await import('next/cache')
+    expect(revalidatePath).toHaveBeenCalledWith('/admin/routes')
   })
 })
 
@@ -399,5 +456,9 @@ describe('mergeRoutes', () => {
     if (result.success) {
       expect(result.deletedRoutesCount).toBe(1)
     }
+
+    // Verify updates were performed (event reassignment + route update/delete)
+    const updateCalls = mockModule.__calls.filter((c) => c.method === 'update')
+    expect(updateCalls.length).toBeGreaterThanOrEqual(1)
   })
 })

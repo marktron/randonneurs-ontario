@@ -11,6 +11,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 // Mock dependencies before imports
 vi.mock('@/lib/supabase-server', () => {
+  // Track all requests for assertions
+  const calls: Array<{ table: string; method: string; args?: unknown[] }> = []
+  let currentTable = ''
+
   const createQueryBuilder = () => {
     const builder: Record<string, ReturnType<typeof vi.fn>> = {}
     const methods = [
@@ -35,7 +39,10 @@ vi.mock('@/lib/supabase-server', () => {
     ]
 
     methods.forEach((method) => {
-      builder[method] = vi.fn(() => builder)
+      builder[method] = vi.fn((...args) => {
+        calls.push({ table: currentTable, method, args })
+        return builder
+      })
     })
 
     builder.single = vi.fn().mockResolvedValue({ data: null, error: { code: 'PGRST116' } })
@@ -50,10 +57,15 @@ vi.mock('@/lib/supabase-server', () => {
 
   return {
     getSupabaseAdmin: vi.fn(() => ({
-      from: vi.fn(() => queryBuilder),
+      from: vi.fn((table: string) => {
+        currentTable = table
+        return queryBuilder
+      }),
     })),
+    __calls: calls,
     __queryBuilder: queryBuilder,
     __reset: () => {
+      calls.length = 0
       queryBuilder.single.mockReset()
       queryBuilder.single.mockResolvedValue({ data: null, error: { code: 'PGRST116' } })
       queryBuilder.then.mockReset()
@@ -119,6 +131,7 @@ import {
 } from '@/lib/actions/results'
 
 const mockModule = await vi.importMock<{
+  __calls: Array<{ table: string; method: string; args?: unknown[] }>
   __queryBuilder: Record<string, ReturnType<typeof vi.fn>>
   __reset: () => void
   __mockResultFound: (result: unknown) => void
@@ -171,6 +184,25 @@ describe('createResult', () => {
     })
 
     expect(result.success).toBe(true)
+
+    // Verify insert was called on the results table
+    const insertCalls = mockModule.__calls.filter(
+      (c) => c.table === 'results' && c.method === 'insert'
+    )
+    expect(insertCalls).toHaveLength(1)
+
+    const insertData = insertCalls[0].args![0]
+    expect(insertData).toMatchObject({
+      event_id: 'event-1',
+      rider_id: 'rider-1',
+      status: 'finished',
+      finish_time: '13:30',
+      season: 2025,
+      distance_km: 200,
+    })
+
+    const { revalidatePath } = await import('next/cache')
+    expect(revalidatePath).toHaveBeenCalledWith(expect.stringContaining('/admin/events/'))
   })
 
   it('handles database errors', async () => {
@@ -211,6 +243,16 @@ describe('createResult', () => {
     })
 
     expect(result.success).toBe(true)
+
+    // Verify insert was called on the results table
+    const insertCalls = mockModule.__calls.filter(
+      (c) => c.table === 'results' && c.method === 'insert'
+    )
+    expect(insertCalls).toHaveLength(1)
+
+    const insertData = insertCalls[0].args![0]
+    expect(insertData.status).toBe('dnf')
+    expect(insertData.finish_time).toBeNull()
   })
 })
 
@@ -236,6 +278,21 @@ describe('updateResult', () => {
     })
 
     expect(result.success).toBe(true)
+
+    // Verify update was called on the results table
+    const updateCalls = mockModule.__calls.filter(
+      (c) => c.table === 'results' && c.method === 'update'
+    )
+    expect(updateCalls).toHaveLength(1)
+
+    const updateData = updateCalls[0].args![0]
+    expect(updateData).toMatchObject({
+      status: 'finished',
+      finish_time: '14:00',
+    })
+
+    const { revalidatePath } = await import('next/cache')
+    expect(revalidatePath).toHaveBeenCalledWith('/admin/events')
   })
 
   it('handles partial updates', async () => {
@@ -253,6 +310,16 @@ describe('updateResult', () => {
     })
 
     expect(result.success).toBe(true)
+
+    // Verify update was called on the results table
+    const updateCalls = mockModule.__calls.filter(
+      (c) => c.table === 'results' && c.method === 'update'
+    )
+    expect(updateCalls).toHaveLength(1)
+
+    const updateData = updateCalls[0].args![0]
+    expect(updateData.finish_time).toBe('14:00')
+    expect(updateData.status).toBeUndefined()
   })
 
   it('handles database errors', async () => {
@@ -289,6 +356,15 @@ describe('deleteResult', () => {
     const result = await deleteResult('result-1')
 
     expect(result.success).toBe(true)
+
+    // Verify delete was called on the results table
+    const deleteCalls = mockModule.__calls.filter(
+      (c) => c.table === 'results' && c.method === 'delete'
+    )
+    expect(deleteCalls).toHaveLength(1)
+
+    const { revalidatePath } = await import('next/cache')
+    expect(revalidatePath).toHaveBeenCalledWith('/admin/events')
   })
 
   it('handles database errors', async () => {
@@ -333,6 +409,12 @@ describe('addRegistration', () => {
     })
 
     expect(result.success).toBe(true)
+
+    // Verify insert was called on the registrations table
+    const insertCalls = mockModule.__calls.filter(
+      (c) => c.table === 'registrations' && c.method === 'insert'
+    )
+    expect(insertCalls).toHaveLength(1)
   })
 
   it('handles database errors', async () => {
@@ -377,6 +459,12 @@ describe('createBulkResults', () => {
     )
 
     expect(result.success).toBe(true)
+
+    // Verify insert was called on the results table
+    const insertCalls = mockModule.__calls.filter(
+      (c) => c.table === 'results' && c.method === 'insert'
+    )
+    expect(insertCalls).toHaveLength(1)
   })
 
   it('handles database errors', async () => {
