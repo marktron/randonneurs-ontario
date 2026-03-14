@@ -236,6 +236,21 @@ describe('submitEventResults', () => {
     expect(result.error).toBe('Only completed events can have results submitted')
   })
 
+  it('returns error when event status is cancelled', async () => {
+    mockModule.__mockEventFound({
+      id: 'test-event-id',
+      status: 'cancelled',
+      name: 'Test Event',
+      event_date: '2025-01-15',
+      chapters: { name: 'Toronto' },
+    })
+
+    const result = await submitEventResults('test-event-id')
+
+    expect(result.success).toBe(false)
+    expect(result.error).toBe('Only completed events can have results submitted')
+  })
+
   it('sends email with spreadsheet attachment for brevet events', async () => {
     // Mock event found (completed brevet with distance_km)
     mockModule.__mockEventFound({
@@ -335,6 +350,104 @@ describe('submitEventResults', () => {
 
     const { sendgrid } = await import('@/lib/email/sendgrid')
     expect(sendgrid.send).not.toHaveBeenCalled()
+  })
+
+  it('updates event status to submitted after successful email', async () => {
+    mockModule.__mockEventFound({
+      id: 'test-event-id',
+      status: 'completed',
+      event_type: 'brevet',
+      name: 'Test Event',
+      event_date: '2025-01-15',
+      distance_km: 200,
+      chapters: { name: 'Toronto' },
+    })
+
+    // Mock results query
+    mockModule.__queryBuilder.then.mockImplementationOnce((resolve) => {
+      resolve({
+        data: [
+          {
+            riders: { first_name: 'John', last_name: 'Doe', gender: 'M' },
+            status: 'finished',
+            finish_time: '10:30:00',
+            note: null,
+          },
+        ],
+        error: null,
+      })
+    })
+
+    // Mock the status update
+    mockModule.__mockUpdateSuccess()
+
+    // Mock chapter query for revalidation
+    mockModule.__mockEventFound({ slug: 'toronto' })
+
+    process.env.SENDGRID_API_KEY = 'test-key'
+    const result = await submitEventResults('test-event-id')
+    delete process.env.SENDGRID_API_KEY
+
+    expect(result.success).toBe(true)
+
+    // Verify status was updated to 'submitted' on the events table
+    const updateCalls = mockModule.__calls.filter(
+      (c) => c.table === 'events' && c.method === 'update'
+    )
+    expect(updateCalls.length).toBeGreaterThanOrEqual(1)
+    const updateData = updateCalls[0].args![0]
+    expect(updateData).toMatchObject({ status: 'submitted' })
+  })
+
+  it('succeeds with no finished riders — email sent with zero finishers', async () => {
+    mockModule.__mockEventFound({
+      id: 'test-event-id',
+      status: 'completed',
+      event_type: 'brevet',
+      name: 'Test Event',
+      event_date: '2025-01-15',
+      distance_km: 200,
+      chapters: { name: 'Toronto' },
+    })
+
+    // Mock results query — all DNF, no finished riders
+    mockModule.__queryBuilder.then.mockImplementationOnce((resolve) => {
+      resolve({
+        data: [
+          {
+            riders: { first_name: 'John', last_name: 'Doe', gender: 'M' },
+            status: 'dnf',
+            finish_time: null,
+            note: null,
+          },
+        ],
+        error: null,
+      })
+    })
+
+    // Mock the status update
+    mockModule.__mockUpdateSuccess()
+
+    // Mock chapter query for revalidation
+    mockModule.__mockEventFound({ slug: 'toronto' })
+
+    process.env.SENDGRID_API_KEY = 'test-key'
+    const result = await submitEventResults('test-event-id')
+    delete process.env.SENDGRID_API_KEY
+
+    expect(result.success).toBe(true)
+
+    // Email should still be sent (with "No finishers recorded.")
+    const { sendgrid } = await import('@/lib/email/sendgrid')
+    expect(sendgrid.send).toHaveBeenCalledTimes(1)
+
+    // Status should still be updated to 'submitted'
+    const updateCalls = mockModule.__calls.filter(
+      (c) => c.table === 'events' && c.method === 'update'
+    )
+    expect(updateCalls.length).toBeGreaterThanOrEqual(1)
+    const updateData = updateCalls[0].args![0]
+    expect(updateData).toMatchObject({ status: 'submitted' })
   })
 })
 
@@ -621,5 +734,47 @@ describe('updateEventStatus', () => {
       (c) => c.table === 'events' && c.method === 'update'
     )
     expect(updateCalls.length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('re-completing an already completed event does not trigger pending result creation', async () => {
+    mockModule.__mockEventFound({
+      id: 'event-1',
+      name: 'Test Event',
+      event_date: '2025-06-15',
+      distance_km: 200,
+      chapter_id: 'chapter-1',
+      event_type: 'brevet',
+      status: 'completed', // Already completed — not 'scheduled'
+      chapters: { name: 'Toronto' },
+    })
+    mockModule.__mockUpdateSuccess()
+    mockModule.__mockEventFound({ slug: 'toronto' }) // For revalidation
+
+    const result = await updateEventStatus('event-1', 'completed')
+
+    expect(result.success).toBe(true)
+
+    // createPendingResultsAndSendEmails should NOT be called
+    // (only triggered when transitioning from 'scheduled' to 'completed')
+    const { createPendingResultsAndSendEmails } = await import('@/lib/events/complete-event')
+    expect(createPendingResultsAndSendEmails).not.toHaveBeenCalled()
+  })
+
+  it('returns error when result deletion fails during cancellation', async () => {
+    // Mock delete to return an error (the first .then() call is the delete operation)
+    mockModule.__queryBuilder.then.mockImplementationOnce((resolve) => {
+      resolve({ data: null, error: { message: 'FK constraint' } })
+    })
+
+    const result = await updateEventStatus('event-1', 'cancelled')
+
+    expect(result.success).toBe(false)
+    expect(result.error).toBe('Failed to delete results')
+
+    // Status should NOT have been updated
+    const updateCalls = mockModule.__calls.filter(
+      (c) => c.table === 'events' && c.method === 'update'
+    )
+    expect(updateCalls).toHaveLength(0)
   })
 })
