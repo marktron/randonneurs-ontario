@@ -109,75 +109,88 @@ expect(updateData).toMatchObject({
 
 **"handles partial updates" (line ~272)**
 
+Test passes only `{ finishTime: '14:00' }`. Production code always sets `finish_time`, `status`, `team_name`, `note` on the update object (even if undefined).
+
 ```typescript
 // After existing updateCalls assertion
 const updateData = updateCalls[0].args![0]
-expect(updateData.status).toBe('dnf')
-expect(updateData.finish_time).toBeUndefined()
+expect(updateData.finish_time).toBe('14:00')
+expect(updateData.status).toBeUndefined()
 ```
 
 ### riders.test.ts
 
 **"creates rider successfully without email" (line ~228)**
 
+Test passes `{ firstName: 'John', lastName: 'Doe' }`.
+
 ```typescript
 const insertCalls = mockModule.__calls.filter((c) => c.table === 'riders' && c.method === 'insert')
 expect(insertCalls).toHaveLength(1)
 const insertData = insertCalls[0].args![0]
-expect(insertData.first_name).toBe('New')
-expect(insertData.last_name).toBe('Rider')
+expect(insertData.first_name).toBe('John')
+expect(insertData.last_name).toBe('Doe')
 expect(insertData.slug).toBeDefined()
 ```
 
 **"creates rider successfully with email" (line ~247)**
 
+Test passes `{ firstName: 'John', lastName: 'Doe', email: 'john@example.com' }`.
+
 ```typescript
 const insertCalls = mockModule.__calls.filter((c) => c.table === 'riders' && c.method === 'insert')
 expect(insertCalls).toHaveLength(1)
 const insertData = insertCalls[0].args![0]
-expect(insertData.email).toBe('new@example.com')
+expect(insertData.email).toBe('john@example.com')
 ```
 
 **"updates rider without email" (line ~369)**
 
+Test passes `{ firstName: 'John', lastName: 'Doe', email: null }`.
+
 ```typescript
 const updateCalls = mockModule.__calls.filter((c) => c.table === 'riders' && c.method === 'update')
 expect(updateCalls).toHaveLength(1)
 const updateData = updateCalls[0].args![0]
-expect(updateData.first_name).toBe('Updated')
+expect(updateData.first_name).toBe('John')
 ```
 
 **"updates rider with email when no duplicate exists" (line ~385)**
 
+Test passes `{ firstName: 'John', lastName: 'Doe', email: 'john@example.com' }`.
+
 ```typescript
 const updateCalls = mockModule.__calls.filter((c) => c.table === 'riders' && c.method === 'update')
 expect(updateCalls).toHaveLength(1)
 const updateData = updateCalls[0].args![0]
-expect(updateData.email).toBe('updated@example.com')
+expect(updateData.email).toBe('john@example.com')
 ```
 
 ### routes.test.ts
 
 **"creates route with provided slug" (line ~178)**
 
+Test passes `{ name: 'Test Route Name', slug: 'test-route-name' }` (no distanceKm).
+
 ```typescript
 const insertCalls = mockModule.__calls.filter((c) => c.table === 'routes' && c.method === 'insert')
 expect(insertCalls).toHaveLength(1)
 const insertData = insertCalls[0].args![0]
 expect(insertData).toMatchObject({
-  name: 'Test Route',
-  slug: 'test-route',
-  distance_km: 200,
+  name: 'Test Route Name',
+  slug: 'test-route-name',
 })
 ```
 
 **"updates route successfully" (line ~286)**
 
+Test passes `{ name: 'Updated Name' }`.
+
 ```typescript
 const updateCalls = mockModule.__calls.filter((c) => c.table === 'routes' && c.method === 'update')
 expect(updateCalls).toHaveLength(1)
 const updateData = updateCalls[0].args![0]
-expect(updateData.name).toBe('Updated Route')
+expect(updateData.name).toBe('Updated Name')
 ```
 
 **"toggles route active status" (line ~370)**
