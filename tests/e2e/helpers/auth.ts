@@ -26,8 +26,8 @@ export async function loginAsAdmin(page: Page, email?: string, password?: string
   await page.fill('input[type="password"]', adminPassword)
   await page.click('button[type="submit"]')
 
-  // Wait for redirect to admin dashboard
-  await page.waitForURL(/\/admin/, { timeout: 10000 })
+  // Wait for redirect to admin dashboard (not the login page)
+  await page.waitForURL(/\/admin(?!\/login)/, { timeout: 10000 })
 }
 
 /**

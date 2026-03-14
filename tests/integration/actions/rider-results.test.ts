@@ -2,12 +2,19 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 // Mock supabase before imports
 vi.mock('@/lib/supabase-server', () => {
+  // Track all requests for assertions
+  const calls: Array<{ table: string; method: string; args?: unknown[] }> = []
+  let currentTable = ''
+
   const createQueryBuilder = () => {
     const builder: Record<string, ReturnType<typeof vi.fn>> = {}
     const methods = ['select', 'eq', 'insert', 'update', 'single']
 
     methods.forEach((method) => {
-      builder[method] = vi.fn(() => builder)
+      builder[method] = vi.fn((...args) => {
+        calls.push({ table: currentTable, method, args })
+        return builder
+      })
     })
 
     return builder
@@ -17,7 +24,10 @@ vi.mock('@/lib/supabase-server', () => {
 
   return {
     getSupabaseAdmin: vi.fn(() => ({
-      from: vi.fn(() => queryBuilder),
+      from: vi.fn((table: string) => {
+        currentTable = table
+        return queryBuilder
+      }),
       storage: {
         from: vi.fn(() => ({
           upload: vi.fn().mockResolvedValue({ error: null }),
@@ -28,8 +38,10 @@ vi.mock('@/lib/supabase-server', () => {
         })),
       },
     })),
+    __calls: calls,
     __queryBuilder: queryBuilder,
     __reset: () => {
+      calls.length = 0
       queryBuilder.single.mockReset()
     },
     __mockResultFound: (result: unknown) => {
@@ -55,6 +67,7 @@ import {
 } from '@/lib/actions/rider-results'
 
 const mockModule = await vi.importMock<{
+  __calls: Array<{ table: string; method: string; args?: unknown[] }>
   __queryBuilder: Record<string, ReturnType<typeof vi.fn>>
   __reset: () => void
   __mockResultFound: (result: unknown) => void
@@ -251,6 +264,9 @@ describe('submitRiderResult', () => {
 
     // Should not fail validation
     expect(result.error).not.toBe('Finish time is required for finished rides')
+
+    // Verify update was attempted on the query builder
+    expect(mockModule.__queryBuilder.update).toHaveBeenCalled()
   })
 })
 

@@ -79,22 +79,31 @@ test.describe('Complete Registration Flow', () => {
     const errorToast = page.getByTestId('registration-error').or(page.locator('.sonner-toast'))
     const registerButton = form.getByRole('button', { name: 'Register' }) // Button re-enables on error
 
-    // Wait for one of these outcomes
+    // Wait for one of the meaningful outcomes (not the register button re-enabling, which happens on any outcome)
     await Promise.race([
       success.waitFor({ state: 'visible', timeout: 15000 }),
       matchDialog.waitFor({ state: 'visible', timeout: 15000 }),
       errorToast.waitFor({ state: 'visible', timeout: 15000 }),
-      registerButton.waitFor({ state: 'visible', timeout: 15000 }),
-    ])
+    ]).catch(() => {
+      // If none resolved, the button may have re-enabled due to an error — check below
+    })
 
-    // Form should have responded to the submission
+    // Verify a specific meaningful outcome occurred
     const hasSuccess = await success.isVisible().catch(() => false)
     const hasDialog = await matchDialog.isVisible().catch(() => false)
     const hasError = await errorToast.isVisible().catch(() => false)
-    const buttonReset = await registerButton.isVisible().catch(() => false)
 
-    // At least one outcome should have occurred
-    expect(hasSuccess || hasDialog || hasError || buttonReset).toBeTruthy()
+    if (hasSuccess) {
+      await expect(success).toBeVisible()
+    } else if (hasDialog) {
+      await expect(matchDialog).toBeVisible()
+    } else if (hasError) {
+      await expect(errorToast).toBeVisible()
+    } else {
+      expect.fail(
+        'Registration submission produced no visible outcome (no success, dialog, or error)'
+      )
+    }
   })
 
   test('registration form validates required fields', async ({ page }) => {
@@ -121,11 +130,9 @@ test.describe('Complete Registration Flow', () => {
     // Try to submit empty form
     await form.getByRole('button', { name: 'Register' }).click()
 
-    // Should show validation errors (HTML5 or custom)
+    // Submitting an empty form should trigger HTML5 required-field validation
     const invalidInputs = await form.locator('input:invalid').count()
-    const errorMessages = await page.locator('[data-slot="form-message"]').count()
-
-    expect(invalidInputs > 0 || errorMessages > 0).toBeTruthy()
+    expect(invalidInputs).toBeGreaterThan(0)
   })
 
   test('registration form saves data to localStorage', async ({ page, context }) => {
@@ -168,13 +175,14 @@ test.describe('Complete Registration Flow', () => {
     const errorIndicator = page.getByTestId('registration-error').or(page.locator('.sonner-toast'))
     const registerButton = form.getByRole('button', { name: 'Register' })
 
-    // Wait for one of these outcomes
+    // Wait for one of the meaningful outcomes
     await Promise.race([
       success.waitFor({ state: 'visible', timeout: 15000 }),
       matchDialog.waitFor({ state: 'visible', timeout: 15000 }),
       errorIndicator.waitFor({ state: 'visible', timeout: 15000 }),
-      registerButton.waitFor({ state: 'visible', timeout: 15000 }),
-    ])
+    ]).catch(() => {
+      // None resolved within timeout — check below
+    })
 
     // Check if registration was successful
     const wasSuccessful = await success.isVisible().catch(() => false)
@@ -192,9 +200,8 @@ test.describe('Complete Registration Flow', () => {
         expect(parsed.lastName).toBe('Rider')
       }
     } else {
-      // Registration didn't succeed (dialog, error, etc.)
-      // Test still passes - we verified the form submission flow worked
-      expect(true).toBe(true)
+      // Registration didn't succeed — localStorage test is only meaningful on success
+      test.skip(true, 'Registration did not succeed — cannot verify localStorage')
     }
   })
 
@@ -228,19 +235,33 @@ test.describe('Complete Registration Flow', () => {
 
     await form.getByRole('button', { name: 'Register' }).click()
 
-    // Wait for response - either success, match dialog, or error
-    // The page should handle the server response gracefully
-    await expect(page.locator('main')).toBeVisible()
-
-    // Check if we got a success message or if matching dialog appeared
+    // Wait for a meaningful outcome
     const success = page.getByTestId('registration-success')
     const matchDialog = page.locator('[role="dialog"]')
+    const errorToast = page.getByTestId('registration-error').or(page.locator('.sonner-toast'))
 
-    // Either success or dialog should be visible within timeout
     await Promise.race([
-      success.waitFor({ state: 'visible', timeout: 10000 }).catch(() => {}),
-      matchDialog.waitFor({ state: 'visible', timeout: 10000 }).catch(() => {}),
-    ])
+      success.waitFor({ state: 'visible', timeout: 15000 }),
+      matchDialog.waitFor({ state: 'visible', timeout: 15000 }),
+      errorToast.waitFor({ state: 'visible', timeout: 15000 }),
+    ]).catch(() => {})
+
+    const hasSuccess = await success.isVisible().catch(() => false)
+    const hasDialog = await matchDialog.isVisible().catch(() => false)
+    const hasError = await errorToast.isVisible().catch(() => false)
+
+    if (hasSuccess) {
+      await expect(success).toBeVisible()
+    } else if (hasDialog) {
+      // Rider match dialog appeared — this is the expected path for this test
+      await expect(matchDialog).toBeVisible()
+    } else if (hasError) {
+      await expect(errorToast).toBeVisible()
+    } else {
+      expect.fail(
+        'Registration submission produced no visible outcome (no success, dialog, or error)'
+      )
+    }
   })
 
   test('can register for permanent ride', async ({ page }) => {
@@ -261,10 +282,9 @@ test.describe('Complete Registration Flow', () => {
 
       // Should now be on permanent registration page with route selection
       await expect(page.locator('button[role="combobox"]').first()).toBeVisible({ timeout: 15000 })
+    } else {
+      test.skip(true, 'No "Register for a Permanent" button found on permanents page')
     }
-
-    // The page should have some permanent-related content
-    await expect(page.locator('text=/permanent/i').first()).toBeVisible()
   })
 
   test('permanent registration requires route and date selection', async ({ page }) => {
@@ -285,18 +305,21 @@ test.describe('Complete Registration Flow', () => {
     await page.locator('main #lastName').fill('Rider')
     await page.locator('main #email').fill('test@example.com')
 
-    // Try to submit
+    // Submit button always renders in the permanent registration form
     const submitButton = page.locator('main').getByTestId('registration-submit')
-    if ((await submitButton.count()) > 0) {
-      await submitButton.click()
+    await expect(submitButton).toBeVisible()
+    await submitButton.click()
 
-      // Should show validation error for missing route/date
-      const errorMessages = page.locator('[data-slot="form-message"]')
-      const invalidInputs = page.locator('main input:invalid')
-      const hasError = (await errorMessages.count()) > 0
-      const hasInvalid = (await invalidInputs.count()) > 0
+    // Should show validation error for missing route/date
+    const errorMessages = page.locator('[data-slot="form-message"]')
+    const invalidInputs = page.locator('main input:invalid')
+    const hasError = (await errorMessages.count()) > 0
+    const hasInvalid = (await invalidInputs.count()) > 0
 
-      expect(hasError || hasInvalid).toBeTruthy()
+    if (!hasError && !hasInvalid) {
+      expect.fail(
+        'No validation error shown for missing route/date — expected form-message or :invalid inputs'
+      )
     }
   })
 })

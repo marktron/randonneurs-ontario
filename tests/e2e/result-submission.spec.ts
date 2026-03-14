@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test'
+import { getTestData } from './helpers/test-data'
 
 /**
  * E2E tests for result submission flow.
@@ -12,50 +13,47 @@ import { test, expect } from '@playwright/test'
  * - Submit result
  *
  * Prerequisites:
- * - Test result with known submission_token must exist
- * - Set E2E_SUBMISSION_TOKEN env var or use test data
+ * - globalSetup must have seeded test results with submission tokens
  * - Event must be in 'completed' status
  */
 
 test.describe('Result Submission Flow', () => {
   const getSubmissionToken = (): string | null => {
-    return process.env.E2E_SUBMISSION_TOKEN || null
+    return getTestData()?.pendingResult.submissionToken ?? null
   }
 
   test('shows 404 for invalid token', async ({ page }) => {
     await page.goto('/results/submit/invalid-token-12345')
 
-    // Should show 404 or error message - check for either condition
-    const notFoundText = page.locator('text=/not found|invalid|error/i').first()
-    const notFoundHeading = page.locator('h1:has-text("404")')
-
-    // Wait for either to be visible
-    await expect(notFoundText.or(notFoundHeading)).toBeVisible({ timeout: 10000 })
+    // Should show 404 page — the app renders "Off route" heading with "404" label
+    await expect(page.getByRole('heading', { name: 'Off route' })).toBeVisible({ timeout: 10000 })
   })
 
   test('displays submission form for valid token', async ({ page }) => {
     const token = getSubmissionToken()
     if (!token) {
-      test.skip(true, 'E2E_SUBMISSION_TOKEN not set')
+      console.warn('[e2e] No submission token — globalSetup may have failed')
+      test.skip(true, 'No submission token available')
       return
     }
 
     await page.goto(`/results/submit/${token}`)
 
     // Should show event information
-    await expect(page.locator('h1, main')).toBeVisible()
+    await expect(page.locator('h1')).toBeVisible()
 
     // Should show submission form
     await expect(page.locator('form')).toBeVisible()
 
-    // Should show status select
-    await expect(page.locator('select, button[role="combobox"]')).toBeVisible()
+    // Should show status select (Radix Select renders as combobox)
+    await expect(page.locator('button[role="combobox"]')).toBeVisible()
   })
 
   test('displays event information on submission page', async ({ page }) => {
     const token = getSubmissionToken()
     if (!token) {
-      test.skip(true, 'E2E_SUBMISSION_TOKEN not set')
+      console.warn('[e2e] No submission token — globalSetup may have failed')
+      test.skip(true, 'No submission token available')
       return
     }
 
@@ -68,247 +66,216 @@ test.describe('Result Submission Flow', () => {
   test('allows selecting finish status', async ({ page }) => {
     const token = getSubmissionToken()
     if (!token) {
-      test.skip(true, 'E2E_SUBMISSION_TOKEN not set')
+      console.warn('[e2e] No submission token — globalSetup may have failed')
+      test.skip(true, 'No submission token available')
       return
     }
 
     await page.goto(`/results/submit/${token}`)
 
-    // Find status select
-    const statusSelect = page.locator('select, button[role="combobox"]').first()
-    if ((await statusSelect.count()) > 0) {
-      await statusSelect.click()
+    // Find status select (Radix Select renders as combobox)
+    const statusSelect = page.locator('button[role="combobox"]').first()
+    await expect(statusSelect).toBeVisible()
+    await statusSelect.click()
 
-      // Should show status options
-      await expect(page.locator('text=/finished|dnf|dns/i')).toBeVisible()
-    }
+    // Should show status options in the dropdown
+    await expect(page.getByRole('option').first()).toBeVisible()
   })
 
   test('shows finish time inputs when status is finished', async ({ page }) => {
     const token = getSubmissionToken()
     if (!token) {
-      test.skip(true, 'E2E_SUBMISSION_TOKEN not set')
+      console.warn('[e2e] No submission token — globalSetup may have failed')
+      test.skip(true, 'No submission token available')
       return
     }
 
     await page.goto(`/results/submit/${token}`)
 
     // Select "finished" status
-    const statusSelect = page.locator('select, button[role="combobox"]').first()
-    if ((await statusSelect.count()) > 0) {
-      await statusSelect.click()
-      const finishedOption = page.locator('text=/finished/i').first()
-      if ((await finishedOption.count()) > 0) {
-        await finishedOption.click()
+    const statusSelect = page.locator('button[role="combobox"]').first()
+    await expect(statusSelect).toBeVisible()
+    await statusSelect.click()
+    await page.getByRole('option', { name: /finished/i }).click()
 
-        // Should show time inputs
-        await expect(
-          page.locator('input[type="number"], label:has-text("hour"), label:has-text("minute")')
-        ).toBeVisible()
-      }
-    }
+    // Should show time inputs
+    await expect(page.locator('#finishHours')).toBeVisible()
+    await expect(page.locator('#finishMinutes')).toBeVisible()
   })
 
   test('allows entering finish time', async ({ page }) => {
     const token = getSubmissionToken()
     if (!token) {
-      test.skip(true, 'E2E_SUBMISSION_TOKEN not set')
+      console.warn('[e2e] No submission token — globalSetup may have failed')
+      test.skip(true, 'No submission token available')
       return
     }
 
     await page.goto(`/results/submit/${token}`)
 
     // Select finished status first
-    const statusSelect = page.locator('select, button[role="combobox"]').first()
-    if ((await statusSelect.count()) > 0) {
-      await statusSelect.click()
-      const finishedOption = page.locator('text=/finished/i').first()
-      if ((await finishedOption.count()) > 0) {
-        await finishedOption.click()
+    const statusSelect = page.locator('button[role="combobox"]').first()
+    await expect(statusSelect).toBeVisible()
+    await statusSelect.click()
+    await page.getByRole('option', { name: /finished/i }).click()
 
-        // Find and fill time inputs - wait for them to be visible after status change
-        const hourInput = page
-          .locator('input[type="number"], label:has-text("hour") + input')
-          .first()
-        await expect(hourInput).toBeVisible({ timeout: 5000 })
-        const minuteInput = page
-          .locator('input[type="number"], label:has-text("minute") + input')
-          .first()
+    // Find and fill time inputs - wait for them to be visible after status change
+    const hourInput = page.locator('#finishHours')
+    await expect(hourInput).toBeVisible({ timeout: 5000 })
+    const minuteInput = page.locator('#finishMinutes')
+    await expect(minuteInput).toBeVisible()
 
-        if ((await hourInput.count()) > 0 && (await minuteInput.count()) > 0) {
-          await hourInput.fill('13')
-          await minuteInput.fill('30')
+    await hourInput.fill('13')
+    await minuteInput.fill('30')
 
-          expect(await hourInput.inputValue()).toBe('13')
-          expect(await minuteInput.inputValue()).toBe('30')
-        }
-      }
-    }
+    expect(await hourInput.inputValue()).toBe('13')
+    expect(await minuteInput.inputValue()).toBe('30')
   })
 
   test('allows selecting DNF status without time', async ({ page }) => {
     const token = getSubmissionToken()
     if (!token) {
-      test.skip(true, 'E2E_SUBMISSION_TOKEN not set')
+      console.warn('[e2e] No submission token — globalSetup may have failed')
+      test.skip(true, 'No submission token available')
       return
     }
 
     await page.goto(`/results/submit/${token}`)
 
-    const statusSelect = page.locator('select, button[role="combobox"]').first()
-    if ((await statusSelect.count()) > 0) {
-      await statusSelect.click()
-      const dnfOption = page.locator('text=/dnf|did not finish/i').first()
-      if ((await dnfOption.count()) > 0) {
-        await dnfOption.click()
+    const statusSelect = page.locator('button[role="combobox"]').first()
+    await expect(statusSelect).toBeVisible()
+    await statusSelect.click()
+    await page.getByRole('option', { name: /dnf|did not finish/i }).click()
 
-        // DNF should not require time input
-        // Form should be submittable
-        const submitButton = page
-          .locator('button[type="submit"], button:has-text("submit")')
-          .first()
-        if ((await submitButton.count()) > 0) {
-          await expect(submitButton).toBeEnabled()
-        }
-      }
-    }
+    // DNF should not require time input
+    // Form should be submittable
+    const submitButton = page.locator('button[type="submit"]').first()
+    await expect(submitButton).toBeVisible()
+    await expect(submitButton).toBeEnabled()
   })
 
-  test('displays file upload inputs', async ({ page }) => {
+  test('displays file upload inputs when status is finished', async ({ page }) => {
     const token = getSubmissionToken()
     if (!token) {
-      test.skip(true, 'E2E_SUBMISSION_TOKEN not set')
+      console.warn('[e2e] No submission token — globalSetup may have failed')
+      test.skip(true, 'No submission token available')
       return
     }
 
     await page.goto(`/results/submit/${token}`)
 
-    // Should show file upload inputs
-    const fileInputs = page.locator('input[type="file"]')
-    const fileInputCount = await fileInputs.count()
-    expect(fileInputCount).toBeGreaterThan(0)
+    // File inputs only render when status is "finished"
+    const statusSelect = page.locator('button[role="combobox"]').first()
+    await expect(statusSelect).toBeVisible()
+    await statusSelect.click()
+    await page.getByRole('option', { name: /finished/i }).click()
+
+    // Should show GPX and control card file inputs
+    await expect(page.locator('input[type="file"][accept*=".gpx"]')).toBeAttached()
+    await expect(page.locator('input[type="file"][accept*="image"]').first()).toBeAttached()
   })
 
   test('can upload GPX file', async ({ page }) => {
     const token = getSubmissionToken()
     if (!token) {
-      test.skip(true, 'E2E_SUBMISSION_TOKEN not set')
+      console.warn('[e2e] No submission token — globalSetup may have failed')
+      test.skip(true, 'No submission token available')
       return
     }
 
     await page.goto(`/results/submit/${token}`)
 
-    // Find GPX file input
-    const gpxInput = page
-      .locator('input[type="file"], label:has-text("gpx") + input[type="file"]')
-      .first()
-    if ((await gpxInput.count()) > 0) {
-      // Create a test file
-      const testFileContent = '<?xml version="1.0"?><gpx></gpx>'
-      const file = {
-        name: 'test-route.gpx',
-        mimeType: 'application/gpx+xml',
-        buffer: Buffer.from(testFileContent),
-      }
+    // File inputs only render when status is "finished"
+    const statusSelect = page.locator('button[role="combobox"]').first()
+    await expect(statusSelect).toBeVisible()
+    await statusSelect.click()
+    await page.getByRole('option', { name: /finished/i }).click()
 
-      await gpxInput.setInputFiles({
-        name: file.name,
-        mimeType: file.mimeType,
-        buffer: file.buffer,
-      })
+    // Find GPX file input (hidden but in DOM)
+    const gpxInput = page.locator('input[type="file"][accept*=".gpx"]')
+    await expect(gpxInput).toBeAttached()
 
-      // Should show upload progress or success message
-      await expect(page.locator('text=/upload|success|complete/i').first()).toBeVisible({
-        timeout: 10000,
-      })
-    }
+    // Create a test file
+    const testFileContent = '<?xml version="1.0"?><gpx></gpx>'
+    await gpxInput.setInputFiles({
+      name: 'test-route.gpx',
+      mimeType: 'application/gpx+xml',
+      buffer: Buffer.from(testFileContent),
+    })
+
+    // After successful upload, the component shows the server-generated filename as a link
+    await expect(page.locator('a[href*="gpx"]')).toBeVisible({ timeout: 10000 })
   })
 
   test('can upload control card photo', async ({ page }) => {
     const token = getSubmissionToken()
     if (!token) {
-      test.skip(true, 'E2E_SUBMISSION_TOKEN not set')
+      console.warn('[e2e] No submission token — globalSetup may have failed')
+      test.skip(true, 'No submission token available')
       return
     }
 
     await page.goto(`/results/submit/${token}`)
 
-    // Find control card file input
-    const cardInput = page
-      .locator('input[type="file"], label:has-text("control") + input[type="file"]')
-      .first()
-    if ((await cardInput.count()) > 0) {
-      // Create a test image file
-      const file = {
-        name: 'control-card.jpg',
-        mimeType: 'image/jpeg',
-        buffer: Buffer.from('fake-image-data'),
-      }
+    // File inputs only render when status is "finished"
+    const statusSelect = page.locator('button[role="combobox"]').first()
+    await expect(statusSelect).toBeVisible()
+    await statusSelect.click()
+    await page.getByRole('option', { name: /finished/i }).click()
 
-      await cardInput.setInputFiles({
-        name: file.name,
-        mimeType: file.mimeType,
-        buffer: file.buffer,
-      })
+    // Find control card file input (hidden but in DOM)
+    const cardInput = page.locator('input[type="file"][accept*="image"]').first()
+    await expect(cardInput).toBeAttached()
 
-      // Should show upload progress or success
-      await expect(page.locator('text=/upload|success|complete/i').first()).toBeVisible({
-        timeout: 10000,
-      })
-    }
+    // Create a test image file
+    await cardInput.setInputFiles({
+      name: 'control-card.jpg',
+      mimeType: 'image/jpeg',
+      buffer: Buffer.from('fake-image-data'),
+    })
+
+    // After successful upload, the component shows the server-generated filename as a link
+    await expect(page.locator('a[href*="control_card"]')).toBeVisible({ timeout: 10000 })
   })
 
   test('validates finish time is required for finished status', async ({ page }) => {
     const token = getSubmissionToken()
     if (!token) {
-      test.skip(true, 'E2E_SUBMISSION_TOKEN not set')
+      console.warn('[e2e] No submission token — globalSetup may have failed')
+      test.skip(true, 'No submission token available')
       return
     }
 
     await page.goto(`/results/submit/${token}`)
 
     // Select finished status
-    const statusSelect = page.locator('select, button[role="combobox"]').first()
-    if ((await statusSelect.count()) > 0) {
-      await statusSelect.click()
-      const finishedOption = page.locator('text=/finished/i').first()
-      if ((await finishedOption.count()) > 0) {
-        await finishedOption.click()
+    const statusSelect = page.locator('button[role="combobox"]').first()
+    await expect(statusSelect).toBeVisible()
+    await statusSelect.click()
+    await page.getByRole('option', { name: /finished/i }).click()
 
-        // Try to submit without time
-        const submitButton = page
-          .locator('button[type="submit"], button:has-text("submit")')
-          .first()
-        if ((await submitButton.count()) > 0) {
-          await submitButton.click()
+    // Try to submit without time
+    const submitButton = page.locator('button[type="submit"]').first()
+    await expect(submitButton).toBeVisible()
+    await submitButton.click()
 
-          // Should show validation error
-          await expect(page.locator('text=/time|required|finish/i')).toBeVisible({ timeout: 5000 })
-        }
-      }
-    }
+    // HTML5 required validation should prevent submission — check for :invalid inputs
+    const invalidInputs = page.locator('#finishHours:invalid, #finishMinutes:invalid')
+    await expect(invalidInputs.first()).toBeAttached()
   })
 
   test('disables form when results already submitted', async ({ page }) => {
-    // This would require a result with status 'submitted'
-    // and canSubmit: false in the initial data
-    // For now, we'll test the structure
-
-    const token = getSubmissionToken()
+    const token = getTestData()?.submittedResult.submissionToken ?? null
     if (!token) {
-      test.skip(true, 'E2E_SUBMISSION_TOKEN not set')
+      console.warn('[e2e] No submitted result token — globalSetup may have failed')
+      test.skip(true, 'No submitted result token available')
       return
     }
 
     await page.goto(`/results/submit/${token}`)
 
-    // Check if form is disabled (would show message if already submitted)
-    const disabledMessage = page.locator('text=/already submitted|submitted/i')
-    if ((await disabledMessage.count()) > 0) {
-      const submitButton = page.locator('button[type="submit"]').first()
-      if ((await submitButton.count()) > 0) {
-        await expect(submitButton).toBeDisabled()
-      }
-    }
+    // When canSubmit is false, the component shows "Results Already Submitted" heading and no form
+    await expect(page.locator('h2:has-text("Results Already Submitted")')).toBeVisible()
+    await expect(page.locator('form')).not.toBeAttached()
   })
 })
