@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import {
   Table,
   TableBody,
@@ -10,11 +11,19 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectSeparator,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Checkbox } from '@/components/ui/checkbox'
 import { InputGroup, InputGroupAddon, InputGroupInput } from '@/components/ui/input-group'
-import { Eye, GitMerge, Search, X } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Eye, GitMerge, Search, X } from 'lucide-react'
 import { MergeRidersDialog, type RiderForMerge } from './merge-riders-dialog'
 
 interface RiderWithStats {
@@ -24,16 +33,36 @@ interface RiderWithStats {
   last_name: string
   email: string | null
   gender: string | null
-  created_at: string | null
+  member_since: number | null
   registrations: { count: number }[] | null
   results: { count: number }[] | null
   memberships: { type: string; season: number }[] | null
+  rider_memberships:
+    | {
+        season: number
+        membership_type: string
+        chapters: { name: string } | null
+      }[]
+    | null
+}
+
+interface Chapter {
+  id: string
+  name: string
 }
 
 interface RidersTableProps {
   riders: RiderWithStats[]
   searchQuery: string
+  chapters: Chapter[]
+  chapterFilter: string | null
+  page: number
+  pageSize: number
+  totalCount: number
 }
+
+// Match the order used in the main site navbar
+const CHAPTER_ORDER = ['Huron', 'Ottawa', 'Simcoe-Muskoka', 'Toronto']
 
 function getGenderBadge(gender: string | null) {
   switch (gender) {
@@ -48,10 +77,40 @@ function getGenderBadge(gender: string | null) {
   }
 }
 
-export function RidersTable({ riders, searchQuery }: RidersTableProps) {
+function buildPageUrl(page: number, searchQuery: string, chapterFilter: string | null) {
+  const params = new URLSearchParams()
+  if (searchQuery) params.set('q', searchQuery)
+  if (chapterFilter) params.set('chapter', chapterFilter)
+  if (page > 1) params.set('page', String(page))
+  const qs = params.toString()
+  return `/admin/riders${qs ? `?${qs}` : ''}`
+}
+
+export function RidersTable({
+  riders,
+  searchQuery,
+  chapters,
+  chapterFilter,
+  page,
+  pageSize,
+  totalCount,
+}: RidersTableProps) {
+  const router = useRouter()
   const [localSearch, setLocalSearch] = useState(searchQuery)
   const [selectedRiderIds, setSelectedRiderIds] = useState<Set<string>>(new Set())
   const [mergeDialogOpen, setMergeDialogOpen] = useState(false)
+
+  const mainChapters = CHAPTER_ORDER.map((name) => chapters.find((c) => c.name === name)).filter(
+    (c): c is Chapter => c !== undefined
+  )
+
+  const handleChapterChange = (value: string) => {
+    const params = new URLSearchParams()
+    if (searchQuery) params.set('q', searchQuery)
+    if (value !== 'all') params.set('chapter', value)
+    const qs = params.toString()
+    router.push(`/admin/riders${qs ? `?${qs}` : ''}`)
+  }
 
   const selectedRiders: RiderForMerge[] = useMemo(
     () =>
@@ -130,30 +189,59 @@ export function RidersTable({ riders, searchQuery }: RidersTableProps) {
         </div>
       )}
 
-      {/* Search */}
-      <form className="flex items-center gap-2 max-w-md mb-4" role="search">
-        <InputGroup className="flex-1">
-          <InputGroupAddon>
-            <Search className="h-4 w-4" aria-hidden="true" />
-          </InputGroupAddon>
-          <InputGroupInput
-            type="search"
-            name="q"
-            placeholder="Search by name or email…"
-            aria-label="Search riders by name or email"
-            value={localSearch}
-            onChange={(e) => setLocalSearch(e.target.value)}
-          />
-        </InputGroup>
-        <Button type="submit" variant="secondary">
-          Search
-        </Button>
-        {searchQuery && (
-          <Button variant="ghost" asChild>
-            <Link href="/admin/riders">Clear</Link>
+      {/* Search and filters */}
+      <div className="flex items-center gap-4 mb-4">
+        <form className="flex items-center gap-2 max-w-md" role="search">
+          {chapterFilter && <input type="hidden" name="chapter" value={chapterFilter} />}
+          <InputGroup className="flex-1">
+            <InputGroupAddon>
+              <Search className="h-4 w-4" aria-hidden="true" />
+            </InputGroupAddon>
+            <InputGroupInput
+              type="search"
+              name="q"
+              placeholder="Search by name or email…"
+              aria-label="Search riders by name or email"
+              value={localSearch}
+              onChange={(e) => setLocalSearch(e.target.value)}
+            />
+          </InputGroup>
+          <Button type="submit" variant="secondary">
+            Search
           </Button>
-        )}
-      </form>
+          {searchQuery && (
+            <Button variant="ghost" asChild>
+              <Link
+                href={chapterFilter ? `/admin/riders?chapter=${chapterFilter}` : '/admin/riders'}
+              >
+                Clear
+              </Link>
+            </Button>
+          )}
+        </form>
+
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-muted-foreground">Chapter:</span>
+          <Select value={chapterFilter || 'all'} onValueChange={handleChapterChange}>
+            <SelectTrigger className="w-[180px]">
+              <SelectValue>
+                {chapterFilter
+                  ? chapters.find((c) => c.name === chapterFilter)?.name || chapterFilter
+                  : 'All Chapters'}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent position="popper" sideOffset={4}>
+              <SelectItem value="all">All Chapters</SelectItem>
+              <SelectSeparator />
+              {mainChapters.map((chapter) => (
+                <SelectItem key={chapter.id} value={chapter.name}>
+                  {chapter.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
 
       <div className="rounded-md border">
         <Table>
@@ -177,15 +265,16 @@ export function RidersTable({ riders, searchQuery }: RidersTableProps) {
               <TableHead>Gender</TableHead>
               <TableHead className="text-center">Registrations</TableHead>
               <TableHead className="text-center">Results</TableHead>
+              <TableHead>Chapter</TableHead>
               <TableHead>Membership</TableHead>
-              <TableHead>Joined</TableHead>
+              <TableHead>Since</TableHead>
               <TableHead className="w-[100px]">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {riders.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={9} className="text-center text-muted-foreground">
+                <TableCell colSpan={10} className="text-center text-muted-foreground">
                   {searchQuery ? 'No riders found matching your search' : 'No riders found'}
                 </TableCell>
               </TableRow>
@@ -227,6 +316,18 @@ export function RidersTable({ riders, searchQuery }: RidersTableProps) {
                     </TableCell>
                     <TableCell>
                       {(() => {
+                        const latest = rider.rider_memberships
+                          ?.slice()
+                          .sort((a, b) => b.season - a.season)[0]
+                        return latest?.chapters?.name ? (
+                          <span className="text-sm">{latest.chapters.name}</span>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )
+                      })()}
+                    </TableCell>
+                    <TableCell>
+                      {(() => {
                         const currentSeason = parseInt(
                           process.env.NEXT_PUBLIC_CURRENT_SEASON || '2026',
                           10
@@ -242,13 +343,7 @@ export function RidersTable({ riders, searchQuery }: RidersTableProps) {
                       })()}
                     </TableCell>
                     <TableCell>
-                      {rider.created_at
-                        ? new Date(rider.created_at).toLocaleDateString('en-CA', {
-                            month: 'short',
-                            day: 'numeric',
-                            year: 'numeric',
-                          })
-                        : '—'}
+                      {rider.member_since ?? <span className="text-muted-foreground">—</span>}
                     </TableCell>
                     <TableCell>
                       <Button variant="ghost" size="icon-sm" asChild>
@@ -265,9 +360,44 @@ export function RidersTable({ riders, searchQuery }: RidersTableProps) {
         </Table>
       </div>
 
-      <p className="text-sm text-muted-foreground mt-4">
-        Showing {riders.length} riders{searchQuery ? ` matching "${searchQuery}"` : ''}.
-      </p>
+      {/* Pagination */}
+      <div className="flex items-center justify-between mt-4">
+        <p className="text-sm text-muted-foreground">
+          Showing {(page - 1) * pageSize + 1}–{Math.min(page * pageSize, totalCount)} of{' '}
+          {totalCount} riders{searchQuery ? ` matching "${searchQuery}"` : ''}
+        </p>
+        <div className="flex items-center gap-2">
+          {page > 1 ? (
+            <Button variant="outline" size="sm" asChild>
+              <Link href={buildPageUrl(page - 1, searchQuery, chapterFilter)}>
+                <ChevronLeft className="h-4 w-4 mr-1" />
+                Previous
+              </Link>
+            </Button>
+          ) : (
+            <Button variant="outline" size="sm" disabled>
+              <ChevronLeft className="h-4 w-4 mr-1" />
+              Previous
+            </Button>
+          )}
+          <span className="text-sm text-muted-foreground">
+            Page {page} of {Math.max(1, Math.ceil(totalCount / pageSize))}
+          </span>
+          {page * pageSize < totalCount ? (
+            <Button variant="outline" size="sm" asChild>
+              <Link href={buildPageUrl(page + 1, searchQuery, chapterFilter)}>
+                Next
+                <ChevronRight className="h-4 w-4 ml-1" />
+              </Link>
+            </Button>
+          ) : (
+            <Button variant="outline" size="sm" disabled>
+              Next
+              <ChevronRight className="h-4 w-4 ml-1" />
+            </Button>
+          )}
+        </div>
+      </div>
 
       <MergeRidersDialog
         selectedRiders={selectedRiders}

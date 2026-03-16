@@ -465,7 +465,8 @@ describe('mergeRiders', () => {
 
       expect(result.success).toBe(true)
 
-      // Verify the 4 DB operations: update registrations, update results, delete riders, update target rider
+      // Verify DB operations: update registrations, update results,
+      // query/move rider_memberships, delete riders, update target rider
       const regUpdates = mockModule.__calls.filter(
         (c) => c.table === 'registrations' && c.method === 'update'
       )
@@ -475,6 +476,11 @@ describe('mergeRiders', () => {
         (c) => c.table === 'results' && c.method === 'update'
       )
       expect(resultUpdates).toHaveLength(1)
+
+      const membershipSelects = mockModule.__calls.filter(
+        (c) => c.table === 'rider_memberships' && c.method === 'select'
+      )
+      expect(membershipSelects.length).toBeGreaterThanOrEqual(2)
 
       const riderDeletes = mockModule.__calls.filter(
         (c) => c.table === 'riders' && c.method === 'delete'
@@ -501,7 +507,7 @@ describe('mergeRiders', () => {
 
       expect(result.success).toBe(true)
 
-      // Same 4 operations regardless of merge count
+      // Same operations regardless of merge count
       const regUpdates = mockModule.__calls.filter(
         (c) => c.table === 'registrations' && c.method === 'update'
       )
@@ -511,6 +517,11 @@ describe('mergeRiders', () => {
         (c) => c.table === 'results' && c.method === 'update'
       )
       expect(resultUpdates).toHaveLength(1)
+
+      const membershipSelects = mockModule.__calls.filter(
+        (c) => c.table === 'rider_memberships' && c.method === 'select'
+      )
+      expect(membershipSelects.length).toBeGreaterThanOrEqual(2)
 
       const riderDeletes = mockModule.__calls.filter(
         (c) => c.table === 'riders' && c.method === 'delete'

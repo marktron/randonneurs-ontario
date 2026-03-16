@@ -93,24 +93,29 @@ export function RiderMatchDialog({
             >
               {/* Candidate riders */}
               {candidates.map((candidate) => (
-                <div key={candidate.id} className="flex items-center gap-3 py-3.5">
-                  <RadioGroupItem value={candidate.id} id={candidate.id} />
+                <div key={candidate.id} className="flex items-start gap-3 py-3.5">
+                  <RadioGroupItem value={candidate.id} id={candidate.id} className="mt-0.5" />
                   <Label
                     htmlFor={candidate.id}
-                    className="flex-1 cursor-pointer flex flex-col min-[400px]:flex-row min-[400px]:items-center min-[400px]:justify-between gap-0.5"
+                    className="flex-1 cursor-pointer !flex-col !items-start gap-0.5"
                   >
-                    <span className="font-medium">{candidate.fullName}</span>
-                    <span className="text-sm text-muted-foreground">
-                      {candidate.firstSeason && <span>Since {candidate.firstSeason}</span>}
-                      {candidate.firstSeason && candidate.totalRides > 0 && (
-                        <span className="mx-1">&middot;</span>
-                      )}
-                      {candidate.totalRides > 0 && (
-                        <span>
-                          {candidate.totalRides} {candidate.totalRides === 1 ? 'ride' : 'rides'}
-                        </span>
-                      )}
+                    <span className="flex items-baseline justify-between gap-2 w-full">
+                      <span className="font-medium">{candidate.fullName}</span>
+                      <span className="text-sm text-muted-foreground whitespace-nowrap">
+                        {candidate.totalRides > 0 && (
+                          <span>
+                            {candidate.totalRides} {candidate.totalRides === 1 ? 'ride' : 'rides'}
+                          </span>
+                        )}
+                        {candidate.totalRides > 0 && candidate.firstSeason && ' since '}
+                        {candidate.firstSeason && <span>{candidate.firstSeason}</span>}
+                      </span>
                     </span>
+                    {candidate.obfuscatedEmail && (
+                      <span className="text-sm text-muted-foreground">
+                        {candidate.obfuscatedEmail}
+                      </span>
+                    )}
                   </Label>
                 </div>
               ))}

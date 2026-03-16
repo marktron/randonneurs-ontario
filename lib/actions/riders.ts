@@ -232,7 +232,33 @@ export async function mergeRiders(data: MergeRidersData): Promise<MergeRidersRes
       return { success: false, error: 'Failed to update results' }
     }
 
-    // Step 3: Delete the other riders
+    // Step 3: Move rider_memberships to target rider (skip if season already exists on target)
+    const { data: targetMemberships } = await getSupabaseAdmin()
+      .from('rider_memberships')
+      .select('season')
+      .eq('rider_id', targetRiderId)
+
+    const targetSeasons = new Set((targetMemberships ?? []).map((m) => m.season))
+
+    const { data: sourceMemberships } = await getSupabaseAdmin()
+      .from('rider_memberships')
+      .select('id, season')
+      .in('rider_id', ridersToDelete)
+
+    if (sourceMemberships) {
+      const toMove = sourceMemberships.filter((m) => !targetSeasons.has(m.season))
+      if (toMove.length > 0) {
+        await getSupabaseAdmin()
+          .from('rider_memberships')
+          .update({ rider_id: targetRiderId })
+          .in(
+            'id',
+            toMove.map((m) => m.id)
+          )
+      }
+    }
+
+    // Step 4: Delete the other riders (cascades remaining rider_memberships with duplicate seasons)
     const { error: deleteError } = await getSupabaseAdmin()
       .from('riders')
       .delete()
@@ -243,7 +269,7 @@ export async function mergeRiders(data: MergeRidersData): Promise<MergeRidersRes
       return { success: false, error: 'Failed to delete old riders' }
     }
 
-    // Step 4: Update the target rider with new properties
+    // Step 5: Update the target rider with new properties
     const parsedGender =
       riderData.gender === 'M' || riderData.gender === 'F' || riderData.gender === 'X'
         ? riderData.gender

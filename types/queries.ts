@@ -364,11 +364,16 @@ export type RouteWithChapterForAdmin = Route & {
  */
 export type RiderWithStats = Pick<
   Rider,
-  'id' | 'slug' | 'first_name' | 'last_name' | 'email' | 'gender' | 'created_at'
+  'id' | 'slug' | 'first_name' | 'last_name' | 'email' | 'gender' | 'member_since'
 > & {
   registrations: Array<{ count: number }> | null
   results: Array<{ count: number }> | null
   memberships: Array<{ type: string; season: number }> | null
+  rider_memberships: Array<{
+    season: number
+    membership_type: string
+    chapters: { name: string } | null
+  }> | null
 }
 
 /**

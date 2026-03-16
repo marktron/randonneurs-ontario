@@ -2,8 +2,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 /**
  * Regression test: registering with an existing rider's email must NOT
- * overwrite that rider's name. This was a production bug where a different
- * person used the same email and silently replaced the original rider's name.
+ * silently link to that rider when names don't match. Instead, it should
+ * fall through to the fuzzy match picker.
+ *
+ * When names DO match (same person, same email), auto-linking should work
+ * and only update supplementary fields (gender, emergency contact) — never
+ * overwrite the rider's name.
  */
 
 // Track DB operations so we can inspect payloads
@@ -33,6 +37,7 @@ vi.mock('@/lib/supabase-server', () => {
     eq: vi.fn((): unknown => fallback),
     ilike: vi.fn((): unknown => fallback),
     limit: vi.fn((): unknown => fallback),
+    then: vi.fn((resolve: (v: unknown) => void) => resolve({ data: [], error: null })),
   }
 
   return {
@@ -48,8 +53,17 @@ vi.mock('@/lib/supabase-server', () => {
             currentData = {}
             return Promise.resolve({ data: null, error: null })
           }
-          // Rider lookup by email or id
-          if (currentTable === 'riders' && (col === 'email' || col === 'id')) {
+          // Rider lookup by email — return array (new query doesn't use .single())
+          if (currentTable === 'riders' && col === 'email') {
+            return {
+              then: vi.fn((resolve: (v: unknown) => void) =>
+                resolve({ data: [EXISTING_RIDER], error: null })
+              ),
+              single: vi.fn().mockResolvedValue({ data: EXISTING_RIDER, error: null }),
+            }
+          }
+          // Rider lookup by id
+          if (currentTable === 'riders' && col === 'id') {
             return {
               single: vi.fn().mockResolvedValue({ data: EXISTING_RIDER, error: null }),
             }
@@ -98,6 +112,11 @@ vi.mock('@/lib/email/send-registration-email', () => ({
   sendRegistrationConfirmationEmail: vi.fn().mockResolvedValue({ success: true }),
 }))
 
+// Mock searchRiderCandidates — returns empty for simplicity
+vi.mock('@/lib/actions/rider-match', () => ({
+  searchRiderCandidates: vi.fn().mockResolvedValue({ candidates: [] }),
+}))
+
 import { registerForEvent } from '@/lib/actions/register'
 
 describe('rider name preservation on email match', () => {
@@ -106,7 +125,7 @@ describe('rider name preservation on email match', () => {
     insertPayloads.length = 0
   })
 
-  it('does not include first_name or last_name when updating an existing rider found by email', async () => {
+  it('name mismatch with matching email — does not auto-link, falls through to fuzzy search', async () => {
     await registerForEvent({
       eventId: 'event-123',
       firstName: 'Peter',
@@ -117,17 +136,22 @@ describe('rider name preservation on email match', () => {
       emergencyContactPhone: '555-1234',
     })
 
+    // "Peter Agelakos" vs "Fred Chagnon" scores < 0.8, so should NOT auto-link.
+    // With no fuzzy match candidates mocked, a new rider is created.
+    // The key point: Fred Chagnon's rider record is NOT updated.
     const riderUpdate = updatePayloads.find((u) => u.table === 'riders')
-    expect(riderUpdate).toBeDefined()
-    expect(riderUpdate!.data).not.toHaveProperty('first_name')
-    expect(riderUpdate!.data).not.toHaveProperty('last_name')
+    expect(riderUpdate).toBeUndefined()
+
+    // No rider_merges entry from findOrCreateRider (auto-link didn't happen)
+    const mergeInsert = insertPayloads.find((i) => i.table === 'rider_merges')
+    expect(mergeInsert).toBeUndefined()
   })
 
-  it('still updates gender and emergency contact fields', async () => {
+  it('name match with matching email — auto-links and updates supplementary fields only', async () => {
     await registerForEvent({
       eventId: 'event-123',
-      firstName: 'Peter',
-      lastName: 'Agelakos',
+      firstName: 'Fred',
+      lastName: 'Chagnon',
       email: 'fchagnon@gmail.com',
       gender: 'M',
       shareRegistration: false,
@@ -135,37 +159,23 @@ describe('rider name preservation on email match', () => {
       emergencyContactPhone: '555-9999',
     })
 
+    // Same name + same email → auto-link
     const riderUpdate = updatePayloads.find((u) => u.table === 'riders')
     expect(riderUpdate).toBeDefined()
+
+    // Should NOT include first_name or last_name
+    expect(riderUpdate!.data).not.toHaveProperty('first_name')
+    expect(riderUpdate!.data).not.toHaveProperty('last_name')
+
+    // Should update supplementary fields
     expect(riderUpdate!.data).toMatchObject({
       gender: 'M',
       emergency_contact_name: 'New Contact',
       emergency_contact_phone: '555-9999',
     })
-  })
 
-  it('creates a rider_merges audit entry with submitted and previous names', async () => {
-    await registerForEvent({
-      eventId: 'event-123',
-      firstName: 'Peter',
-      lastName: 'Agelakos',
-      email: 'fchagnon@gmail.com',
-      shareRegistration: false,
-      emergencyContactName: 'Emergency Contact',
-      emergencyContactPhone: '555-1234',
-    })
-
+    // No rider_merges entry when name is identical (nothing changed)
     const mergeInsert = insertPayloads.find((i) => i.table === 'rider_merges')
-    expect(mergeInsert).toBeDefined()
-    expect(mergeInsert!.data).toMatchObject({
-      rider_id: 'rider-fred',
-      submitted_first_name: 'Peter',
-      submitted_last_name: 'Agelakos',
-      submitted_email: 'fchagnon@gmail.com',
-      previous_first_name: 'Fred',
-      previous_last_name: 'Chagnon',
-      previous_email: 'fchagnon@gmail.com',
-      merge_source: 'registration',
-    })
+    expect(mergeInsert).toBeUndefined()
   })
 })

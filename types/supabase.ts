@@ -614,6 +614,67 @@ export type Database = {
           },
         ]
       }
+      rider_memberships: {
+        Row: {
+          chapter_id: string | null
+          city: string | null
+          country: string | null
+          created_at: string | null
+          id: string
+          membership_type: string
+          province: string | null
+          rider_id: string
+          season: number
+          updated_at: string | null
+        }
+        Insert: {
+          chapter_id?: string | null
+          city?: string | null
+          country?: string | null
+          created_at?: string | null
+          id?: string
+          membership_type: string
+          province?: string | null
+          rider_id: string
+          season: number
+          updated_at?: string | null
+        }
+        Update: {
+          chapter_id?: string | null
+          city?: string | null
+          country?: string | null
+          created_at?: string | null
+          id?: string
+          membership_type?: string
+          province?: string | null
+          rider_id?: string
+          season?: number
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'rider_memberships_chapter_id_fkey'
+            columns: ['chapter_id']
+            isOneToOne: false
+            referencedRelation: 'chapters'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'rider_memberships_rider_id_fkey'
+            columns: ['rider_id']
+            isOneToOne: false
+            referencedRelation: 'public_riders'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'rider_memberships_rider_id_fkey'
+            columns: ['rider_id']
+            isOneToOne: false
+            referencedRelation: 'riders'
+            referencedColumns: ['id']
+          },
+        ]
+      }
       rider_merges: {
         Row: {
           id: string
@@ -670,6 +731,8 @@ export type Database = {
       }
       riders: {
         Row: {
+          birth_year: number | null
+          ccn_id: number | null
           created_at: string | null
           email: string | null
           emergency_contact_name: string | null
@@ -679,11 +742,14 @@ export type Database = {
           gender: string | null
           id: string
           last_name: string
+          member_since: number | null
           rider_number: number | null
           slug: string
           updated_at: string | null
         }
         Insert: {
+          birth_year?: number | null
+          ccn_id?: number | null
           created_at?: string | null
           email?: string | null
           emergency_contact_name?: string | null
@@ -693,11 +759,14 @@ export type Database = {
           gender?: string | null
           id?: string
           last_name: string
+          member_since?: number | null
           rider_number?: number | null
           slug: string
           updated_at?: string | null
         }
         Update: {
+          birth_year?: number | null
+          ccn_id?: number | null
           created_at?: string | null
           email?: string | null
           emergency_contact_name?: string | null
@@ -707,6 +776,7 @@ export type Database = {
           gender?: string | null
           id?: string
           last_name?: string
+          member_since?: number | null
           rider_number?: number | null
           slug?: string
           updated_at?: string | null

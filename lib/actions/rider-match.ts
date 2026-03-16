@@ -2,8 +2,7 @@
  * Rider Matching Server Actions
  *
  * These actions support fuzzy matching of registrants to existing riders.
- * Used during registration to help returning riders (whose historical
- * records don't have email addresses) link to their existing profile.
+ * Used during registration to help returning riders link to their existing profile.
  *
  * These are PUBLIC actions - no authentication required since they're
  * called during the registration flow.
@@ -21,36 +20,48 @@ export interface RiderMatchCandidate {
   fullName: string
   firstSeason: number | null
   totalRides: number
+  obfuscatedEmail: string | null
 }
 
-interface RiderWithStats {
+interface RiderRow {
   id: string
   first_name: string
   last_name: string
   full_name: string | null
-  first_season: number | null
-  total_rides: number
+  email: string | null
+  member_since: number | null
+  results: Array<{ count: number }> | null
 }
 
-interface RiderWithResults {
-  id: string
-  first_name: string
-  last_name: string
-  full_name: string | null
-  results: Array<{ rider_id: string; season: number | null }> | null
+/**
+ * Obfuscate an email for display in the rider match picker.
+ * Shows first and last character of local part + domain.
+ * e.g. "markallen@gmail.com" -> "m*******n@gmail.com"
+ *      "jo@example.com" -> "j*@example.com"
+ */
+function obfuscateEmail(email: string): string {
+  const [local, domain] = email.split('@')
+  if (!domain) return '•••'
+  if (local.length <= 2) {
+    return `${local[0]}•@${domain}`
+  }
+  return `${local[0]}${'•'.repeat(local.length - 2)}${local[local.length - 1]}@${domain}`
 }
 
 /**
  * Search for potential rider matches based on name.
- * Only searches riders WITHOUT email (historical records).
+ * Searches all riders (with or without email) to find returning members.
  *
  * @param firstName - First name from registration form
  * @param lastName - Last name from registration form
+ * @param registrationEmail - Email from registration form (to exclude exact email matches,
+ *                            which are handled separately by the email-first lookup)
  * @returns List of potential matches with ride statistics
  */
 export async function searchRiderCandidates(
   firstName: string,
-  lastName: string
+  lastName: string,
+  registrationEmail?: string
 ): Promise<{ candidates: RiderMatchCandidate[] }> {
   const trimmedFirst = firstName.trim()
   const trimmedLast = lastName.trim()
@@ -64,23 +75,22 @@ export async function searchRiderCandidates(
   const firstNameVariants = getNameVariants(trimmedFirst)
 
   // Build OR filter for all name variants
-  // This handles cases like Bob vs Robert, Dave vs David
-  const orFilters = firstNameVariants
-    .map(variant => `first_name.ilike.%${variant}%`)
-    .join(',')
+  const orFilters = firstNameVariants.map((variant) => `first_name.ilike.%${variant}%`).join(',')
 
-  // Query riders without email, with their results joined in a single query
-  // This reduces round trips by fetching rider data and results together
+  // Query riders with their result counts
   const { data: riders, error } = await getSupabaseAdmin()
     .from('riders')
-    .select(`
+    .select(
+      `
       id,
       first_name,
       last_name,
       full_name,
-      results (rider_id, season)
-    `)
-    .is('email', null)
+      email,
+      member_since,
+      results(count)
+`
+    )
     .or(orFilters)
     .limit(100)
 
@@ -93,53 +103,32 @@ export async function searchRiderCandidates(
     return { candidates: [] }
   }
 
-  // Calculate stats per rider from joined results
-  const riderStats: Record<string, { firstSeason: number | null; totalRides: number }> = {}
-  for (const rider of riders) {
-    riderStats[rider.id] = { firstSeason: null, totalRides: 0 }
-    
-    // Aggregate stats from joined results
-    if (rider.results && Array.isArray(rider.results)) {
-      for (const result of rider.results) {
-        riderStats[rider.id].totalRides++
-        if (result.season !== null) {
-          const currentFirst = riderStats[rider.id].firstSeason
-          if (currentFirst === null || result.season < currentFirst) {
-            riderStats[rider.id].firstSeason = result.season
-          }
-        }
-      }
-    }
-  }
-
-  // Combine rider info with stats
-  const ridersWithStats: RiderWithStats[] = (riders as RiderWithResults[]).map(r => ({
-    id: r.id,
-    first_name: r.first_name,
-    last_name: r.last_name,
-    full_name: r.full_name,
-    first_season: riderStats[r.id].firstSeason,
-    total_rides: riderStats[r.id].totalRides,
-  }))
+  // Exclude riders whose email exactly matches the registration email,
+  // since those are already handled by the email-first lookup path
+  const normalizedRegEmail = registrationEmail?.toLowerCase().trim()
+  const filteredRiders = normalizedRegEmail
+    ? (riders as RiderRow[]).filter((r) => r.email?.toLowerCase() !== normalizedRegEmail)
+    : (riders as RiderRow[])
 
   // Apply fuzzy matching to rank candidates
   const matches = findFuzzyNameMatches(
     trimmedFirst,
     trimmedLast,
-    ridersWithStats,
-    r => r.first_name,
-    r => r.last_name,
+    filteredRiders,
+    (r) => r.first_name,
+    (r) => r.last_name,
     { threshold: 0.4, maxResults: 10 }
   )
 
   // Convert to output format
-  const candidates: RiderMatchCandidate[] = matches.map(match => ({
+  const candidates: RiderMatchCandidate[] = matches.map((match) => ({
     id: match.item.id,
     firstName: match.item.first_name,
     lastName: match.item.last_name,
     fullName: match.item.full_name || `${match.item.first_name} ${match.item.last_name}`,
-    firstSeason: match.item.first_season,
-    totalRides: match.item.total_rides,
+    firstSeason: match.item.member_since,
+    totalRides: match.item.results?.[0]?.count ?? 0,
+    obfuscatedEmail: match.item.email ? obfuscateEmail(match.item.email) : null,
   }))
 
   return { candidates }

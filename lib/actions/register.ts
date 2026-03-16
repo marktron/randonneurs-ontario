@@ -32,6 +32,7 @@ import { sendRegistrationConfirmationEmail } from '@/lib/email/send-registration
 import { formatEventType } from '@/lib/utils'
 import { format, parseISO } from 'date-fns'
 import { searchRiderCandidates, type RiderMatchCandidate } from './rider-match'
+import { fuzzyNameScore } from '@/lib/utils/fuzzy-match'
 import { getMembershipForRider, isTrialUsed } from '@/lib/memberships/service'
 import { handleActionError, handleSupabaseError, createActionResult, logError } from '@/lib/errors'
 import type {
@@ -171,45 +172,66 @@ async function findOrCreateRider(
   const normalizedEmail = email.toLowerCase().trim()
   const parsedGender = gender === 'M' || gender === 'F' || gender === 'X' ? gender : null
 
-  // Find existing rider by email
-  const { data: existingRider } = await getSupabaseAdmin()
+  // Find existing rider(s) by email — multiple riders can share an email (family members)
+  const { data: emailRiders } = await getSupabaseAdmin()
     .from('riders')
     .select('id, first_name, last_name')
     .eq('email', normalizedEmail)
-    .single()
 
-  if (existingRider) {
-    const rider = existingRider as { id: string; first_name: string; last_name: string }
-    const riderId = rider.id
+  if (emailRiders && emailRiders.length > 0) {
+    // Score each email-matched rider against the submitted name and pick the best
+    type RiderRow = { id: string; first_name: string; last_name: string }
+    let bestRider: RiderRow | null = null
+    let bestScore = 0
 
-    // Log to rider_merges so admins can see when someone registers with
-    // a different name but the same email (e.g. shared/mistyped email)
-    const mergeInsert: RiderMergeInsert = {
-      rider_id: riderId,
-      submitted_first_name: trimmedFirstName,
-      submitted_last_name: trimmedLastName,
-      submitted_email: normalizedEmail,
-      previous_first_name: rider.first_name,
-      previous_last_name: rider.last_name,
-      previous_email: normalizedEmail,
-      merge_source: 'registration',
+    for (const r of emailRiders as RiderRow[]) {
+      const score = fuzzyNameScore(trimmedFirstName, trimmedLastName, r.first_name, r.last_name)
+      if (score > bestScore) {
+        bestScore = score
+        bestRider = r
+      }
     }
-    await getSupabaseAdmin().from('rider_merges').insert(mergeInsert)
 
-    // Update supplementary rider info only — never overwrite the name,
-    // as someone registering with the same email may not be the same person
-    const updateData: RiderUpdate = {
-      gender: parsedGender,
-      emergency_contact_name: emergencyContactName || null,
-      emergency_contact_phone: emergencyContactPhone || null,
+    if (bestRider && bestScore >= 0.8) {
+      // Name matches well — same person, proceed automatically
+      // Only log to rider_merges if something actually differs (e.g. slight name variation)
+      const nameChanged =
+        trimmedFirstName !== bestRider.first_name || trimmedLastName !== bestRider.last_name
+      if (nameChanged) {
+        const mergeInsert: RiderMergeInsert = {
+          rider_id: bestRider.id,
+          submitted_first_name: trimmedFirstName,
+          submitted_last_name: trimmedLastName,
+          submitted_email: normalizedEmail,
+          previous_first_name: bestRider.first_name,
+          previous_last_name: bestRider.last_name,
+          previous_email: normalizedEmail,
+          merge_source: 'registration',
+        }
+        await getSupabaseAdmin().from('rider_merges').insert(mergeInsert)
+      }
+
+      // Update supplementary rider info only — never overwrite the name
+      const updateData: RiderUpdate = {
+        gender: parsedGender,
+        emergency_contact_name: emergencyContactName || null,
+        emergency_contact_phone: emergencyContactPhone || null,
+      }
+      await getSupabaseAdmin().from('riders').update(updateData).eq('id', bestRider.id)
+
+      return { success: true, riderId: bestRider.id }
     }
-    await getSupabaseAdmin().from('riders').update(updateData).eq('id', riderId)
 
-    return { success: true, riderId }
+    // No good name match among email-matched riders — fall through to fuzzy search
+    // so the user can confirm which rider they are (or create a new one)
   }
 
-  // Email not found - search for fuzzy name matches among riders without email
-  const { candidates } = await searchRiderCandidates(trimmedFirstName, trimmedLastName)
+  // Email not found - search for fuzzy name matches
+  const { candidates } = await searchRiderCandidates(
+    trimmedFirstName,
+    trimmedLastName,
+    normalizedEmail
+  )
 
   // If there are potential matches, return them for user selection
   if (candidates.length > 0) {
@@ -979,6 +1001,18 @@ export async function completeRegistrationWithRider(
     }
 
     const rider = currentRider as { first_name: string; last_name: string; email: string | null }
+
+    // Verify the submitted name matches the selected rider to prevent
+    // someone from claiming another rider's profile via the match picker
+    const nameScore = fuzzyNameScore(
+      trimmedFirstName,
+      trimmedLastName,
+      rider.first_name,
+      rider.last_name
+    )
+    if (nameScore < 0.7) {
+      return { success: false, error: 'Selected rider does not match the submitted name' }
+    }
 
     // Create audit log entry in rider_merges table
     const mergeInsert: RiderMergeInsert = {

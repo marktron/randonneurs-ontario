@@ -184,14 +184,14 @@ describe('completeRegistrationWithRider (real DB)', () => {
         eventId: IDS.scheduledEvent,
         selectedRiderId: IDS.rider,
         email: 'completer@example.com',
-        firstName: 'Updated',
-        lastName: 'Name',
+        firstName: 'Existing',
+        lastName: 'Rider',
       })
     )
 
     expect(result.success).toBe(true)
 
-    // Rider should be updated
+    // Rider should be updated with email (name stays the same)
     const { data: rider } = await supabase
       .from('riders')
       .select('first_name, last_name, email')
@@ -199,8 +199,8 @@ describe('completeRegistrationWithRider (real DB)', () => {
       .single()
 
     expect(rider).toMatchObject({
-      first_name: 'Updated',
-      last_name: 'Name',
+      first_name: 'Existing',
+      last_name: 'Rider',
       email: 'completer@example.com',
     })
 
@@ -219,13 +219,29 @@ describe('completeRegistrationWithRider (real DB)', () => {
     expect(sendEmail).toHaveBeenCalledTimes(1)
     assertEmailPayload(sendEmail, {
       membershipStatus: 'valid',
-      registrantName: 'Updated Name',
+      registrantName: 'Existing Rider',
       registrantEmail: 'completer@example.com',
       eventName: 'IntTest Complete Brevet',
       eventDistance: 200,
       eventLocation: 'Test Start',
     })
     assertManagementUrl(sendEmail)
+  })
+
+  it('selectedRiderId with mismatched name — returns error', async () => {
+    const { completeRegistrationWithRider } = await import('@/lib/actions/register')
+    const result = await completeRegistrationWithRider(
+      buildCompleteRegistrationData({
+        eventId: IDS.scheduledEvent,
+        selectedRiderId: IDS.rider,
+        email: 'completer@example.com',
+        firstName: 'Completely',
+        lastName: 'Different',
+      })
+    )
+
+    expect(result.success).toBe(false)
+    expect(result.error).toBe('Selected rider does not match the submitted name')
   })
 
   it('creates rider_merges audit entry with before/after fields', async () => {
@@ -241,8 +257,8 @@ describe('completeRegistrationWithRider (real DB)', () => {
         eventId: IDS.scheduledEvent,
         selectedRiderId: IDS.rider,
         email: 'completer@example.com',
-        firstName: 'Updated',
-        lastName: 'Name',
+        firstName: 'Existing',
+        lastName: 'Rider',
       })
     )
 
@@ -255,8 +271,8 @@ describe('completeRegistrationWithRider (real DB)', () => {
 
     expect(merges).toHaveLength(1)
     expect(merges![0]).toMatchObject({
-      submitted_first_name: 'Updated',
-      submitted_last_name: 'Name',
+      submitted_first_name: 'Existing',
+      submitted_last_name: 'Rider',
       submitted_email: 'completer@example.com',
       previous_first_name: 'Existing',
       previous_last_name: 'Rider',
@@ -319,6 +335,8 @@ describe('completeRegistrationWithRider (real DB)', () => {
         eventId: IDS.scheduledEvent,
         selectedRiderId: IDS.rider,
         email: 'completer@example.com',
+        firstName: 'Existing',
+        lastName: 'Rider',
       })
     )
 
@@ -362,6 +380,8 @@ describe('completeRegistrationWithRider (real DB)', () => {
         eventId: IDS.scheduledEvent,
         selectedRiderId: IDS.rider,
         email: 'completer@example.com',
+        firstName: 'Existing',
+        lastName: 'Rider',
       })
     )
 
@@ -391,6 +411,8 @@ describe('completeRegistrationWithRider (real DB)', () => {
           eventId: IDS.scheduledEvent,
           selectedRiderId: IDS.rider,
           email: 'completer@example.com',
+          firstName: 'Existing',
+          lastName: 'Rider',
         })
       )
     ).rejects.toThrow('CCN API error')

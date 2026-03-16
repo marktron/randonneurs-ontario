@@ -8,6 +8,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
  * 2. Fuzzy matching logic
  * 3. Empty input handling
  * 4. Error handling
+ * 5. Email obfuscation
+ * 6. Filtering out riders whose email matches the registration email
  */
 
 // Mock dependencies before imports
@@ -107,6 +109,19 @@ const mockModule = await vi.importMock<{
   __mockQueryError: (error: unknown) => void
 }>('@/lib/supabase-server')
 
+function mockRider(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 'rider-1',
+    first_name: 'John',
+    last_name: 'Doe',
+    full_name: null,
+    email: null,
+    member_since: null,
+    results: [{ count: 0 }],
+    ...overrides,
+  }
+}
+
 describe('searchRiderCandidates', () => {
   beforeEach(() => {
     mockModule.__reset()
@@ -137,13 +152,13 @@ describe('searchRiderCandidates', () => {
   })
 
   describe('query behavior', () => {
-    it('searches for riders without email', async () => {
+    it('searches all riders including those with email', async () => {
       mockModule.__mockRidersEmpty()
 
       await searchRiderCandidates('John', 'Doe')
 
-      // Verify query was made (indirectly through mock)
-      expect(mockModule.__queryBuilder.is).toHaveBeenCalled()
+      // Should NOT filter by email IS NULL
+      expect(mockModule.__queryBuilder.is).not.toHaveBeenCalled()
     })
 
     it('limits results to 100 riders', async () => {
@@ -176,27 +191,17 @@ describe('searchRiderCandidates', () => {
     })
 
     it('processes riders with results', async () => {
-      const mockRiders = [
-        {
-          id: 'rider-1',
-          first_name: 'John',
-          last_name: 'Doe',
-          full_name: 'John Doe',
-          results: [
-            { rider_id: 'rider-1', season: 2020 },
-            { rider_id: 'rider-1', season: 2021 },
-          ],
-        },
-        {
+      mockModule.__mockRidersFound([
+        mockRider({
+          results: [{ count: 2 }],
+        }),
+        mockRider({
           id: 'rider-2',
           first_name: 'Jane',
           last_name: 'Smith',
-          full_name: null,
-          results: [{ rider_id: 'rider-2', season: 2022 }],
-        },
-      ]
-
-      mockModule.__mockRidersFound(mockRiders)
+          results: [{ count: 1 }],
+        }),
+      ])
 
       const result = await searchRiderCandidates('John', 'Doe')
 
@@ -206,44 +211,20 @@ describe('searchRiderCandidates', () => {
       expect(result.candidates[0].lastName).toBe('Doe')
     })
 
-    it('calculates first season correctly', async () => {
-      const mockRiders = [
-        {
-          id: 'rider-1',
-          first_name: 'John',
-          last_name: 'Doe',
-          full_name: null,
-          results: [
-            { rider_id: 'rider-1', season: 2021 },
-            { rider_id: 'rider-1', season: 2020 },
-            { rider_id: 'rider-1', season: 2022 },
-          ],
-        },
-      ]
-
-      mockModule.__mockRidersFound(mockRiders)
+    it('uses member_since for firstSeason', async () => {
+      mockModule.__mockRidersFound([mockRider({ member_since: 2018 })])
 
       const result = await searchRiderCandidates('John', 'Doe')
 
-      expect(result.candidates[0].firstSeason).toBe(2020)
+      expect(result.candidates[0].firstSeason).toBe(2018)
     })
 
-    it('calculates total rides correctly', async () => {
-      const mockRiders = [
-        {
-          id: 'rider-1',
-          first_name: 'John',
-          last_name: 'Doe',
-          full_name: null,
-          results: [
-            { rider_id: 'rider-1', season: 2020 },
-            { rider_id: 'rider-1', season: 2021 },
-            { rider_id: 'rider-1', season: 2022 },
-          ],
-        },
-      ]
-
-      mockModule.__mockRidersFound(mockRiders)
+    it('calculates total rides from results count', async () => {
+      mockModule.__mockRidersFound([
+        mockRider({
+          results: [{ count: 3 }],
+        }),
+      ])
 
       const result = await searchRiderCandidates('John', 'Doe')
 
@@ -251,17 +232,7 @@ describe('searchRiderCandidates', () => {
     })
 
     it('handles riders with no results', async () => {
-      const mockRiders = [
-        {
-          id: 'rider-1',
-          first_name: 'John',
-          last_name: 'Doe',
-          full_name: null,
-          results: null,
-        },
-      ]
-
-      mockModule.__mockRidersFound(mockRiders)
+      mockModule.__mockRidersFound([mockRider({ results: null })])
 
       const result = await searchRiderCandidates('John', 'Doe')
 
@@ -270,17 +241,7 @@ describe('searchRiderCandidates', () => {
     })
 
     it('uses full_name when available', async () => {
-      const mockRiders = [
-        {
-          id: 'rider-1',
-          first_name: 'John',
-          last_name: 'Doe',
-          full_name: 'Johnny Doe',
-          results: [],
-        },
-      ]
-
-      mockModule.__mockRidersFound(mockRiders)
+      mockModule.__mockRidersFound([mockRider({ full_name: 'Johnny Doe' })])
 
       const result = await searchRiderCandidates('John', 'Doe')
 
@@ -288,17 +249,7 @@ describe('searchRiderCandidates', () => {
     })
 
     it('constructs full name when full_name is null', async () => {
-      const mockRiders = [
-        {
-          id: 'rider-1',
-          first_name: 'John',
-          last_name: 'Doe',
-          full_name: null,
-          results: [],
-        },
-      ]
-
-      mockModule.__mockRidersFound(mockRiders)
+      mockModule.__mockRidersFound([mockRider()])
 
       const result = await searchRiderCandidates('John', 'Doe')
 
@@ -306,26 +257,70 @@ describe('searchRiderCandidates', () => {
     })
   })
 
+  describe('email handling', () => {
+    it('excludes riders whose email matches the registration email', async () => {
+      mockModule.__mockRidersFound([
+        mockRider({ id: 'rider-1', email: 'john@example.com' }),
+        mockRider({ id: 'rider-2', first_name: 'Jon', email: 'jon@other.com' }),
+      ])
+
+      const result = await searchRiderCandidates('John', 'Doe', 'john@example.com')
+
+      // rider-1 should be excluded since their email matches the registration email
+      expect(result.candidates).toHaveLength(1)
+      expect(result.candidates[0].id).toBe('rider-2')
+    })
+
+    it('excludes email match case-insensitively', async () => {
+      mockModule.__mockRidersFound([mockRider({ email: 'John@Example.COM' })])
+
+      const result = await searchRiderCandidates('John', 'Doe', 'john@example.com')
+
+      expect(result.candidates).toHaveLength(0)
+    })
+
+    it('includes all riders when no registration email provided', async () => {
+      mockModule.__mockRidersFound([
+        mockRider({ id: 'rider-1', email: 'john@example.com' }),
+        mockRider({ id: 'rider-2', email: null }),
+      ])
+
+      const result = await searchRiderCandidates('John', 'Doe')
+
+      expect(result.candidates).toHaveLength(2)
+    })
+
+    it('obfuscates email in candidates', async () => {
+      mockModule.__mockRidersFound([mockRider({ email: 'markallen@gmail.com' })])
+
+      const result = await searchRiderCandidates('John', 'Doe')
+
+      expect(result.candidates[0].obfuscatedEmail).toBe('m•••••••n@gmail.com')
+    })
+
+    it('obfuscates short emails', async () => {
+      mockModule.__mockRidersFound([mockRider({ email: 'jo@example.com' })])
+
+      const result = await searchRiderCandidates('John', 'Doe')
+
+      expect(result.candidates[0].obfuscatedEmail).toBe('j•@example.com')
+    })
+
+    it('returns null obfuscatedEmail for riders without email', async () => {
+      mockModule.__mockRidersFound([mockRider()])
+
+      const result = await searchRiderCandidates('John', 'Doe')
+
+      expect(result.candidates[0].obfuscatedEmail).toBeNull()
+    })
+  })
+
   describe('fuzzy matching', () => {
     it('applies fuzzy matching to results', async () => {
-      const mockRiders = [
-        {
-          id: 'rider-1',
-          first_name: 'John',
-          last_name: 'Doe',
-          full_name: null,
-          results: [],
-        },
-        {
-          id: 'rider-2',
-          first_name: 'Jane',
-          last_name: 'Smith',
-          full_name: null,
-          results: [],
-        },
-      ]
-
-      mockModule.__mockRidersFound(mockRiders)
+      mockModule.__mockRidersFound([
+        mockRider({ id: 'rider-1' }),
+        mockRider({ id: 'rider-2', first_name: 'Jane', last_name: 'Smith' }),
+      ])
 
       const result = await searchRiderCandidates('John', 'Doe')
 
@@ -334,13 +329,7 @@ describe('searchRiderCandidates', () => {
     })
 
     it('limits results to maxResults', async () => {
-      const mockRiders = Array.from({ length: 20 }, (_, i) => ({
-        id: `rider-${i}`,
-        first_name: 'John',
-        last_name: 'Doe',
-        full_name: null,
-        results: [],
-      }))
+      const mockRiders = Array.from({ length: 20 }, (_, i) => mockRider({ id: `rider-${i}` }))
 
       mockModule.__mockRidersFound(mockRiders)
 
