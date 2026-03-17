@@ -42,7 +42,6 @@ async function getRiders(
       member_since,
       registrations (count),
       results (count),
-      memberships (type, season),
       rider_memberships (season, membership_type, chapters (name))
 `
 

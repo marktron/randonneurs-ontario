@@ -26,6 +26,8 @@ describe('searchCCNMembership', () => {
             id: 11669640,
             full_name: 'Mark Allen',
             registration_category: 'Individual Membership',
+            city: 'Toronto',
+            country: 'Canada',
           },
         ],
       }),
@@ -39,6 +41,8 @@ describe('searchCCNMembership', () => {
       found: true,
       membershipId: 11669640,
       type: 'Individual Membership',
+      city: 'Toronto',
+      country: 'Canada',
     })
     expect(mockFetch).toHaveBeenCalledWith(
       'https://ccnbikes.com/en/rest/v2/event_app/registration-search/?event_id=21392&search=Mark%20Allen'

@@ -68,7 +68,7 @@ interface Registration {
     email: string | null
     emergency_contact_name: string | null
     emergency_contact_phone: string | null
-    memberships?: Array<{ type: string; season: number }> | null
+    rider_memberships?: Array<{ membership_type: string; season: number }> | null
   } | null
 }
 
@@ -597,7 +597,7 @@ export function EventResultsManager({
   const participantsFromRegistrations: Participant[] = registrations
     .filter((reg) => reg.riders && !cancelledRegistrationIds.has(reg.id))
     .map((reg) => {
-      const currentMembership = reg.riders!.memberships?.find((m) => m.season === season)
+      const currentMembership = reg.riders!.rider_memberships?.find((m) => m.season === season)
       return {
         id: reg.id,
         riderId: reg.rider_id,
@@ -609,7 +609,7 @@ export function EventResultsManager({
         registrationNotes: reg.notes,
         hasRegistration: true,
         registrationStatus: reg.status,
-        membershipType: currentMembership?.type ?? null,
+        membershipType: currentMembership?.membership_type ?? null,
         registrationTeamName: reg.team_name,
         isTeamCaptain: reg.is_team_captain,
       }

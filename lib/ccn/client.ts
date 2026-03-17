@@ -14,6 +14,8 @@ export type CCNSearchResult =
         | 'Additional Family Member'
         | 'Family Membership > PRIMARY FAMILY MEMBER'
         | 'Trial Member'
+      city: string
+      country: string
     }
   | {
       found: false
@@ -25,6 +27,8 @@ interface CCNAPIResponse {
     id: number
     full_name: string
     registration_category: string
+    city: string
+    country: string
   }>
 }
 
@@ -69,5 +73,7 @@ export async function searchCCNMembership(
       | 'Additional Family Member'
       | 'Family Membership > PRIMARY FAMILY MEMBER'
       | 'Trial Member',
+    city: member.city,
+    country: member.country,
   }
 }

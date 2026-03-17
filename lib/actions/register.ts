@@ -34,6 +34,9 @@ import { format, parseISO } from 'date-fns'
 import { searchRiderCandidates, type RiderMatchCandidate } from './rider-match'
 import { fuzzyNameScore } from '@/lib/utils/fuzzy-match'
 import { getMembershipForRider, isTrialUsed } from '@/lib/memberships/service'
+
+/** Chapter slugs that represent real geographic chapters (not pseudo-chapters like 'permanent' or 'other') */
+const REAL_CHAPTER_SLUGS = ['huron', 'ottawa', 'simcoe', 'toronto']
 import { handleActionError, handleSupabaseError, createActionResult, logError } from '@/lib/errors'
 import type {
   RiderInsert,
@@ -397,7 +400,7 @@ export async function registerForEvent(data: RegistrationData): Promise<Registra
     .select(
       `
       id, slug, status, name, event_date, start_time,
-      start_location, distance_km, event_type,
+      start_location, distance_km, event_type, chapter_id,
       chapters (slug, name),
       routes (slug)
     `
@@ -444,7 +447,18 @@ export async function registerForEvent(data: RegistrationData): Promise<Registra
     const riderId = riderResult.riderId
 
     // Step: Verify membership
-    const membershipResult = await getMembershipForRider(riderId, trimmedFirstName, trimmedLastName)
+    // Only pass chapter_id for real geographic chapters
+    const chapterSlug = event.chapters?.slug
+    const realChapterId =
+      chapterSlug && REAL_CHAPTER_SLUGS.includes(chapterSlug)
+        ? (event.chapter_id ?? undefined)
+        : undefined
+    const membershipResult = await getMembershipForRider(
+      riderId,
+      trimmedFirstName,
+      trimmedLastName,
+      realChapterId
+    )
 
     if (!membershipResult.found) {
       // Create incomplete registration
@@ -766,7 +780,16 @@ export async function registerForPermanent(
     const riderId = riderResult.riderId
 
     // Step: Verify membership
-    const membershipResult = await getMembershipForRider(riderId, trimmedFirstName, trimmedLastName)
+    // Permanent rides use the route's chapter — only pass if it's a real chapter
+    const permChapterSlug = route.chapters?.slug
+    const permRealChapterId =
+      permChapterSlug && REAL_CHAPTER_SLUGS.includes(permChapterSlug) ? route.chapter_id : undefined
+    const membershipResult = await getMembershipForRider(
+      riderId,
+      trimmedFirstName,
+      trimmedLastName,
+      permRealChapterId
+    )
 
     if (!membershipResult.found) {
       // Create incomplete registration
@@ -965,7 +988,7 @@ export async function completeRegistrationWithRider(
     .select(
       `
       id, slug, status, name, event_date, start_time,
-      start_location, distance_km, event_type,
+      start_location, distance_km, event_type, chapter_id,
       chapters (slug, name),
       routes (slug)
     `
@@ -1070,7 +1093,17 @@ export async function completeRegistrationWithRider(
   }
 
   // Verify membership (same as registerForEvent / registerForPermanent)
-  const membershipResult = await getMembershipForRider(riderId, trimmedFirstName, trimmedLastName)
+  const completeChapterSlug = event.chapters?.slug
+  const completeRealChapterId =
+    completeChapterSlug && REAL_CHAPTER_SLUGS.includes(completeChapterSlug)
+      ? (event.chapter_id ?? undefined)
+      : undefined
+  const membershipResult = await getMembershipForRider(
+    riderId,
+    trimmedFirstName,
+    trimmedLastName,
+    completeRealChapterId
+  )
 
   if (!membershipResult.found) {
     const mgmtToken = await createRegistrationRecord(

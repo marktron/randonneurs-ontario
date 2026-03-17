@@ -41,6 +41,7 @@ describe('registerForPermanent (real DB)', () => {
 
     // Clean up
     await supabase.from('rider_merges').delete().eq('rider_id', IDS.rider)
+    await supabase.from('rider_memberships').delete().eq('rider_id', IDS.rider)
     await supabase.from('memberships').delete().eq('rider_id', IDS.rider)
     await supabase.from('results').delete().eq('rider_id', IDS.rider)
     await supabase.from('registrations').delete().eq('rider_id', IDS.rider)
@@ -102,6 +103,7 @@ describe('registerForPermanent (real DB)', () => {
 
   afterEach(async () => {
     await supabase.from('rider_merges').delete().eq('rider_id', IDS.rider)
+    await supabase.from('rider_memberships').delete().eq('rider_id', IDS.rider)
     await supabase.from('memberships').delete().eq('rider_id', IDS.rider)
     const { data: events } = await supabase
       .from('events')
@@ -120,6 +122,7 @@ describe('registerForPermanent (real DB)', () => {
 
   afterAll(async () => {
     await supabase.from('rider_merges').delete().eq('rider_id', IDS.rider)
+    await supabase.from('rider_memberships').delete().eq('rider_id', IDS.rider)
     await supabase.from('memberships').delete().eq('rider_id', IDS.rider)
     await supabase.from('results').delete().eq('rider_id', IDS.rider)
     await supabase.from('registrations').delete().eq('rider_id', IDS.rider)
@@ -151,6 +154,8 @@ describe('registerForPermanent (real DB)', () => {
       found: true,
       membershipId: 42,
       type: 'Individual Membership',
+      city: 'Toronto',
+      country: 'Canada',
     })
 
     const eventDate = daysFromNow(30)
@@ -201,6 +206,8 @@ describe('registerForPermanent (real DB)', () => {
       found: true,
       membershipId: 42,
       type: 'Individual Membership',
+      city: 'Toronto',
+      country: 'Canada',
     })
 
     const eventDate = daysFromNow(31)
@@ -288,6 +295,8 @@ describe('registerForPermanent (real DB)', () => {
       found: true,
       membershipId: 42,
       type: 'Individual Membership',
+      city: 'Toronto',
+      country: 'Canada',
     })
 
     const eventDate = daysFromNow(32)
@@ -317,6 +326,8 @@ describe('registerForPermanent (real DB)', () => {
       found: true,
       membershipId: 42,
       type: 'Individual Membership',
+      city: 'Toronto',
+      country: 'Canada',
     })
 
     const eventDate = daysFromNow(36)
@@ -381,6 +392,8 @@ describe('registerForPermanent (real DB)', () => {
       found: true,
       membershipId: 99,
       type: 'Trial Member',
+      city: 'Toronto',
+      country: 'Canada',
     })
     const tempEventId = '00000000-1a21-4000-a000-000000000010'
     await checked(
@@ -434,6 +447,8 @@ describe('registerForPermanent (real DB)', () => {
       found: true,
       membershipId: 42,
       type: 'Individual Membership',
+      city: 'Toronto',
+      country: 'Canada',
     })
 
     const eventDate = daysFromNow(35)

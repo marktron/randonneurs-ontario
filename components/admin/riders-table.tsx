@@ -36,7 +36,6 @@ interface RiderWithStats {
   member_since: number | null
   registrations: { count: number }[] | null
   results: { count: number }[] | null
-  memberships: { type: string; season: number }[] | null
   rider_memberships:
     | {
         season: number
@@ -332,11 +331,11 @@ export function RidersTable({
                           process.env.NEXT_PUBLIC_CURRENT_SEASON || '2026',
                           10
                         )
-                        const currentMembership = rider.memberships?.find(
+                        const currentMembership = rider.rider_memberships?.find(
                           (m) => m.season === currentSeason
                         )
                         return currentMembership ? (
-                          <span className="text-sm">{currentMembership.type}</span>
+                          <span className="text-sm">{currentMembership.membership_type}</span>
                         ) : (
                           <span className="text-muted-foreground">—</span>
                         )

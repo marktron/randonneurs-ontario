@@ -46,11 +46,11 @@ The current schema only allows `registered` and `cancelled`. Add a migration to 
 ### Registration flow (step-by-step)
 
 1. Validate input.
-2. Find or create rider. Join to `memberships` on `(rider_id, season)` to get current-season membership in the same query. If the rider is found by email, their name is never overwritten (only gender and emergency contact are updated). A `rider_merges` audit entry is always created so admins can spot mismatches (e.g. someone registering with a different name but the same email).
+2. Find or create rider. If the rider is found by email, their name is never overwritten (only gender and emergency contact are updated). A `rider_merges` audit entry is created when the submitted name differs so admins can spot mismatches.
 3. If rider match needed (fuzzy name match), return match candidates and stop.
-4. If we have a membership row for current season, skip to step 7. Otherwise, call CCN API with registrant's full name.
-5. If CCN returns a result: insert into `memberships`, then continue.
-6. If CCN returns no result: create registration with `status = 'incomplete: membership'`, send email with warning, show error modal, stop.
+4. Check `rider_memberships` for `(rider_id, current_season)`. If found and NOT Trial Member, skip to step 7. If Trial Member, proceed to step 5 to check for upgrade. If not found, proceed to step 5.
+5. Call CCN API with registrant's full name. If CCN returns a result: upsert into `rider_memberships` (with `ccn_id`, `membership_type`, `city`, `country`, `chapter_id`), then continue. If Trial Member and CCN returns a full membership type, the row is updated (upgrade).
+6. If CCN returns no result and no existing membership: create registration with `status = 'incomplete: membership'`, send email with warning, show error modal, stop. If Trial Member and CCN returns no result: preserve existing Trial data (graceful degradation).
 7. If membership type is Trial Member: check if trial is already used (results with status in `finished`, `dnf`, `otl`, `dq` OR other registrations for events with `event_date >= today`). If used, show error modal, stop.
 8. Create registration with `status = 'registered'`, send confirmation email, revalidate, return success.
 
@@ -136,25 +136,39 @@ cf-ray: 9c74628a5bf5dda9-YYZ
 ## Future improvements
 
 - **Multiple CCN matches:** The CCN API can return multiple results for a name search. We have not yet tested this case. When it occurs, document the behavior and consider adding logic to disambiguate (e.g. by email if available, or prompt the user).
-- **Manual upgrade from trial to full membership:** Right now there is not a way to automatically have the rider update their `incomplete: membership` registration after they purchase a full membership. Mark will have to handle this until he builds a better solution.
+- **CCN polling for new members:** The `ccn_id` column on `rider_memberships` enables detecting new registrations by polling the CCN API and comparing against the highest known `ccn_id`. See `docs/ccn-api-investigation.md` for the polling approach.
 
 ## Implementation Notes
 
+### Membership storage (March 2026 update)
+
+Membership verification now reads and writes the `rider_memberships` table (not the older `memberships` table). When a rider registers:
+
+1. Check `rider_memberships` for `(rider_id, current_season)`
+2. If found and NOT Trial Member — use cached data, skip API call
+3. If found and Trial Member — re-check CCN API to detect upgrades (trial → full membership)
+4. If not found — query CCN API, upsert result into `rider_memberships` with `ccn_id`, `membership_type`, `city`, `country`, and `chapter_id`
+
+The `ccn_id` column stores the CCN registration ID (per-season, e.g. `11671361`). This is different from `riders.ccn_id` which is the person-level CCN identity ID.
+
+Chapter assignment: When writing from the API, `chapter_id` is set to the event's chapter if it's a real geographic chapter (Toronto, Ottawa, Simcoe-Muskoka, Huron) and no existing value is present.
+
 ### Files Modified/Created
 
-- `supabase/migrations/20260201120000_add_memberships_table.sql` - Creates memberships table
-- `supabase/migrations/20260201120100_extend_registration_status.sql` - Extends registration status constraint
-- `lib/ccn/client.ts` - CCN API client for membership verification
-- `lib/memberships/service.ts` - Membership verification service (checks DB then CCN API)
-- `lib/actions/register.ts` - Registration flow with membership check
+- `supabase/migrations/20260201120000_add_memberships_table.sql` - Creates memberships table (legacy)
+- `supabase/migrations/20260315120000_add_rider_memberships.sql` - Creates rider_memberships table
+- `supabase/migrations/20260317120000_add_ccn_id_to_rider_memberships.sql` - Adds ccn_id column
+- `lib/ccn/client.ts` - CCN API client for membership verification (returns city, country)
+- `lib/memberships/service.ts` - Membership verification service (checks rider_memberships then CCN API)
+- `lib/actions/register.ts` - Registration flow with membership check, passes chapter_id
 - `lib/email/templates.ts` - Email templates with membership status warnings
 - `components/membership-error-modal.tsx` - Error modal component (no-membership, trial-used variants)
 - `components/registration-form.tsx` - Form integration with membership error handling
 - `components/admin/event-results-manager.tsx` - Shows "Missing membership" badge on registrations
 - `components/admin/riders-table.tsx` - Shows membership column in riders list
-- `app/admin/events/[id]/page.tsx` - Fetches incomplete registrations
-- `app/admin/riders/page.tsx` - Includes memberships in rider query
-- `types/queries.ts` - Added Membership types
+- `app/admin/events/[id]/page.tsx` - Fetches incomplete registrations (reads rider_memberships)
+- `app/admin/riders/page.tsx` - Includes rider_memberships in rider query
+- `types/queries.ts` - Membership types
 
 ### Environment Variables
 
@@ -163,8 +177,8 @@ cf-ray: 9c74628a5bf5dda9-YYZ
 
 ### Testing
 
-- Unit tests: `tests/unit/lib/ccn-client.test.ts`, `tests/unit/lib/membership-service.test.ts`, `tests/unit/components/membership-error-modal.test.tsx`
-- E2E tests: `tests/e2e/membership-verification.spec.ts`
+- Unit tests: `tests/unit/lib/ccn-client.test.ts`, `tests/unit/components/membership-error-modal.test.tsx`
+- Integration tests: `tests/integration-real/memberships/membership-service.test.ts`, `tests/integration-real/registration/`
 
 ## Links to code
 

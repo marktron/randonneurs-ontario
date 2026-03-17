@@ -48,6 +48,7 @@ describe('registerForEvent (real DB)', () => {
 
     // Clean up leftover test data
     await supabase.from('rider_merges').delete().eq('rider_id', IDS.rider)
+    await supabase.from('rider_memberships').delete().eq('rider_id', IDS.rider)
     await supabase.from('memberships').delete().eq('rider_id', IDS.rider)
     await supabase.from('results').delete().eq('rider_id', IDS.rider)
     await supabase.from('registrations').delete().eq('rider_id', IDS.rider)
@@ -119,6 +120,7 @@ describe('registerForEvent (real DB)', () => {
   afterEach(async () => {
     // Clean up per-test data
     await supabase.from('rider_merges').delete().eq('rider_id', IDS.rider)
+    await supabase.from('rider_memberships').delete().eq('rider_id', IDS.rider)
     await supabase.from('memberships').delete().eq('rider_id', IDS.rider)
     await supabase
       .from('registrations')
@@ -135,6 +137,7 @@ describe('registerForEvent (real DB)', () => {
 
   afterAll(async () => {
     await supabase.from('rider_merges').delete().eq('rider_id', IDS.rider)
+    await supabase.from('rider_memberships').delete().eq('rider_id', IDS.rider)
     await supabase.from('memberships').delete().eq('rider_id', IDS.rider)
     await supabase.from('results').delete().eq('rider_id', IDS.rider)
     await supabase.from('registrations').delete().eq('rider_id', IDS.rider)
@@ -154,6 +157,8 @@ describe('registerForEvent (real DB)', () => {
       found: true,
       membershipId: 42,
       type: 'Individual Membership',
+      city: 'Toronto',
+      country: 'Canada',
     })
 
     const { registerForEvent } = await import('@/lib/actions/register')
@@ -216,6 +221,8 @@ describe('registerForEvent (real DB)', () => {
       found: true,
       membershipId: 99,
       type: 'Trial Member',
+      city: 'Toronto',
+      country: 'Canada',
     })
     // And a prior finished result (trial used)
     await checked(
@@ -309,6 +316,8 @@ describe('registerForEvent (real DB)', () => {
       found: true,
       membershipId: 42,
       type: 'Individual Membership',
+      city: 'Toronto',
+      country: 'Canada',
     })
 
     const { registerForEvent } = await import('@/lib/actions/register')
@@ -356,6 +365,8 @@ describe('registerForEvent (real DB)', () => {
       found: true,
       membershipId: 42,
       type: 'Individual Membership',
+      city: 'Toronto',
+      country: 'Canada',
     })
 
     const { registerForEvent } = await import('@/lib/actions/register')
@@ -390,6 +401,8 @@ describe('registerForEvent (real DB)', () => {
       found: true,
       membershipId: 42,
       type: 'Individual Membership',
+      city: 'Toronto',
+      country: 'Canada',
     })
 
     const { registerForEvent } = await import('@/lib/actions/register')
@@ -422,6 +435,8 @@ describe('registerForEvent (real DB)', () => {
       found: true,
       membershipId: 42,
       type: 'Individual Membership',
+      city: 'Toronto',
+      country: 'Canada',
     })
 
     const { registerForEvent } = await import('@/lib/actions/register')

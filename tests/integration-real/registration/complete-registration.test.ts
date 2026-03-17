@@ -47,7 +47,7 @@ describe('completeRegistrationWithRider (real DB)', () => {
     // Clean up
     const riderIds = [IDS.rider]
     await supabase.from('rider_merges').delete().in('rider_id', riderIds)
-    await supabase.from('memberships').delete().in('rider_id', riderIds)
+    await supabase.from('rider_memberships').delete().in('rider_id', riderIds)
     await supabase
       .from('registrations')
       .delete()
@@ -129,7 +129,7 @@ describe('completeRegistrationWithRider (real DB)', () => {
           newRiders.map((r: { id: string }) => r.id)
         )
     }
-    await supabase.from('memberships').delete().in('rider_id', [IDS.rider])
+    await supabase.from('rider_memberships').delete().in('rider_id', [IDS.rider])
     await supabase.from('results').delete().in('event_id', [IDS.scheduledEvent, IDS.completedEvent])
     await supabase
       .from('registrations')
@@ -157,7 +157,7 @@ describe('completeRegistrationWithRider (real DB)', () => {
 
   afterAll(async () => {
     await supabase.from('rider_merges').delete().in('rider_id', [IDS.rider])
-    await supabase.from('memberships').delete().in('rider_id', [IDS.rider])
+    await supabase.from('rider_memberships').delete().in('rider_id', [IDS.rider])
     await supabase.from('results').delete().in('event_id', [IDS.scheduledEvent, IDS.completedEvent])
     await supabase
       .from('registrations')
@@ -176,6 +176,8 @@ describe('completeRegistrationWithRider (real DB)', () => {
       found: true,
       membershipId: 42,
       type: 'Individual Membership',
+      city: 'Toronto',
+      country: 'Canada',
     })
 
     const { completeRegistrationWithRider } = await import('@/lib/actions/register')
@@ -249,6 +251,8 @@ describe('completeRegistrationWithRider (real DB)', () => {
       found: true,
       membershipId: 42,
       type: 'Individual Membership',
+      city: 'Toronto',
+      country: 'Canada',
     })
 
     const { completeRegistrationWithRider } = await import('@/lib/actions/register')
@@ -288,6 +292,8 @@ describe('completeRegistrationWithRider (real DB)', () => {
       found: true,
       membershipId: 42,
       type: 'Individual Membership',
+      city: 'Toronto',
+      country: 'Canada',
     })
 
     const { completeRegistrationWithRider } = await import('@/lib/actions/register')
@@ -360,6 +366,8 @@ describe('completeRegistrationWithRider (real DB)', () => {
       found: true,
       membershipId: 99,
       type: 'Trial Member',
+      city: 'Toronto',
+      country: 'Canada',
     })
     // Seed a prior finished result to mark trial as used
     await checked(

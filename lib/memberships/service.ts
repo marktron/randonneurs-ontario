@@ -2,7 +2,8 @@
  * Membership Service
  *
  * Handles membership verification for event registration.
- * Checks local database first, then queries CCN API if needed.
+ * Checks rider_memberships table first, then queries CCN API if needed.
+ * Writes verified memberships to rider_memberships for caching and tracking.
  */
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { searchCCNMembership } from '@/lib/ccn/client'
@@ -21,51 +22,75 @@ export type MembershipResult =
     }
 
 /**
- * Get membership for a rider, checking database first then CCN API.
+ * Get membership for a rider, checking rider_memberships first then CCN API.
+ *
+ * If the rider has a non-Trial membership cached, returns immediately.
+ * If the rider has a Trial membership, re-checks CCN to detect upgrades.
+ * If no cached membership, queries CCN and caches the result.
  *
  * @param riderId - Rider's UUID
  * @param firstName - Rider's first name (for CCN lookup)
  * @param lastName - Rider's last name (for CCN lookup)
+ * @param chapterId - Optional chapter ID from the event (only real chapters)
  * @returns Membership data if found, or { found: false }
  */
 export async function getMembershipForRider(
   riderId: string,
   firstName: string,
-  lastName: string
+  lastName: string,
+  chapterId?: string
 ): Promise<MembershipResult> {
   const supabase = getSupabaseAdmin()
   const currentSeason = getCurrentSeason()
 
-  // Check database first
+  // Check rider_memberships first
   const { data: existingMembership } = await supabase
-    .from('memberships')
-    .select('membership_id, type')
+    .from('rider_memberships')
+    .select('ccn_id, membership_type, chapter_id')
     .eq('rider_id', riderId)
     .eq('season', currentSeason)
     .single()
 
-  if (existingMembership) {
+  // If found and NOT Trial, return immediately (skip API call)
+  if (existingMembership && existingMembership.membership_type !== 'Trial Member') {
     return {
       found: true,
-      membershipId: existingMembership.membership_id,
-      type: existingMembership.type as MembershipType,
+      membershipId: existingMembership.ccn_id ?? 0,
+      type: existingMembership.membership_type as MembershipType,
     }
   }
 
-  // Query CCN API
+  // Either no row exists, or it's a Trial Member — check CCN API
   const ccnResult = await searchCCNMembership(firstName, lastName)
 
   if (!ccnResult.found) {
+    // If we had an existing Trial row, preserve it (graceful degradation)
+    if (existingMembership) {
+      return {
+        found: true,
+        membershipId: existingMembership.ccn_id ?? 0,
+        type: existingMembership.membership_type as MembershipType,
+      }
+    }
     return { found: false }
   }
 
-  // Cache in database
-  const { error } = await supabase.from('memberships').insert({
+  // Build upsert payload — only include chapter_id if we should set it
+  const shouldSetChapter = chapterId && (!existingMembership || !existingMembership.chapter_id)
+  const upsertData = {
     rider_id: riderId,
     season: currentSeason,
-    membership_id: ccnResult.membershipId,
-    type: ccnResult.type,
-  })
+    ccn_id: ccnResult.membershipId,
+    membership_type: ccnResult.type,
+    city: ccnResult.city || null,
+    country: ccnResult.country || null,
+    ...(shouldSetChapter ? { chapter_id: chapterId } : {}),
+  }
+
+  const { error } = await supabase
+    .from('rider_memberships')
+    .upsert(upsertData, { onConflict: 'rider_id,season' })
+
   if (error) {
     console.error(`Failed to cache membership for rider ${riderId}:`, error.message)
   }

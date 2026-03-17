@@ -616,6 +616,7 @@ export type Database = {
       }
       rider_memberships: {
         Row: {
+          ccn_id: number | null
           chapter_id: string | null
           city: string | null
           country: string | null
@@ -628,6 +629,7 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
+          ccn_id?: number | null
           chapter_id?: string | null
           city?: string | null
           country?: string | null
@@ -640,6 +642,7 @@ export type Database = {
           updated_at?: string | null
         }
         Update: {
+          ccn_id?: number | null
           chapter_id?: string | null
           city?: string | null
           country?: string | null

@@ -310,7 +310,7 @@ export type RegistrationWithRiderForAdmin = Pick<
         | 'emergency_contact_name'
         | 'emergency_contact_phone'
       > & {
-        memberships: Array<{ type: string; season: number }> | null
+        rider_memberships: Array<{ membership_type: string; season: number }> | null
       })
     | null
 }
@@ -368,7 +368,6 @@ export type RiderWithStats = Pick<
 > & {
   registrations: Array<{ count: number }> | null
   results: Array<{ count: number }> | null
-  memberships: Array<{ type: string; season: number }> | null
   rider_memberships: Array<{
     season: number
     membership_type: string
