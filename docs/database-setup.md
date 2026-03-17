@@ -36,15 +36,33 @@ Located in `supabase/migrations/`. Key migrations include:
 
 ### Seed Data
 
-The seed file (`supabase/seed.sql`) is automatically loaded when running `supabase db reset`. It contains:
+The seed file (`supabase/seed.sql`) is automatically loaded when running `supabase db reset`. It contains chapters, awards, riders, routes, events, results, and result/rider awards. **PII is stripped** from this file (rider email, emergency contacts, ccn_id, birth_year are set to NULL).
 
-- **7 chapters** (Toronto, Ottawa, Simcoe-Muskoka, Huron, Niagara, Other, Permanent)
-- **9 awards**
-- **302 routes**
-- **1,613 events** (1983-2026)
-- **1,130 riders**
-- **9,817 results**
-- **2,277 result awards**
+A separate **gitignored** file `supabase/seed-memberships.sql` contains:
+
+- UPDATE statements to restore stripped rider PII (email, ccn_id, birth_year, etc.)
+- INSERT statements for `rider_memberships` (membership history with city/country)
+
+To load the full dataset including PII and memberships:
+
+```bash
+npx supabase db reset
+psql -h localhost -p 54322 -U postgres -d postgres -f supabase/seed-memberships.sql
+```
+
+### Importing Membership CSVs
+
+To import membership data from CCN CSV exports:
+
+```bash
+# Generic script (any season)
+npx tsx scripts/import-memberships.ts <season> <csv-file-path> [--dry-run]
+
+# 2025-specific script (has hardcoded season)
+npx tsx scripts/import-memberships-2025.ts <csv-file-path> [--dry-run]
+```
+
+Always do a `--dry-run` first to review matches and new rider creation.
 
 ## Regenerating Seed Data
 
@@ -58,8 +76,9 @@ This script:
 
 - Uses `pg_dump` from inside Docker (avoids version mismatch issues)
 - Generates clean INSERT statements with column names
-- Excludes the `admins` and `images` tables (they require auth.users)
-- Removes problematic backslash commands that can cause syntax errors
+- Excludes `admins`, `images`, and `rider_memberships` tables
+- Strips PII from rider rows (email, emergency contacts, ccn_id, birth_year → NULL)
+- Generates `supabase/seed-memberships.sql` (gitignored) with rider PII updates and rider_memberships data
 
 After regenerating, test with:
 
