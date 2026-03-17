@@ -48,6 +48,9 @@ next-env.d.ts
 .validation-cache
 validation-reports
 
+# seed files containing PII (memberships with city/country)
+supabase/seed-memberships.sql
+
 # backups (used in local development)
 backups/
 
