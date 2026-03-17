@@ -50,6 +50,7 @@ validation-reports
 
 # seed files containing PII (memberships with city/country)
 supabase/seed-memberships.sql
+supabase/prod-membership-update.sql
 
 # backups (used in local development)
 backups/
