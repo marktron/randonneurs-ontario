@@ -42,7 +42,6 @@ describe('membership service (real DB)', () => {
     const eventIds = [IDS.completedEvent, IDS.scheduledEvent]
     const riderIds = [IDS.rider, IDS.otherRider]
     await supabase.from('rider_memberships').delete().in('rider_id', riderIds)
-    await supabase.from('memberships').delete().in('rider_id', riderIds)
     await supabase.from('results').delete().in('event_id', eventIds)
     await supabase.from('registrations').delete().in('event_id', eventIds)
     await supabase.from('events').delete().in('id', eventIds)
@@ -105,7 +104,6 @@ describe('membership service (real DB)', () => {
     const eventIds = [IDS.completedEvent, IDS.scheduledEvent]
     const riderIds = [IDS.rider, IDS.otherRider]
     await supabase.from('rider_memberships').delete().in('rider_id', riderIds)
-    await supabase.from('memberships').delete().in('rider_id', riderIds)
     await supabase.from('results').delete().in('event_id', eventIds)
     await supabase.from('registrations').delete().in('event_id', eventIds)
     await supabase.from('events').delete().in('id', eventIds)
@@ -124,7 +122,6 @@ describe('membership service (real DB)', () => {
     afterEach(async () => {
       // Clean up any memberships created during tests
       await supabase.from('rider_memberships').delete().eq('rider_id', IDS.rider)
-      await supabase.from('memberships').delete().eq('rider_id', IDS.rider)
       vi.resetAllMocks()
     })
 

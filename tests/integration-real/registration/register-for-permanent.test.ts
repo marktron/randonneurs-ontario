@@ -42,7 +42,6 @@ describe('registerForPermanent (real DB)', () => {
     // Clean up
     await supabase.from('rider_merges').delete().eq('rider_id', IDS.rider)
     await supabase.from('rider_memberships').delete().eq('rider_id', IDS.rider)
-    await supabase.from('memberships').delete().eq('rider_id', IDS.rider)
     await supabase.from('results').delete().eq('rider_id', IDS.rider)
     await supabase.from('registrations').delete().eq('rider_id', IDS.rider)
     const { data: events } = await supabase
@@ -104,7 +103,6 @@ describe('registerForPermanent (real DB)', () => {
   afterEach(async () => {
     await supabase.from('rider_merges').delete().eq('rider_id', IDS.rider)
     await supabase.from('rider_memberships').delete().eq('rider_id', IDS.rider)
-    await supabase.from('memberships').delete().eq('rider_id', IDS.rider)
     const { data: events } = await supabase
       .from('events')
       .select('id')
@@ -123,7 +121,6 @@ describe('registerForPermanent (real DB)', () => {
   afterAll(async () => {
     await supabase.from('rider_merges').delete().eq('rider_id', IDS.rider)
     await supabase.from('rider_memberships').delete().eq('rider_id', IDS.rider)
-    await supabase.from('memberships').delete().eq('rider_id', IDS.rider)
     await supabase.from('results').delete().eq('rider_id', IDS.rider)
     await supabase.from('registrations').delete().eq('rider_id', IDS.rider)
     const { data: events } = await supabase
