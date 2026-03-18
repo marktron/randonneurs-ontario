@@ -3,6 +3,7 @@
 import { redirect } from 'next/navigation'
 import { createSupabaseServerClient } from '@/lib/supabase-server-client'
 import { handleSupabaseError, createActionResult } from '@/lib/errors'
+import { isRateLimited } from '@/lib/rate-limit'
 import type { ActionResult } from '@/types/actions'
 
 export interface LoginResult {
@@ -11,6 +12,11 @@ export interface LoginResult {
 }
 
 export async function login(email: string, password: string): Promise<LoginResult> {
+  const normalizedEmail = email.toLowerCase().trim()
+  if (isRateLimited('login', normalizedEmail, 5, 15 * 60 * 1000)) {
+    return { success: false, error: 'Too many login attempts. Please try again later.' }
+  }
+
   const supabase = await createSupabaseServerClient()
 
   const { data, error } = await supabase.auth.signInWithPassword({
@@ -28,11 +34,7 @@ export async function login(email: string, password: string): Promise<LoginResul
   }
 
   // Verify user is an admin
-  const { data: admin } = await supabase
-    .from('admins')
-    .select('id')
-    .eq('id', data.user.id)
-    .single()
+  const { data: admin } = await supabase.from('admins').select('id').eq('id', data.user.id).single()
 
   if (!admin) {
     await supabase.auth.signOut()
@@ -59,7 +61,9 @@ export async function changePassword(
   const supabase = await createSupabaseServerClient()
 
   // Get current user
-  const { data: { user } } = await supabase.auth.getUser()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
   if (!user?.email) {
     return { success: false, error: 'Not authenticated' }
   }
@@ -102,7 +106,9 @@ export async function updateProfile(
   const supabase = await createSupabaseServerClient()
 
   // Get current user
-  const { data: { user } } = await supabase.auth.getUser()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
   if (!user) {
     return { success: false, error: 'Not authenticated' }
   }
@@ -119,11 +125,7 @@ export async function updateProfile(
     .eq('id', user.id)
 
   if (error) {
-    return handleSupabaseError(
-      error,
-      { operation: 'updateProfile' },
-      'Failed to update profile'
-    )
+    return handleSupabaseError(error, { operation: 'updateProfile' }, 'Failed to update profile')
   }
 
   return createActionResult()

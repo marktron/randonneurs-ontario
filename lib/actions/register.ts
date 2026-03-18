@@ -34,6 +34,7 @@ import { format, parseISO } from 'date-fns'
 import { searchRiderCandidates, type RiderMatchCandidate } from './rider-match'
 import { fuzzyNameScore } from '@/lib/utils/fuzzy-match'
 import { getMembershipForRider, isTrialUsed } from '@/lib/memberships/service'
+import { isRateLimited } from '@/lib/rate-limit'
 
 /** Chapter slugs that represent real geographic chapters (not pseudo-chapters like 'permanent' or 'other') */
 const REAL_CHAPTER_SLUGS = ['huron', 'ottawa', 'simcoe', 'toronto']
@@ -386,6 +387,11 @@ export async function registerForEvent(data: RegistrationData): Promise<Registra
   const normalizedEmail = email.toLowerCase().trim()
   const trimmedTeamName = teamName?.trim() || undefined
 
+  // Rate limit: 10 registration attempts per email per 15 minutes
+  if (isRateLimited('registration', normalizedEmail, 10, 15 * 60 * 1000)) {
+    return { success: false, error: 'Too many registration attempts. Please try again later.' }
+  }
+
   // Block duplicate team names with a helpful message
   if (trimmedTeamName && isTeamCaptain) {
     const { data: existingTeam } = await getSupabaseAdmin()
@@ -672,6 +678,12 @@ export async function registerForPermanent(
 
   const trimmedFirstName = firstName.trim()
   const trimmedLastName = lastName.trim()
+  const normalizedEmail = email.toLowerCase().trim()
+
+  // Rate limit: 10 registration attempts per email per 15 minutes
+  if (isRateLimited('registration', normalizedEmail, 10, 15 * 60 * 1000)) {
+    return { success: false, error: 'Too many registration attempts. Please try again later.' }
+  }
 
   // Validate date is at least 2 weeks in the future
   const eventDateObj = parseISO(eventDate)
@@ -761,8 +773,6 @@ export async function registerForPermanent(
   }
 
   // Find or create rider
-  const normalizedEmail = email.toLowerCase().trim()
-
   try {
     const riderResult = await findOrCreateRider(
       email,
