@@ -45,7 +45,8 @@ describe('searchCCNMembership', () => {
       country: 'Canada',
     })
     expect(mockFetch).toHaveBeenCalledWith(
-      'https://ccnbikes.com/en/rest/v2/event_app/registration-search/?event_id=21392&search=Mark%20Allen'
+      'https://ccnbikes.com/en/rest/v2/event_app/registration-search/?event_id=21392&search=Mark%20Allen',
+      expect.objectContaining({ signal: expect.any(AbortSignal) })
     )
   })
 

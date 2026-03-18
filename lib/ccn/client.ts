@@ -52,7 +52,21 @@ export async function searchCCNMembership(
   const fullName = `${firstName} ${lastName}`
   const url = `${endpoint}&search=${encodeURIComponent(fullName)}`
 
-  const response = await fetch(url)
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 10_000)
+
+  let response: Response
+  try {
+    response = await fetch(url, { signal: controller.signal })
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      throw new Error('CCN API timed out after 10s')
+    }
+    throw error
+  } finally {
+    clearTimeout(timeout)
+  }
+
   if (!response.ok) {
     throw new Error(`CCN API error: ${response.status}`)
   }
