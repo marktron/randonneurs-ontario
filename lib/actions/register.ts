@@ -35,6 +35,7 @@ import { searchRiderCandidates, type RiderMatchCandidate } from './rider-match'
 import { fuzzyNameScore } from '@/lib/utils/fuzzy-match'
 import { getMembershipForRider, isTrialUsed } from '@/lib/memberships/service'
 import { isRateLimited } from '@/lib/rate-limit'
+import { validateEmail, normalizePhone } from '@/lib/utils/validation'
 
 /** Chapter slugs that represent real geographic chapters (not pseudo-chapters like 'permanent' or 'other') */
 const REAL_CHAPTER_SLUGS = ['huron', 'ottawa', 'simcoe', 'toronto']
@@ -382,10 +383,25 @@ export async function registerForEvent(data: RegistrationData): Promise<Registra
     return { success: false, error: 'Missing required fields' }
   }
 
+  if (!emergencyContactName?.trim() || !emergencyContactPhone?.trim()) {
+    return { success: false, error: 'Emergency contact name and phone are required' }
+  }
+
   const trimmedFirstName = firstName.trim()
   const trimmedLastName = lastName.trim()
-  const normalizedEmail = email.toLowerCase().trim()
   const trimmedTeamName = teamName?.trim() || undefined
+
+  const emailResult = validateEmail(email)
+  if (!emailResult.valid) {
+    return { success: false, error: 'Please enter a valid email address' }
+  }
+  const normalizedEmail = emailResult.normalized
+
+  const phoneResult = normalizePhone(emergencyContactPhone)
+  if (!phoneResult.valid) {
+    return { success: false, error: 'Please enter a valid emergency contact phone number' }
+  }
+  const normalizedPhone = phoneResult.formatted
 
   // Rate limit: 10 registration attempts per email per 15 minutes
   if (isRateLimited('registration', normalizedEmail, 10, 15 * 60 * 1000)) {
@@ -442,12 +458,12 @@ export async function registerForEvent(data: RegistrationData): Promise<Registra
   // Find or create rider
   try {
     const riderResult = await findOrCreateRider(
-      email,
-      firstName,
-      lastName,
+      normalizedEmail,
+      trimmedFirstName,
+      trimmedLastName,
       gender,
-      emergencyContactName,
-      emergencyContactPhone
+      emergencyContactName.trim(),
+      normalizedPhone
     )
 
     if (!riderResult.success) {
@@ -676,9 +692,24 @@ export async function registerForPermanent(
     return { success: false, error: 'Missing required fields' }
   }
 
+  if (!emergencyContactName?.trim() || !emergencyContactPhone?.trim()) {
+    return { success: false, error: 'Emergency contact name and phone are required' }
+  }
+
   const trimmedFirstName = firstName.trim()
   const trimmedLastName = lastName.trim()
-  const normalizedEmail = email.toLowerCase().trim()
+
+  const emailResult = validateEmail(email)
+  if (!emailResult.valid) {
+    return { success: false, error: 'Please enter a valid email address' }
+  }
+  const normalizedEmail = emailResult.normalized
+
+  const phoneResult = normalizePhone(emergencyContactPhone)
+  if (!phoneResult.valid) {
+    return { success: false, error: 'Please enter a valid emergency contact phone number' }
+  }
+  const normalizedPhone = phoneResult.formatted
 
   // Rate limit: 10 registration attempts per email per 15 minutes
   if (isRateLimited('registration', normalizedEmail, 10, 15 * 60 * 1000)) {
@@ -775,12 +806,12 @@ export async function registerForPermanent(
   // Find or create rider
   try {
     const riderResult = await findOrCreateRider(
-      email,
-      firstName,
-      lastName,
+      normalizedEmail,
+      trimmedFirstName,
+      trimmedLastName,
       gender,
-      emergencyContactName,
-      emergencyContactPhone
+      emergencyContactName.trim(),
+      normalizedPhone
     )
 
     if (!riderResult.success) {
@@ -1014,11 +1045,26 @@ export async function completeRegistrationWithRider(
     return { success: false, error: 'Missing required fields' }
   }
 
+  if (!emergencyContactName?.trim() || !emergencyContactPhone?.trim()) {
+    return { success: false, error: 'Emergency contact name and phone are required' }
+  }
+
   const trimmedFirstName = firstName.trim()
   const trimmedLastName = lastName.trim()
-  const normalizedEmail = email.toLowerCase().trim()
   const parsedGender = gender === 'M' || gender === 'F' || gender === 'X' ? gender : null
   const trimmedTeamName = teamName?.trim() || undefined
+
+  const emailResult = validateEmail(email)
+  if (!emailResult.valid) {
+    return { success: false, error: 'Please enter a valid email address' }
+  }
+  const normalizedEmail = emailResult.normalized
+
+  const phoneResult = normalizePhone(emergencyContactPhone)
+  if (!phoneResult.valid) {
+    return { success: false, error: 'Please enter a valid emergency contact phone number' }
+  }
+  const normalizedPhone = phoneResult.formatted
 
   // Check if event exists and is scheduled
   const { data: eventData, error: eventError } = await getSupabaseAdmin()
@@ -1094,8 +1140,8 @@ export async function completeRegistrationWithRider(
       last_name: trimmedLastName,
       email: normalizedEmail,
       gender: parsedGender,
-      emergency_contact_name: emergencyContactName || null,
-      emergency_contact_phone: emergencyContactPhone || null,
+      emergency_contact_name: emergencyContactName?.trim() || null,
+      emergency_contact_phone: normalizedPhone || null,
     }
     await getSupabaseAdmin().from('riders').update(updateData).eq('id', selectedRiderId)
   } else {
@@ -1106,8 +1152,8 @@ export async function completeRegistrationWithRider(
       last_name: trimmedLastName,
       email: normalizedEmail,
       gender: parsedGender,
-      emergency_contact_name: emergencyContactName || null,
-      emergency_contact_phone: emergencyContactPhone || null,
+      emergency_contact_name: emergencyContactName?.trim() || null,
+      emergency_contact_phone: normalizedPhone || null,
     }
     const { data: newRider, error: riderError } = await getSupabaseAdmin()
       .from('riders')

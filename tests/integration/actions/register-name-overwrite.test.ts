@@ -167,11 +167,11 @@ describe('rider name preservation on email match', () => {
     expect(riderUpdate!.data).not.toHaveProperty('first_name')
     expect(riderUpdate!.data).not.toHaveProperty('last_name')
 
-    // Should update supplementary fields
+    // Should update supplementary fields (phone is normalized by server)
     expect(riderUpdate!.data).toMatchObject({
       gender: 'M',
       emergency_contact_name: 'New Contact',
-      emergency_contact_phone: '555-9999',
+      emergency_contact_phone: '5559999',
     })
 
     // No rider_merges entry when name is identical (nothing changed)
