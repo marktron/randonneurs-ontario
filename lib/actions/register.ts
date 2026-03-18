@@ -942,6 +942,8 @@ export interface CompleteRegistrationData {
   notes?: string
   emergencyContactName: string
   emergencyContactPhone: string
+  teamName?: string
+  isTeamCaptain?: boolean
 }
 
 /**
@@ -970,6 +972,8 @@ export async function completeRegistrationWithRider(
     notes,
     emergencyContactName,
     emergencyContactPhone,
+    teamName,
+    isTeamCaptain,
   } = data
 
   // Validate required fields
@@ -981,6 +985,7 @@ export async function completeRegistrationWithRider(
   const trimmedLastName = lastName.trim()
   const normalizedEmail = email.toLowerCase().trim()
   const parsedGender = gender === 'M' || gender === 'F' || gender === 'X' ? gender : null
+  const trimmedTeamName = teamName?.trim() || undefined
 
   // Check if event exists and is scheduled
   const { data: eventData, error: eventError } = await getSupabaseAdmin()
@@ -1111,7 +1116,9 @@ export async function completeRegistrationWithRider(
       riderId,
       shareRegistration,
       notes,
-      'incomplete: membership'
+      'incomplete: membership',
+      trimmedTeamName,
+      isTeamCaptain
     )
     const chapter = event.chapters
     const fullName = `${trimmedFirstName} ${trimmedLastName}`
@@ -1151,7 +1158,9 @@ export async function completeRegistrationWithRider(
         riderId,
         shareRegistration,
         notes,
-        'incomplete: membership'
+        'incomplete: membership',
+        trimmedTeamName,
+        isTeamCaptain
       )
       const chapter = event.chapters
       const fullName = `${trimmedFirstName} ${trimmedLastName}`
@@ -1187,7 +1196,15 @@ export async function completeRegistrationWithRider(
   // Create registration
   let mgmtToken: string
   try {
-    mgmtToken = await createRegistrationRecord(eventId, riderId, shareRegistration, notes)
+    mgmtToken = await createRegistrationRecord(
+      eventId,
+      riderId,
+      shareRegistration,
+      notes,
+      'registered',
+      trimmedTeamName,
+      isTeamCaptain
+    )
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Failed to complete registration'
     return { success: false, error: errorMessage }

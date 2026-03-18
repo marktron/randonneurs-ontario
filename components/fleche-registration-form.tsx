@@ -209,6 +209,8 @@ export function FlecheRegistrationForm({
         notes: pendingNotes || undefined,
         emergencyContactName,
         emergencyContactPhone,
+        teamName: resolvedTeamName,
+        isTeamCaptain: teamMode === 'create',
       })
 
       if (result.success) {
