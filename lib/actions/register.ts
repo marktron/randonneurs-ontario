@@ -756,9 +756,12 @@ export async function registerForPermanent(
     return { success: false, error: 'Route does not have an assigned chapter' }
   }
 
-  // Generate event name and slug
+  // Generate event name and slug (reversed rides get a distinct slug)
   const eventName = direction === 'reversed' ? `${route.name} (Reversed)` : route.name
-  const eventSlug = `permanent-${route.slug}-${eventDate}`
+  const eventSlug =
+    direction === 'reversed'
+      ? `permanent-${route.slug}-${eventDate}-reverse`
+      : `permanent-${route.slug}-${eventDate}`
 
   // Check if an event with this slug already exists
   const { data: existingEvent } = await getSupabaseAdmin()
