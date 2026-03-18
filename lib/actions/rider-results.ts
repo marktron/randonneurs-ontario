@@ -615,7 +615,7 @@ export async function getUpcomingEventsByEventId(
     )
     .eq('chapter_id', currentEvent.chapter_id)
     .eq('status', 'scheduled')
-    .neq('event_type', 'Permanent')
+    .neq('event_type', 'permanent')
     .neq('id', eventId)
     .gt('event_date', currentEvent.event_date)
     .gte('event_date', today)
