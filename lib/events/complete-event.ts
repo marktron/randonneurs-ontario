@@ -2,6 +2,7 @@ import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { sendgrid, fromEmail } from '@/lib/email/sendgrid'
 import { buildResultSubmissionRequestEmail } from '@/lib/email/templates'
 import { format } from 'date-fns'
+import { parseLocalDate } from '@/lib/utils'
 import type {
   RegistrationWithRider,
   ResultWithRiderId,
@@ -133,7 +134,7 @@ export async function createPendingResultsAndSendEmails(
       riderName: result.riderName,
       riderEmail: result.riderEmail,
       eventName: event.name,
-      eventDate: format(new Date(event.event_date), 'MMMM d, yyyy'),
+      eventDate: format(parseLocalDate(event.event_date), 'MMMM d, yyyy'),
       eventDistance: event.distance_km,
       chapterName: event.chapters?.name || 'Randonneurs Ontario',
       submissionUrl,
