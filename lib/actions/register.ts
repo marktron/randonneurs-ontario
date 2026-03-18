@@ -387,6 +387,16 @@ export async function registerForEvent(data: RegistrationData): Promise<Registra
     return { success: false, error: 'Emergency contact name and phone are required' }
   }
 
+  if (firstName.length > 100 || lastName.length > 100 || email.length > 254) {
+    return { success: false, error: 'Name or email is too long' }
+  }
+  if (notes && notes.length > 2000) {
+    return { success: false, error: 'Notes must be under 2000 characters' }
+  }
+  if (emergencyContactName && emergencyContactName.length > 200) {
+    return { success: false, error: 'Emergency contact name is too long' }
+  }
+
   const trimmedFirstName = firstName.trim()
   const trimmedLastName = lastName.trim()
   const trimmedTeamName = teamName?.trim() || undefined
@@ -694,6 +704,16 @@ export async function registerForPermanent(
 
   if (!emergencyContactName?.trim() || !emergencyContactPhone?.trim()) {
     return { success: false, error: 'Emergency contact name and phone are required' }
+  }
+
+  if (firstName.length > 100 || lastName.length > 100 || email.length > 254) {
+    return { success: false, error: 'Name or email is too long' }
+  }
+  if (notes && notes.length > 2000) {
+    return { success: false, error: 'Notes must be under 2000 characters' }
+  }
+  if (emergencyContactName && emergencyContactName.length > 200) {
+    return { success: false, error: 'Emergency contact name is too long' }
   }
 
   const trimmedFirstName = firstName.trim()
@@ -1050,6 +1070,16 @@ export async function completeRegistrationWithRider(
 
   if (!emergencyContactName?.trim() || !emergencyContactPhone?.trim()) {
     return { success: false, error: 'Emergency contact name and phone are required' }
+  }
+
+  if (firstName.length > 100 || lastName.length > 100 || email.length > 254) {
+    return { success: false, error: 'Name or email is too long' }
+  }
+  if (notes && notes.length > 2000) {
+    return { success: false, error: 'Notes must be under 2000 characters' }
+  }
+  if (emergencyContactName && emergencyContactName.length > 200) {
+    return { success: false, error: 'Emergency contact name is too long' }
   }
 
   const trimmedFirstName = firstName.trim()
