@@ -77,7 +77,12 @@ export async function searchCCNMembership(
     return { found: false }
   }
 
-  // Take the first result (future: handle multiple matches)
+  if (data.results.length > 1) {
+    console.warn(
+      `CCN returned ${data.results.length} results for "${fullName}" — using first match (ID: ${data.results[0].id})`
+    )
+  }
+
   const member = data.results[0]
   return {
     found: true,
