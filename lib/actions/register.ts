@@ -271,38 +271,14 @@ async function findOrCreateRider(
 }
 
 /**
- * Check if a rider already has a completed registration for an event.
- * Only 'registered' status counts as a duplicate — incomplete registrations
- * (e.g. 'incomplete: membership') should not block re-registration.
- *
- * @param eventId - Event ID
- * @param riderId - Rider ID
- * @returns true if already fully registered, false otherwise
- */
-async function checkDuplicateRegistration(eventId: string, riderId: string): Promise<boolean> {
-  const { data: existingRegistration } = await getSupabaseAdmin()
-    .from('registrations')
-    .select('id')
-    .eq('event_id', eventId)
-    .eq('rider_id', riderId)
-    .eq('status', 'registered')
-    .single()
-
-  return existingRegistration !== null
-}
-
-/**
  * Create or update a registration record for a rider and event.
- * Uses upsert to handle the case where an incomplete registration already
- * exists (e.g. from a previous failed membership check), avoiding duplicate
- * key violations on the (event_id, rider_id) unique constraint.
  *
- * @param eventId - Event ID
- * @param riderId - Rider ID
- * @param shareRegistration - Whether to share registration publicly
- * @param notes - Optional registration notes
- * @param status - Registration status (defaults to 'registered')
- * @throws Error if registration creation fails
+ * Tries an INSERT first. On conflict (event_id, rider_id):
+ * - If existing row is 'incomplete: membership', updates it (re-registration after membership fix)
+ * - If existing row is 'registered', returns 'duplicate' (already registered)
+ *
+ * @returns The management token, or 'duplicate' if already fully registered
+ * @throws Error if registration creation fails for other reasons
  */
 async function createRegistrationRecord(
   eventId: string,
@@ -312,7 +288,10 @@ async function createRegistrationRecord(
   status: 'registered' | 'incomplete: membership' = 'registered',
   teamName?: string,
   isTeamCaptain?: boolean
-): Promise<string> {
+): Promise<string | 'duplicate'> {
+  const supabase = getSupabaseAdmin()
+
+  // First, try a plain INSERT
   const insertRegistration: RegistrationInsert = {
     event_id: eventId,
     rider_id: riderId,
@@ -322,18 +301,50 @@ async function createRegistrationRecord(
     team_name: teamName || null,
     is_team_captain: isTeamCaptain || false,
   }
-  const { data: registration, error: registrationError } = await getSupabaseAdmin()
+  const { data: inserted, error: insertError } = await supabase
     .from('registrations')
-    .upsert(insertRegistration, { onConflict: 'event_id,rider_id' })
+    .insert(insertRegistration)
     .select('management_token')
     .single()
 
-  if (registrationError || !registration) {
-    console.error('🚨 Error creating registration:', registrationError)
+  if (!insertError && inserted) {
+    return (inserted as { management_token: string }).management_token
+  }
+
+  // If the error is NOT a unique violation, it's a real failure
+  if (insertError.code !== '23505') {
+    console.error('🚨 Error creating registration:', insertError)
     throw new Error('Failed to complete registration')
   }
 
-  return (registration as { management_token: string }).management_token
+  // Unique violation — a row already exists for this (event_id, rider_id).
+  // Only update if it's an incomplete registration (membership re-check).
+  const { data: updated, error: updateError } = await supabase
+    .from('registrations')
+    .update({
+      status,
+      share_registration: shareRegistration,
+      notes: notes || null,
+      team_name: teamName || null,
+      is_team_captain: isTeamCaptain || false,
+    })
+    .eq('event_id', eventId)
+    .eq('rider_id', riderId)
+    .eq('status', 'incomplete: membership')
+    .select('management_token')
+    .maybeSingle()
+
+  if (updateError) {
+    console.error('🚨 Error updating registration:', updateError)
+    throw new Error('Failed to complete registration')
+  }
+
+  if (!updated) {
+    // No row matched the update — the existing registration is already 'registered'
+    return 'duplicate'
+  }
+
+  return (updated as { management_token: string }).management_token
 }
 
 // ============================================================================
@@ -472,6 +483,10 @@ export async function registerForEvent(data: RegistrationData): Promise<Registra
         isTeamCaptain
       )
 
+      if (mgmtToken === 'duplicate') {
+        return { success: false, error: 'You are already registered for this event' }
+      }
+
       // Send warning email (fire-and-forget)
       const chapter = event.chapters
       const fullName = `${trimmedFirstName} ${trimmedLastName}`
@@ -518,6 +533,10 @@ export async function registerForEvent(data: RegistrationData): Promise<Registra
           isTeamCaptain
         )
 
+        if (mgmtToken === 'duplicate') {
+          return { success: false, error: 'You are already registered for this event' }
+        }
+
         const chapter = event.chapters
         const fullName = `${trimmedFirstName} ${trimmedLastName}`
         sendRegistrationConfirmationEmail({
@@ -550,13 +569,7 @@ export async function registerForEvent(data: RegistrationData): Promise<Registra
       }
     }
 
-    // Check if already registered
-    const isDuplicate = await checkDuplicateRegistration(eventId, riderId)
-    if (isDuplicate) {
-      return { success: false, error: 'You are already registered for this event' }
-    }
-
-    // Create registration
+    // Create registration (atomically checks for duplicates)
     const mgmtToken = await createRegistrationRecord(
       eventId,
       riderId,
@@ -566,6 +579,10 @@ export async function registerForEvent(data: RegistrationData): Promise<Registra
       trimmedTeamName,
       isTeamCaptain
     )
+
+    if (mgmtToken === 'duplicate') {
+      return { success: false, error: 'You are already registered for this event' }
+    }
 
     // Send confirmation email (fire-and-forget - don't block registration on email)
     const chapter = event.chapters
@@ -801,6 +818,10 @@ export async function registerForPermanent(
         'incomplete: membership'
       )
 
+      if (mgmtToken === 'duplicate') {
+        return { success: false, error: 'You are already registered for this permanent ride' }
+      }
+
       // Send warning email (fire-and-forget)
       const chapter = route.chapters
       const fullName = `${trimmedFirstName} ${trimmedLastName}`
@@ -845,6 +866,10 @@ export async function registerForPermanent(
           'incomplete: membership'
         )
 
+        if (mgmtToken === 'duplicate') {
+          return { success: false, error: 'You are already registered for this permanent ride' }
+        }
+
         const chapter = route.chapters
         const fullName = `${trimmedFirstName} ${trimmedLastName}`
         sendRegistrationConfirmationEmail({
@@ -877,14 +902,12 @@ export async function registerForPermanent(
       }
     }
 
-    // Check if already registered
-    const isDuplicate = await checkDuplicateRegistration(eventId, riderId)
-    if (isDuplicate) {
+    // Create registration (atomically checks for duplicates)
+    const mgmtToken = await createRegistrationRecord(eventId, riderId, shareRegistration, notes)
+
+    if (mgmtToken === 'duplicate') {
       return { success: false, error: 'You are already registered for this permanent ride' }
     }
-
-    // Create registration
-    const mgmtToken = await createRegistrationRecord(eventId, riderId, shareRegistration, notes)
 
     // Send confirmation email (fire-and-forget)
     const chapter = route.chapters
@@ -1091,12 +1114,6 @@ export async function completeRegistrationWithRider(
     riderId = typedNewRider.id
   }
 
-  // Check if already registered
-  const isDuplicate = await checkDuplicateRegistration(eventId, riderId)
-  if (isDuplicate) {
-    return { success: false, error: 'You are already registered for this event' }
-  }
-
   // Verify membership (same as registerForEvent / registerForPermanent)
   const completeChapterSlug = event.chapters?.slug
   const completeRealChapterId =
@@ -1120,6 +1137,9 @@ export async function completeRegistrationWithRider(
       trimmedTeamName,
       isTeamCaptain
     )
+    if (mgmtToken === 'duplicate') {
+      return { success: false, error: 'You are already registered for this event' }
+    }
     const chapter = event.chapters
     const fullName = `${trimmedFirstName} ${trimmedLastName}`
     sendRegistrationConfirmationEmail({
@@ -1162,6 +1182,9 @@ export async function completeRegistrationWithRider(
         trimmedTeamName,
         isTeamCaptain
       )
+      if (mgmtToken === 'duplicate') {
+        return { success: false, error: 'You are already registered for this event' }
+      }
       const chapter = event.chapters
       const fullName = `${trimmedFirstName} ${trimmedLastName}`
       sendRegistrationConfirmationEmail({
@@ -1193,8 +1216,8 @@ export async function completeRegistrationWithRider(
     }
   }
 
-  // Create registration
-  let mgmtToken: string
+  // Create registration (atomically checks for duplicates)
+  let mgmtToken: string | 'duplicate'
   try {
     mgmtToken = await createRegistrationRecord(
       eventId,
@@ -1208,6 +1231,10 @@ export async function completeRegistrationWithRider(
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Failed to complete registration'
     return { success: false, error: errorMessage }
+  }
+
+  if (mgmtToken === 'duplicate') {
+    return { success: false, error: 'You are already registered for this event' }
   }
 
   // Send confirmation email (fire-and-forget)
