@@ -332,7 +332,9 @@ export function ResultSubmissionForm({ token, initialData }: ResultSubmissionFor
 
       <form className="space-y-6" onSubmit={handleSubmit}>
         {error && (
-          <div className="p-3 rounded-lg bg-destructive/10 text-destructive text-sm">{error}</div>
+          <div role="alert" className="p-3 rounded-lg bg-destructive/10 text-destructive text-sm">
+            {error}
+          </div>
         )}
 
         {/* Status */}

@@ -92,6 +92,7 @@ export function RegistrationForm({
   const [loadingEvents, setLoadingEvents] = useState(false)
 
   const errorRef = useRef<HTMLDivElement>(null)
+  const successRef = useRef<HTMLDivElement>(null)
 
   // Load saved data on mount
   useEffect(() => {
@@ -113,6 +114,13 @@ export function RegistrationForm({
       errorRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
     }
   }, [error])
+
+  // Move focus to success message when registration completes
+  useEffect(() => {
+    if (success && successRef.current) {
+      successRef.current.focus()
+    }
+  }, [success])
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -240,7 +248,13 @@ export function RegistrationForm({
   if (success) {
     return (
       <div className={wrapperClassName}>
-        <div className="text-center py-8" data-testid="registration-success">
+        <div
+          ref={successRef}
+          tabIndex={-1}
+          role="status"
+          className="text-center py-8"
+          data-testid="registration-success"
+        >
           <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-green-100 dark:bg-green-900/30 mb-4">
             <svg
               className="w-6 h-6 text-green-600 dark:text-green-400"
