@@ -29,7 +29,10 @@ const BRM_TIME_LIMITS: Record<number, number> = {
  * - Fleche: 24 hours
  * - Populaires: Use distance / 15 km/h
  */
-function getEventDuration(distanceKm: number, eventType: string): { hours: number; minutes: number } {
+function getEventDuration(
+  distanceKm: number,
+  eventType: string
+): { hours: number; minutes: number } {
   let totalHours: number
 
   // Fleche is always 24 hours
@@ -40,7 +43,9 @@ function getEventDuration(distanceKm: number, eventType: string): { hours: numbe
     totalHours = BRM_TIME_LIMITS[distanceKm]
   } else if (eventType === 'brevet' && distanceKm >= 200) {
     // For brevets without exact match, interpolate or use closest
-    const distances = Object.keys(BRM_TIME_LIMITS).map(Number).sort((a, b) => a - b)
+    const distances = Object.keys(BRM_TIME_LIMITS)
+      .map(Number)
+      .sort((a, b) => a - b)
     totalHours = BRM_TIME_LIMITS[distances[0]] // Default to 200km limit
 
     for (let i = 0; i < distances.length - 1; i++) {
@@ -97,10 +102,7 @@ export async function GET(request: Request, { params }: RouteParams) {
 
   const dbSlug = getDbSlug(chapter)
   if (!dbSlug) {
-    return NextResponse.json(
-      { error: 'Chapter not found' },
-      { status: 404 }
-    )
+    return NextResponse.json({ error: 'Chapter not found' }, { status: 404 })
   }
 
   // Get chapter ID
@@ -111,10 +113,7 @@ export async function GET(request: Request, { params }: RouteParams) {
     .single()
 
   if (chapterError || !chapterData) {
-    return NextResponse.json(
-      { error: 'Chapter not found in database' },
-      { status: 404 }
-    )
+    return NextResponse.json({ error: 'Chapter not found in database' }, { status: 404 })
   }
 
   const typedChapter = chapterData as ChapterId
@@ -126,9 +125,11 @@ export async function GET(request: Request, { params }: RouteParams) {
       const today = new Date().toISOString().split('T')[0]
       const { data: events, error: eventsError } = await getSupabase()
         .from('events')
-        .select('id, slug, name, event_date, start_time, start_location, distance_km, event_type, description')
+        .select(
+          'id, slug, name, event_date, start_time, start_location, distance_km, event_type, description'
+        )
         .eq('chapter_id', chapterId)
-        .eq('status', 'scheduled')
+        .in('status', ['scheduled', 'completed', 'submitted'])
         .neq('event_type', 'permanent')
         .gte('event_date', today)
         .order('event_date', { ascending: true })
@@ -147,10 +148,7 @@ export async function GET(request: Request, { params }: RouteParams) {
   )()
 
   if (!events) {
-    return NextResponse.json(
-      { error: 'Failed to fetch events' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Failed to fetch events' }, { status: 500 })
   }
 
   // Convert events to iCal format
@@ -188,7 +186,7 @@ export async function GET(request: Request, { params }: RouteParams) {
       `${event.distance_km}km ${eventType}`,
       event.description || '',
       '',
-      `Details & Registration: ${siteUrl}/register/${event.slug}`
+      `Details & Registration: ${siteUrl}/register/${event.slug}`,
     ].filter(Boolean)
 
     return {
@@ -210,7 +208,10 @@ export async function GET(request: Request, { params }: RouteParams) {
       categories: [eventType, 'Cycling', 'Randonneuring'],
       status: 'CONFIRMED' as const,
       busyStatus: 'BUSY' as const,
-      organizer: { name: `Randonneurs Ontario - ${chapterInfo.name}`, email: `info@${siteHostname}` },
+      organizer: {
+        name: `Randonneurs Ontario - ${chapterInfo.name}`,
+        email: `info@${siteHostname}`,
+      },
     }
   })
 
@@ -221,11 +222,11 @@ export async function GET(request: Request, { params }: RouteParams) {
   })
 
   if (icsError || !icsContent) {
-    logError(icsError || new Error('iCal generation returned no content'), { operation: 'calendar.generateICS', context: { chapter } })
-    return NextResponse.json(
-      { error: 'Failed to generate calendar' },
-      { status: 500 }
-    )
+    logError(icsError || new Error('iCal generation returned no content'), {
+      operation: 'calendar.generateICS',
+      context: { chapter },
+    })
+    return NextResponse.json({ error: 'Failed to generate calendar' }, { status: 500 })
   }
 
   // Return iCal file with appropriate headers
