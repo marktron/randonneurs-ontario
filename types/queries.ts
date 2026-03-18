@@ -19,9 +19,6 @@ export type Result = Omit<Database['public']['Tables']['results']['Row'], 'finis
 }
 export type Registration = Database['public']['Tables']['registrations']['Row']
 export type RiderAward = Database['public']['Tables']['rider_awards']['Row']
-export type Membership = Database['public']['Tables']['memberships']['Row']
-export type MembershipInsert = Database['public']['Tables']['memberships']['Insert']
-
 // Membership type enum for type safety
 export type MembershipType =
   | 'Individual Membership'

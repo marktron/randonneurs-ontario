@@ -290,51 +290,6 @@ export type Database = {
         }
         Relationships: []
       }
-      memberships: {
-        Row: {
-          created_at: string | null
-          id: string
-          membership_id: number
-          rider_id: string
-          season: number
-          type: string
-          updated_at: string | null
-        }
-        Insert: {
-          created_at?: string | null
-          id?: string
-          membership_id: number
-          rider_id: string
-          season: number
-          type: string
-          updated_at?: string | null
-        }
-        Update: {
-          created_at?: string | null
-          id?: string
-          membership_id?: number
-          rider_id?: string
-          season?: number
-          type?: string
-          updated_at?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: 'memberships_rider_id_fkey'
-            columns: ['rider_id']
-            isOneToOne: false
-            referencedRelation: 'public_riders'
-            referencedColumns: ['id']
-          },
-          {
-            foreignKeyName: 'memberships_rider_id_fkey'
-            columns: ['rider_id']
-            isOneToOne: false
-            referencedRelation: 'riders'
-            referencedColumns: ['id']
-          },
-        ]
-      }
       news: {
         Row: {
           body: string
@@ -1004,6 +959,62 @@ export type Database = {
           first_name: string
           last_name: string
           share_registration: boolean
+        }[]
+      }
+      get_report_event_stats: {
+        Args: { p_chapter_id?: string; p_season: number }
+        Returns: {
+          distance_bucket: string
+          event_count: number
+          total_riders: number
+        }[]
+      }
+      get_report_membership_stats: {
+        Args: { p_chapter_id?: string; p_season: number }
+        Returns: {
+          new_members: number
+          prior_year_members: number
+          returning_members: number
+          total_members: number
+        }[]
+      }
+      get_report_non_renewed_riders: {
+        Args: { p_chapter_id?: string; p_season: number }
+        Returns: {
+          first_name: string
+          last_name: string
+          rider_id: string
+        }[]
+      }
+      get_report_participation_stats: {
+        Args: { p_chapter_id?: string; p_season: number }
+        Returns: {
+          total_dnf: number
+          total_dns: number
+          total_finishes: number
+          total_km: number
+          total_otl: number
+          unique_riders: number
+        }[]
+      }
+      get_report_top_riders: {
+        Args: { p_chapter_id?: string; p_limit?: number; p_season: number }
+        Returns: {
+          events_finished: number
+          first_name: string
+          last_name: string
+          rider_id: string
+          total_km: number
+        }[]
+      }
+      get_report_yoy_summary: {
+        Args: { p_chapter_id?: string; p_season: number }
+        Returns: {
+          events: number
+          members: number
+          riders: number
+          season: number
+          total_km: number
         }[]
       }
       get_rider_active_seasons: {
