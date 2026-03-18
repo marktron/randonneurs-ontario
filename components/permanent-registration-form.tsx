@@ -28,6 +28,7 @@ import {
 } from '@/components/ui/command'
 import { registerForPermanent, completeRegistrationWithRider } from '@/lib/actions/register'
 import { RiderMatchDialog } from '@/components/rider-match-dialog'
+import { MembershipErrorModal } from '@/components/membership-error-modal'
 import type { RiderMatchCandidate } from '@/lib/actions/rider-match'
 import type { ActiveRoute } from '@/lib/data/routes'
 
@@ -94,6 +95,11 @@ export function PermanentRegistrationForm({ routes }: PermanentRegistrationFormP
   // UI state
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
+
+  // Membership error state
+  const [membershipErrorVariant, setMembershipErrorVariant] = useState<
+    'no-membership' | 'trial-used' | null
+  >(null)
 
   // Fuzzy matching state
   const [matchDialogOpen, setMatchDialogOpen] = useState(false)
@@ -191,6 +197,8 @@ export function PermanentRegistrationForm({ routes }: PermanentRegistrationFormP
         setMatchCandidates(result.matchCandidates)
         setPendingEventId(result.pendingData.eventId)
         setMatchDialogOpen(true)
+      } else if (result.membershipError) {
+        setMembershipErrorVariant(result.membershipError)
       } else {
         setError(result.error || 'Registration failed')
       }
@@ -225,6 +233,9 @@ export function PermanentRegistrationForm({ routes }: PermanentRegistrationFormP
         })
         setSuccess(true)
         router.refresh()
+      } else if (result.membershipError) {
+        setMatchDialogOpen(false)
+        setMembershipErrorVariant(result.membershipError)
       } else {
         setMatchDialogOpen(false)
         setError(result.error || 'Registration failed')
@@ -605,6 +616,12 @@ export function PermanentRegistrationForm({ routes }: PermanentRegistrationFormP
         onSelectRider={(riderId) => handleRiderSelection(riderId)}
         onCreateNew={() => handleRiderSelection(null)}
         isPending={isPending}
+      />
+
+      <MembershipErrorModal
+        open={membershipErrorVariant !== null}
+        onClose={() => setMembershipErrorVariant(null)}
+        variant={membershipErrorVariant || 'no-membership'}
       />
     </div>
   )
