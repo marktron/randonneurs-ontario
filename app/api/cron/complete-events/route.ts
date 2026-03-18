@@ -41,18 +41,14 @@ export async function GET(request: Request) {
   const cronSecret = process.env.CRON_SECRET
 
   if (!cronSecret) {
-    logError(new Error('CRON_SECRET environment variable not configured'), { operation: 'complete-events.auth' })
-    return NextResponse.json(
-      { error: 'Server configuration error' },
-      { status: 500 }
-    )
+    logError(new Error('CRON_SECRET environment variable not configured'), {
+      operation: 'complete-events.auth',
+    })
+    return NextResponse.json({ error: 'Server configuration error' }, { status: 500 })
   }
 
   if (authHeader !== `Bearer ${cronSecret}`) {
-    return NextResponse.json(
-      { error: 'Unauthorized' },
-      { status: 401 }
-    )
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
   try {
@@ -67,14 +63,16 @@ export async function GET(request: Request) {
 
     if (fetchError) {
       logError(fetchError, { operation: 'complete-events.fetchEvents' })
-      return NextResponse.json(
-        { error: 'Failed to fetch events' },
-        { status: 500 }
-      )
+      return NextResponse.json({ error: 'Failed to fetch events' }, { status: 500 })
     }
 
     const scheduledEvents = (events || []) as EventForCronCompletion[]
-    const completedEvents: { id: string; name: string; resultsCreated: number; emailsSent: number }[] = []
+    const completedEvents: {
+      id: string
+      name: string
+      resultsCreated: number
+      emailsSent: number
+    }[] = []
     const errors: { id: string; name: string; error: string }[] = []
 
     // Check each event and mark as completed if closing time has passed
@@ -82,22 +80,39 @@ export async function GET(request: Request) {
       const closingTime = calculateClosingTime(event)
 
       if (now > closingTime) {
+        // Atomically set status to 'completed' only if still 'scheduled'.
+        // This prevents duplicate processing if two cron runs overlap.
         const updateData: EventUpdate = { status: 'completed' }
-        const { error: updateError } = await supabase
+        const { data: updated, error: updateError } = await supabase
           .from('events')
           .update(updateData)
           .eq('id', event.id)
+          .eq('status', 'scheduled')
+          .select('id')
+          .maybeSingle()
 
         if (updateError) {
-          logError(updateError, { operation: 'complete-events.updateEvent', context: { eventId: event.id } })
+          logError(updateError, {
+            operation: 'complete-events.updateEvent',
+            context: { eventId: event.id },
+          })
           errors.push({ id: event.id, name: event.name, error: updateError.message })
+          continue
+        }
+
+        if (!updated) {
+          // Another run already completed this event — skip it
           continue
         }
 
         console.log(`Auto-completed event: ${event.name} (${event.id})`)
 
         // Create pending results and send emails
-        const { resultsCreated, emailsSent, errors: resultErrors } = await createPendingResultsAndSendEmails(event)
+        const {
+          resultsCreated,
+          emailsSent,
+          errors: resultErrors,
+        } = await createPendingResultsAndSendEmails(event)
 
         completedEvents.push({
           id: event.id,
@@ -122,9 +137,6 @@ export async function GET(request: Request) {
     })
   } catch (error) {
     logError(error, { operation: 'complete-events' })
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
