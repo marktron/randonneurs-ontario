@@ -127,9 +127,9 @@ export default async function AdminRidersPage({ searchParams }: AdminRidersPageP
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold">Riders</h1>
+        <h1 className="text-3xl font-bold">Members</h1>
         <p className="text-muted-foreground">
-          View registered riders and their participation history
+          View registered members and their participation history
         </p>
       </div>
 

@@ -63,19 +63,6 @@ interface RidersTableProps {
 // Match the order used in the main site navbar
 const CHAPTER_ORDER = ['Huron', 'Ottawa', 'Simcoe-Muskoka', 'Toronto']
 
-function getGenderBadge(gender: string | null) {
-  switch (gender) {
-    case 'M':
-      return <Badge variant="outline">M</Badge>
-    case 'F':
-      return <Badge variant="outline">F</Badge>
-    case 'X':
-      return <Badge variant="outline">X</Badge>
-    default:
-      return <span className="text-muted-foreground">—</span>
-  }
-}
-
 function buildPageUrl(page: number, searchQuery: string, chapterFilter: string | null) {
   const params = new URLSearchParams()
   if (searchQuery) params.set('q', searchQuery)
@@ -260,8 +247,6 @@ export function RidersTable({
                 />
               </TableHead>
               <TableHead>Name</TableHead>
-              <TableHead>Email</TableHead>
-              <TableHead>Gender</TableHead>
               <TableHead className="text-center">Registrations</TableHead>
               <TableHead className="text-center">Results</TableHead>
               <TableHead>Chapter</TableHead>
@@ -273,7 +258,7 @@ export function RidersTable({
           <TableBody>
             {riders.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={10} className="text-center text-muted-foreground">
+                <TableCell colSpan={8} className="text-center text-muted-foreground">
                   {searchQuery ? 'No riders found matching your search' : 'No riders found'}
                 </TableCell>
               </TableRow>
@@ -297,8 +282,6 @@ export function RidersTable({
                     <TableCell className="font-medium">
                       {rider.first_name} {rider.last_name}
                     </TableCell>
-                    <TableCell className="text-muted-foreground">{rider.email || '—'}</TableCell>
-                    <TableCell>{getGenderBadge(rider.gender)}</TableCell>
                     <TableCell className="text-center">
                       {regCount > 0 ? (
                         <Badge variant="secondary">{regCount}</Badge>

@@ -30,6 +30,7 @@ import {
   Megaphone,
   Navigation,
   BookOpen,
+  BarChart3,
 } from 'lucide-react'
 import { logout } from '@/lib/actions/auth'
 import { isSuperAdmin, isFullAdmin } from '@/lib/auth/roles'
@@ -59,7 +60,7 @@ const mainNavItems = [
     testId: 'nav-routes',
   },
   {
-    title: 'Riders',
+    title: 'Members',
     href: '/admin/riders',
     icon: Users,
     testId: 'nav-riders',
@@ -69,6 +70,12 @@ const mainNavItems = [
     href: '/admin/results',
     icon: Trophy,
     testId: 'nav-results',
+  },
+  {
+    title: 'Chapter Reports',
+    href: '/admin/reports',
+    icon: BarChart3,
+    testId: 'nav-reports',
   },
   {
     title: 'News',

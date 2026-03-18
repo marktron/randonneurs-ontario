@@ -1,6 +1,6 @@
 # Admin guide
 
-_Last updated: Mar 2, 2026_
+_Last updated: Mar 18, 2026_
 
 If you have an admin account on the Randonneurs Ontario site, this is your reference for how everything works.
 
@@ -106,6 +106,33 @@ Click "Add Route" and fill in:
 - **Description and notes**: Markdown-supported fields for route details.
 
 Routes can be toggled active or inactive. Inactive routes won't show up as options when creating new events.
+
+## Members
+
+The [Members](/admin/riders) page lists all riders in the system. You can search by name and filter by chapter (based on the rider's most recent membership).
+
+Click any rider to open their detail page, which shows:
+
+- **Rider details**: edit their name and email address.
+- **Season history**: a year-by-year sidebar (2018 to present) showing which years they held a membership (green dot), how many events they finished, and their total distance for each season.
+- **Registrations and results**: tables of all their event registrations and results, with links to the event detail pages.
+
+The summary line at the top shows their gender, total registrations, total results, and all-time distance.
+
+## Chapter Reports
+
+The [Chapter Reports](/admin/reports) page gives you a season-level overview of your chapter's activity. Use the season and chapter dropdowns to filter the data.
+
+The page shows:
+
+- **Summary cards**: total members (new vs returning), retention rate compared to the prior year, unique riders, and total distance ridden.
+- **Events by Distance**: how many events were held at each distance (Populaire, 200, 300, 400, 600, 1000+) and how many riders finished them.
+- **Participation Breakdown**: counts of finished, DNF, DNS, and OTL results.
+- **Top Riders**: the 10 riders with the most distance for the season, with links to their profiles.
+- **Year over Year**: a 5-season comparison table showing members, events, riders, and total distance.
+- **Rode Without Membership**: riders who have finished results this season but don't have a membership on file. This is useful for outreach — these riders may need a reminder to renew.
+
+Chapter admins see their own chapter's data by default. Full admins can switch between chapters or view all chapters combined.
 
 ## Results
 
