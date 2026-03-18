@@ -275,35 +275,7 @@ export async function deleteEvent(eventId: string): Promise<ActionResult> {
       return { success: false, error: 'Cannot delete past events' }
     }
 
-    // Delete registrations for this event first
-    const { error: regDeleteError } = await getSupabaseAdmin()
-      .from('registrations')
-      .delete()
-      .eq('event_id', eventId)
-
-    if (regDeleteError) {
-      return handleSupabaseError(
-        regDeleteError,
-        { operation: 'deleteEvent.registrations' },
-        'Failed to delete event registrations'
-      )
-    }
-
-    // Delete results for this event (shouldn't exist for future events, but just in case)
-    const { error: resultsDeleteError } = await getSupabaseAdmin()
-      .from('results')
-      .delete()
-      .eq('event_id', eventId)
-
-    if (resultsDeleteError) {
-      return handleSupabaseError(
-        resultsDeleteError,
-        { operation: 'deleteEvent.results' },
-        'Failed to delete event results'
-      )
-    }
-
-    // Delete the event
+    // Delete the event (registrations and results cascade-delete automatically)
     const { error: deleteError } = await getSupabaseAdmin()
       .from('events')
       .delete()
