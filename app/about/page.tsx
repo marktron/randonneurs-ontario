@@ -19,8 +19,8 @@ export default function AboutPage() {
 
   return (
     <PageShell>
-      <PageHero eyebrow="About" title={page.title} description={page.description} />
-      <div className="content-container py-16 md:py-20">
+      <PageHero eyebrow="About" title={page.title} description={page.description} editorial />
+      <div className="content-container-editorial py-16 md:py-20">
         <MarkdownContent content={page.content} />
       </div>
     </PageShell>

@@ -1,6 +1,7 @@
 @import 'tailwindcss';
 @import 'tw-animate-css';
 @import 'shadcn/tailwind.css';
+@plugin "@tailwindcss/typography";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -50,11 +51,11 @@
 
 :root {
   --background: oklch(1 0 0);
-  --foreground: oklch(0.13 0.028 261.692);
+  --foreground: oklch(37.1% 0 0);
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.13 0.028 261.692);
+  --card-foreground: oklch(37.1% 0 0);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.13 0.028 261.692);
+  --popover-foreground: oklch(37.1% 0 0);
   --primary: oklch(0.577 0.245 27.325);
   --primary-foreground: oklch(0.971 0.013 17.38);
   --secondary: oklch(0.967 0.001 286.375);
@@ -150,12 +151,38 @@
   .eyebrow-hero {
     @apply text-[11px] font-bold tracking-[0.3em] uppercase;
   }
-  /* Standard content container for most pages */
+  /* Standard content container for app/data pages */
   .content-container {
-    @apply mx-auto max-w-5xl px-6 sm:px-6;
+    @apply mx-auto max-w-5xl px-6;
+  }
+  /* Narrow reading column — matches prose-lg (65ch at 18px) */
+  .content-container-editorial {
+    @apply mx-auto max-w-prose px-6 text-lg;
   }
   /* Wide container for two-column layouts */
   .content-container-wide {
     @apply mx-auto max-w-6xl px-4 sm:px-6;
   }
+}
+
+/* Editorial prose — maps @tailwindcss/typography color slots to the shadcn theme.
+   Dark mode works automatically because the theme variables switch in .dark. */
+@utility prose-editorial {
+  --tw-prose-body: var(--foreground);
+  --tw-prose-headings: var(--foreground);
+  --tw-prose-lead: var(--muted-foreground);
+  --tw-prose-links: var(--foreground);
+  --tw-prose-bold: var(--foreground);
+  --tw-prose-counters: var(--primary);
+  --tw-prose-bullets: var(--primary);
+  --tw-prose-hr: var(--border);
+  --tw-prose-quotes: var(--foreground);
+  --tw-prose-quote-borders: var(--primary);
+  --tw-prose-captions: var(--muted-foreground);
+  --tw-prose-kbd: var(--foreground);
+  --tw-prose-code: var(--foreground);
+  --tw-prose-pre-code: var(--muted-foreground);
+  --tw-prose-pre-bg: var(--muted);
+  --tw-prose-th-borders: var(--border);
+  --tw-prose-td-borders: var(--border);
 }

@@ -14,7 +14,7 @@ export default async function NewsPage() {
 
   return (
     <PageShell>
-      <div className="mx-auto max-w-3xl px-6 py-16">
+      <div className="content-container-editorial pt-20 md:pt-28 pb-16 md:pb-20">
         <h1 className="font-serif text-4xl tracking-tight md:text-5xl">News &amp; Notices</h1>
 
         {items.length === 0 ? (
