@@ -20,7 +20,9 @@
   <div className="absolute inset-0 bg-gradient-to-t from-neutral-900/70 to-neutral-900/20" />
   <div className="relative mx-auto max-w-4xl px-6 py-16 md:py-20">
     <p className="eyebrow-hero text-neutral-200 text-shadow-lg">{eyebrow}</p>
-    <h1 className="font-serif text-5xl md:text-6xl lg:text-7xl tracking-tight text-neutral-100 text-shadow-lg">{title}</h1>
+    <h1 className="font-serif text-5xl md:text-6xl tracking-tight text-neutral-100 text-shadow-lg">
+      {title}
+    </h1>
   </div>
 </div>
 ```
@@ -41,6 +43,7 @@ Lines 76-140: Hero image block (lines 76-89) + Event header block (lines 91-140)
 ### Task 1: Restructure event hero with overlay
 
 **Files:**
+
 - Modify: `app/register/[slug]/page.tsx:74-140`
 
 **Step 1: Replace the hero image + header blocks**
@@ -143,6 +146,7 @@ Replace lines 74-140 (from `return (` through the closing `</header>`) with the 
 Run: `npm run dev` and navigate to an event with an image (e.g. `/register/scoops-105`)
 
 Check:
+
 - Badge and title appear bottom-left on the image
 - Gradient is visible from bottom
 - Text is legible (white on dark gradient)
@@ -151,6 +155,7 @@ Check:
 - Scroll down — rest of page unchanged
 
 Also check an event without an image:
+
 - Full header renders on white background as before
 
 **Step 3: Commit**
@@ -165,6 +170,7 @@ git commit -m "feat: overlay event title on hero image"
 ### Task 2: Update e2e test
 
 **Files:**
+
 - Modify: `tests/e2e/registration.spec.ts`
 
 The existing e2e test at line 23 checks `page.locator('h1').toBeVisible()`. With the overlay, the h1 is now inside the image container rather than the header. The test should still pass since h1 is still visible, but verify.
@@ -186,4 +192,5 @@ git commit -m "test: update e2e test for hero overlay"
 ### Task 3: Update documentation
 
 **Files:**
+
 - Modify: `docs/plans/2026-02-26-event-hero-overlay-design.md` — mark plan as completed

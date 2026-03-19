@@ -1,13 +1,11 @@
 ---
-title: About Randonneurs Ontario
+title: Randonneurs Ontario
 slug: about
-description: Learn about randonneuring and Randonneurs Ontario
+description: Ontario’s home for long-distance cycling and randonneuring.
 lastUpdated: 2026-03-09
 ---
 
-# About Randonneurs Ontario
-
-Randonneurs Ontario is the provincial organization for long-distance cycling in Ontario, Canada. We are affiliated with [Audax Club Parisien](https://www.audax-club-parisien.com), the international governing body for randonneuring, and [Randonneurs Mondiaux](https://www.randonneursmondiaux.org), the sanctioning body for long brevets of 1200 km and above.
+Randonneurs Ontario is the provincial organization for randonneuring in Ontario. We organize brevets across the province and are affiliated with [Audax Club Parisien](https://www.audax-club-parisien.com), the international governing body for randonneuring, and [Randonneurs Mondiaux](https://www.randonneursmondiaux.org), which sanctions brevets of 1200 km and longer.
 
 ## What is Randonneuring?
 
