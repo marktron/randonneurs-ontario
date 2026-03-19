@@ -60,9 +60,14 @@ async function getRiderResults(riderId: string): Promise<ResultWithEventForRider
     `
     )
     .eq('rider_id', riderId)
-    .order('created_at', { ascending: false })
 
-  return (data as ResultWithEventForRider[]) ?? []
+  const results = (data as ResultWithEventForRider[]) ?? []
+  results.sort((a, b) => {
+    const dateA = a.events?.event_date ?? ''
+    const dateB = b.events?.event_date ?? ''
+    return dateB.localeCompare(dateA)
+  })
+  return results
 }
 
 async function getRiderMemberships(riderId: string): Promise<number[]> {

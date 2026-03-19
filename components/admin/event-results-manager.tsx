@@ -2,6 +2,7 @@
 
 import { useState, useTransition, useCallback } from 'react'
 import Image from 'next/image'
+import Link from 'next/link'
 import {
   Table,
   TableBody,
@@ -321,7 +322,9 @@ function RiderRow({
     <TableRow className={isPending ? 'opacity-60' : undefined}>
       <TableCell className="font-medium">
         <div>
-          {riderName}
+          <Link href={`/admin/riders/${participant.riderId}`} className="hover:underline">
+            {riderName}
+          </Link>
           {participant.registrationStatus === 'incomplete: membership' && (
             <Badge variant="destructive" className="ml-2">
               Missing membership
