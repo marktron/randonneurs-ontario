@@ -30,12 +30,12 @@ export default async function AdminNewNewsPage() {
           </Link>
         </Button>
         <div>
-          <h1 className="text-3xl font-bold">New News Item</h1>
+          <h1 className="text-3xl font-bold">Post a News Item</h1>
           <p className="text-muted-foreground">Create a new notice or announcement</p>
         </div>
       </div>
 
-      <NewsEditor isNew />
+      <NewsEditor isNew initialIsPublished />
     </div>
   )
 }
