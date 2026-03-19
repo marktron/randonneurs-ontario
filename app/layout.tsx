@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { Noto_Sans, Noto_Serif } from 'next/font/google'
 import { AuthRedirectHandler } from '@/components/auth-redirect-handler'
+import { OrganizationJsonLd } from '@/components/structured-data'
 import './globals.css'
 
 const notoSans = Noto_Sans({ variable: '--font-sans' })
@@ -33,11 +34,13 @@ export const metadata: Metadata = {
     title: 'Randonneurs Ontario',
     description:
       'Long-distance cycling club in Ontario, Canada. Join us for brevets, populaires, and other randonneuring events.',
+    images: [{ url: '/og-default.jpg', width: 1200, height: 630, alt: 'Randonneurs Ontario' }],
   },
   twitter: {
     card: 'summary_large_image',
     title: 'Randonneurs Ontario',
     description: 'Long-distance cycling club in Ontario, Canada.',
+    images: ['/og-default.jpg'],
   },
   robots: {
     index: true,
@@ -53,6 +56,9 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${notoSans.variable} ${notoSerif.variable} antialiased`}>
       <body>
+        <OrganizationJsonLd
+          baseUrl={process.env.NEXT_PUBLIC_SITE_URL ?? 'https://randonneursontario.ca'}
+        />
         <AuthRedirectHandler />
         {children}
       </body>

@@ -1,7 +1,13 @@
+import type { Metadata } from 'next'
 import { PageShell } from '@/components/page-shell'
 import { getPublishedNews } from '@/lib/data/news'
 import { createSlug } from '@/lib/utils'
 import { MarkdownContent } from '@/components/markdown-content'
+
+export const metadata: Metadata = {
+  title: 'News & Notices',
+  description: 'Latest news, announcements, and notices from Randonneurs Ontario.',
+}
 
 export default async function NewsPage() {
   const items = await getPublishedNews()

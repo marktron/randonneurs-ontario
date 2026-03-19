@@ -14,6 +14,7 @@ import {
 } from '@/lib/data/events'
 import { MapPinIcon, CalendarIcon } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
+import { EventJsonLd } from '@/components/structured-data'
 
 interface PageProps {
   params: Promise<{ slug: string }>
@@ -96,8 +97,19 @@ export default async function RegisterPage({ params }: PageProps) {
     isFleche ? getFlecheTeams(event.id) : Promise.resolve([]),
   ])
 
+  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://randonneursontario.ca'
+
   return (
     <PageShell>
+      <EventJsonLd
+        name={flecheDisplayName || `${event.name} ${event.distance}km`}
+        date={event.date}
+        startTime={event.startTime}
+        location={event.startLocation}
+        description={event.description}
+        url={`${baseUrl}/register/${slug}`}
+        imageUrl={event.imageUrl}
+      />
       {/* Hero Section */}
       {event.imageUrl ? (
         <div className="relative w-full h-[30vh] md:h-[60vh] min-h-[200px] md:min-h-[350px] max-h-[550px] overflow-hidden">
