@@ -12,6 +12,10 @@
           "href": "/intro"
         },
         {
+          "label": "Your First Brevet",
+          "href": "/your-first-brevet"
+        },
+        {
           "label": "Blog",
           "href": "https://blog.randonneursontario.ca",
           "external": true
