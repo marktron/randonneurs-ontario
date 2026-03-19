@@ -5,8 +5,6 @@ description: Everything you need to know to sign up, show up, and finish your fi
 lastUpdated: 2026-03-19
 ---
 
-# Your First Brevet
-
 You've been riding for a while. Maybe you did a century last summer, or you've been stringing together longer weekend rides and wondering what's next. Someone mentioned randonneuring, you looked it up, and now you're staring at a 200 km brevet on [the calendar](/calendar) thinking "can I actually do this?"
 
 For most riders who are comfortable riding 100–140 km, yes. And you'll be in good company. Here's what you need to know.
