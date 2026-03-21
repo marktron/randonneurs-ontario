@@ -1,13 +1,72 @@
-Always ask me before resetting the local supabase database.
+# Development Rules
 
-I am not a particularly talented programmer, but I am a very good designer and product manager. If I propose a solution that isn't right, don't hesitate to push back or offer a better solution.
+## Critical Safety
 
-When creating a new feature, remember to create documentation for it by creating/updating the relevant files in /docs, and create or update test coverage for the new feature.
+- Always ask before resetting the local Supabase database.
 
-Consult docs/style_guide.md when doing any frontend design work.
+## Collaboration
 
-The app is usually already running at http://localhost:3000/, check to see if you can use that instance before spinning up another dev server.
+- Push back when a proposed direction seems weak, and suggest a better option.
 
-When making UI changes, visually verify the result by using Playwright to take a screenshot of the affected page(s). Navigate to the relevant URL and capture a screenshot. Review the screenshot to confirm the change looks correct before considering the task done.
+## Discovery Before Implementation
 
-When manual testing reveals a bug, write a failing test that reproduces it first, then fix the code and confirm the test passes (red/green TDD).
+- Before modifying database queries or adding constraints, check existing CHECK constraints, triggers, schema definitions, and enum types. If unsure, query the schema first.
+- Before building a new feature, grep the codebase for how similar features are currently implemented. Follow existing patterns unless there's a reason to diverge.
+- For features touching multiple concerns (DB, server actions, UI, email), identify edge cases from the data — NULLs, shared references (e.g., multiple records pointing to the same parent), default values — before writing code.
+
+## Feature Work Requirements
+
+- For new features, update or add documentation in `docs/`.
+- For new features, add or update test coverage.
+
+## Frontend and UI
+
+- Consult `docs/style_guide.md` for frontend design work.
+- Before starting a new dev server, check whether the app is already running at `http://localhost:3000/`.
+- For UI changes, use Playwright to capture screenshots of affected pages and visually verify the result.
+- Exception: this screenshot requirement does not apply to work in `app/admin/` (login may be unavailable).
+
+## Code Quality
+
+- This is a TypeScript/Next.js project. Keep type safety intact and run `tsc --noEmit` (or equivalent) before considering work complete.
+
+## Session Start
+
+- Begin sessions by running `npm test && npm run typecheck` to establish a passing baseline before making any changes.
+
+## Testing
+
+- Run the full test suite (`npm test` or equivalent) after changes and before committing.
+- When manual testing reveals a bug, write a failing test first, then fix the bug and confirm the test passes (red/green TDD).
+- For bug fixes generally, prefer red/green TDD: write a failing test that reproduces the issue, confirm it fails, then implement the fix.
+
+## Verification Commands
+
+- Type safety: `npm run typecheck` (or `tsc --noEmit`).
+- Linting: `npm run lint`.
+- Tests: `npm test`.
+
+## Required vs Optional Verification
+
+- During active iteration: run targeted checks as needed for speed.
+- Before marking work complete: run typecheck and lint.
+- Before committing: run the full test suite.
+
+## Fast Path for Docs-Only Changes
+
+- If changes are limited to docs/markdown and do not affect executable code or configs, typecheck/lint/tests can be skipped.
+- If there is any uncertainty about impact, run the normal verification commands.
+
+## Subagents
+
+- Use subagents for token-heavy exploration (e.g., auditing many test files, searching across large directories) to keep the main context clean.
+- For large audits or multi-file reviews, dispatch a subagent and have it return a concise summary of findings rather than dumping raw results into the main session.
+
+## Completion Checklist
+
+- Documentation updated (for new features).
+- Tests added or updated (for new features/bug fixes).
+- UI screenshot captured and reviewed (except `app/admin/`).
+- Typecheck passed.
+- Lint passed.
+- Full tests passed (before commit).
