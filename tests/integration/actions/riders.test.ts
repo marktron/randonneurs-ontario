@@ -245,7 +245,32 @@ describe('createRider', () => {
       const insertData = insertCalls[0].args![0] as Record<string, unknown>
       expect(insertData.first_name).toBe('John')
       expect(insertData.last_name).toBe('Doe')
-      expect(insertData.slug).toBeDefined()
+      expect(insertData.slug).toBe('john-doe')
+    })
+
+    it('retries with numeric suffix on slug collision', async () => {
+      // First attempt: slug collision (23505)
+      mockModule.__mockInsertError({
+        code: '23505',
+        message: 'duplicate key value violates unique constraint "riders_slug_key"',
+        details: '',
+      })
+      // Second attempt: success with slug "john-doe-2"
+      mockModule.__mockInsertSuccess({ id: 'new-rider-id' })
+
+      const result = await createRider({ firstName: 'John', lastName: 'Doe' })
+
+      expect(result.success).toBe(true)
+      expect(result.riderId).toBe('new-rider-id')
+
+      const insertCalls = mockModule.__calls.filter(
+        (c) => c.table === 'riders' && c.method === 'insert'
+      )
+      expect(insertCalls).toHaveLength(2)
+      const firstSlug = (insertCalls[0].args![0] as Record<string, unknown>).slug
+      const secondSlug = (insertCalls[1].args![0] as Record<string, unknown>).slug
+      expect(firstSlug).toBe('john-doe')
+      expect(secondSlug).toBe('john-doe-2')
     })
 
     it('creates rider successfully with email', async () => {
