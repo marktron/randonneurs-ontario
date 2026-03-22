@@ -130,7 +130,7 @@ Your trial membership was used for a previous event this season. Please upgrade 
   const text = `
 Hi ${data.registrantName},
 ${membershipWarningText}
-Thanks for your interest in our ${rideName}. We've received your registration request and we'll be following up if we need anything more.
+Thanks for your interest in ${rideName}. We've received your registration request and we'll be following up if we need anything more.
 
 Rider name: ${data.registrantName}
 Ride: ${rideName}
@@ -180,7 +180,7 @@ https://randonneursontario.ca
 <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
   <p>Hi ${safe.registrantName},</p>
 ${membershipWarningHtml}
-  <p>Thanks for your interest in our <strong>${safe.rideName}</strong>. We've received your registration request and we'll be following up if we need anything more.</p>
+  <p>Thanks for your interest in <strong>${safe.rideName}</strong>. We've received your registration request and we'll be following up if we need anything more.</p>
 
   <table style="width: 100%; border-collapse: collapse; margin: 24px 0;">
     <tr>
