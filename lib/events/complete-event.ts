@@ -125,7 +125,7 @@ export async function createPendingResultsAndSendEmails(
   }
 
   // Send emails to riders with their submission links
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://randonneursontario.ca'
+  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://randonneursontario.ca'
 
   for (const result of created) {
     const submissionUrl = `${baseUrl}/results/submit/${result.submissionToken}`

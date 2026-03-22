@@ -132,7 +132,7 @@ function buildRouteUrl(
 }
 
 function buildManagementUrl(managementToken: string): string {
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://randonneursontario.ca'
+  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://randonneursontario.ca'
   return `${baseUrl}/registration/manage/${managementToken}`
 }
 

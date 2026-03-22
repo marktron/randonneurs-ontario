@@ -212,7 +212,7 @@ export async function cancelRegistration(
 
   // Send cancellation email (fire-and-forget)
   if (reg.riders.email) {
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://randonneursontario.ca'
+    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://randonneursontario.ca'
     const riderName = `${reg.riders.first_name} ${reg.riders.last_name}`
     sendCancellationConfirmationEmail({
       registrantName: riderName,
