@@ -54,6 +54,7 @@ describe('ResultSubmissionForm', () => {
     riderEmail: 'john@example.com',
     eventDate: '2025-05-15',
     eventDistance: 200,
+    eventType: 'brevet',
     chapterName: 'Toronto',
     chapterSlug: 'toronto',
     riderId: 'rider-1',
@@ -156,6 +157,32 @@ describe('ResultSubmissionForm', () => {
 
   // Note: File deletion tests require files to be displayed, which needs status="finished"
   // to be set via Radix Select. This flow is covered by E2E tests.
+
+  describe('populaire events', () => {
+    it('hides control card photos for populaires', () => {
+      render(
+        <ResultSubmissionForm
+          token="test-token-123"
+          initialData={{ ...mockInitialData, eventType: 'populaire' }}
+        />
+      )
+
+      // "Finished" is pre-selected, so ride evidence should show, but not control cards
+      expect(screen.getByText('Elapsed Time')).toBeInTheDocument()
+      expect(screen.queryByText('Control Card Photos')).not.toBeInTheDocument()
+    })
+
+    it('shows control card photos for brevets', () => {
+      render(
+        <ResultSubmissionForm
+          token="test-token-123"
+          initialData={{ ...mockInitialData, eventType: 'brevet' }}
+        />
+      )
+
+      expect(screen.getByText('Control Card Photos')).toBeInTheDocument()
+    })
+  })
 
   describe('disabled state', () => {
     it('shows message when canSubmit is false', () => {

@@ -463,8 +463,8 @@ export function ResultSubmissionForm({ token, initialData }: ResultSubmissionFor
           </div>
         )}
 
-        {/* Control Card Photos - only show if finished */}
-        {status === 'finished' && (
+        {/* Control Card Photos - only show if finished and not a populaire */}
+        {status === 'finished' && initialData.eventType !== 'populaire' && (
           <fieldset
             className="bg-muted/50 border border-border rounded-lg p-4 space-y-4"
             disabled={isPending}

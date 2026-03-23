@@ -20,6 +20,7 @@ export interface ResultSubmissionData {
   eventName: string
   eventDate: string
   eventDistance: number
+  eventType: string
   chapterName: string
   chapterSlug: string // For fetching suggested events
   riderId: string // For fetching upcoming registrations
@@ -65,6 +66,7 @@ export async function getResultByToken(token: string): Promise<ActionResult<Resu
       events (
         id,
         name,
+        event_type,
         event_date,
         distance_km,
         status,
@@ -90,6 +92,7 @@ export async function getResultByToken(token: string): Promise<ActionResult<Resu
     events: {
       id: string
       name: string
+      event_type: string
       event_date: string
       distance_km: number
       status: string
@@ -113,6 +116,7 @@ export async function getResultByToken(token: string): Promise<ActionResult<Resu
       eventName: event.name,
       eventDate: event.event_date,
       eventDistance: event.distance_km,
+      eventType: event.event_type,
       chapterName: event.chapters?.name || 'Randonneurs Ontario',
       chapterSlug: event.chapters?.slug || '',
       riderId: rider.id,
