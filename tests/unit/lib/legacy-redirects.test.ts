@@ -37,7 +37,8 @@ describe('LEGACY_EVENT_MAP', () => {
   })
 
   it('maps Wizard of Oz 100km populaire correctly', () => {
-    expect(LEGACY_EVENT_MAP['1400']).toBe('wizard-of-oz-100km-2026-03-28')
+    // Override: production slug was created via admin tool without 'km' suffix
+    expect(LEGACY_EVENT_MAP['1400']).toBe('the-wizard-of-oz-100-2026-03-28')
   })
 
   it('maps event with apostrophe in name', () => {

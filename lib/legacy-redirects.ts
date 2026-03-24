@@ -97,13 +97,13 @@ const schedule = [
   { id: '1337', route: 'to be made', distance: '100', date: '2026-07-11' },
   { id: '1284', route: 'Much Ado About Nothing', distance: '200', date: '2026-07-11' },
   { id: '1387', route: 'Couchiching', distance: '120', date: '2026-07-11' },
-  { id: '1286', route: 'Griddlecake', distance: '1000', date: '2026-07-16' },
-  { id: '1285', route: 'Waffle', distance: '1200', date: '2026-07-16' },
-  { id: '1287', route: 'Hotcake', distance: '300', date: '2026-07-18' },
+  { id: '1286', route: 'Waffle 1000', distance: '1000', date: '2026-07-16' },
+  { id: '1285', route: 'Waffle 1200', distance: '1200', date: '2026-07-16' },
+  { id: '1287', route: 'Waffle 300', distance: '300', date: '2026-07-18' },
   { id: '1370', route: 'Aldershot-Erie', distance: '200', date: '2026-07-18' },
   { id: '1338', route: 'Maberly', distance: '200', date: '2026-07-18' },
-  { id: '1289', route: 'Blini', distance: '100', date: '2026-07-19' },
-  { id: '1288', route: 'Crepe', distance: '200', date: '2026-07-19' },
+  { id: '1289', route: 'Waffle 100', distance: '100', date: '2026-07-19' },
+  { id: '1288', route: 'Waffle 200', distance: '200', date: '2026-07-19' },
   { id: '1372', route: 'Belfountain', distance: '160', date: '2026-07-25' },
   { id: '1371', route: 'Kissing Bridge', distance: '300', date: '2026-07-25' },
   { id: '1388', route: 'Up and Back', distance: '300', date: '2026-07-25' },
@@ -171,9 +171,13 @@ const schedule = [
 ] as const
 
 /** Map of old Sched_Id to new event slug. */
-export const LEGACY_EVENT_MAP: Record<string, string> = Object.fromEntries(
-  schedule.map(({ id, route, distance, date }) => [
-    id,
-    `${createSlug(route)}-${distance}km-${date}`,
-  ])
-)
+export const LEGACY_EVENT_MAP: Record<string, string> = {
+  ...Object.fromEntries(
+    schedule.map(({ id, route, distance, date }) => [
+      id,
+      `${createSlug(route)}-${distance}km-${date}`,
+    ])
+  ),
+  // Overrides for slugs that don't follow the standard formula
+  '1400': 'the-wizard-of-oz-100-2026-03-28',
+}

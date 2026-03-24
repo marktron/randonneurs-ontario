@@ -94,7 +94,8 @@ export async function createEvent(data: CreateEventData): Promise<ActionResult<{
     }
 
     // Generate slug from name, distance, and date
-    const slug = createSlug(`${name}-${distanceKm}-${eventDate}`)
+    // Format: {name}-{distance}km-{date} to match the import script
+    const slug = `${createSlug(name)}-${distanceKm}km-${eventDate}`
 
     const insertData: EventInsert = {
       slug,
