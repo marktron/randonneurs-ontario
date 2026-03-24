@@ -199,7 +199,7 @@ describe('getEventsByChapter', () => {
         distance_km: 200,
         start_location: 'Toronto',
         start_time: '08:00',
-        registrations: [{ count: 5 }],
+        public_registrations: [{ count: 5 }],
       },
     ]
 
@@ -226,7 +226,7 @@ describe('getEventsByChapter', () => {
         distance_km: 200,
         start_location: null,
         start_time: null,
-        registrations: [],
+        public_registrations: [],
       },
     ]
 
@@ -279,7 +279,7 @@ describe('getEventsByChapter', () => {
         distance_km: 200,
         start_location: 'Toronto',
         start_time: '08:00',
-        registrations: [{ count: 3 }],
+        public_registrations: [{ count: 3 }],
       },
     ])
     // Second query: fleche events
@@ -293,7 +293,7 @@ describe('getEventsByChapter', () => {
         distance_km: 360,
         start_location: 'Various',
         start_time: '06:00',
-        registrations: [{ count: 8 }],
+        public_registrations: [{ count: 8 }],
       },
     ])
 
@@ -333,7 +333,7 @@ describe('getPermanentEvents', () => {
         distance_km: 200,
         start_location: 'Toronto',
         start_time: '09:00',
-        registrations: [{ count: 2 }],
+        public_registrations: [{ count: 2 }],
       },
     ]
 

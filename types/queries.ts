@@ -51,14 +51,14 @@ export type EventWithRelations = Event & {
  * Event with registration count
  */
 export type EventWithRegistrationCount = Event & {
-  registrations: Array<{ count: number }> | null
+  public_registrations: Array<{ count: number }> | null
 }
 
 /**
  * Event with registration count and chapter name (for all-chapters calendar)
  */
 export type EventWithRegistrationCountAndChapter = Event & {
-  registrations: Array<{ count: number }> | null
+  public_registrations: Array<{ count: number }> | null
   chapters: Pick<Chapter, 'slug' | 'name'> | null
 }
 

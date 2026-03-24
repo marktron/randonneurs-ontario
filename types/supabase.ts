@@ -799,6 +799,43 @@ export type Database = {
       }
     }
     Views: {
+      public_registrations: {
+        Row: {
+          cancelled_at: string | null
+          event_id: string | null
+          id: string | null
+          is_team_captain: boolean | null
+          notes: string | null
+          registered_at: string | null
+          rider_id: string | null
+          share_registration: boolean | null
+          status: string | null
+          team_name: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'registrations_event_id_fkey'
+            columns: ['event_id']
+            isOneToOne: false
+            referencedRelation: 'events'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'registrations_rider_id_fkey'
+            columns: ['rider_id']
+            isOneToOne: false
+            referencedRelation: 'public_riders'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'registrations_rider_id_fkey'
+            columns: ['rider_id']
+            isOneToOne: false
+            referencedRelation: 'riders'
+            referencedColumns: ['id']
+          },
+        ]
+      }
       public_results: {
         Row: {
           created_at: string | null

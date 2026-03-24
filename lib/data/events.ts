@@ -73,9 +73,9 @@ const getEventsByChapterInner = cache(async (urlSlug: string): Promise<Event[]> 
   const [chapterResult, flecheResult] = await Promise.all([
     getSupabase()
       .from('events')
-      .select('*, registrations(count), chapters!inner(slug)')
+      .select('*, public_registrations(count), chapters!inner(slug)')
       .eq('chapters.slug', dbSlug)
-      .eq('registrations.status', 'registered')
+      .eq('public_registrations.status', 'registered')
       .eq('status', 'scheduled')
       .neq('event_type', 'permanent')
       .neq('event_type', 'fleche')
@@ -84,8 +84,8 @@ const getEventsByChapterInner = cache(async (urlSlug: string): Promise<Event[]> 
       .order('distance_km', { ascending: false }),
     getSupabase()
       .from('events')
-      .select('*, registrations(count)')
-      .eq('registrations.status', 'registered')
+      .select('*, public_registrations(count)')
+      .eq('public_registrations.status', 'registered')
       .eq('status', 'scheduled')
       .eq('event_type', 'fleche')
       .gte('event_date', today),
@@ -108,7 +108,7 @@ const getEventsByChapterInner = cache(async (urlSlug: string): Promise<Event[]> 
     distance: event.distance_km.toString(),
     startLocation: event.start_location || '',
     startTime: event.start_time || '08:00',
-    registeredCount: event.registrations?.[0]?.count ?? 0,
+    registeredCount: event.public_registrations?.[0]?.count ?? 0,
   })
 
   const chapterEvents = (chapterResult.data as EventWithRegistrationCount[]).map(transformEvent)
@@ -149,8 +149,8 @@ const getAllUpcomingEventsInner = cache(async (): Promise<Event[]> => {
   const today = new Date().toISOString().split('T')[0]
   const { data: events, error } = await getSupabase()
     .from('events')
-    .select('*, registrations(count), chapters!inner(slug, name)')
-    .eq('registrations.status', 'registered')
+    .select('*, public_registrations(count), chapters!inner(slug, name)')
+    .eq('public_registrations.status', 'registered')
     .eq('status', 'scheduled')
     .neq('event_type', 'permanent')
     .gte('event_date', today)
@@ -170,7 +170,7 @@ const getAllUpcomingEventsInner = cache(async (): Promise<Event[]> => {
     distance: event.distance_km.toString(),
     startLocation: event.start_location || '',
     startTime: event.start_time || '08:00',
-    registeredCount: event.registrations?.[0]?.count ?? 0,
+    registeredCount: event.public_registrations?.[0]?.count ?? 0,
     chapterName: event.chapters?.name || '',
   }))
 })
@@ -192,8 +192,8 @@ const getPermanentEventsInner = cache(async (): Promise<Event[]> => {
   const today = new Date().toISOString().split('T')[0]
   const { data: events, error } = await getSupabase()
     .from('events')
-    .select('*, registrations(count)')
-    .eq('registrations.status', 'registered')
+    .select('*, public_registrations(count)')
+    .eq('public_registrations.status', 'registered')
     .eq('event_type', 'permanent')
     .eq('status', 'scheduled')
     .gte('event_date', today)
@@ -214,7 +214,7 @@ const getPermanentEventsInner = cache(async (): Promise<Event[]> => {
     distance: event.distance_km.toString(),
     startLocation: event.start_location || '',
     startTime: event.start_time || '08:00',
-    registeredCount: event.registrations?.[0]?.count ?? 0,
+    registeredCount: event.public_registrations?.[0]?.count ?? 0,
   }))
 })
 
@@ -320,7 +320,7 @@ export async function getRegisteredRiders(eventId: string): Promise<RegisteredRi
  */
 const getFlecheTeamsInner = cache(async (eventId: string): Promise<FlecheTeam[]> => {
   const { data: registrations, error } = await getSupabase()
-    .from('registrations')
+    .from('public_registrations')
     .select('team_name, is_team_captain, riders(first_name, last_name)')
     .eq('event_id', eventId)
     .eq('status', 'registered')
@@ -370,7 +370,7 @@ export async function getFlecheTeams(eventId: string): Promise<FlecheTeam[]> {
 const getRegisteredRidersWithTeamsInner = cache(
   async (eventId: string): Promise<RegisteredRider[]> => {
     const { data: registrations, error } = await getSupabase()
-      .from('registrations')
+      .from('public_registrations')
       .select('team_name, share_registration, riders(first_name, last_name)')
       .eq('event_id', eventId)
       .eq('status', 'registered')

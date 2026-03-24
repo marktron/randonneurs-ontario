@@ -56,6 +56,19 @@ The admin login page validates redirect URLs to prevent open redirect attacks. O
 - Admin emails use `replyTo` rather than spoofing the `from` address
 - Email logs do not contain user email addresses
 
+## Capability Token Protection
+
+`registrations.management_token` and `results.submission_token` are capability tokens used for unauthenticated rider self-service flows (`/registration/manage/[token]` and `/results/submit/[token]`). These columns are hidden from the anonymous PostgREST role:
+
+| Table           | Mechanism                                        | Hidden Column      |
+| --------------- | ------------------------------------------------ | ------------------ |
+| `registrations` | `public_registrations` view (excludes the token) | `management_token` |
+| `results`       | Column-level `GRANT` (excludes the token)        | `submission_token` |
+
+All server actions that need the tokens use `getSupabaseAdmin()` (service role), which bypasses grants. Public queries use `public_registrations` (view) and the column-restricted `results` table.
+
+Regression tests in `tests/integration-real/token-column-security.test.ts` verify that the anonymous client cannot read either token column.
+
 ## Storage Bucket Policies
 
 The app uses two Supabase Storage buckets with distinct access policies:
