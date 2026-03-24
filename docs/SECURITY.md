@@ -15,11 +15,11 @@ This document describes the security measures in place and guidelines for mainta
 
 All Supabase tables have RLS policies. The three-client pattern ensures proper access:
 
-| Client | Use Case | RLS |
-|--------|----------|-----|
-| `getSupabase()` | Public reads | Enforced |
-| `createSupabaseServerClient()` | Auth checks | Enforced |
-| `getSupabaseAdmin()` | Admin writes | Bypassed (server-side only) |
+| Client                         | Use Case     | RLS                         |
+| ------------------------------ | ------------ | --------------------------- |
+| `getSupabase()`                | Public reads | Enforced                    |
+| `createSupabaseServerClient()` | Auth checks  | Enforced                    |
+| `getSupabaseAdmin()`           | Admin writes | Bypassed (server-side only) |
 
 **Never import `getSupabaseAdmin()` in client components.**
 
@@ -55,6 +55,19 @@ The admin login page validates redirect URLs to prevent open redirect attacks. O
 - All emails are sent from a verified sender address (`fromEmail`)
 - Admin emails use `replyTo` rather than spoofing the `from` address
 - Email logs do not contain user email addresses
+
+## Storage Bucket Policies
+
+The app uses two Supabase Storage buckets with distinct access policies:
+
+| Bucket              | Public Read | Anonymous Insert | Notes                                                                   |
+| ------------------- | ----------- | ---------------- | ----------------------------------------------------------------------- |
+| `images`            | Yes         | No               | Admin uploads via service-role client                                   |
+| `rider-submissions` | Yes         | No               | Rider uploads via service-role client in `lib/actions/rider-results.ts` |
+
+Both buckets restrict write access to the service-role client (`getSupabaseAdmin()`), which bypasses RLS. Anonymous/public INSERT policies are not used — application-level token validation (submission tokens for riders, admin auth for images) gates access before the service-role upload occurs.
+
+Regression tests in `tests/integration-real/rider-submissions-bucket-policy.test.ts` verify that anonymous uploads to `rider-submissions` are rejected.
 
 ## Guidelines for Contributors
 

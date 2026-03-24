@@ -57,7 +57,19 @@ The bucket configuration lives in two places:
 - **Local dev:** `supabase/config.toml` under `[storage.buckets.images]`
 - **Production:** Applied via migration in `supabase/migrations/`
 
+## Rider Submissions Bucket
+
+The `rider-submissions` bucket stores GPX files and control card photos uploaded by riders through the self-service result submission flow.
+
+- **Upload path:** `lib/actions/rider-results.ts` → `uploadResultFile()` using the service-role client
+- **Access control:** Token-based (each result row has a unique `submission_token` UUID); the server action validates the token before uploading
+- **RLS policies:** Public read (the bucket is public), no anonymous insert — only the service-role client can write
+- **Allowed types:** JPEG, PNG, WebP, GPX/XML
+- **Max size:** 10MB
+- **File path pattern:** `{eventId}/{riderId}/{fileType}-{timestamp}-{randomId}.{ext}`
+
 ## Testing
 
 - Server action tests: `tests/integration/actions/images.test.ts`
 - Editor component tests: `tests/unit/components/markdown-editor.test.tsx`
+- Bucket policy tests: `tests/integration-real/rider-submissions-bucket-policy.test.ts`
