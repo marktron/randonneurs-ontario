@@ -44,6 +44,7 @@ vi.mock('@/lib/supabase', () => {
       resolve({ data: [], error: null })
     })
     builder.single = vi.fn().mockResolvedValue({ data: null, error: { code: 'PGRST116' } })
+    builder.maybeSingle = vi.fn().mockResolvedValue({ data: null, error: null })
 
     return builder
   }
@@ -64,6 +65,8 @@ vi.mock('@/lib/supabase', () => {
       })
       queryBuilder.single.mockReset()
       queryBuilder.single.mockResolvedValue({ data: null, error: { code: 'PGRST116' } })
+      queryBuilder.maybeSingle.mockReset()
+      queryBuilder.maybeSingle.mockResolvedValue({ data: null, error: null })
     },
     __mockEventsFound: (events: unknown[]) => {
       queryBuilder.then.mockImplementationOnce((resolve) => {
@@ -71,10 +74,10 @@ vi.mock('@/lib/supabase', () => {
       })
     },
     __mockRiderFound: (rider: unknown) => {
-      queryBuilder.single.mockResolvedValueOnce({ data: rider, error: null })
+      queryBuilder.maybeSingle.mockResolvedValueOnce({ data: rider, error: null })
     },
     __mockRiderNotFound: () => {
-      queryBuilder.single.mockResolvedValueOnce({ data: null, error: { code: 'PGRST116' } })
+      queryBuilder.maybeSingle.mockResolvedValueOnce({ data: null, error: null })
     },
     __mockQueryError: (error: unknown) => {
       queryBuilder.then.mockImplementationOnce((resolve) => {
@@ -440,6 +443,15 @@ describe('getRiderResults', () => {
     const result = await getRiderResults('non-existent-rider')
 
     expect(result).toEqual([])
+  })
+
+  it('does not log an error when rider is simply not found', async () => {
+    const { handleDataError } = await import('@/lib/errors')
+    mockModule.__mockRiderNotFound()
+
+    await getRiderResults('non-existent-rider')
+
+    expect(handleDataError).not.toHaveBeenCalled()
   })
 
   it('groups results by year', async () => {

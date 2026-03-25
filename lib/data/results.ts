@@ -403,7 +403,7 @@ const getRiderBySlugInner = cache(async (slug: string): Promise<RiderInfo | null
     .from('public_riders')
     .select('slug, first_name, last_name, rider_number')
     .eq('slug', slug)
-    .single()
+    .maybeSingle()
 
   if (error || !data) return null
 
@@ -430,14 +430,14 @@ const getRiderResultsInner = cache(async (slug: string): Promise<RiderYearResult
     .from('public_riders')
     .select('id')
     .eq('slug', slug)
-    .single()
+    .maybeSingle()
 
-  if (riderError || !rider || !rider.id) {
-    return handleDataError(
-      riderError || new Error('Rider not found'),
-      { operation: 'getRiderResults', context: { slug } },
-      []
-    )
+  if (riderError) {
+    return handleDataError(riderError, { operation: 'getRiderResults', context: { slug } }, [])
+  }
+
+  if (!rider || !rider.id) {
+    return []
   }
 
   // Get all results for this rider with event info and awards in a single query
