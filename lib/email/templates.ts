@@ -151,7 +151,7 @@ Brevet Rules
 - Have front and rear lights solidly affixed to your bicycle.
 - Have someone sign your brevet card at the controls.
 
-Learn more about Brevets: https://randonneursontario.ca/about
+Learn more about Brevets: https://register.randonneursontario.ca/intro
 
 --------------------
 What's Next?
@@ -227,7 +227,7 @@ ${
     <li>Have front and rear lights solidly affixed to your bicycle.</li>
     <li>Have someone sign your brevet card at the controls.</li>
   </ul>
-  <p><a href="https://randonneursontario.ca/about" style="color: #0066cc;">Learn more about Brevets</a></p>
+  <p><a href="https://register.randonneursontario.ca/intro" style="color: #0066cc;">Learn more about Brevets</a></p>
 
   <hr style="border: none; border-top: 1px solid #eee; margin: 32px 0;">
 

@@ -13,6 +13,11 @@ const nextConfig: NextConfig = {
   },
   redirects: async () => [
     {
+      source: '/registration',
+      destination: '/calendar',
+      permanent: true,
+    },
+    {
       source: '/who/Mailing_Lists.html',
       destination: '/mailing-list',
       permanent: true,
