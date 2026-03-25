@@ -46,32 +46,31 @@ async function getRiders(
 `
 
   if (chapterFilter) {
-    // Chapter filtering requires JS post-filter on most recent membership,
-    // so fetch all riders, filter, then paginate in memory
-    let query = getSupabaseAdmin()
+    // Use RPC to filter by latest membership chapter in the database
+    const offset = (page - 1) * PAGE_SIZE
+    const { data: rpcData } = await getSupabaseAdmin().rpc('get_riders_by_latest_chapter', {
+      p_chapter_name: chapterFilter,
+      p_search: search || null,
+      p_limit: PAGE_SIZE,
+      p_offset: offset,
+    })
+
+    if (!rpcData?.length) {
+      return { riders: [], totalCount: 0 }
+    }
+
+    const totalCount = Number(rpcData[0].total_count)
+    const riderIds = rpcData.map((r: { rider_id: string }) => r.rider_id)
+
+    // Fetch full rider data (with nested counts/memberships) for the page
+    const { data } = await getSupabaseAdmin()
       .from('riders')
       .select(selectQuery)
+      .in('id', riderIds)
       .order('last_name', { ascending: true })
       .order('first_name', { ascending: true })
 
-    if (search) {
-      query = applyRiderSearchFilter(query, search)
-    }
-
-    const { data } = await query
-    let allRiders = (data as RiderWithStats[]) ?? []
-
-    allRiders = allRiders.filter((rider) => {
-      if (!rider.rider_memberships?.length) return false
-      const latest = rider.rider_memberships.slice().sort((a, b) => b.season - a.season)[0]
-      return latest.chapters?.name === chapterFilter
-    })
-
-    const totalCount = allRiders.length
-    const offset = (page - 1) * PAGE_SIZE
-    const riders = allRiders.slice(offset, offset + PAGE_SIZE)
-
-    return { riders, totalCount }
+    return { riders: (data as RiderWithStats[]) ?? [], totalCount }
   }
 
   // No chapter filter — use Supabase range for efficient pagination

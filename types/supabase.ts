@@ -1119,6 +1119,18 @@ export type Database = {
           streak_length: number
         }[]
       }
+      get_riders_by_latest_chapter: {
+        Args: {
+          p_chapter_name: string
+          p_search?: string | null
+          p_limit?: number
+          p_offset?: number
+        }
+        Returns: {
+          rider_id: string
+          total_count: number
+        }[]
+      }
       get_route_frequency_counts: {
         Args: { limit_count?: number }
         Returns: {
