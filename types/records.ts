@@ -55,6 +55,7 @@ export interface RouteRecord {
   routeName: string
   distanceKm: number
   chapterName: string | null
+  chapterSlug: string | null
   value: number // event count or participant count
 }
 

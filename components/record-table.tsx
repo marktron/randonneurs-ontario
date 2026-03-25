@@ -400,7 +400,14 @@ export function RouteRecordTable({ title, records, valueLabel }: RouteRecordTabl
                   {record.rank}
                 </TableCell>
                 <TableCell className={record.rank === 1 ? 'font-semibold' : ''}>
-                  <Link href={`/routes/${record.routeSlug}`} className="hover:underline">
+                  <Link
+                    href={
+                      record.chapterSlug
+                        ? `/routes/${record.chapterSlug}/${record.routeSlug}`
+                        : `/routes/${record.routeSlug}`
+                    }
+                    className="hover:underline"
+                  >
                     {record.routeName}
                   </Link>
                   {record.chapterName && (
@@ -426,7 +433,11 @@ export function RouteRecordTable({ title, records, valueLabel }: RouteRecordTabl
             key={record.routeSlug}
             rank={record.rank}
             primary={record.routeName}
-            primaryHref={`/routes/${record.routeSlug}`}
+            primaryHref={
+              record.chapterSlug
+                ? `/routes/${record.chapterSlug}/${record.routeSlug}`
+                : `/routes/${record.routeSlug}`
+            }
             secondary={`${record.distanceKm} km${record.chapterName ? ` - ${record.chapterName}` : ''}`}
             value={record.value.toLocaleString()}
             valueLabel={valueLabel}

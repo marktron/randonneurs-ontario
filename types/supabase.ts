@@ -1135,6 +1135,7 @@ export type Database = {
         Args: { limit_count?: number }
         Returns: {
           chapter_name: string
+          chapter_slug: string
           distance_km: number
           rank: number
           route_name: string
@@ -1146,6 +1147,7 @@ export type Database = {
         Args: { limit_count?: number }
         Returns: {
           chapter_name: string
+          chapter_slug: string
           distance_km: number
           rank: number
           route_name: string

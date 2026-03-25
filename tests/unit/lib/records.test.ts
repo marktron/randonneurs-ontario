@@ -33,6 +33,7 @@ const mockRouteRecords = [
     route_name: 'Gentle Start',
     distance_km: 200,
     chapter_name: 'Toronto',
+    chapter_slug: 'toronto',
     value: 50,
   },
   {
@@ -41,6 +42,7 @@ const mockRouteRecords = [
     route_name: 'Hills of Hockley',
     distance_km: 200,
     chapter_name: 'Toronto',
+    chapter_slug: 'toronto',
     value: 30,
   },
 ]
@@ -290,6 +292,7 @@ describe('Records Data Module', () => {
         routeSlug: expect.any(String),
         routeName: expect.any(String),
         distanceKm: expect.any(Number),
+        chapterSlug: expect.any(String),
         value: expect.any(Number),
       })
     })

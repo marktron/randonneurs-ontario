@@ -90,6 +90,7 @@ function toRouteRecords(
     route_name: string
     distance_km: number | null
     chapter_name: string | null
+    chapter_slug: string | null
     value: number
   }> | null
 ): RouteRecord[] {
@@ -100,6 +101,7 @@ function toRouteRecords(
     routeName: row.route_name,
     distanceKm: row.distance_km ?? 0,
     chapterName: row.chapter_name,
+    chapterSlug: row.chapter_slug,
     value: Number(row.value),
   }))
 }
