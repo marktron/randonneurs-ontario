@@ -19,14 +19,7 @@ Sentry.init({
   // https://docs.sentry.io/platforms/javascript/guides/nextjs/configuration/options/#sendDefaultPii
   sendDefaultPii: false,
 
-  beforeSend(event, hint) {
-    // Ignore errors from browser extensions (e.g. runtime.sendMessage tab not found)
-    const error = hint.originalException
-    if (error instanceof Error && error.message.includes('runtime.sendMessage')) {
-      return null
-    }
-    return event
-  },
+  ignoreErrors: [/Invalid call to runtime\.sendMessage/],
 })
 
 export const onRouterTransitionStart = Sentry.captureRouterTransitionStart
