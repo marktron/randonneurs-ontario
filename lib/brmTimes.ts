@@ -2,7 +2,7 @@
 
 export type NominalDistance = 200 | 300 | 400 | 600 | 1000 | 1200 | 1300
 
-const TORONTO_TZ = 'America/Toronto'
+export const TORONTO_TZ = 'America/Toronto'
 
 /**
  * Create a Date object representing a specific local time in Toronto.

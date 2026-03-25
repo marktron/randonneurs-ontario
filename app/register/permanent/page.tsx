@@ -1,15 +1,16 @@
-import { PageShell } from "@/components/page-shell";
-import { PermanentRegistrationForm } from "@/components/permanent-registration-form";
-import { getActiveRoutes } from "@/lib/data/routes";
-import Link from "next/link";
+import { PageShell } from '@/components/page-shell'
+import { PermanentRegistrationForm } from '@/components/permanent-registration-form'
+import { getActiveRoutes } from '@/lib/data/routes'
+import Link from 'next/link'
 
 export const metadata = {
-  title: "Register for a Permanent",
-  description: "Schedule a permanent ride on any active route. Ride at your own pace, on your own schedule.",
-};
+  title: 'Register for a Permanent',
+  description:
+    'Schedule a permanent ride on any active route. Ride at your own pace, on your own schedule.',
+}
 
 export default async function PermanentRegistrationPage() {
-  const routes = await getActiveRoutes();
+  const routes = await getActiveRoutes()
 
   return (
     <PageShell>
@@ -34,37 +35,43 @@ export default async function PermanentRegistrationPage() {
 
               <div className="mt-10 space-y-8">
                 <div>
-                  <h2 className="font-serif text-xl tracking-tight mb-3">
-                    How it works
-                  </h2>
+                  <h2 className="font-serif text-xl tracking-tight mb-3">How it works</h2>
                   <ol className="space-y-3 text-sm text-muted-foreground">
                     <li className="flex gap-3">
-                      <span className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-medium flex items-center justify-center">1</span>
+                      <span className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-medium flex items-center justify-center">
+                        1
+                      </span>
                       <span>Choose a route from our list of active routes</span>
                     </li>
                     <li className="flex gap-3">
-                      <span className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-medium flex items-center justify-center">2</span>
+                      <span className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-medium flex items-center justify-center">
+                        2
+                      </span>
                       <span>Select your start date, time, and location</span>
                     </li>
                     <li className="flex gap-3">
-                      <span className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-medium flex items-center justify-center">3</span>
-                      <span>Submit your registration at least 2 weeks in advance</span>
+                      <span className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-medium flex items-center justify-center">
+                        3
+                      </span>
+                      <span>Submit your registration by 8:00 p.m. the day before your ride</span>
                     </li>
                     <li className="flex gap-3">
-                      <span className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-medium flex items-center justify-center">4</span>
+                      <span className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-medium flex items-center justify-center">
+                        4
+                      </span>
                       <span>You&apos;ll receive a control card and route details by email</span>
                     </li>
                     <li className="flex gap-3">
-                      <span className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-medium flex items-center justify-center">5</span>
+                      <span className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-medium flex items-center justify-center">
+                        5
+                      </span>
                       <span>Complete the ride and submit your control card for validation</span>
                     </li>
                   </ol>
                 </div>
 
                 <div>
-                  <h2 className="font-serif text-xl tracking-tight mb-3">
-                    Requirements
-                  </h2>
+                  <h2 className="font-serif text-xl tracking-tight mb-3">Requirements</h2>
                   <ul className="space-y-2 text-sm text-muted-foreground">
                     <li className="flex gap-2">
                       <span className="text-primary">•</span>
@@ -72,7 +79,7 @@ export default async function PermanentRegistrationPage() {
                     </li>
                     <li className="flex gap-2">
                       <span className="text-primary">•</span>
-                      <span>Permanent rides must be scheduled at least 2 weeks in advance</span>
+                      <span>Registration closes at 8 p.m. Eastern the day before the ride</span>
                     </li>
                     <li className="flex gap-2">
                       <span className="text-primary">•</span>
@@ -82,18 +89,19 @@ export default async function PermanentRegistrationPage() {
                 </div>
 
                 <div>
-                  <h2 className="font-serif text-xl tracking-tight mb-3">
-                    Questions?
-                  </h2>
+                  <h2 className="font-serif text-xl tracking-tight mb-3">Questions?</h2>
                   <p className="text-sm text-muted-foreground">
-                    See our{" "}
+                    See our{' '}
                     <Link href="/intro" className="text-primary hover:underline underline-offset-2">
                       introduction to randonneuring
-                    </Link>{" "}
-                    or{" "}
-                    <Link href="/contact" className="text-primary hover:underline underline-offset-2">
+                    </Link>{' '}
+                    or{' '}
+                    <Link
+                      href="/contact"
+                      className="text-primary hover:underline underline-offset-2"
+                    >
                       contact your chapter VP
-                    </Link>{" "}
+                    </Link>{' '}
                     if you have any questions about permanents.
                   </p>
                 </div>
@@ -108,5 +116,5 @@ export default async function PermanentRegistrationPage() {
         </div>
       </div>
     </PageShell>
-  );
+  )
 }

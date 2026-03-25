@@ -3,7 +3,7 @@
 import { useState, useTransition, useEffect, useMemo, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { ChevronDownIcon } from 'lucide-react'
-import { format, addDays, isBefore, startOfDay } from 'date-fns'
+import { format, addDays, isBefore } from 'date-fns'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
@@ -62,8 +62,28 @@ function saveData(data: SavedRegistrationData): void {
   }
 }
 
-// Minimum date is 2 weeks from today
-const minDate = addDays(startOfDay(new Date()), 14)
+const TORONTO_TZ = 'America/Toronto'
+
+function getMinPermanentDate(): Date {
+  const now = new Date()
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: TORONTO_TZ,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: 'numeric',
+    hour12: false,
+  }).formatToParts(now)
+  const get = (type: string) => parseInt(parts.find((p) => p.type === type)!.value, 10)
+
+  const torontoToday = new Date(get('year'), get('month') - 1, get('day'))
+  const torontoHour = get('hour')
+
+  // Before 20:00 ET → tomorrow is earliest; at/after 20:00 ET → day after tomorrow
+  return addDays(torontoToday, torontoHour >= 20 ? 2 : 1)
+}
+
+const minDate = getMinPermanentDate()
 
 interface PermanentRegistrationFormProps {
   routes: ActiveRoute[]
@@ -394,7 +414,9 @@ export function PermanentRegistrationForm({ routes }: PermanentRegistrationFormP
                 />
               </PopoverContent>
             </Popover>
-            <p className="text-xs text-muted-foreground">Must be at least 2 weeks from today</p>
+            <p className="text-xs text-muted-foreground">
+              Registration closes at 8 p.m. Eastern the day before your ride
+            </p>
           </div>
 
           {/* Time Picker */}

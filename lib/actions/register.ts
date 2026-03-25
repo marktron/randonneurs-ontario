@@ -20,7 +20,7 @@
  * Permanent rides are self-scheduled events. When a rider registers:
  * 1. System creates an event record for that route/date if needed
  * 2. Multiple riders can share the same event if same route/date
- * 3. Must be scheduled at least 2 weeks in advance
+ * 3. Registration closes at 8 p.m. Eastern the day before the ride
  *
  * @see docs/DATA_LAYER.md for more on server actions
  */
@@ -35,6 +35,7 @@ import { searchRiderCandidates, type RiderMatchCandidate } from './rider-match'
 import { fuzzyNameScore } from '@/lib/utils/fuzzy-match'
 import { getMembershipForRider, isTrialUsed } from '@/lib/memberships/service'
 import { isRateLimited } from '@/lib/rate-limit'
+import { createTorontoDate } from '@/lib/brmTimes'
 import { validateEmail, normalizePhone } from '@/lib/utils/validation'
 
 /** Chapter slugs that represent real geographic chapters (not pseudo-chapters like 'permanent' or 'other') */
@@ -736,16 +737,14 @@ export async function registerForPermanent(
     return { success: false, error: 'Too many registration attempts. Please try again later.' }
   }
 
-  // Validate date is at least 2 weeks in the future
-  const eventDateObj = parseISO(eventDate)
-  const twoWeeksFromNow = new Date()
-  twoWeeksFromNow.setDate(twoWeeksFromNow.getDate() + 14)
-  twoWeeksFromNow.setHours(0, 0, 0, 0)
+  // Validate registration deadline: 8 p.m. Eastern the day before the ride
+  const [eyear, emonth, eday] = eventDate.split('-').map(Number)
+  const deadline = createTorontoDate(eyear, emonth - 1, eday - 1, 20, 0)
 
-  if (eventDateObj < twoWeeksFromNow) {
+  if (new Date() > deadline) {
     return {
       success: false,
-      error: 'Permanent rides must be scheduled at least 2 weeks in advance',
+      error: 'Registration for permanent rides closes at 8 p.m. Eastern the day before the ride',
     }
   }
 

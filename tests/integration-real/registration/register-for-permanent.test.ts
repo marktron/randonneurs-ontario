@@ -240,17 +240,17 @@ describe('registerForPermanent (real DB)', () => {
 
   // --- Validation ---
 
-  it('date less than 14 days in future returns error', async () => {
+  it('ride date of today returns error (deadline already passed)', async () => {
     const { registerForPermanent } = await import('@/lib/actions/register')
     const result = await registerForPermanent(
       buildPermanentRegistrationData({
         routeId: IDS.route,
-        eventDate: daysFromNow(7),
+        eventDate: daysFromNow(0),
       })
     )
 
     expect(result.success).toBe(false)
-    expect(result.error).toContain('2 weeks')
+    expect(result.error).toContain('8 p.m.')
   })
 
   it('invalid route ID returns error', async () => {

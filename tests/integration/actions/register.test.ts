@@ -131,10 +131,12 @@ describe('registerForPermanent', () => {
   })
 
   describe('date validation', () => {
-    it('returns error if date is less than 2 weeks in future', async () => {
+    it('rejects ride date that is today', async () => {
+      // Mocked time: 2025-01-01T12:00:00Z (07:00 EST)
+      // Deadline for Jan 1 ride was Dec 31 at 20:00 EST — already past
       const result = await registerForPermanent({
         routeId: 'route-123',
-        eventDate: '2025-01-10', // Only 9 days from mocked date
+        eventDate: '2025-01-01',
         startTime: '08:00',
         direction: 'as_posted',
         firstName: 'Test',
@@ -146,13 +148,18 @@ describe('registerForPermanent', () => {
       })
 
       expect(result.success).toBe(false)
-      expect(result.error).toBe('Permanent rides must be scheduled at least 2 weeks in advance')
+      expect(result.error).toBe(
+        'Registration for permanent rides closes at 8 p.m. Eastern the day before the ride'
+      )
     })
 
-    it('returns error for date exactly 13 days out', async () => {
+    it('rejects tomorrow after 20:00 ET cutoff', async () => {
+      // Set time to 2025-01-02T01:30:00Z = Jan 1 at 20:30 EST (past cutoff)
+      vi.setSystemTime(new Date('2025-01-02T01:30:00Z'))
+
       const result = await registerForPermanent({
         routeId: 'route-123',
-        eventDate: '2025-01-14', // 13 days
+        eventDate: '2025-01-02',
         startTime: '08:00',
         direction: 'as_posted',
         firstName: 'Test',
@@ -164,11 +171,13 @@ describe('registerForPermanent', () => {
       })
 
       expect(result.success).toBe(false)
-      expect(result.error).toBe('Permanent rides must be scheduled at least 2 weeks in advance')
+      expect(result.error).toBe(
+        'Registration for permanent rides closes at 8 p.m. Eastern the day before the ride'
+      )
     })
 
-    // Note: Tests for dates 14+ days out require route/chapter DB calls
-    // which need more sophisticated mocking. These are covered by E2E tests.
+    // Note: Tests for dates that pass the deadline check require route/chapter DB calls
+    // which need more sophisticated mocking. These are covered by integration-real tests.
   })
 
   describe('validation', () => {

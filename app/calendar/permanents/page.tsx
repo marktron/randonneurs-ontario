@@ -7,7 +7,8 @@ import { getPermanentEvents } from '@/lib/data/events'
 
 export const metadata = {
   title: 'Permanents Calendar',
-  description: 'View scheduled permanent rides and register to ride any active route on your own schedule.',
+  description:
+    'View scheduled permanent rides and register to ride any active route on your own schedule.',
 }
 
 export default async function PermanentsCalendarPage() {
@@ -24,11 +25,11 @@ export default async function PermanentsCalendarPage() {
       <div className="content-container py-16 md:py-20">
         {/* CTA Section */}
         <div className="bg-muted/50 border border-border rounded-lg p-6 md:p-8 mb-12">
-          <h2 className="font-serif text-2xl md:text-3xl tracking-tight">
-            Schedule a Permanent
-          </h2>
+          <h2 className="font-serif text-2xl md:text-3xl tracking-tight">Schedule a Permanent</h2>
           <p className="text-muted-foreground mt-2 max-w-2xl">
-            Choose any active route and ride it on your own schedule. Submit your request at least two weeks in advance to allow time for coordination.
+            Choose any active route and ride it on your own schedule. Submit your registration by
+            8:00 p.m. the day before your ride. We ask new members to provide a 48 hour grace period
+            to ensure your membership is validated by the route’s chapter VP prior to the ride.
           </p>
           <Button asChild className="mt-6">
             <Link href="/register/permanent">Register for a Permanent</Link>
