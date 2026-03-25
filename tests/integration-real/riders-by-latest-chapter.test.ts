@@ -14,7 +14,7 @@ describe('get_riders_by_latest_chapter RPC', () => {
 
     if (!membership?.chapters) return
 
-    const chapterName = (membership.chapters as { name: string }).name
+    const chapterName = (membership.chapters as unknown as { name: string }).name
     const { data, error } = await supabase.rpc('get_riders_by_latest_chapter', {
       p_chapter_name: chapterName,
     })
@@ -44,7 +44,7 @@ describe('get_riders_by_latest_chapter RPC', () => {
 
     if (!membership?.chapters) return
 
-    const chapterName = (membership.chapters as { name: string }).name
+    const chapterName = (membership.chapters as unknown as { name: string }).name
     const { data, error } = await supabase.rpc('get_riders_by_latest_chapter', {
       p_chapter_name: chapterName,
       p_limit: 2,
@@ -62,7 +62,7 @@ describe('get_riders_by_latest_chapter RPC', () => {
 
     if (!membership?.chapters) return
 
-    const chapterName = (membership.chapters as { name: string }).name
+    const chapterName = (membership.chapters as unknown as { name: string }).name
 
     // Get all results (no limit)
     const { data: allData } = await supabase.rpc('get_riders_by_latest_chapter', {
@@ -92,7 +92,7 @@ describe('get_riders_by_latest_chapter RPC', () => {
 
     if (!membership?.chapters) return
 
-    const chapterName = (membership.chapters as { name: string }).name
+    const chapterName = (membership.chapters as unknown as { name: string }).name
 
     // Get the rider's name for a search term
     const { data: rider } = await supabase
@@ -110,7 +110,7 @@ describe('get_riders_by_latest_chapter RPC', () => {
     expect(error).toBeNull()
     expect(data!.length).toBeGreaterThan(0)
     // The searched rider should be in results
-    expect(data!.some((r) => r.rider_id === membership.rider_id)).toBe(true)
+    expect(data!.some((r: { rider_id: string }) => r.rider_id === membership.rider_id)).toBe(true)
   })
 
   it('returns only riders whose latest membership matches the chapter', async () => {
