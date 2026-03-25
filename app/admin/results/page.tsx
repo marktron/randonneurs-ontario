@@ -14,16 +14,43 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Eye, Clock } from 'lucide-react'
 import { ResultsFilters } from '@/components/admin/results-filters'
-import type {
-  ResultForAdminList,
-  GetDistinctSeasonsResult,
-  ChapterForAdmin,
-} from '@/types/queries'
+import { AdminPagination } from '@/components/admin/admin-pagination'
+import type { ResultForAdminList, GetDistinctSeasonsResult, ChapterForAdmin } from '@/types/queries'
 
-async function getResults(season: number | null, chapterId: string | null): Promise<ResultForAdminList[]> {
-  let query = getSupabaseAdmin()
+const PAGE_SIZE = 50
+
+function buildPageUrl(page: number, season: number | null, chapterId: string | null): string {
+  const params = new URLSearchParams()
+  if (season !== null) params.set('season', String(season))
+  if (chapterId) params.set('chapter', chapterId)
+  if (page > 1) params.set('page', String(page))
+  const qs = params.toString()
+  return `/admin/results${qs ? `?${qs}` : ''}`
+}
+
+async function getResults(
+  season: number | null,
+  chapterId: string | null,
+  page: number = 1
+): Promise<{ results: ResultForAdminList[]; totalCount: number }> {
+  // Get total count with same filters
+  let countQuery = getSupabaseAdmin()
     .from('results')
-    .select(`
+    .select('id, events!inner(chapter_id)', { count: 'exact', head: true })
+
+  if (season !== null) {
+    countQuery = countQuery.eq('season', season)
+  }
+  if (chapterId) {
+    countQuery = countQuery.eq('events.chapter_id', chapterId)
+  }
+
+  const { count } = await countQuery
+  const totalCount = count ?? 0
+
+  // Get paginated data
+  const offset = (page - 1) * PAGE_SIZE
+  let query = getSupabaseAdmin().from('results').select(`
       id,
       finish_time,
       status,
@@ -45,18 +72,17 @@ async function getResults(season: number | null, chapterId: string | null): Prom
 
   const { data } = await query
     .order('events(event_date)', { ascending: false })
-    .limit(500)
+    .range(offset, offset + PAGE_SIZE - 1)
 
-  return (data as ResultForAdminList[]) ?? []
+  return { results: (data as ResultForAdminList[]) ?? [], totalCount }
 }
 
 async function getSeasons(): Promise<number[]> {
-  // Use RPC function to efficiently get distinct seasons
   const { data } = await getSupabaseAdmin().rpc('get_distinct_seasons')
 
   if (!data) return []
 
-  return (data as GetDistinctSeasonsResult[]).map(r => r.season)
+  return (data as GetDistinctSeasonsResult[]).map((r) => r.season)
 }
 
 async function getChapters(): Promise<ChapterForAdmin[]> {
@@ -86,7 +112,7 @@ function getStatusBadge(status: string) {
 }
 
 interface AdminResultsPageProps {
-  searchParams: Promise<{ season?: string; chapter?: string }>
+  searchParams: Promise<{ season?: string; chapter?: string; page?: string }>
 }
 
 export default async function AdminResultsPage({ searchParams }: AdminResultsPageProps) {
@@ -95,9 +121,10 @@ export default async function AdminResultsPage({ searchParams }: AdminResultsPag
   const params = await searchParams
   const selectedSeason = params.season ? parseInt(params.season, 10) : null
   const selectedChapter = params.chapter || null
+  const page = Math.max(1, parseInt(params.page || '1', 10))
 
-  const [results, seasons, chapters] = await Promise.all([
-    getResults(selectedSeason, selectedChapter),
+  const [{ results, totalCount }, seasons, chapters] = await Promise.all([
+    getResults(selectedSeason, selectedChapter, page),
     getSeasons(),
     getChapters(),
   ])
@@ -106,12 +133,9 @@ export default async function AdminResultsPage({ searchParams }: AdminResultsPag
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold">Results</h1>
-        <p className="text-muted-foreground">
-          View and manage event results across all chapters
-        </p>
+        <p className="text-muted-foreground">View and manage event results across all chapters</p>
       </div>
 
-      {/* Filters */}
       <ResultsFilters seasons={seasons} chapters={chapters} />
 
       <div className="rounded-md border">
@@ -145,9 +169,7 @@ export default async function AdminResultsPage({ searchParams }: AdminResultsPag
                     <div>
                       <p>{result.events.name}</p>
                       {result.team_name && (
-                        <p className="text-sm text-muted-foreground">
-                          Team: {result.team_name}
-                        </p>
+                        <p className="text-sm text-muted-foreground">Team: {result.team_name}</p>
                       )}
                     </div>
                   </TableCell>
@@ -185,9 +207,15 @@ export default async function AdminResultsPage({ searchParams }: AdminResultsPag
         </Table>
       </div>
 
-      <p className="text-sm text-muted-foreground">
-        Showing {results.length} results. Click the eye icon to view and edit results on the event page.
-      </p>
+      {totalCount > 0 && (
+        <AdminPagination
+          page={page}
+          pageSize={PAGE_SIZE}
+          totalCount={totalCount}
+          buildPageUrl={(p) => buildPageUrl(p, selectedSeason, selectedChapter)}
+          label="results"
+        />
+      )}
     </div>
   )
 }

@@ -14,11 +14,13 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { EventFilters } from '@/components/admin/event-filters'
+import { AdminPagination } from '@/components/admin/admin-pagination'
 import { Plus } from 'lucide-react'
 import Link from 'next/link'
 import type { EventForAdminList } from '@/types/queries'
 
 const currentSeason = process.env.NEXT_PUBLIC_CURRENT_SEASON || '2026'
+const PAGE_SIZE = 50
 
 function buildEventDetailUrl(eventId: string, season: string, chapterId: string | null): string {
   const params = new URLSearchParams()
@@ -26,6 +28,15 @@ function buildEventDetailUrl(eventId: string, season: string, chapterId: string 
   if (chapterId) params.set('from_chapter', chapterId)
   const qs = params.toString()
   return `/admin/events/${eventId}${qs ? `?${qs}` : ''}`
+}
+
+function buildPageUrl(page: number, season: string, chapterParam: string | undefined): string {
+  const params = new URLSearchParams()
+  if (season !== currentSeason) params.set('season', season)
+  if (chapterParam) params.set('chapter', chapterParam)
+  if (page > 1) params.set('page', String(page))
+  const qs = params.toString()
+  return `/admin/events${qs ? `?${qs}` : ''}`
 }
 
 async function getAvailableSeasons(): Promise<string[]> {
@@ -39,11 +50,30 @@ async function getAvailableSeasons(): Promise<string[]> {
 async function getEvents(
   season: string,
   chapterId?: string,
-  chapterSlug?: string
-): Promise<EventForAdminList[]> {
+  chapterSlug?: string,
+  page: number = 1
+): Promise<{ events: EventForAdminList[]; totalCount: number }> {
   const startDate = `${season}-01-01`
   const endDate = `${season}-12-31`
 
+  // Get total count with same filters
+  let countQuery = getSupabaseAdmin()
+    .from('events')
+    .select('id', { count: 'exact', head: true })
+    .gte('event_date', startDate)
+    .lte('event_date', endDate)
+
+  if (chapterSlug === 'permanent') {
+    countQuery = countQuery.eq('event_type', 'permanent')
+  } else if (chapterId) {
+    countQuery = countQuery.eq('chapter_id', chapterId)
+  }
+
+  const { count } = await countQuery
+  const totalCount = count ?? 0
+
+  // Get paginated data
+  const offset = (page - 1) * PAGE_SIZE
   let query = getSupabaseAdmin()
     .from('events')
     .select(
@@ -63,17 +93,16 @@ async function getEvents(
     .order('event_date', { ascending: true })
 
   if (chapterSlug === 'permanent') {
-    // Permanents: filter by event_type instead of chapter
     query = query.eq('event_type', 'permanent')
   } else if (chapterId) {
     query = query.eq('chapter_id', chapterId)
   }
 
-  const { data } = await query.limit(200)
+  const { data } = await query.range(offset, offset + PAGE_SIZE - 1)
 
   const events = (data as EventForAdminList[]) ?? []
 
-  if (events.length === 0) return events
+  if (events.length === 0) return { events, totalCount }
 
   // Get deduplicated rider counts across registrations and results
   const eventIds = events.map((e) => e.id)
@@ -93,11 +122,11 @@ async function getEvents(
     }
   }
 
-  return events
+  return { events, totalCount }
 }
 
 interface AdminEventsPageProps {
-  searchParams: Promise<{ season?: string; chapter?: string }>
+  searchParams: Promise<{ season?: string; chapter?: string; page?: string }>
 }
 
 export default async function AdminEventsPage({ searchParams }: AdminEventsPageProps) {
@@ -113,7 +142,8 @@ export default async function AdminEventsPage({ searchParams }: AdminEventsPageP
   // 'all' means explicitly show all chapters (overrides admin default)
   const chapterId = params.chapter === 'all' ? null : (params.chapter ?? admin.chapter_id ?? null)
   const chapterSlug = chapterId ? chapters.find((c) => c.id === chapterId)?.slug : undefined
-  const events = await getEvents(season, chapterId || undefined, chapterSlug)
+  const page = Math.max(1, parseInt(params.page || '1', 10))
+  const { events, totalCount } = await getEvents(season, chapterId || undefined, chapterSlug, page)
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -196,6 +226,16 @@ export default async function AdminEventsPage({ searchParams }: AdminEventsPageP
           </TableBody>
         </Table>
       </div>
+
+      {totalCount > 0 && (
+        <AdminPagination
+          page={page}
+          pageSize={PAGE_SIZE}
+          totalCount={totalCount}
+          buildPageUrl={(p) => buildPageUrl(p, season, params.chapter)}
+          label="events"
+        />
+      )}
     </div>
   )
 }
