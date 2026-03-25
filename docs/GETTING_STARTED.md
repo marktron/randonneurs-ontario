@@ -51,6 +51,7 @@ For local development, the environment variables will be populated after startin
 | `SUPPRESS_ADMIN_EMAILS`         | Set to `true` to prevent emails to admins/VPs in dev  | Add to `.env.local`                                     |
 | `NEXT_PUBLIC_CURRENT_SEASON`    | Current riding season year                            | Set to current year (e.g., `2025`)                      |
 | `CRON_SECRET`                   | Secret for authenticating cron jobs (production only) | Generate a random string (e.g., `openssl rand -hex 32`) |
+| `REVALIDATE_SECRET`             | Secret for on-demand cache revalidation (production)  | Generate a random string (e.g., `openssl rand -hex 32`) |
 
 ## Step 4: Start Local Supabase
 

@@ -382,19 +382,61 @@ The pattern combines:
 
 ### Cache Invalidation
 
-We use `revalidatePath()` to invalidate cache after mutations:
+#### Tag-based revalidation (primary approach)
+
+All `unstable_cache()` calls include cache tags. Server actions call `revalidateTag()` after mutations to invalidate related caches:
 
 ```typescript
 // lib/actions/register.ts
-export async function registerForEvent(data: RegistrationData) {
-  // ... create registration ...
-
-  // Invalidate the registration page cache
-  revalidatePath(`/register/${event.slug}`)
-
-  return { success: true }
-}
+revalidateTag('registrations', 'max')
+revalidateTag('events', 'max')
+revalidateTag(`event-${event.slug}`, 'max')
 ```
+
+Top-level cache tags used across the codebase:
+
+| Tag             | Data                      |
+| --------------- | ------------------------- |
+| `events`        | Event listings, calendars |
+| `permanents`    | Permanent events          |
+| `registrations` | Registration data         |
+| `results`       | Ride results              |
+| `riders`        | Rider profiles            |
+| `records`       | All record types          |
+| `routes`        | Route data                |
+| `news`          | News/notices              |
+| `chapters`      | Chapter listings          |
+| `slugs`         | Event slug index          |
+
+Dynamic tags like `event-${slug}`, `chapter-${urlSlug}`, `rider-${slug}`, and `year-${year}` provide fine-grained invalidation.
+
+#### Path-based revalidation
+
+`revalidatePath()` is used for specific page caches:
+
+```typescript
+revalidatePath(`/register/${event.slug}`)
+```
+
+#### On-demand revalidation API
+
+For cases where cached data goes stale outside of normal server actions (e.g., direct Supabase edits, post-deploy), use the `/api/revalidate` endpoint:
+
+```bash
+# Bust specific caches
+curl -X POST https://randonneursontario.ca/api/revalidate \
+  -H "Authorization: Bearer $REVALIDATE_SECRET" \
+  -H "Content-Type: application/json" \
+  -d '{"tags": ["events", "results"]}'
+
+# Bust all caches
+curl -X POST https://randonneursontario.ca/api/revalidate \
+  -H "Authorization: Bearer $REVALIDATE_SECRET" \
+  -H "Content-Type: application/json" \
+  -d '{"all": true}'
+```
+
+The endpoint validates tags against the known list above and returns `400` for unknown tags. Requires the `REVALIDATE_SECRET` environment variable.
 
 ## Type Safety
 

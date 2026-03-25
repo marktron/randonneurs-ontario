@@ -240,6 +240,7 @@ Navbar renders desktop + mobile nav from data
 ```
 
 **Key files:**
+
 - `content/navigation.json` — raw nav structure with template placeholders
 - `lib/navigation.ts` — `getResolvedNavigation()` (client-safe, imports JSON module), plus shared template resolution helpers (`expandItem`, `resolveHref`, `getTemplateVariables`)
 - `lib/content.ts` — `getNavigation()` (server-side, reads from disk via `fs`) and `getNavigationRaw()` (for admin editing)
@@ -305,6 +306,14 @@ GitHub Actions (hourly) → /api/cron/complete-events → Update event status �
 - `SITE_URL` - Production URL (e.g., `https://randonneursontario.ca`)
 
 **Timezone handling:** All event times are interpreted as Toronto time (`America/Toronto`), with proper EST/EDT handling via `createTorontoDate()` in `lib/brmTimes.ts`.
+
+## On-Demand Cache Revalidation
+
+The site provides a `POST /api/revalidate` endpoint for manually busting cached data when it goes stale outside of normal server actions (e.g., direct Supabase edits, after a deploy).
+
+**Authentication:** Requires `REVALIDATE_SECRET` environment variable (Bearer token).
+
+**Usage:** See [Data Layer: On-demand revalidation API](DATA_LAYER.md#on-demand-revalidation-api) for details.
 
 ## Error Monitoring
 
