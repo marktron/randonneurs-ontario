@@ -55,6 +55,10 @@
           "href": "/mailing-list"
         },
         {
+          "label": "Control Cards",
+          "href": "/control-cards"
+        },
+        {
           "label": "Contact",
           "href": "/contact"
         }

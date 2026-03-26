@@ -340,3 +340,49 @@ export async function getActiveRoutes(): Promise<ActiveRoute[]> {
     tags: ['routes'],
   })()
 }
+
+export interface ActiveRouteWithRwgps extends ActiveRoute {
+  rwgpsId: string | null
+}
+
+const getActiveRoutesWithRwgpsInner = cache(async (): Promise<ActiveRouteWithRwgps[]> => {
+  const { data: routes, error } = await getSupabase()
+    .from('routes')
+    .select(
+      `
+      id,
+      name,
+      slug,
+      distance_km,
+      chapter_id,
+      rwgps_id,
+      chapters (name)
+    `
+    )
+    .eq('is_active', true)
+    .order('name', { ascending: true })
+
+  if (error || !routes) {
+    return handleDataError(
+      error || new Error('No routes returned'),
+      { operation: 'getActiveRoutesWithRwgps' },
+      []
+    )
+  }
+
+  return (routes as (RouteWithChapterName & { rwgps_id: string | null })[]).map((route) => ({
+    id: route.id,
+    name: route.name,
+    slug: route.slug,
+    distanceKm: route.distance_km,
+    chapterId: route.chapter_id,
+    chapterName: route.chapters?.name ?? null,
+    rwgpsId: route.rwgps_id ?? null,
+  }))
+})
+
+export async function getActiveRoutesWithRwgps(): Promise<ActiveRouteWithRwgps[]> {
+  return unstable_cache(async () => getActiveRoutesWithRwgpsInner(), ['active-routes-rwgps'], {
+    tags: ['routes'],
+  })()
+}
