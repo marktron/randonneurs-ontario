@@ -124,12 +124,9 @@ function formatEventTime(timeStr: string | null): string {
 /**
  * Build a URL to the route page if route info is available.
  */
-function buildRouteUrl(
-  chapterSlug: string | undefined,
-  routeSlug: string | undefined
-): string | undefined {
-  if (!chapterSlug || !routeSlug) return undefined
-  return `https://randonneursontario.ca/routes/${chapterSlug}/${routeSlug}`
+function buildRouteUrl(rwgpsId: string | null | undefined): string | undefined {
+  if (!rwgpsId) return undefined
+  return `https://ridewithgps.com/routes/${rwgpsId}`
 }
 
 function buildManagementUrl(managementToken: string): string {
@@ -534,7 +531,7 @@ export async function registerForEvent(data: RegistrationData): Promise<Registra
         eventType: formatEventType(event.event_type),
         chapterName: chapter?.name || '',
         chapterSlug: chapter?.slug || '',
-        routeUrl: buildRouteUrl(chapter?.slug, event.routes?.slug),
+        routeUrl: buildRouteUrl(event.routes?.rwgps_id),
         notes: notes || undefined,
         membershipStatus: 'none',
         managementUrl: buildManagementUrl(mgmtToken),
@@ -583,7 +580,7 @@ export async function registerForEvent(data: RegistrationData): Promise<Registra
           eventType: formatEventType(event.event_type),
           chapterName: chapter?.name || '',
           chapterSlug: chapter?.slug || '',
-          routeUrl: buildRouteUrl(chapter?.slug, event.routes?.slug),
+          routeUrl: buildRouteUrl(event.routes?.rwgps_id),
           notes: notes || undefined,
           membershipStatus: 'trial-used',
           managementUrl: buildManagementUrl(mgmtToken),
@@ -631,7 +628,7 @@ export async function registerForEvent(data: RegistrationData): Promise<Registra
       eventType: formatEventType(event.event_type),
       chapterName: chapter?.name || '',
       chapterSlug: chapter?.slug || '',
-      routeUrl: buildRouteUrl(chapter?.slug, event.routes?.slug),
+      routeUrl: buildRouteUrl(event.routes?.rwgps_id),
       notes: notes || undefined,
       membershipType: membershipResult.type,
       membershipStatus: 'valid',
@@ -899,7 +896,7 @@ export async function registerForPermanent(
         eventType: 'Permanent',
         chapterName: chapter?.name || '',
         chapterSlug: chapter?.slug || '',
-        routeUrl: buildRouteUrl(chapter?.slug, route.slug),
+        routeUrl: buildRouteUrl(route.rwgps_id),
         notes: notes || undefined,
         membershipStatus: 'none',
         managementUrl: buildManagementUrl(mgmtToken),
@@ -946,7 +943,7 @@ export async function registerForPermanent(
           eventType: 'Permanent',
           chapterName: chapter?.name || '',
           chapterSlug: chapter?.slug || '',
-          routeUrl: buildRouteUrl(chapter?.slug, route.slug),
+          routeUrl: buildRouteUrl(route.rwgps_id),
           notes: notes || undefined,
           membershipStatus: 'trial-used',
           managementUrl: buildManagementUrl(mgmtToken),
@@ -986,7 +983,7 @@ export async function registerForPermanent(
       eventType: 'Permanent',
       chapterName: chapter?.name || '',
       chapterSlug: chapter?.slug || '',
-      routeUrl: buildRouteUrl(chapter?.slug, route.slug),
+      routeUrl: buildRouteUrl(route.rwgps_id),
       notes: notes || undefined,
       membershipType: membershipResult.type,
       membershipStatus: 'valid',
@@ -1241,7 +1238,7 @@ export async function completeRegistrationWithRider(
       eventType: formatEventType(event.event_type),
       chapterName: chapter?.name || '',
       chapterSlug: chapter?.slug || '',
-      routeUrl: buildRouteUrl(chapter?.slug, event.routes?.slug),
+      routeUrl: buildRouteUrl(event.routes?.rwgps_id),
       notes: notes || undefined,
       membershipStatus: 'none',
       managementUrl: buildManagementUrl(mgmtToken),
@@ -1286,7 +1283,7 @@ export async function completeRegistrationWithRider(
         eventType: formatEventType(event.event_type),
         chapterName: chapter?.name || '',
         chapterSlug: chapter?.slug || '',
-        routeUrl: buildRouteUrl(chapter?.slug, event.routes?.slug),
+        routeUrl: buildRouteUrl(event.routes?.rwgps_id),
         notes: notes || undefined,
         membershipStatus: 'trial-used',
         managementUrl: buildManagementUrl(mgmtToken),
@@ -1339,7 +1336,7 @@ export async function completeRegistrationWithRider(
     eventType: formatEventType(event.event_type),
     chapterName: chapter?.name || '',
     chapterSlug: chapter?.slug || '',
-    routeUrl: buildRouteUrl(chapter?.slug, event.routes?.slug),
+    routeUrl: buildRouteUrl(event.routes?.rwgps_id),
     notes: notes || undefined,
     membershipType: membershipResult.type,
     membershipStatus: 'valid',
