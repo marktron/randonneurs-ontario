@@ -443,7 +443,7 @@ export async function registerForEvent(data: RegistrationData): Promise<Registra
       id, slug, status, name, event_date, start_time,
       start_location, distance_km, event_type, chapter_id,
       chapters (slug, name),
-      routes (slug)
+      routes (slug, rwgps_id)
     `
     )
     .eq('id', eventId)
@@ -750,7 +750,7 @@ export async function registerForPermanent(
     .from('routes')
     .select(
       `
-      id, name, slug, distance_km, chapter_id,
+      id, name, slug, distance_km, chapter_id, rwgps_id,
       chapters (slug, name)
     `
     )
@@ -1103,7 +1103,7 @@ export async function completeRegistrationWithRider(
       id, slug, status, name, event_date, start_time,
       start_location, distance_km, event_type, chapter_id,
       chapters (slug, name),
-      routes (slug)
+      routes (slug, rwgps_id)
     `
     )
     .eq('id', eventId)
