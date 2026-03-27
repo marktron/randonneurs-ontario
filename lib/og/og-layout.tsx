@@ -155,7 +155,6 @@ function OgLayout({
           flex: 1,
           padding: '60px 72px',
           position: 'relative',
-          zIndex: 1,
         }}
       >
         {/* Eyebrow */}
@@ -241,7 +240,6 @@ function OgLayout({
           padding: '0 40px 40px',
           position: 'relative',
           marginTop: '-80',
-          zIndex: 1,
         }}
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
