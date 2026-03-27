@@ -56,7 +56,7 @@ export function buildRegistrationConfirmationEmail(data: RegistrationEmailData):
       ? `
 ⚠️ IMPORTANT: Your registration is NOT YET VALID
 
-We could not verify your club membership. Please join Randonneurs Ontario at https://randonneursontario.ca/membership before the event to complete your registration.
+We could not verify your club membership. Please join Randonneurs Ontario at ${process.env.NEXT_PUBLIC_SITE_URL}/membership before the event to complete your registration.
 
 ---
 
@@ -65,7 +65,7 @@ We could not verify your club membership. Please join Randonneurs Ontario at htt
         ? `
 ⚠️ IMPORTANT: Your trial membership has been used
 
-Your trial membership was used for a previous event this season. Please upgrade to a full membership at https://randonneursontario.ca/membership to participate in this event.
+Your trial membership was used for a previous event this season. Please upgrade to a full membership at ${process.env.NEXT_PUBLIC_SITE_URL}/membership to participate in this event.
 
 ---
 
@@ -80,7 +80,7 @@ Your trial membership was used for a previous event this season. Please upgrade 
     <p style="color: #dc2626; font-weight: 600; margin: 0 0 8px 0;">⚠️ Your registration is NOT YET VALID</p>
     <p style="color: #7f1d1d; margin: 0;">
       We could not verify your club membership. Please
-      <a href="https://randonneursontario.ca/membership" style="color: #dc2626;">join Randonneurs Ontario</a>
+      <a href="${process.env.NEXT_PUBLIC_SITE_URL}/membership" style="color: #dc2626;">join Randonneurs Ontario</a>
       before the event to complete your registration.
     </p>
   </div>
@@ -91,7 +91,7 @@ Your trial membership was used for a previous event this season. Please upgrade 
     <p style="color: #dc2626; font-weight: 600; margin: 0 0 8px 0;">⚠️ Trial Membership Used</p>
     <p style="color: #7f1d1d; margin: 0;">
       Your trial membership was used for a previous event. Please
-      <a href="https://randonneursontario.ca/membership" style="color: #dc2626;">upgrade to a full membership</a>
+      <a href="${process.env.NEXT_PUBLIC_SITE_URL}/membership" style="color: #dc2626;">upgrade to a full membership</a>
       to participate in this event.
     </p>
   </div>
@@ -151,7 +151,7 @@ Brevet Rules
 - Have front and rear lights solidly affixed to your bicycle.
 - Have someone sign your brevet card at the controls.
 
-Learn more about Brevets: https://register.randonneursontario.ca/intro
+Learn more about Brevets: ${process.env.NEXT_PUBLIC_SITE_URL}/intro
 
 --------------------
 What's Next?
@@ -227,7 +227,7 @@ ${
     <li>Have front and rear lights solidly affixed to your bicycle.</li>
     <li>Have someone sign your brevet card at the controls.</li>
   </ul>
-  <p><a href="https://register.randonneursontario.ca/intro" style="color: #0066cc;">Learn more about Brevets</a></p>
+  <p><a href="${process.env.NEXT_PUBLIC_SITE_URL}/intro" style="color: #0066cc;">Learn more about Brevets</a></p>
 
   <hr style="border: none; border-top: 1px solid #eee; margin: 32px 0;">
 
