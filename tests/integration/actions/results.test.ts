@@ -121,6 +121,10 @@ vi.mock('@/lib/chapter-config', () => ({
   getUrlSlugFromDbSlug: vi.fn((slug: string) => (slug === 'toronto' ? 'toronto' : null)),
 }))
 
+vi.mock('@/lib/memberships/service', () => ({
+  getMembershipForRider: vi.fn(),
+}))
+
 // Import after mocks
 import {
   createResult,
@@ -128,7 +132,9 @@ import {
   deleteResult,
   createBulkResults,
   addRegistration,
+  revalidateMembership,
 } from '@/lib/actions/results'
+import { getMembershipForRider } from '@/lib/memberships/service'
 
 const mockModule = await vi.importMock<{
   __calls: Array<{ table: string; method: string; args?: unknown[] }>
@@ -495,5 +501,101 @@ describe('createBulkResults', () => {
     const result = await createBulkResults('event-1', [], 2025, 200)
 
     expect(result.success).toBe(true)
+  })
+})
+
+describe('revalidateMembership', () => {
+  const mockGetMembership = vi.mocked(getMembershipForRider)
+
+  beforeEach(() => {
+    mockModule.__reset()
+    vi.clearAllMocks()
+  })
+
+  it('returns error when registration not found', async () => {
+    mockModule.__mockResultNotFound()
+
+    const result = await revalidateMembership('nonexistent-reg')
+
+    expect(result.success).toBe(false)
+  })
+
+  it('returns error when registration status is not incomplete', async () => {
+    mockModule.__mockResultFound({
+      id: 'reg-1',
+      status: 'registered',
+      rider_id: 'rider-1',
+      event_id: 'event-1',
+      riders: { first_name: 'Frank', last_name: 'Fake' },
+      events: { chapter_id: 'ch-1' },
+    })
+
+    const result = await revalidateMembership('reg-1')
+
+    expect(result.success).toBe(false)
+    expect(result.error).toContain('missing membership')
+  })
+
+  it('returns membershipFound: false when CCN has no membership', async () => {
+    mockModule.__mockResultFound({
+      id: 'reg-1',
+      status: 'incomplete: membership',
+      rider_id: 'rider-1',
+      event_id: 'event-1',
+      riders: { first_name: 'Frank', last_name: 'Fake' },
+      events: { chapter_id: 'ch-1' },
+    })
+    mockGetMembership.mockResolvedValueOnce({ found: false })
+
+    const result = await revalidateMembership('reg-1')
+
+    expect(result.success).toBe(true)
+    expect(result.data?.membershipFound).toBe(false)
+    expect(mockGetMembership).toHaveBeenCalledWith('rider-1', 'Frank', 'Fake', 'ch-1')
+  })
+
+  it('updates registration status when membership found', async () => {
+    mockModule.__mockResultFound({
+      id: 'reg-1',
+      status: 'incomplete: membership',
+      rider_id: 'rider-1',
+      event_id: 'event-1',
+      riders: { first_name: 'Frank', last_name: 'Fake' },
+      events: { chapter_id: 'ch-1' },
+    })
+    mockGetMembership.mockResolvedValueOnce({
+      found: true,
+      membershipId: 12345,
+      type: 'Individual Membership',
+    })
+    mockModule.__mockUpdateSuccess()
+
+    const result = await revalidateMembership('reg-1')
+
+    expect(result.success).toBe(true)
+    expect(result.data?.membershipFound).toBe(true)
+
+    const updateCalls = mockModule.__calls.filter(
+      (c) => c.table === 'registrations' && c.method === 'update'
+    )
+    expect(updateCalls).toHaveLength(1)
+    expect(updateCalls[0].args![0]).toMatchObject({ status: 'registered' })
+  })
+
+  it('returns error when CCN API fails', async () => {
+    mockModule.__mockResultFound({
+      id: 'reg-1',
+      status: 'incomplete: membership',
+      rider_id: 'rider-1',
+      event_id: 'event-1',
+      riders: { first_name: 'Frank', last_name: 'Fake' },
+      events: { chapter_id: null },
+    })
+    mockGetMembership.mockRejectedValueOnce(new Error('CCN API timed out after 10s'))
+
+    const result = await revalidateMembership('reg-1')
+
+    expect(result.success).toBe(false)
+    expect(result.error).toBe('CCN API timed out after 10s')
   })
 })

@@ -28,7 +28,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Loader2, Check, Plus, CheckCircle2, Globe, FileText, Mail, UserX } from 'lucide-react'
+import {
+  Loader2,
+  Check,
+  Plus,
+  CheckCircle2,
+  Globe,
+  FileText,
+  Mail,
+  UserX,
+  RefreshCw,
+} from 'lucide-react'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import {
   AlertDialog,
@@ -47,6 +57,7 @@ import {
   updateResult,
   updateRegistrationTeamName,
   adminCancelRegistration,
+  revalidateMembership,
   type ResultStatus,
 } from '@/lib/actions/results'
 import { formatFinishTime, buildParticipantMailtoUrl } from '@/lib/utils'
@@ -62,6 +73,7 @@ interface Registration {
   notes: string | null
   team_name: string | null
   is_team_captain: boolean | null
+  share_registration: boolean | null
   riders: {
     id: string
     first_name: string
@@ -111,6 +123,7 @@ interface Participant {
   membershipType: string | null // membership type for event's season, if any
   registrationTeamName: string | null
   isTeamCaptain: boolean | null
+  shareRegistration: boolean | null
 }
 
 interface CancelledRegistration {
@@ -322,26 +335,54 @@ function RiderRow({
     <TableRow className={isPending ? 'opacity-60' : undefined}>
       <TableCell className="font-medium">
         <div>
-          <Link href={`/admin/riders/${participant.riderId}`} className="hover:underline">
-            {riderName}
-          </Link>
-          {participant.registrationStatus === 'incomplete: membership' && (
-            <Badge variant="destructive" className="ml-2">
-              Missing membership
-            </Badge>
-          )}
-          {participant.hasRegistration &&
-            participant.registrationStatus === 'registered' &&
-            participant.membershipType === 'Trial Member' && (
-              <Badge variant="secondary" className="ml-2">
-                Trial
+          <div className="flex items-center flex-wrap gap-1">
+            <Link href={`/admin/riders/${participant.riderId}`} className="hover:underline">
+              {riderName}
+            </Link>
+            {participant.registrationStatus === 'incomplete: membership' && registrationId && (
+              <Badge
+                variant="destructive"
+                className="ml-1 cursor-pointer"
+                onClick={() => {
+                  startTransition(async () => {
+                    const res = await revalidateMembership(registrationId)
+                    if (!res.success) {
+                      toast.error(res.error || 'Failed to check membership')
+                    } else if (res.data?.membershipFound) {
+                      toast.success('Membership found — registration updated')
+                    } else {
+                      toast.info('Membership still not found in CCN')
+                    }
+                  })
+                }}
+              >
+                <RefreshCw className={`h-3 w-3 mr-1 ${isPending ? 'animate-spin' : ''}`} />
+                Missing membership
               </Badge>
             )}
-          {isFleche && participant.isTeamCaptain && (
-            <Badge variant="outline" className="ml-2">
-              Captain
-            </Badge>
-          )}
+            {participant.registrationStatus === 'incomplete: membership' && !registrationId && (
+              <Badge variant="destructive" className="ml-1">
+                Missing membership
+              </Badge>
+            )}
+            {participant.hasRegistration &&
+              participant.registrationStatus === 'registered' &&
+              participant.membershipType === 'Trial Member' && (
+                <Badge variant="secondary" className="ml-1">
+                  Trial
+                </Badge>
+              )}
+            {isFleche && participant.isTeamCaptain && (
+              <Badge variant="outline" className="ml-1">
+                Captain
+              </Badge>
+            )}
+            {participant.hasRegistration && participant.shareRegistration === false && (
+              <Badge variant="outline" className="ml-1">
+                Anonymous registration
+              </Badge>
+            )}
+          </div>
           {participant.email && (
             <p className="text-xs text-muted-foreground">{participant.email}</p>
           )}
@@ -615,6 +656,7 @@ export function EventResultsManager({
         membershipType: currentMembership?.membership_type ?? null,
         registrationTeamName: reg.team_name,
         isTeamCaptain: reg.is_team_captain,
+        shareRegistration: reg.share_registration,
       }
     })
 
@@ -634,6 +676,7 @@ export function EventResultsManager({
       membershipType: null,
       registrationTeamName: null,
       isTeamCaptain: false,
+      shareRegistration: null,
     }))
 
   const allParticipants = [...participantsFromRegistrations, ...participantsFromResultsOnly]

@@ -7,6 +7,7 @@ import { getUrlSlugFromDbSlug } from '@/lib/chapter-config'
 import { logAuditEvent } from '@/lib/audit-log'
 import { handleSupabaseError, createActionResult } from '@/lib/errors'
 import type { ActionResult } from '@/types/actions'
+import { getMembershipForRider } from '@/lib/memberships/service'
 import type {
   RegistrationInsert,
   ResultInsert,
@@ -448,4 +449,79 @@ export async function createBulkResults(
   })
 
   return { success: true }
+}
+
+export async function revalidateMembership(
+  registrationId: string
+): Promise<ActionResult<{ membershipFound: boolean }>> {
+  await requireAdmin()
+
+  const supabase = getSupabaseAdmin()
+
+  const { data: registration, error: fetchError } = await supabase
+    .from('registrations')
+    .select('id, status, rider_id, event_id, riders (first_name, last_name), events (chapter_id)')
+    .eq('id', registrationId)
+    .single()
+
+  if (fetchError || !registration) {
+    return handleSupabaseError(
+      fetchError,
+      { operation: 'revalidateMembership' },
+      'Registration not found'
+    )
+  }
+
+  const reg = registration as {
+    id: string
+    status: string | null
+    rider_id: string
+    event_id: string
+    riders: { first_name: string; last_name: string } | null
+    events: { chapter_id: string | null } | null
+  }
+
+  if (reg.status !== 'incomplete: membership') {
+    return { success: false, error: 'Registration does not have missing membership status' }
+  }
+
+  if (!reg.riders) {
+    return { success: false, error: 'Rider not found' }
+  }
+
+  let membershipFound: boolean
+  try {
+    const membership = await getMembershipForRider(
+      reg.rider_id,
+      reg.riders.first_name,
+      reg.riders.last_name,
+      reg.events?.chapter_id ?? undefined
+    )
+    membershipFound = membership.found
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'CCN API error'
+    return { success: false, error: message }
+  }
+
+  if (!membershipFound) {
+    return { success: true, data: { membershipFound: false } }
+  }
+
+  const { error: updateError } = await supabase
+    .from('registrations')
+    .update({ status: 'registered' })
+    .eq('id', registrationId)
+
+  if (updateError) {
+    return handleSupabaseError(
+      updateError,
+      { operation: 'revalidateMembership' },
+      'Failed to update registration'
+    )
+  }
+
+  revalidatePath(`/admin/events/${reg.event_id}`)
+  revalidateTag('registrations', 'max')
+
+  return { success: true, data: { membershipFound: true } }
 }
