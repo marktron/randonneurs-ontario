@@ -44,11 +44,6 @@ export async function generateMetadata({ params }: PageProps) {
     description: isFlecheMeta
       ? `Register your team for the ${flecheTitle} on ${formatDateShort(event.date)}.`
       : `Register for the ${event.name} ${event.distance}km ${event.type.toLowerCase()} on ${formatDateShort(event.date)}.`,
-    ...(event.imageUrl && {
-      openGraph: {
-        images: [{ url: event.imageUrl }],
-      },
-    }),
   }
 }
 

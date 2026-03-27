@@ -17,17 +17,9 @@ export async function generateMetadata({ params }: PageProps) {
     return { title: 'Route Not Found' }
   }
 
-  const { chapter } = await params
-  const chapterInfo = getChapterInfo(chapter)
-
   return {
     title: `${route.name} - Route History`,
     description: `Historical results for the ${route.name} route from Randonneurs Ontario.`,
-    ...(chapterInfo?.coverImage && {
-      openGraph: {
-        images: [{ url: chapterInfo.coverImage }],
-      },
-    }),
   }
 }
 

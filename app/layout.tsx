@@ -31,16 +31,10 @@ export const metadata: Metadata = {
     type: 'website',
     locale: 'en_CA',
     siteName: 'Randonneurs Ontario',
-    title: 'Randonneurs Ontario',
-    description:
-      'Long-distance cycling club in Ontario, Canada. Join us for brevets, populaires, and other randonneuring events.',
     images: [{ url: '/og-default.jpg', width: 1200, height: 630, alt: 'Randonneurs Ontario' }],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Randonneurs Ontario',
-    description: 'Long-distance cycling club in Ontario, Canada.',
-    images: ['/og-default.jpg'],
   },
   robots: {
     index: true,
