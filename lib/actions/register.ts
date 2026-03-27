@@ -318,33 +318,37 @@ async function createRegistrationRecord(
   }
 
   // Unique violation — a row already exists for this (event_id, rider_id).
-  // Only update if it's an incomplete registration (membership re-check).
-  const { data: updated, error: updateError } = await supabase
-    .from('registrations')
-    .update({
-      status,
-      share_registration: shareRegistration,
-      notes: notes || null,
-      team_name: teamName || null,
-      is_team_captain: isTeamCaptain || false,
-    })
-    .eq('event_id', eventId)
-    .eq('rider_id', riderId)
-    .eq('status', 'incomplete: membership')
-    .select('management_token')
-    .maybeSingle()
+  // Try updating if it's an incomplete registration (membership re-check)
+  // or a cancelled registration (re-registration).
+  for (const revivableStatus of ['incomplete: membership', 'cancelled'] as const) {
+    const { data: updated, error: updateError } = await supabase
+      .from('registrations')
+      .update({
+        status,
+        share_registration: shareRegistration,
+        notes: notes || null,
+        team_name: teamName || null,
+        is_team_captain: isTeamCaptain || false,
+        ...(revivableStatus === 'cancelled' ? { cancelled_at: null } : {}),
+      })
+      .eq('event_id', eventId)
+      .eq('rider_id', riderId)
+      .eq('status', revivableStatus)
+      .select('management_token')
+      .maybeSingle()
 
-  if (updateError) {
-    console.error('🚨 Error updating registration:', updateError)
-    throw new Error('Failed to complete registration')
+    if (updateError) {
+      console.error('🚨 Error updating registration:', updateError)
+      throw new Error('Failed to complete registration')
+    }
+
+    if (updated) {
+      return (updated as { management_token: string }).management_token
+    }
   }
 
-  if (!updated) {
-    // No row matched the update — the existing registration is already 'registered'
-    return 'duplicate'
-  }
-
-  return (updated as { management_token: string }).management_token
+  // No row matched either update — the existing registration is already 'registered'
+  return 'duplicate'
 }
 
 // ============================================================================

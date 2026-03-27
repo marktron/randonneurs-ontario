@@ -195,13 +195,12 @@ export async function cancelRegistration(
     return { success: false, error: 'This event is no longer open for changes' }
   }
 
-  // Update registration and invalidate the management token
+  // Update registration status (preserve management_token so manage page stays accessible)
   const { error: updateError } = await supabase
     .from('registrations')
     .update({
       status: 'cancelled',
       cancelled_at: new Date().toISOString(),
-      management_token: null,
     })
     .eq('id', reg.id)
 

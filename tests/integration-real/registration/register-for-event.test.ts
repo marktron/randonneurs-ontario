@@ -26,6 +26,7 @@ describe('registerForEvent (real DB)', () => {
   const pastDate = daysFromNow(-7)
 
   let sendEmail: ReturnType<typeof vi.fn>
+  let sendCancellationEmail: ReturnType<typeof vi.fn>
   let searchCCNMembership: ReturnType<typeof vi.fn>
   let searchRiderCandidates: ReturnType<typeof vi.fn>
 
@@ -35,6 +36,7 @@ describe('registerForEvent (real DB)', () => {
     // Set up mocks
     const emailMod = await import('@/lib/email/send-registration-email')
     sendEmail = vi.mocked(emailMod.sendRegistrationConfirmationEmail)
+    sendCancellationEmail = vi.mocked(emailMod.sendCancellationConfirmationEmail)
 
     const ccnMod = await import('@/lib/ccn/client')
     searchCCNMembership = vi.mocked(ccnMod.searchCCNMembership)
@@ -43,8 +45,9 @@ describe('registerForEvent (real DB)', () => {
     searchRiderCandidates = vi.mocked(matchMod.searchRiderCandidates)
     searchRiderCandidates.mockResolvedValue({ candidates: [] })
 
-    // sendRegistrationConfirmationEmail must return a Promise so .catch() works
+    // Email mocks must return a Promise so .catch() works
     sendEmail.mockResolvedValue({ success: true })
+    sendCancellationEmail.mockResolvedValue({ success: true })
 
     // Clean up leftover test data
     await supabase.from('rider_merges').delete().eq('rider_id', IDS.rider)
@@ -131,6 +134,7 @@ describe('registerForEvent (real DB)', () => {
     // Re-establish default mocks after reset
     searchRiderCandidates.mockResolvedValue({ candidates: [] })
     sendEmail.mockResolvedValue({ success: true })
+    sendCancellationEmail.mockResolvedValue({ success: true })
   })
 
   afterAll(async () => {
@@ -470,5 +474,99 @@ describe('registerForEvent (real DB)', () => {
       .eq('event_id', IDS.scheduledEvent)
       .single()
     expect(reg?.rider_id).toBe(IDS.rider)
+  })
+
+  it('re-registration after cancellation revives the row and preserves management token', async () => {
+    searchCCNMembership.mockResolvedValue({
+      found: true,
+      membershipId: 42,
+      type: 'Individual Membership',
+      city: 'Toronto',
+      country: 'Canada',
+    })
+
+    const { registerForEvent } = await import('@/lib/actions/register')
+    const { cancelRegistration } = await import('@/lib/actions/manage-registration')
+
+    // 1. Register
+    const result1 = await registerForEvent(buildRegistrationData({ eventId: IDS.scheduledEvent }))
+    expect(result1.success).toBe(true)
+
+    // Grab the management token
+    const { data: regBefore } = await supabase
+      .from('registrations')
+      .select('management_token, status')
+      .eq('event_id', IDS.scheduledEvent)
+      .eq('rider_id', IDS.rider)
+      .single()
+    expect(regBefore?.status).toBe('registered')
+    const originalToken = regBefore!.management_token
+
+    // 2. Cancel
+    const cancelResult = await cancelRegistration(originalToken)
+    expect(cancelResult.success).toBe(true)
+
+    // Verify cancelled state
+    const { data: regCancelled } = await supabase
+      .from('registrations')
+      .select('status, cancelled_at, management_token')
+      .eq('event_id', IDS.scheduledEvent)
+      .eq('rider_id', IDS.rider)
+      .single()
+    expect(regCancelled?.status).toBe('cancelled')
+    expect(regCancelled?.cancelled_at).not.toBeNull()
+    expect(regCancelled?.management_token).toBe(originalToken)
+
+    // 3. Re-register
+    const result2 = await registerForEvent(buildRegistrationData({ eventId: IDS.scheduledEvent }))
+    expect(result2.success).toBe(true)
+
+    // Verify revived state
+    const { data: regAfter } = await supabase
+      .from('registrations')
+      .select('status, cancelled_at, management_token')
+      .eq('event_id', IDS.scheduledEvent)
+      .eq('rider_id', IDS.rider)
+      .single()
+    expect(regAfter?.status).toBe('registered')
+    expect(regAfter?.cancelled_at).toBeNull()
+    expect(regAfter?.management_token).toBe(originalToken)
+
+    // Confirmation email sent for re-registration
+    expect(sendEmail).toHaveBeenCalledTimes(2)
+  })
+
+  it('re-registration after cancellation still blocks true duplicates', async () => {
+    searchCCNMembership.mockResolvedValue({
+      found: true,
+      membershipId: 42,
+      type: 'Individual Membership',
+      city: 'Toronto',
+      country: 'Canada',
+    })
+
+    const { registerForEvent } = await import('@/lib/actions/register')
+    const { cancelRegistration } = await import('@/lib/actions/manage-registration')
+
+    // Register → cancel → re-register
+    await registerForEvent(buildRegistrationData({ eventId: IDS.scheduledEvent }))
+    const { data: reg } = await supabase
+      .from('registrations')
+      .select('management_token')
+      .eq('event_id', IDS.scheduledEvent)
+      .eq('rider_id', IDS.rider)
+      .single()
+    await cancelRegistration(reg!.management_token)
+    const reRegResult = await registerForEvent(
+      buildRegistrationData({ eventId: IDS.scheduledEvent })
+    )
+    expect(reRegResult.success).toBe(true)
+
+    // Now a third registration attempt should be blocked as duplicate
+    const duplicateResult = await registerForEvent(
+      buildRegistrationData({ eventId: IDS.scheduledEvent })
+    )
+    expect(duplicateResult.success).toBe(false)
+    expect(duplicateResult.error).toContain('already registered')
   })
 })
