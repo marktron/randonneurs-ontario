@@ -2,7 +2,7 @@
 title: Your First Brevet
 slug: your-first-brevet
 description: Everything you need to know to sign up, show up, and finish your first 200 km brevet.
-lastUpdated: 2026-03-19
+lastUpdated: 2026-03-27
 ---
 
 You've been riding for a while. Maybe you did a century last summer, or you've been stringing together longer weekend rides and wondering what's next. Someone mentioned randonneuring, you looked it up, and now you're staring at a 200 km brevet on [the calendar](/calendar) thinking "can I actually do this?"
@@ -47,4 +47,4 @@ Post a ride report if you feel like it. The club loves hearing from first-timers
 
 ---
 
-If this sounds a little daunting, that’s normal. If it sounds a little exciting too, that’s probably your answer. [Pick a 200](/calendar) and join us.
+If this sounds a little daunting, that’s normal. If it sounds a little exciting too, that’s probably your answer. [Pick a 200](/calendar) and join us, or [contact your local chapter VP](/contact) to learn more.
