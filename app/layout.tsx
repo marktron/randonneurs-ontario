@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import { Noto_Sans, Noto_Serif } from 'next/font/google'
+import { Analytics } from '@vercel/analytics/next'
 import { AuthRedirectHandler } from '@/components/auth-redirect-handler'
 import { OrganizationJsonLd } from '@/components/structured-data'
 import './globals.css'
@@ -55,6 +56,7 @@ export default function RootLayout({
         />
         <AuthRedirectHandler />
         {children}
+        <Analytics />
       </body>
     </html>
   )
