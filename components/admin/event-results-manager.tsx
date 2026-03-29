@@ -528,7 +528,7 @@ function RiderRow({
           <span className="text-xs text-muted-foreground">—</span>
         )}
       </TableCell>
-      <TableCell>
+      <TableCell className="max-w-[300px] whitespace-normal break-words">
         {participant.registrationNotes && (
           <p className="text-muted-foreground">{participant.registrationNotes}</p>
         )}
