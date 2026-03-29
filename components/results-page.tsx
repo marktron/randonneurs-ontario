@@ -272,7 +272,7 @@ export function ResultsPage({
                   ) : (
                     /* Non-fleche: Flat rider grid */
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-1">
-                      {participants.map((rider, index) => (
+                      {event.riders.map((rider, index) => (
                         <div
                           key={`${rider.name}-${index}`}
                           className="flex items-center justify-between py-1.5 border-b border-border/50 group gap-2"
