@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useTransition, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import Link from 'next/link'
 import {
@@ -37,6 +38,7 @@ import {
   FileText,
   Mail,
   UserX,
+  Trash2,
   RefreshCw,
 } from 'lucide-react'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
@@ -55,6 +57,7 @@ import { Badge } from '@/components/ui/badge'
 import {
   createResult,
   updateResult,
+  deleteResult,
   updateRegistrationTeamName,
   adminCancelRegistration,
   revalidateMembership,
@@ -174,6 +177,79 @@ interface RiderRowProps {
     riderName: string,
     riderEmail: string | null
   ) => void
+}
+
+function DeleteResultButton({
+  resultId,
+  riderName,
+  riderEmail,
+  isPending,
+  registrationId,
+  onRegistrationCancelled,
+}: {
+  resultId: string
+  riderName: string
+  riderEmail: string | null
+  isPending: boolean
+  registrationId: string | null
+  onRegistrationCancelled: (id: string, name: string, email: string | null) => void
+}) {
+  const router = useRouter()
+  const [deleting, startDelete] = useTransition()
+
+  return (
+    <AlertDialog>
+      <AlertDialogTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7 text-muted-foreground hover:text-destructive"
+          title="Delete result"
+          disabled={isPending || deleting}
+        >
+          <Trash2 className="h-4 w-4" />
+        </Button>
+      </AlertDialogTrigger>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Delete result?</AlertDialogTitle>
+          <AlertDialogDescription>
+            This will remove <strong>{riderName}</strong>&apos;s registration and result from the
+            event. They will not appear as DNS on the website.
+            <br />
+            <br />
+            Use this if the rider cancelled with the organizer but did not cancel their registration
+            online.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Keep</AlertDialogCancel>
+          <AlertDialogAction
+            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            onClick={() => {
+              startDelete(async () => {
+                const res = await deleteResult(resultId)
+                if (!res.success) {
+                  toast.error(res.error || 'Failed to delete result')
+                  return
+                }
+                if (registrationId) {
+                  const regRes = await adminCancelRegistration(registrationId)
+                  if (regRes.success) {
+                    onRegistrationCancelled(registrationId, riderName, riderEmail)
+                  }
+                }
+                toast.success(`Result deleted for ${riderName}`)
+                router.refresh()
+              })
+            }}
+          >
+            Delete Result
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  )
 }
 
 function RiderRow({
@@ -545,7 +621,7 @@ function RiderRow({
             participant.hasRegistration &&
             (participant.registrationStatus === 'registered' ||
               participant.registrationStatus === 'incomplete: membership') &&
-            eventStatus === 'scheduled' &&
+            (eventStatus === 'scheduled' || eventStatus === 'completed') &&
             !result && (
               <AlertDialog>
                 <AlertDialogTrigger asChild>
@@ -589,6 +665,16 @@ function RiderRow({
                 </AlertDialogContent>
               </AlertDialog>
             )}
+          {result && eventStatus === 'completed' && (
+            <DeleteResultButton
+              resultId={result.id}
+              riderName={riderName}
+              riderEmail={participant.email}
+              isPending={isPending}
+              registrationId={registrationId}
+              onRegistrationCancelled={onRegistrationCancelled}
+            />
+          )}
         </div>
       </TableCell>
     </TableRow>
