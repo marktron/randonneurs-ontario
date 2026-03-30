@@ -206,7 +206,7 @@ export default async function EventDetailPage({ params, searchParams }: EventPag
                 (r) => !registeredRiderIds.has(r.rider_id)
               ).length
               const total = registrations.length + resultsOnlyCount
-              return `${total} ${total === 1 ? 'rider' : 'riders'}`
+              return `${results.length} ${results.length === 1 ? 'result' : 'results'} / ${total} ${total === 1 ? 'rider' : 'riders'}`
             })()}
           </span>
         </div>
