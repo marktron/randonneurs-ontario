@@ -783,7 +783,7 @@ export function EventResultsManager({
     return a.firstName.localeCompare(b.firstName)
   })
 
-  const completedCount = results.length
+  const completedCount = results.filter((r) => r.status && r.status !== 'pending').length
   const totalCount = allParticipants.length
 
   const participantEmails = allParticipants

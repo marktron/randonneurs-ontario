@@ -206,7 +206,10 @@ export default async function EventDetailPage({ params, searchParams }: EventPag
                 (r) => !registeredRiderIds.has(r.rider_id)
               ).length
               const total = registrations.length + resultsOnlyCount
-              return `${results.length} ${results.length === 1 ? 'result' : 'results'} / ${total} ${total === 1 ? 'rider' : 'riders'}`
+              const submittedCount = results.filter(
+                (r) => r.status && r.status !== 'pending'
+              ).length
+              return `${submittedCount} ${submittedCount === 1 ? 'result' : 'results'} / ${total} ${total === 1 ? 'rider' : 'riders'}`
             })()}
           </span>
         </div>
