@@ -140,7 +140,7 @@ Start time: ${data.eventTime} ${data.eventDate}
 Start location: ${data.eventLocation}
 ${membershipTypeRow}
 ${notesSection}
-${data.managementUrl ? `\nNeed to cancel or review your registration? ${data.managementUrl}\n` : ''}
+${data.managementUrl ? `\nNew for 2026! Cancel your event registration or submit your results: ${data.managementUrl}\n` : ''}
 --------------------
 Brevet Rules
 --------------------
@@ -213,12 +213,18 @@ ${membershipWarningHtml}
 ${
   data.managementUrl
     ? `
-  <p style="margin: 16px 0;">
-    Need to cancel or review your registration? <a href="${safe.managementUrl}" style="color: #0066cc;">Manage your registration</a>
-  </p>
+    <div style="background-color: #E5F0FA; border: 1px solid #73ABE3; border-radius: 8px; padding: 16px; margin: 16px 0;">
+      <p style="text-align: center;">
+        <strong>New for 2026!</strong> Need to cancel your event registration or submit your results?
+      </p>
+      <p style="text-align: center;">
+        <a href="${safe.managementUrl}" style="display: inline-block; background-color: #0066cc; color: white; padding: 8px 16px; text-decoration: none; border-radius: 6px; font-weight: 600;">Manage your registration</a>
+      </p>
+    </div>
 `
     : ''
 }
+
   <h2 style="font-size: 18px; margin-bottom: 16px;">Brevet Rules</h2>
   <ul style="padding-left: 20px; margin: 0 0 24px 0;">
     <li>Be an active member of Randonneurs Ontario and Ontario Cycling.</li>
