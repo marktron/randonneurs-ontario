@@ -562,8 +562,8 @@ This email was sent from the Randonneurs Ontario admin system.
       } else {
         try {
           await sendgrid.send({
-            to: suppressAdminEmails ? admin.email : 'vp-toronto@randonneursontario.ca',
-            cc: suppressAdminEmails ? undefined : admin.email,
+            to: suppressAdminEmails ? admin.email : 'vp-admin@randonneursontario.ca',
+            cc: suppressAdminEmails ? undefined : [admin.email, 'vp-toronto@randonneursontario.ca'],
             from: fromEmail,
             replyTo: admin.email,
             subject,
