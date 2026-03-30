@@ -561,9 +561,19 @@ This email was sent from the Randonneurs Ontario admin system.
         console.warn('SendGrid API key not configured, skipping email')
       } else {
         try {
+          const toAddress = suppressAdminEmails ? admin.email : 'vp-admin@randonneursontario.ca'
+          // Deduplicate recipients to avoid SendGrid 400
+          const ccAddresses = suppressAdminEmails
+            ? undefined
+            : [
+                ...new Set(
+                  [admin.email, 'vp-toronto@randonneursontario.ca'].map((e) => e.toLowerCase())
+                ),
+              ].filter((email) => email !== toAddress.toLowerCase())
+
           await sendgrid.send({
-            to: suppressAdminEmails ? admin.email : 'vp-admin@randonneursontario.ca',
-            cc: suppressAdminEmails ? undefined : [admin.email, 'vp-toronto@randonneursontario.ca'],
+            to: toAddress,
+            cc: ccAddresses && ccAddresses.length > 0 ? ccAddresses : undefined,
             from: fromEmail,
             replyTo: admin.email,
             subject,
@@ -574,7 +584,12 @@ This email was sent from the Randonneurs Ontario admin system.
             },
           })
         } catch (emailError) {
-          console.error('Failed to send results email:', emailError)
+          const errBody = (emailError as { response?: { body?: unknown } })?.response?.body
+          console.error(
+            'Failed to send results email:',
+            emailError,
+            errBody ? JSON.stringify(errBody) : ''
+          )
           return { success: false, error: 'Failed to send email. Please try again.' }
         }
       }
