@@ -21,7 +21,7 @@ Randonneurs Ontario is a volunteer-run organization dedicated to **randonneuring
 | **Database**      | Supabase (PostgreSQL)   | Hosted database with authentication             |
 | **Styling**       | Tailwind CSS 4          | Utility-first CSS framework                     |
 | **UI Components** | shadcn/ui + Radix UI    | Accessible component library                    |
-| **Email**         | SendGrid                | Transactional emails for registration           |
+| **Email**         | Amazon SES              | Transactional emails for registration           |
 | **Maps**          | RideWithGPS             | Route maps and cue sheets                       |
 
 ## Directory Structure

@@ -1,5 +1,5 @@
 import { getSupabaseAdmin } from '@/lib/supabase-server'
-import { sendgrid, fromEmail, suppressAdminEmails } from '@/lib/email/sendgrid'
+import { sendEmail, fromEmail, suppressAdminEmails, isEmailConfigured } from '@/lib/email/ses'
 import { buildResultSubmissionRequestEmail } from '@/lib/email/templates'
 import { format } from 'date-fns'
 import { parseLocalDate } from '@/lib/utils'
@@ -148,21 +148,18 @@ export async function createPendingResultsAndSendEmails(
     const { subject, text, html } = buildResultSubmissionRequestEmail(emailData)
 
     try {
-      if (process.env.SENDGRID_API_KEY) {
-        await sendgrid.send({
+      if (isEmailConfigured()) {
+        await sendEmail({
           to: result.riderEmail,
           from: fromEmail,
           subject,
           text,
           html,
-          trackingSettings: {
-            clickTracking: { enable: false },
-          },
         })
         emailsSent++
         console.log(`Sent result submission email for event ${event.name}`)
       } else {
-        console.warn('SendGrid not configured, skipping result submission email')
+        console.warn('AWS SES not configured, skipping result submission email')
       }
     } catch (emailError) {
       const errorMessage = emailError instanceof Error ? emailError.message : 'Unknown error'

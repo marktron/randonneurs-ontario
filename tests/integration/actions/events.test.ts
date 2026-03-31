@@ -118,12 +118,11 @@ vi.mock('@/lib/events/complete-event', () => ({
     .mockResolvedValue({ resultsCreated: 0, emailsSent: 0, errors: [] }),
 }))
 
-vi.mock('@/lib/email/sendgrid', () => ({
-  sendgrid: {
-    send: vi.fn().mockResolvedValue({}),
-  },
+vi.mock('@/lib/email/ses', () => ({
+  sendEmail: vi.fn().mockResolvedValue(undefined),
   fromEmail: 'no-reply@randonneurs.to',
   suppressAdminEmails: false,
+  isEmailConfigured: vi.fn().mockReturnValue(true),
 }))
 
 vi.mock('@/lib/email/results-spreadsheet', () => ({
@@ -296,14 +295,13 @@ describe('submitEventResults', () => {
 
     expect(result.success).toBe(true)
 
-    // Verify sendgrid.send was called with an attachment
-    const { sendgrid } = await import('@/lib/email/sendgrid')
-    expect(sendgrid.send).toHaveBeenCalledWith(
+    // Verify sendEmail was called with an attachment
+    const { sendEmail } = await import('@/lib/email/ses')
+    expect(sendEmail).toHaveBeenCalledWith(
       expect.objectContaining({
         attachments: expect.arrayContaining([
           expect.objectContaining({
             filename: expect.stringMatching(/^\d{8}-.+\.xlsx$/),
-            disposition: 'attachment',
           }),
         ]),
       })
@@ -348,8 +346,8 @@ describe('submitEventResults', () => {
 
     expect(result.success).toBe(true)
 
-    const { sendgrid } = await import('@/lib/email/sendgrid')
-    expect(sendgrid.send).not.toHaveBeenCalled()
+    const { sendEmail } = await import('@/lib/email/ses')
+    expect(sendEmail).not.toHaveBeenCalled()
   })
 
   it('updates event status to submitted after successful email', async () => {
@@ -438,8 +436,8 @@ describe('submitEventResults', () => {
     expect(result.success).toBe(true)
 
     // Email should still be sent (with "No finishers recorded.")
-    const { sendgrid } = await import('@/lib/email/sendgrid')
-    expect(sendgrid.send).toHaveBeenCalledTimes(1)
+    const { sendEmail } = await import('@/lib/email/ses')
+    expect(sendEmail).toHaveBeenCalledTimes(1)
 
     // Status should still be updated to 'submitted'
     const updateCalls = mockModule.__calls.filter(

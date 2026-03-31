@@ -1,4 +1,4 @@
-import { sendgrid, fromEmail, suppressAdminEmails } from './sendgrid'
+import { sendEmail, fromEmail, suppressAdminEmails, isEmailConfigured } from './ses'
 import {
   buildRegistrationConfirmationEmail,
   buildCancellationConfirmationEmail,
@@ -16,9 +16,8 @@ export interface SendEmailResult {
 export async function sendRegistrationConfirmationEmail(
   data: RegistrationEmailData
 ): Promise<SendEmailResult> {
-  // Check if SendGrid is configured
-  if (!process.env.SENDGRID_API_KEY) {
-    console.warn('SendGrid API key not configured, skipping email')
+  if (!isEmailConfigured()) {
+    console.warn('AWS SES not configured, skipping email')
     return { success: true }
   }
 
@@ -26,7 +25,7 @@ export async function sendRegistrationConfirmationEmail(
   const vpEmail = getVpEmail(data.chapterSlug)
 
   try {
-    await sendgrid.send({
+    await sendEmail({
       to: data.registrantEmail,
       from: fromEmail,
       replyTo: suppressAdminEmails ? undefined : vpEmail || undefined,
@@ -34,9 +33,6 @@ export async function sendRegistrationConfirmationEmail(
       subject,
       text,
       html,
-      trackingSettings: {
-        clickTracking: { enable: false },
-      },
     })
 
     console.log('Registration email sent successfully')
@@ -55,8 +51,8 @@ export async function sendRegistrationConfirmationEmail(
 export async function sendCancellationConfirmationEmail(
   data: CancellationEmailData
 ): Promise<SendEmailResult> {
-  if (!process.env.SENDGRID_API_KEY) {
-    console.warn('SendGrid API key not configured, skipping email')
+  if (!isEmailConfigured()) {
+    console.warn('AWS SES not configured, skipping email')
     return { success: true }
   }
 
@@ -64,7 +60,7 @@ export async function sendCancellationConfirmationEmail(
   const vpEmail = getVpEmail(data.chapterSlug)
 
   try {
-    await sendgrid.send({
+    await sendEmail({
       to: data.registrantEmail,
       from: fromEmail,
       replyTo: suppressAdminEmails ? undefined : vpEmail || undefined,
@@ -72,9 +68,6 @@ export async function sendCancellationConfirmationEmail(
       subject,
       text,
       html,
-      trackingSettings: {
-        clickTracking: { enable: false },
-      },
     })
 
     console.log('Cancellation email sent successfully')
