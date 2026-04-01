@@ -37,6 +37,12 @@ An info note appears on the form when the route is reversed, has a custom start,
 - **Reversed only:** "Controls are shown in reversed direction."
 - **Custom start only:** "Starting from {location}."
 
+### Route Map QR Code
+
+If the event's route has a linked RideWithGPS route (`rwgps_id`), a QR code linking to the route page is printed on the front of each control card. This gives riders quick access to the route map on their phone.
+
+The QR code is omitted when no RWGPS route is linked.
+
 ### Organizer Details
 
 The ride organizer's name, phone, and email are printed on each card. These are pre-filled from the logged-in admin's profile.

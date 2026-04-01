@@ -78,7 +78,7 @@ export interface ControlCardInput {
 export const REGULATIONS_TEXT = {
   regulations: `REGULATIONS: Each participant is to be considered a private excursion and remains responsible for any accidents in which they may be involved. Each participant is responsible for following the route. Although Randonneurs Ontario will endeavour to ensure that all route instructions are correct, no responsibility can be accepted for participants becoming lost. Should a participant become lost or stranded by mechanical problems or fatigue, it will be their responsibility to get home.`,
 
-  sagWagon: `There will be no "sag wagon"`,
+  sagWagon: `There will be no “sag wagon”`,
 
   controlCard: `CONTROL CARD: The participant to whom this card is issued must present it at each control for the official stamp, signature and control time. Loss of this card, or absence of any of the control stamps, or any irregularity in stamping or signing of the card will result in disqualification.`,
 

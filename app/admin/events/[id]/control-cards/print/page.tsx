@@ -2,12 +2,15 @@ import { requireAdmin } from '@/lib/auth/get-admin'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { notFound } from 'next/navigation'
 import { ControlCardsPrint } from '@/components/admin/control-cards-print'
-import { computeControlTimes, getNominalDistance, formatControlTime, formatCardDate, createTorontoDate } from '@/lib/brmTimes'
+import {
+  computeControlTimes,
+  getNominalDistance,
+  formatControlTime,
+  formatCardDate,
+  createTorontoDate,
+} from '@/lib/brmTimes'
 import type { ControlPoint, CardRider, OrganizerInfo, CardEvent } from '@/types/control-card'
-import type {
-  EventForControlCards,
-  RegistrationForControlCards,
-} from '@/types/queries'
+import type { EventForControlCards, RegistrationForControlCards } from '@/types/queries'
 
 interface ControlInput {
   name: string
@@ -17,7 +20,8 @@ interface ControlInput {
 async function getEventDetails(eventId: string): Promise<EventForControlCards | null> {
   const { data: event } = await getSupabaseAdmin()
     .from('events')
-    .select(`
+    .select(
+      `
       id,
       name,
       event_date,
@@ -26,8 +30,9 @@ async function getEventDetails(eventId: string): Promise<EventForControlCards | 
       distance_km,
       event_type,
       chapters (id, name),
-      routes (id, name)
-    `)
+      routes (id, name, rwgps_id)
+    `
+    )
     .eq('id', eventId)
     .single()
 
@@ -37,11 +42,13 @@ async function getEventDetails(eventId: string): Promise<EventForControlCards | 
 async function getRegistrations(eventId: string): Promise<RegistrationForControlCards[]> {
   const { data } = await getSupabaseAdmin()
     .from('registrations')
-    .select(`
+    .select(
+      `
       id,
       rider_id,
       riders (id, first_name, last_name)
-    `)
+    `
+    )
     .eq('event_id', eventId)
     .eq('status', 'registered')
     .order('registered_at', { ascending: true })
@@ -66,10 +73,7 @@ export default async function PrintPage({ params, searchParams }: PrintPageProps
 
   await requireAdmin()
 
-  const [event, registrations] = await Promise.all([
-    getEventDetails(id),
-    getRegistrations(id),
-  ])
+  const [event, registrations] = await Promise.all([getEventDetails(id), getRegistrations(id)])
 
   if (!event) {
     notFound()
@@ -146,11 +150,13 @@ export default async function PrintPage({ params, searchParams }: PrintPageProps
 
   // Format riders - if no registrations, create two blank entries
   // Also add any extra blank cards requested
-  const registeredRiders: CardRider[] = registrations.filter((r) => r.riders).map((r) => ({
-    id: r.riders!.id,
-    firstName: r.riders!.first_name,
-    lastName: r.riders!.last_name,
-  }))
+  const registeredRiders: CardRider[] = registrations
+    .filter((r) => r.riders)
+    .map((r) => ({
+      id: r.riders!.id,
+      firstName: r.riders!.first_name,
+      lastName: r.riders!.last_name,
+    }))
 
   // Create extra blank cards
   const extraBlankCards: CardRider[] = Array.from({ length: extraBlankCount }, (_, i) => ({
@@ -160,12 +166,17 @@ export default async function PrintPage({ params, searchParams }: PrintPageProps
   }))
 
   // If no registrations and no extra blanks, default to 2 blank cards
-  const riders: CardRider[] = registeredRiders.length > 0 || extraBlankCount > 0
-    ? [...registeredRiders, ...extraBlankCards]
-    : [
-        { id: 'blank-1', firstName: '', lastName: '' },
-        { id: 'blank-2', firstName: '', lastName: '' },
-      ]
+  const riders: CardRider[] =
+    registeredRiders.length > 0 || extraBlankCount > 0
+      ? [...registeredRiders, ...extraBlankCards]
+      : [
+          { id: 'blank-1', firstName: '', lastName: '' },
+          { id: 'blank-2', firstName: '', lastName: '' },
+        ]
+
+  const rwgpsUrl = event.routes?.rwgps_id
+    ? `https://ridewithgps.com/routes/${event.routes.rwgps_id}`
+    : undefined
 
   return (
     <ControlCardsPrint
@@ -175,6 +186,7 @@ export default async function PrintPage({ params, searchParams }: PrintPageProps
       riders={riders}
       totalAllowableTime={{ hours: totalHours, minutes: totalMinutes }}
       formattedDate={formatCardDate(startDate)}
+      rwgpsUrl={rwgpsUrl}
     />
   )
 }

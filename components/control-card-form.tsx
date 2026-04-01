@@ -279,6 +279,10 @@ export function ControlCardForm({ routes }: ControlCardFormProps) {
       params.set('extraBlank', String(extraBlankCards))
     }
 
+    if (selectedRoute.rwgpsId) {
+      params.set('rwgpsUrl', `https://ridewithgps.com/routes/${selectedRoute.rwgpsId}`)
+    }
+
     return `/control-cards/print?${params.toString()}`
   }, [
     selectedRoute,

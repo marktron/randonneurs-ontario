@@ -2,7 +2,7 @@
 
 import type { ControlPoint, CardRider, OrganizerInfo, CardEvent } from '@/types/control-card'
 import { REGULATIONS_TEXT, EVENT_INFO_TEXT } from '@/types/control-card'
-import Image from 'next/image'
+import { QRCodeSVG } from 'qrcode.react'
 
 // Helper to render text with bold label (text before first colon)
 function BoldLabelText({ text }: { text: string }) {
@@ -27,6 +27,7 @@ interface ControlCardsPrintProps {
   riders: CardRider[]
   totalAllowableTime: { hours: number; minutes: number }
   formattedDate: string
+  rwgpsUrl?: string
 }
 
 export function ControlCardsPrint({
@@ -36,6 +37,7 @@ export function ControlCardsPrint({
   riders,
   totalAllowableTime,
   formattedDate,
+  rwgpsUrl,
 }: ControlCardsPrintProps) {
   // Pair riders (2 per page), adding empty rider if odd number
   const riderPairs: (CardRider | null)[][] = []
@@ -413,6 +415,7 @@ export function ControlCardsPrint({
                 rider={rider}
                 totalAllowableTime={totalAllowableTime}
                 formattedDate={formattedDate}
+                rwgpsUrl={rwgpsUrl}
               />
             ))}
           </div>
@@ -441,12 +444,14 @@ function CardFront({
   rider,
   totalAllowableTime,
   formattedDate,
+  rwgpsUrl,
 }: {
   event: CardEvent
   organizer: OrganizerInfo
   rider: CardRider | null
   totalAllowableTime: { hours: number; minutes: number }
   formattedDate: string
+  rwgpsUrl?: string
 }) {
   return (
     <div className="card-half">
@@ -532,18 +537,31 @@ function CardFront({
           <div className="field-label">Signature of Official</div>
           <div style={{ borderBottom: '1px solid #000', height: '0.4in' }}></div>
         </div>
+
+        {rwgpsUrl && (
+          <div
+            style={{
+              marginTop: 'auto',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+            }}
+          >
+            <div className="field-label" style={{ marginBottom: '0.08in' }}>
+              Scan for Route Map
+            </div>
+            <div>
+              <QRCodeSVG value={rwgpsUrl} size={86} />
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Right column - Event and rider info */}
       <div className="card-column front-right">
         <div className="logo-section">
-          <Image
-            src="/logo-gray.png"
-            alt="Randonneurs Ontario"
-            width={100}
-            height={100}
-            style={{ objectFit: 'contain' }}
-          />
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo-gray.svg" alt="Randonneurs Ontario" width={100} height={100} />
         </div>
 
         <div className="card-title">Control Card</div>
@@ -602,8 +620,9 @@ function CardBack({
                 className="back-header-left"
                 style={{ display: 'flex', alignItems: 'center', gap: '0.1in' }}
               >
-                <Image
-                  src="/logo-gray.png"
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src="/logo-gray.svg"
                   alt=""
                   width={24}
                   height={24}

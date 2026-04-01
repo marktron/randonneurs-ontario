@@ -31,6 +31,7 @@ interface PrintPageProps {
     controls?: string
     riders?: string
     extraBlank?: string
+    rwgpsUrl?: string
   }>
 }
 
@@ -141,6 +142,7 @@ export default async function PrintPage({ searchParams }: PrintPageProps) {
       riders={riders}
       totalAllowableTime={{ hours: totalHours, minutes: totalMinutes }}
       formattedDate={formatCardDate(startDate)}
+      rwgpsUrl={search.rwgpsUrl}
     />
   )
 }
