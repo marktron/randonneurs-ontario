@@ -40,6 +40,8 @@ import {
   UserX,
   Trash2,
   RefreshCw,
+  Clipboard,
+  ClipboardCheck,
 } from 'lucide-react'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import {
@@ -791,6 +793,33 @@ export function EventResultsManager({
     .filter((email): email is string => email !== null)
   const mailtoUrl = buildParticipantMailtoUrl(participantEmails, eventName, eventDate)
 
+  const [copied, setCopied] = useState(false)
+
+  const handleCopyRiderInfo = useCallback(async () => {
+    const lines: string[] = [
+      `${eventName}`,
+      `${eventDate} — ${distanceKm}km ${eventType}`,
+      '',
+      `Riders (${sortedParticipants.length})`,
+      '—'.repeat(40),
+    ]
+
+    for (const p of sortedParticipants) {
+      const name = `${p.firstName} ${p.lastName}`
+      lines.push(name)
+      if (p.email) lines.push(p.email)
+      if (p.emergencyContactName || p.emergencyContactPhone) {
+        const ice = [p.emergencyContactName, p.emergencyContactPhone].filter(Boolean).join(' ')
+        lines.push(`ICE: ${ice}`)
+      }
+      lines.push('')
+    }
+
+    await navigator.clipboard.writeText(lines.join('\n'))
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }, [eventName, eventDate, distanceKm, eventType, sortedParticipants])
+
   return (
     <Card>
       <CardHeader className="flex flex-row items-start justify-between space-y-0">
@@ -803,6 +832,16 @@ export function EventResultsManager({
           )}
         </div>
         <div className="flex items-center gap-2">
+          {sortedParticipants.length > 0 && (
+            <Button variant="outline" size="sm" onClick={handleCopyRiderInfo}>
+              {copied ? (
+                <ClipboardCheck className="mr-2 h-4 w-4" />
+              ) : (
+                <Clipboard className="mr-2 h-4 w-4" />
+              )}
+              {copied ? 'Copied!' : 'Copy rider info'}
+            </Button>
+          )}
           {mailtoUrl && (
             <Button variant="outline" size="sm" asChild>
               <a href={mailtoUrl}>
