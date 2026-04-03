@@ -50,6 +50,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={`${notoSans.variable} ${notoSerif.variable} antialiased`}>
+      <head>
+        <link rel="help" type="text/markdown" href="/llms.txt" />
+      </head>
       <body>
         <OrganizationJsonLd
           baseUrl={process.env.NEXT_PUBLIC_SITE_URL ?? 'https://randonneursontario.ca'}
