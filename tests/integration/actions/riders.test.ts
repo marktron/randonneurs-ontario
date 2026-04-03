@@ -490,17 +490,17 @@ describe('mergeRiders', () => {
 
       expect(result.success).toBe(true)
 
-      // Verify DB operations: update registrations, update results,
+      // Verify DB operations: query/move registrations, query/move results,
       // query/move rider_memberships, delete riders, update target rider
-      const regUpdates = mockModule.__calls.filter(
-        (c) => c.table === 'registrations' && c.method === 'update'
+      const regSelects = mockModule.__calls.filter(
+        (c) => c.table === 'registrations' && c.method === 'select'
       )
-      expect(regUpdates).toHaveLength(1)
+      expect(regSelects.length).toBeGreaterThanOrEqual(2)
 
-      const resultUpdates = mockModule.__calls.filter(
-        (c) => c.table === 'results' && c.method === 'update'
+      const resultSelects = mockModule.__calls.filter(
+        (c) => c.table === 'results' && c.method === 'select'
       )
-      expect(resultUpdates).toHaveLength(1)
+      expect(resultSelects.length).toBeGreaterThanOrEqual(2)
 
       const membershipSelects = mockModule.__calls.filter(
         (c) => c.table === 'rider_memberships' && c.method === 'select'
@@ -533,15 +533,15 @@ describe('mergeRiders', () => {
       expect(result.success).toBe(true)
 
       // Same operations regardless of merge count
-      const regUpdates = mockModule.__calls.filter(
-        (c) => c.table === 'registrations' && c.method === 'update'
+      const regSelects = mockModule.__calls.filter(
+        (c) => c.table === 'registrations' && c.method === 'select'
       )
-      expect(regUpdates).toHaveLength(1)
+      expect(regSelects.length).toBeGreaterThanOrEqual(2)
 
-      const resultUpdates = mockModule.__calls.filter(
-        (c) => c.table === 'results' && c.method === 'update'
+      const resultSelects = mockModule.__calls.filter(
+        (c) => c.table === 'results' && c.method === 'select'
       )
-      expect(resultUpdates).toHaveLength(1)
+      expect(resultSelects.length).toBeGreaterThanOrEqual(2)
 
       const membershipSelects = mockModule.__calls.filter(
         (c) => c.table === 'rider_memberships' && c.method === 'select'

@@ -238,30 +238,100 @@ export async function mergeRiders(data: MergeRidersData): Promise<MergeRidersRes
   const ridersToDelete = sourceRiderIds.filter((id) => id !== targetRiderId)
 
   try {
-    // Step 1: Update all registrations to use target rider
-    const regUpdateData: RegistrationUpdate = { rider_id: targetRiderId }
-    const { data: updatedRegistrations, error: updateRegsError } = await getSupabaseAdmin()
+    // Step 1: Move registrations to target rider, deleting duplicates first
+    const { data: targetRegs } = await getSupabaseAdmin()
       .from('registrations')
-      .update(regUpdateData)
-      .in('rider_id', ridersToDelete)
-      .select('id')
+      .select('event_id')
+      .eq('rider_id', targetRiderId)
 
-    if (updateRegsError) {
-      console.error('Error updating registrations:', updateRegsError)
-      return { success: false, error: 'Failed to update registrations' }
+    const targetEventIds = new Set((targetRegs ?? []).map((r) => r.event_id))
+
+    const { data: sourceRegs } = await getSupabaseAdmin()
+      .from('registrations')
+      .select('id, event_id')
+      .in('rider_id', ridersToDelete)
+
+    const duplicateRegIds = (sourceRegs ?? [])
+      .filter((r) => targetEventIds.has(r.event_id))
+      .map((r) => r.id)
+    const moveRegIds = (sourceRegs ?? [])
+      .filter((r) => !targetEventIds.has(r.event_id))
+      .map((r) => r.id)
+
+    if (duplicateRegIds.length > 0) {
+      const { error: deleteRegsError } = await getSupabaseAdmin()
+        .from('registrations')
+        .delete()
+        .in('id', duplicateRegIds)
+
+      if (deleteRegsError) {
+        console.error('Error deleting duplicate registrations:', deleteRegsError)
+        return { success: false, error: 'Failed to update registrations' }
+      }
     }
 
-    // Step 2: Update all results to use target rider
-    const resultUpdateData: ResultUpdate = { rider_id: targetRiderId }
-    const { data: updatedResults, error: updateResultsError } = await getSupabaseAdmin()
-      .from('results')
-      .update(resultUpdateData)
-      .in('rider_id', ridersToDelete)
-      .select('id')
+    let updatedRegistrations: { id: string }[] = []
+    if (moveRegIds.length > 0) {
+      const regUpdateData: RegistrationUpdate = { rider_id: targetRiderId }
+      const { data: movedRegs, error: updateRegsError } = await getSupabaseAdmin()
+        .from('registrations')
+        .update(regUpdateData)
+        .in('id', moveRegIds)
+        .select('id')
 
-    if (updateResultsError) {
-      console.error('Error updating results:', updateResultsError)
-      return { success: false, error: 'Failed to update results' }
+      if (updateRegsError) {
+        console.error('Error updating registrations:', updateRegsError)
+        return { success: false, error: 'Failed to update registrations' }
+      }
+      updatedRegistrations = movedRegs ?? []
+    }
+
+    // Step 2: Move results to target rider, deleting duplicates first
+    const { data: targetResults } = await getSupabaseAdmin()
+      .from('results')
+      .select('event_id')
+      .eq('rider_id', targetRiderId)
+
+    const targetResultEventIds = new Set((targetResults ?? []).map((r) => r.event_id))
+
+    const { data: sourceResults } = await getSupabaseAdmin()
+      .from('results')
+      .select('id, event_id')
+      .in('rider_id', ridersToDelete)
+
+    const duplicateResultIds = (sourceResults ?? [])
+      .filter((r) => targetResultEventIds.has(r.event_id))
+      .map((r) => r.id)
+    const moveResultIds = (sourceResults ?? [])
+      .filter((r) => !targetResultEventIds.has(r.event_id))
+      .map((r) => r.id)
+
+    if (duplicateResultIds.length > 0) {
+      const { error: deleteResultsError } = await getSupabaseAdmin()
+        .from('results')
+        .delete()
+        .in('id', duplicateResultIds)
+
+      if (deleteResultsError) {
+        console.error('Error deleting duplicate results:', deleteResultsError)
+        return { success: false, error: 'Failed to update results' }
+      }
+    }
+
+    let updatedResults: { id: string }[] = []
+    if (moveResultIds.length > 0) {
+      const resultUpdateData: ResultUpdate = { rider_id: targetRiderId }
+      const { data: movedResults, error: updateResultsError } = await getSupabaseAdmin()
+        .from('results')
+        .update(resultUpdateData)
+        .in('id', moveResultIds)
+        .select('id')
+
+      if (updateResultsError) {
+        console.error('Error updating results:', updateResultsError)
+        return { success: false, error: 'Failed to update results' }
+      }
+      updatedResults = movedResults ?? []
     }
 
     // Step 3: Move rider_memberships to target rider (skip if season already exists on target)
