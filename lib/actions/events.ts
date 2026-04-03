@@ -561,7 +561,7 @@ This email was sent from the Randonneurs Ontario admin system.
         console.warn('SendGrid API key not configured, skipping email')
       } else {
         try {
-          const toAddress = suppressAdminEmails ? admin.email : 'vp-admin@randonneursontario.ca'
+          const toAddress = suppressAdminEmails ? admin.email : 'leissp@mac.com' // NOTE: change to vp-admin@randonneursontario.ca when someone other than Peter handles the admin emails
           // Deduplicate recipients to avoid SendGrid 400
           const ccAddresses = suppressAdminEmails
             ? undefined
