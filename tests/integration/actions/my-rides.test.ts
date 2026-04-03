@@ -216,7 +216,7 @@ describe('getMyUpcomingRides', () => {
         events: {
           slug: 'earlier-ride',
           name: 'Earlier Ride',
-          event_date: '2026-04-01',
+          event_date: '2026-06-01',
           distance_km: 200,
           start_time: '07:00',
           start_location: 'Start',
