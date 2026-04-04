@@ -25,40 +25,36 @@ export default async function Page() {
             </h1>
 
             {/* Intro Copy */}
-            <div className="mt-10 max-w-3xl space-y-6 text-lg leading-8 text-muted-foreground md:text-xl md:leading-9">
-              <p className="text-foreground font-medium">
-                Long-distance cycling doesn&apos;t have to be loud, fast, or competitive.
+            <div className="mt-10 max-w-3xl space-y-6 text-lg leading-8 text-muted-foreground md:text-xl md:leading-9 prose">
+              <p className="prose-lg text-foreground font-medium">
+                Long-distance cycling doesn’t have to be loud, fast, or competitive.
+              </p>
+              <p className="prose-lg">
+                There is a particular pleasure in setting out early on a bicycle with a control card
+                in your pocket and a very long way to go.
               </p>
 
-              <p>
-                At Randonneurs Ontario, it&apos;s about self-reliance, curiosity, and seeing how far
-                you can go under your own power.
+              <p className="prose-lg">
+                Randonneurs Ontario is a volunteer-run club that has organized <em>brevets</em>{' '}
+                (non-competitive rides of 200 km and up) since 1983, across some of the best quiet
+                roads in Ontario. There are time limits, but they are generous. The goal is not
+                necessarily to be fast, but to keep going.
               </p>
 
-              <p>
-                Randonneurs Ontario is a volunteer-run cycling organization dedicated to
-                non-competitive long-distance cycling in Ontario. We organize brevets — structured
-                rides of 200 km and beyond — that challenge riders to manage pacing, navigation, and
-                endurance within generous time limits.
+              <p className="prose-lg">
+                You might ride through farmland at sunrise, eat a butter tart in a small town cafe,
+                fix a flat on the side of the road, and roll back in after dark wondering why the
+                day felt both very long and strangely short.
               </p>
 
-              <p>
-                Riders participate for many reasons: to explore quiet roads, to test themselves, to
-                ride through the night, or simply to experience distance differently. There are no
-                podiums and no winners — only the satisfaction of steady forward progress.
-              </p>
-
-              <p>
-                Whether you are curious about your first long ride or are an experienced randonneur
-                planning a season, you&apos;ll find your place here.
-              </p>
+              <p className="prose-lg">If that sounds appealing, you’ll fit in here.</p>
             </div>
 
             {/* Call to Action Links */}
             <div className="mt-12 flex flex-wrap gap-x-8 gap-y-4">
-              <ArrowLink href="/calendar">Start with your first brevet</ArrowLink>
+              <ArrowLink href="/your-first-brevet">Learn about your first brevet</ArrowLink>
               <ArrowLink href="/calendar">Explore the calendar</ArrowLink>
-              <ArrowLink href="/membership">Join the community</ArrowLink>
+              <ArrowLink href="/membership">Become a member</ArrowLink>
             </div>
           </div>
 
