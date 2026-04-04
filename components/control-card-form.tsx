@@ -466,8 +466,8 @@ export function ControlCardForm({ routes }: ControlCardFormProps) {
         <CardHeader>
           <CardTitle>Control Points</CardTitle>
           <CardDescription>
-            Define control checkpoints along the route. Times will be calculated automatically based
-            on BRM rules.
+            The text in each control field will appear on the printed control card. Times are
+            calculated automatically based on BRM rules.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">

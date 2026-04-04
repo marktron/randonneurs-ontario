@@ -303,8 +303,8 @@ export function ControlCardsForm({ event, riders, organizer }: ControlCardsFormP
         <CardHeader>
           <CardTitle>Control Points</CardTitle>
           <CardDescription>
-            Define control checkpoints along the route. Times will be calculated automatically based
-            on BRM rules.
+            The text in each control field will appear on the printed control card. Times are
+            calculated automatically based on BRM rules.
           </CardDescription>
           {(reversed || (event.eventType === 'permanent' && event.startLocation)) && (
             <div className="flex items-center gap-2 text-sm text-muted-foreground mt-2">
