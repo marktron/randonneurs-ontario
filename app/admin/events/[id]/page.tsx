@@ -110,13 +110,14 @@ async function getResults(eventId: string): Promise<ResultWithRiderForAdmin[]> {
 
 interface EventPageProps {
   params: Promise<{ id: string }>
-  searchParams: Promise<{ from_season?: string; from_chapter?: string }>
+  searchParams: Promise<{ from_season?: string; from_chapter?: string; from_when?: string }>
 }
 
-function buildBackUrl(fromSeason?: string, fromChapter?: string): string {
+function buildBackUrl(fromSeason?: string, fromChapter?: string, fromWhen?: string): string {
   const params = new URLSearchParams()
   if (fromSeason) params.set('season', fromSeason)
   if (fromChapter) params.set('chapter', fromChapter)
+  if (fromWhen) params.set('when', fromWhen)
   const qs = params.toString()
   return `/admin/events${qs ? `?${qs}` : ''}`
 }
@@ -124,7 +125,7 @@ function buildBackUrl(fromSeason?: string, fromChapter?: string): string {
 export default async function EventDetailPage({ params, searchParams }: EventPageProps) {
   const [{ id }, search] = await Promise.all([params, searchParams])
   await requireAdmin()
-  const backUrl = buildBackUrl(search.from_season, search.from_chapter)
+  const backUrl = buildBackUrl(search.from_season, search.from_chapter, search.from_when)
 
   const [event, registrations, cancelledRegistrations, results] = await Promise.all([
     getEventDetails(id),

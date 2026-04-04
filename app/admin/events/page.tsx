@@ -13,7 +13,7 @@ import {
 } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { EventFilters } from '@/components/admin/event-filters'
+import { EventFilters, type DateFilter } from '@/components/admin/event-filters'
 import { AdminPagination } from '@/components/admin/admin-pagination'
 import { Plus } from 'lucide-react'
 import Link from 'next/link'
@@ -22,18 +22,30 @@ import type { EventForAdminList } from '@/types/queries'
 const currentSeason = process.env.NEXT_PUBLIC_CURRENT_SEASON || '2026'
 const PAGE_SIZE = 50
 
-function buildEventDetailUrl(eventId: string, season: string, chapterId: string | null): string {
+function buildEventDetailUrl(
+  eventId: string,
+  season: string,
+  chapterId: string | null,
+  dateFilter: DateFilter
+): string {
   const params = new URLSearchParams()
   if (season !== currentSeason) params.set('from_season', season)
   if (chapterId) params.set('from_chapter', chapterId)
+  if (dateFilter !== 'all') params.set('from_when', dateFilter)
   const qs = params.toString()
   return `/admin/events/${eventId}${qs ? `?${qs}` : ''}`
 }
 
-function buildPageUrl(page: number, season: string, chapterParam: string | undefined): string {
+function buildPageUrl(
+  page: number,
+  season: string,
+  chapterParam: string | undefined,
+  dateFilter: DateFilter
+): string {
   const params = new URLSearchParams()
   if (season !== currentSeason) params.set('season', season)
   if (chapterParam) params.set('chapter', chapterParam)
+  if (dateFilter !== 'all') params.set('when', dateFilter)
   if (page > 1) params.set('page', String(page))
   const qs = params.toString()
   return `/admin/events${qs ? `?${qs}` : ''}`
@@ -49,25 +61,39 @@ async function getAvailableSeasons(): Promise<string[]> {
 
 async function getEvents(
   season: string,
+  dateFilter: DateFilter,
   chapterId?: string,
   chapterSlug?: string,
   page: number = 1
 ): Promise<{ events: EventForAdminList[]; totalCount: number }> {
   const startDate = `${season}-01-01`
   const endDate = `${season}-12-31`
+  const today = new Date().toISOString().split('T')[0]
+
+  function applyDateFilter<
+    T extends {
+      gte: (col: string, val: string) => T
+      lte: (col: string, val: string) => T
+      lt: (col: string, val: string) => T
+    },
+  >(q: T): T {
+    q = q.gte('event_date', startDate).lte('event_date', endDate)
+    if (dateFilter === 'past') q = q.lt('event_date', today)
+    else if (dateFilter === 'upcoming') q = q.gte('event_date', today)
+    return q
+  }
+
+  function applyChapterFilter<T extends { eq: (col: string, val: string) => T }>(q: T): T {
+    if (chapterSlug === 'permanent') q = q.eq('event_type', 'permanent')
+    else if (chapterId) q = q.eq('chapter_id', chapterId)
+    return q
+  }
 
   // Get total count with same filters
-  let countQuery = getSupabaseAdmin()
-    .from('events')
-    .select('id', { count: 'exact', head: true })
-    .gte('event_date', startDate)
-    .lte('event_date', endDate)
+  let countQuery = getSupabaseAdmin().from('events').select('id', { count: 'exact', head: true })
 
-  if (chapterSlug === 'permanent') {
-    countQuery = countQuery.eq('event_type', 'permanent')
-  } else if (chapterId) {
-    countQuery = countQuery.eq('chapter_id', chapterId)
-  }
+  countQuery = applyDateFilter(countQuery)
+  countQuery = applyChapterFilter(countQuery)
 
   const { count } = await countQuery
   const totalCount = count ?? 0
@@ -88,15 +114,10 @@ async function getEvents(
       chapters (name)
     `
     )
-    .gte('event_date', startDate)
-    .lte('event_date', endDate)
     .order('event_date', { ascending: true })
 
-  if (chapterSlug === 'permanent') {
-    query = query.eq('event_type', 'permanent')
-  } else if (chapterId) {
-    query = query.eq('chapter_id', chapterId)
-  }
+  query = applyDateFilter(query)
+  query = applyChapterFilter(query)
 
   const { data } = await query.range(offset, offset + PAGE_SIZE - 1)
 
@@ -126,7 +147,7 @@ async function getEvents(
 }
 
 interface AdminEventsPageProps {
-  searchParams: Promise<{ season?: string; chapter?: string; page?: string }>
+  searchParams: Promise<{ season?: string; chapter?: string; page?: string; when?: string }>
 }
 
 export default async function AdminEventsPage({ searchParams }: AdminEventsPageProps) {
@@ -142,8 +163,16 @@ export default async function AdminEventsPage({ searchParams }: AdminEventsPageP
   // 'all' means explicitly show all chapters (overrides admin default)
   const chapterId = params.chapter === 'all' ? null : (params.chapter ?? admin.chapter_id ?? null)
   const chapterSlug = chapterId ? chapters.find((c) => c.id === chapterId)?.slug : undefined
+  const dateFilter: DateFilter =
+    params.when === 'past' || params.when === 'upcoming' ? params.when : 'all'
   const page = Math.max(1, parseInt(params.page || '1', 10))
-  const { events, totalCount } = await getEvents(season, chapterId || undefined, chapterSlug, page)
+  const { events, totalCount } = await getEvents(
+    season,
+    dateFilter,
+    chapterId || undefined,
+    chapterSlug,
+    page
+  )
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -175,7 +204,13 @@ export default async function AdminEventsPage({ searchParams }: AdminEventsPageP
         </Button>
       </div>
 
-      <EventFilters season={season} chapterId={chapterId} chapters={chapters} seasons={seasons} />
+      <EventFilters
+        season={season}
+        chapterId={chapterId}
+        chapters={chapters}
+        seasons={seasons}
+        dateFilter={dateFilter}
+      />
 
       <div className="rounded-md border">
         <Table>
@@ -200,7 +235,7 @@ export default async function AdminEventsPage({ searchParams }: AdminEventsPageP
               events.map((event) => (
                 <ClickableTableRow
                   key={event.id}
-                  href={buildEventDetailUrl(event.id, season, chapterId)}
+                  href={buildEventDetailUrl(event.id, season, chapterId, dateFilter)}
                 >
                   <TableCell>
                     <div>
@@ -232,7 +267,7 @@ export default async function AdminEventsPage({ searchParams }: AdminEventsPageP
           page={page}
           pageSize={PAGE_SIZE}
           totalCount={totalCount}
-          buildPageUrl={(p) => buildPageUrl(p, season, params.chapter)}
+          buildPageUrl={(p) => buildPageUrl(p, season, params.chapter, dateFilter)}
           label="events"
         />
       )}

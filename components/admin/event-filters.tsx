@@ -11,17 +11,21 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 
 interface Chapter {
   id: string
   name: string
 }
 
+export type DateFilter = 'all' | 'past' | 'upcoming'
+
 interface EventFiltersProps {
   season: string
   chapterId: string | null
   chapters: Chapter[]
   seasons: string[]
+  dateFilter: DateFilter
 }
 
 // Match the order used in the main site navbar
@@ -29,7 +33,12 @@ const CHAPTER_ORDER = ['Huron', 'Ottawa', 'Simcoe-Muskoka', 'Toronto']
 
 const currentSeason = process.env.NEXT_PUBLIC_CURRENT_SEASON || '2026'
 
-function buildFilterUrl(season: string, chapterId: string | null, explicitAll: boolean = false) {
+function buildFilterUrl(
+  season: string,
+  chapterId: string | null,
+  dateFilter: DateFilter,
+  explicitAll: boolean = false
+) {
   const params = new URLSearchParams()
   if (season !== currentSeason) params.set('season', season)
   if (chapterId) {
@@ -38,11 +47,18 @@ function buildFilterUrl(season: string, chapterId: string | null, explicitAll: b
     // Explicitly set 'all' to override admin's default chapter
     params.set('chapter', 'all')
   }
+  if (dateFilter !== 'all') params.set('when', dateFilter)
   const qs = params.toString()
   return `/admin/events${qs ? `?${qs}` : ''}`
 }
 
-export function EventFilters({ season, chapterId, chapters, seasons }: EventFiltersProps) {
+export function EventFilters({
+  season,
+  chapterId,
+  chapters,
+  seasons,
+  dateFilter,
+}: EventFiltersProps) {
   const router = useRouter()
 
   // Separate chapters into main chapters and others
@@ -55,12 +71,17 @@ export function EventFilters({ season, chapterId, chapters, seasons }: EventFilt
     .sort((a, b) => a.name.localeCompare(b.name))
 
   const handleSeasonChange = (value: string) => {
-    router.push(buildFilterUrl(value, chapterId))
+    router.push(buildFilterUrl(value, chapterId, dateFilter))
   }
 
   const handleChapterChange = (value: string) => {
     const isAll = value === 'all'
-    router.push(buildFilterUrl(season, isAll ? null : value, isAll))
+    router.push(buildFilterUrl(season, isAll ? null : value, dateFilter, isAll))
+  }
+
+  const handleDateFilterChange = (value: string) => {
+    if (!value) return // ToggleGroup sends empty string on re-click; ignore it
+    router.push(buildFilterUrl(season, chapterId, value as DateFilter))
   }
 
   // Find current chapter name for display
@@ -119,6 +140,18 @@ export function EventFilters({ season, chapterId, chapters, seasons }: EventFilt
           </SelectContent>
         </Select>
       </div>
+
+      <ToggleGroup
+        type="single"
+        value={dateFilter}
+        onValueChange={handleDateFilterChange}
+        variant="outline"
+        size="sm"
+      >
+        <ToggleGroupItem value="past">Past</ToggleGroupItem>
+        <ToggleGroupItem value="upcoming">Upcoming</ToggleGroupItem>
+        <ToggleGroupItem value="all">All events</ToggleGroupItem>
+      </ToggleGroup>
     </div>
   )
 }
