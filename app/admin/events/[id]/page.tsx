@@ -148,14 +148,14 @@ export default async function EventDetailPage({ params, searchParams }: EventPag
         Back to Events
       </Link>
 
-      <div className="flex items-start justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1 className="text-3xl font-bold">{event.name}</h1>
           <p className="text-muted-foreground">
             {event.chapters?.name} &middot; {event.distance_km}km {event.event_type}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Button variant="outline" asChild>
             <Link href={`/admin/events/${event.id}/edit`}>
               <Pencil className="h-4 w-4 mr-2" />

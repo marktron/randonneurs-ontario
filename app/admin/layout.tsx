@@ -1,6 +1,7 @@
 import { getAdmin } from '@/lib/auth/get-admin'
 import { AdminSidebar } from '@/components/admin/sidebar'
-import { SidebarProvider, SidebarInset } from '@/components/ui/sidebar'
+import { SidebarProvider, SidebarInset, SidebarTrigger } from '@/components/ui/sidebar'
+import { Separator } from '@/components/ui/separator'
 import { Toaster } from '@/components/ui/sonner'
 
 export const metadata = {
@@ -20,7 +21,12 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     <SidebarProvider>
       <AdminSidebar admin={admin} />
       <SidebarInset>
-        <main className="flex-1 p-6">{children}</main>
+        <header className="flex h-12 items-center gap-2 px-4 md:hidden">
+          <SidebarTrigger />
+          <Separator orientation="vertical" className="h-4" />
+          <span className="text-sm font-medium">RO Admin</span>
+        </header>
+        <div className="flex-1 p-4 sm:p-6">{children}</div>
       </SidebarInset>
       <Toaster />
     </SidebarProvider>

@@ -236,8 +236,8 @@ export default async function AdminDashboardPage() {
                     <TableHead>Event</TableHead>
                     {!chapterId && <TableHead>Chapter</TableHead>}
                     <TableHead>Date</TableHead>
-                    <TableHead>Riders</TableHead>
-                    <TableHead className="text-right">Distance</TableHead>
+                    <TableHead className="hidden sm:table-cell">Riders</TableHead>
+                    <TableHead className="hidden sm:table-cell text-right">Distance</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -264,10 +264,12 @@ export default async function AdminDashboardPage() {
                           </span>
                         )}
                       </TableCell>
-                      <TableCell className="tabular-nums">
+                      <TableCell className="hidden sm:table-cell tabular-nums">
                         {event.registrations?.[0]?.count ?? 0}
                       </TableCell>
-                      <TableCell className="text-right">{event.distance_km} km</TableCell>
+                      <TableCell className="hidden sm:table-cell text-right">
+                        {event.distance_km} km
+                      </TableCell>
                     </ClickableTableRow>
                   ))}
                 </TableBody>

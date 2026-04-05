@@ -63,7 +63,7 @@ export function ReportFilters({ season, chapterId, chapters, seasons }: ReportFi
     : 'All Chapters'
 
   return (
-    <div className="flex items-center gap-4">
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
       <div className="flex items-center gap-2">
         <span className="text-sm text-muted-foreground">Season:</span>
         <Select value={season} onValueChange={handleSeasonChange}>

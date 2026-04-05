@@ -7,19 +7,23 @@ import { Plus } from 'lucide-react'
 import type { RouteWithChapterForAdmin } from '@/types/queries'
 
 // Lazy-load RoutesTable (large table component)
-const RoutesTable = dynamic(() => import('@/components/admin/routes-table').then(mod => ({ default: mod.RoutesTable })), {
-  loading: () => (
-    <div className="space-y-4">
-      <div className="h-10 bg-muted animate-pulse rounded" />
-      <div className="h-96 bg-muted animate-pulse rounded" />
-    </div>
-  ),
-})
+const RoutesTable = dynamic(
+  () => import('@/components/admin/routes-table').then((mod) => ({ default: mod.RoutesTable })),
+  {
+    loading: () => (
+      <div className="space-y-4">
+        <div className="h-10 bg-muted animate-pulse rounded" />
+        <div className="h-96 bg-muted animate-pulse rounded" />
+      </div>
+    ),
+  }
+)
 
 async function getRoutes(): Promise<RouteWithChapterForAdmin[]> {
   const { data } = await getSupabaseAdmin()
     .from('routes')
-    .select(`
+    .select(
+      `
       id,
       name,
       slug,
@@ -32,7 +36,8 @@ async function getRoutes(): Promise<RouteWithChapterForAdmin[]> {
       notes,
       is_active,
       chapters (id, name)
-    `)
+    `
+    )
     .order('name', { ascending: true })
 
   return (data as RouteWithChapterForAdmin[]) ?? []
@@ -48,22 +53,16 @@ async function getChapters() {
 }
 
 export default async function AdminRoutesPage() {
-  const [admin, routes, chapters] = await Promise.all([
-    requireAdmin(),
-    getRoutes(),
-    getChapters(),
-  ])
+  const [admin, routes, chapters] = await Promise.all([requireAdmin(), getRoutes(), getChapters()])
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-3xl font-bold">Routes</h1>
-          <p className="text-muted-foreground">
-            Manage route definitions and RWGPS links
-          </p>
+          <p className="text-muted-foreground">Manage route definitions and RWGPS links</p>
         </div>
-        <Button asChild>
+        <Button asChild className="self-start">
           <Link href="/admin/routes/new">
             <Plus className="h-4 w-4 mr-2" />
             Add Route
@@ -71,11 +70,7 @@ export default async function AdminRoutesPage() {
         </Button>
       </div>
 
-      <RoutesTable
-        routes={routes}
-        chapters={chapters}
-        defaultChapterId={admin.chapter_id}
-      />
+      <RoutesTable routes={routes} chapters={chapters} defaultChapterId={admin.chapter_id} />
     </div>
   )
 }

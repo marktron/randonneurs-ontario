@@ -1,6 +1,6 @@
-"use client"
+'use client'
 
-import { useRouter, useSearchParams } from "next/navigation"
+import { useRouter, useSearchParams } from 'next/navigation'
 import {
   Select,
   SelectContent,
@@ -10,7 +10,7 @@ import {
   SelectSeparator,
   SelectGroup,
   SelectLabel,
-} from "@/components/ui/select"
+} from '@/components/ui/select'
 
 interface Chapter {
   id: string
@@ -30,44 +30,42 @@ export function ResultsFilters({ seasons, chapters }: ResultsFiltersProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
 
-  const currentSeason = searchParams.get("season") || "all"
-  const currentChapter = searchParams.get("chapter") || "all"
+  const currentSeason = searchParams.get('season') || 'all'
+  const currentChapter = searchParams.get('chapter') || 'all'
 
   // Separate chapters into main chapters and others
-  const mainChapters = CHAPTER_ORDER
-    .map(name => chapters.find(c => c.name === name))
-    .filter((c): c is Chapter => c !== undefined)
+  const mainChapters = CHAPTER_ORDER.map((name) => chapters.find((c) => c.name === name)).filter(
+    (c): c is Chapter => c !== undefined
+  )
 
   const otherChapters = chapters
-    .filter(c => !CHAPTER_ORDER.includes(c.name))
+    .filter((c) => !CHAPTER_ORDER.includes(c.name))
     .sort((a, b) => a.name.localeCompare(b.name))
 
   // Find current chapter name for display
-  const currentChapterName = currentChapter !== "all"
-    ? chapters.find(c => c.id === currentChapter)?.name || "Unknown"
-    : "All Chapters"
+  const currentChapterName =
+    currentChapter !== 'all'
+      ? chapters.find((c) => c.id === currentChapter)?.name || 'Unknown'
+      : 'All Chapters'
 
   function updateFilters(key: string, value: string) {
     const params = new URLSearchParams(searchParams.toString())
 
-    if (value === "all") {
+    if (value === 'all') {
       params.delete(key)
     } else {
       params.set(key, value)
     }
 
     const queryString = params.toString()
-    router.push(`/admin/results${queryString ? `?${queryString}` : ""}`)
+    router.push(`/admin/results${queryString ? `?${queryString}` : ''}`)
   }
 
   return (
-    <div className="flex items-center gap-4">
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
       <div className="flex items-center gap-2">
         <span className="text-sm text-muted-foreground">Season:</span>
-        <Select
-          value={currentSeason}
-          onValueChange={(value) => updateFilters("season", value)}
-        >
+        <Select value={currentSeason} onValueChange={(value) => updateFilters('season', value)}>
           <SelectTrigger className="w-[130px]">
             <SelectValue />
           </SelectTrigger>
@@ -85,10 +83,7 @@ export function ResultsFilters({ seasons, chapters }: ResultsFiltersProps) {
 
       <div className="flex items-center gap-2">
         <span className="text-sm text-muted-foreground">Chapter:</span>
-        <Select
-          value={currentChapter}
-          onValueChange={(value) => updateFilters("chapter", value)}
-        >
+        <Select value={currentChapter} onValueChange={(value) => updateFilters('chapter', value)}>
           <SelectTrigger className="w-[180px]">
             <SelectValue>{currentChapterName}</SelectValue>
           </SelectTrigger>

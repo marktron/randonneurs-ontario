@@ -66,11 +66,11 @@ export function AdminUsersTable({ users, currentAdminId }: AdminUsersTableProps)
           <TableHeader>
             <TableRow>
               <TableHead>Name</TableHead>
-              <TableHead>Email</TableHead>
+              <TableHead className="hidden sm:table-cell">Email</TableHead>
               <TableHead>Role</TableHead>
-              <TableHead>Chapter</TableHead>
-              <TableHead>Created</TableHead>
-              <TableHead className="w-[100px]">Actions</TableHead>
+              <TableHead className="hidden md:table-cell">Chapter</TableHead>
+              <TableHead className="hidden md:table-cell">Created</TableHead>
+              <TableHead className="w-[80px]">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -84,7 +84,7 @@ export function AdminUsersTable({ users, currentAdminId }: AdminUsersTableProps)
               users.map((user) => (
                 <TableRow key={user.id}>
                   <TableCell className="font-medium">{user.name}</TableCell>
-                  <TableCell>{user.email}</TableCell>
+                  <TableCell className="hidden sm:table-cell">{user.email}</TableCell>
                   <TableCell>
                     <Badge variant={user.role === 'chapter_admin' ? 'secondary' : 'default'}>
                       {user.role === 'super_admin'
@@ -94,8 +94,10 @@ export function AdminUsersTable({ users, currentAdminId }: AdminUsersTableProps)
                           : 'Chapter Admin'}
                     </Badge>
                   </TableCell>
-                  <TableCell>{user.chapters?.name || '—'}</TableCell>
-                  <TableCell>
+                  <TableCell className="hidden md:table-cell">
+                    {user.chapters?.name || '—'}
+                  </TableCell>
+                  <TableCell className="hidden md:table-cell">
                     {user.created_at ? new Date(user.created_at).toLocaleDateString() : '—'}
                   </TableCell>
                   <TableCell>

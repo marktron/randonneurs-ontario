@@ -65,38 +65,44 @@ export function AuditLogTabs({ logs, merges }: AuditLogTabsProps) {
         {logs.length === 0 ? (
           <p className="text-muted-foreground py-8 text-center">No audit log entries yet.</p>
         ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Date/Time</TableHead>
-                <TableHead>Admin</TableHead>
-                <TableHead>Action</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead>Description</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {logs.map((log) => {
-                const actionInfo = actionLabels[log.action] || {
-                  label: log.action,
-                  variant: 'outline' as const,
-                }
-                return (
-                  <TableRow key={log.id}>
-                    <TableCell className="text-muted-foreground tabular-nums">
-                      <LocalTime dateString={log.created_at} />
-                    </TableCell>
-                    <TableCell>{log.admins?.name || 'Unknown'}</TableCell>
-                    <TableCell>
-                      <Badge variant={actionInfo.variant}>{actionInfo.label}</Badge>
-                    </TableCell>
-                    <TableCell>{entityTypeLabels[log.entity_type] || log.entity_type}</TableCell>
-                    <TableCell className="max-w-md truncate">{log.description}</TableCell>
-                  </TableRow>
-                )
-              })}
-            </TableBody>
-          </Table>
+          <div className="rounded-md border overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Date/Time</TableHead>
+                  <TableHead className="hidden sm:table-cell">Admin</TableHead>
+                  <TableHead>Action</TableHead>
+                  <TableHead className="hidden md:table-cell">Type</TableHead>
+                  <TableHead>Description</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {logs.map((log) => {
+                  const actionInfo = actionLabels[log.action] || {
+                    label: log.action,
+                    variant: 'outline' as const,
+                  }
+                  return (
+                    <TableRow key={log.id}>
+                      <TableCell className="text-muted-foreground tabular-nums">
+                        <LocalTime dateString={log.created_at} />
+                      </TableCell>
+                      <TableCell className="hidden sm:table-cell">
+                        {log.admins?.name || 'Unknown'}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={actionInfo.variant}>{actionInfo.label}</Badge>
+                      </TableCell>
+                      <TableCell className="hidden md:table-cell">
+                        {entityTypeLabels[log.entity_type] || log.entity_type}
+                      </TableCell>
+                      <TableCell className="max-w-md truncate">{log.description}</TableCell>
+                    </TableRow>
+                  )
+                })}
+              </TableBody>
+            </Table>
+          </div>
         )}
       </TabsContent>
 
@@ -104,50 +110,54 @@ export function AuditLogTabs({ logs, merges }: AuditLogTabsProps) {
         {merges.length === 0 ? (
           <p className="text-muted-foreground py-8 text-center">No rider merge entries yet.</p>
         ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Date/Time</TableHead>
-                <TableHead>Source</TableHead>
-                <TableHead>Current Rider</TableHead>
-                <TableHead>Submitted Name</TableHead>
-                <TableHead>Previous Name</TableHead>
-                <TableHead>Email</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {merges.map((merge) => {
-                const submittedName = `${merge.submitted_first_name} ${merge.submitted_last_name}`
-                const previousName =
-                  merge.previous_first_name && merge.previous_last_name
-                    ? `${merge.previous_first_name} ${merge.previous_last_name}`
-                    : null
-                const currentName = merge.riders
-                  ? `${merge.riders.first_name} ${merge.riders.last_name}`
-                  : 'Unknown'
-                const nameChanged = previousName && previousName !== submittedName
+          <div className="rounded-md border overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Date/Time</TableHead>
+                  <TableHead className="hidden sm:table-cell">Source</TableHead>
+                  <TableHead>Current Rider</TableHead>
+                  <TableHead>Submitted Name</TableHead>
+                  <TableHead className="hidden md:table-cell">Previous Name</TableHead>
+                  <TableHead className="hidden md:table-cell">Email</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {merges.map((merge) => {
+                  const submittedName = `${merge.submitted_first_name} ${merge.submitted_last_name}`
+                  const previousName =
+                    merge.previous_first_name && merge.previous_last_name
+                      ? `${merge.previous_first_name} ${merge.previous_last_name}`
+                      : null
+                  const currentName = merge.riders
+                    ? `${merge.riders.first_name} ${merge.riders.last_name}`
+                    : 'Unknown'
+                  const nameChanged = previousName && previousName !== submittedName
 
-                return (
-                  <TableRow key={merge.id}>
-                    <TableCell className="text-muted-foreground tabular-nums">
-                      <LocalTime dateString={merge.merged_at} />
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline">
-                        {mergeSourceLabels[merge.merge_source] || merge.merge_source}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>{currentName}</TableCell>
-                    <TableCell className={nameChanged ? 'text-destructive font-medium' : ''}>
-                      {submittedName}
-                    </TableCell>
-                    <TableCell>{previousName || '—'}</TableCell>
-                    <TableCell className="text-muted-foreground">{merge.submitted_email}</TableCell>
-                  </TableRow>
-                )
-              })}
-            </TableBody>
-          </Table>
+                  return (
+                    <TableRow key={merge.id}>
+                      <TableCell className="text-muted-foreground tabular-nums">
+                        <LocalTime dateString={merge.merged_at} />
+                      </TableCell>
+                      <TableCell className="hidden sm:table-cell">
+                        <Badge variant="outline">
+                          {mergeSourceLabels[merge.merge_source] || merge.merge_source}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>{currentName}</TableCell>
+                      <TableCell className={nameChanged ? 'text-destructive font-medium' : ''}>
+                        {submittedName}
+                      </TableCell>
+                      <TableCell className="hidden md:table-cell">{previousName || '—'}</TableCell>
+                      <TableCell className="hidden md:table-cell text-muted-foreground">
+                        {merge.submitted_email}
+                      </TableCell>
+                    </TableRow>
+                  )
+                })}
+              </TableBody>
+            </Table>
+          </div>
         )}
       </TabsContent>
     </Tabs>

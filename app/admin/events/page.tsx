@@ -191,12 +191,12 @@ export default async function AdminEventsPage({ searchParams }: AdminEventsPageP
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1 className="text-3xl font-bold">Events</h1>
           <p className="text-muted-foreground">Manage event registrations and results</p>
         </div>
-        <Button asChild>
+        <Button asChild className="self-start">
           <Link href="/admin/events/new">
             <Plus className="h-4 w-4 mr-2" />
             New Event
@@ -217,10 +217,10 @@ export default async function AdminEventsPage({ searchParams }: AdminEventsPageP
           <TableHeader>
             <TableRow>
               <TableHead>Event</TableHead>
-              <TableHead>Chapter</TableHead>
+              <TableHead className="hidden md:table-cell">Chapter</TableHead>
               <TableHead>Date</TableHead>
-              <TableHead>Distance</TableHead>
-              <TableHead>Riders</TableHead>
+              <TableHead className="hidden sm:table-cell">Distance</TableHead>
+              <TableHead className="hidden sm:table-cell">Riders</TableHead>
               <TableHead>Status</TableHead>
             </TableRow>
           </TableHeader>
@@ -243,7 +243,9 @@ export default async function AdminEventsPage({ searchParams }: AdminEventsPageP
                       <p className="text-sm text-muted-foreground capitalize">{event.event_type}</p>
                     </div>
                   </TableCell>
-                  <TableCell>{event.chapters?.name || '—'}</TableCell>
+                  <TableCell className="hidden md:table-cell">
+                    {event.chapters?.name || '—'}
+                  </TableCell>
                   <TableCell>
                     {parseLocalDate(event.event_date).toLocaleDateString('en-CA', {
                       weekday: 'short',
@@ -252,8 +254,10 @@ export default async function AdminEventsPage({ searchParams }: AdminEventsPageP
                       year: 'numeric',
                     })}
                   </TableCell>
-                  <TableCell>{event.distance_km} km</TableCell>
-                  <TableCell className="tabular-nums">{event.rider_count ?? 0}</TableCell>
+                  <TableCell className="hidden sm:table-cell">{event.distance_km} km</TableCell>
+                  <TableCell className="hidden sm:table-cell tabular-nums">
+                    {event.rider_count ?? 0}
+                  </TableCell>
                   <TableCell>{getStatusBadge(event.status ?? 'scheduled')}</TableCell>
                 </ClickableTableRow>
               ))

@@ -21,12 +21,12 @@ export default async function AdminNewsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-3xl font-bold">News</h1>
           <p className="text-muted-foreground">Manage news and notices</p>
         </div>
-        <Button asChild>
+        <Button asChild className="self-start">
           <Link href="/admin/news/new">
             <Plus className="h-4 w-4 mr-2" />
             New Item
@@ -66,7 +66,7 @@ export default async function AdminNewsPage() {
                       <TableCell>
                         <span className="font-medium">{item.title}</span>
                         {item.body && (
-                          <p className="text-sm text-muted-foreground truncate max-w-md">
+                          <p className="text-sm text-muted-foreground truncate max-w-[200px] sm:max-w-md">
                             {item.body}
                           </p>
                         )}

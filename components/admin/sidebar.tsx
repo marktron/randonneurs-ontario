@@ -14,6 +14,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarSeparator,
+  useSidebar,
 } from '@/components/ui/sidebar'
 import { Button } from '@/components/ui/button'
 import {
@@ -125,6 +126,7 @@ const managementNavItems = [
 
 export function AdminSidebar({ admin }: AdminSidebarProps) {
   const pathname = usePathname()
+  const { setOpenMobile } = useSidebar()
 
   const isActive = (href: string) => {
     if (href === '/admin') {
@@ -136,7 +138,11 @@ export function AdminSidebar({ admin }: AdminSidebarProps) {
   return (
     <Sidebar>
       <SidebarHeader className="p-4">
-        <Link href="/admin" className="flex items-center gap-2">
+        <Link
+          href="/admin"
+          className="flex items-center gap-2"
+          onClick={() => setOpenMobile(false)}
+        >
           <span className="font-semibold text-lg">RO Admin</span>
         </Link>
       </SidebarHeader>
@@ -150,7 +156,11 @@ export function AdminSidebar({ admin }: AdminSidebarProps) {
               {mainNavItems.map((item) => (
                 <SidebarMenuItem key={item.href}>
                   <SidebarMenuButton asChild isActive={isActive(item.href)}>
-                    <Link href={item.href} data-testid={item.testId}>
+                    <Link
+                      href={item.href}
+                      data-testid={item.testId}
+                      onClick={() => setOpenMobile(false)}
+                    >
                       <item.icon className="h-4 w-4" />
                       <span>{item.title}</span>
                     </Link>
@@ -171,7 +181,11 @@ export function AdminSidebar({ admin }: AdminSidebarProps) {
                   .map((item) => (
                     <SidebarMenuItem key={item.href}>
                       <SidebarMenuButton asChild isActive={isActive(item.href)}>
-                        <Link href={item.href} data-testid={item.testId}>
+                        <Link
+                          href={item.href}
+                          data-testid={item.testId}
+                          onClick={() => setOpenMobile(false)}
+                        >
                           <item.icon className="h-4 w-4" />
                           <span>{item.title}</span>
                         </Link>
@@ -195,7 +209,11 @@ export function AdminSidebar({ admin }: AdminSidebarProps) {
           </div>
           <div className="flex gap-2">
             <Button variant="outline" size="sm" className="flex-1" asChild>
-              <Link href="/admin/settings" data-testid="nav-settings">
+              <Link
+                href="/admin/settings"
+                data-testid="nav-settings"
+                onClick={() => setOpenMobile(false)}
+              >
                 <Settings className="h-4 w-4 mr-2" />
                 Settings
               </Link>

@@ -144,12 +144,12 @@ export default async function AdminResultsPage({ searchParams }: AdminResultsPag
             <TableRow>
               <TableHead>Rider</TableHead>
               <TableHead>Event</TableHead>
-              <TableHead>Chapter</TableHead>
-              <TableHead>Date</TableHead>
-              <TableHead>Distance</TableHead>
+              <TableHead className="hidden md:table-cell">Chapter</TableHead>
+              <TableHead className="hidden lg:table-cell">Date</TableHead>
+              <TableHead className="hidden sm:table-cell">Distance</TableHead>
               <TableHead>Time</TableHead>
               <TableHead>Status</TableHead>
-              <TableHead className="w-[100px]">Actions</TableHead>
+              <TableHead className="w-[50px]">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -173,15 +173,17 @@ export default async function AdminResultsPage({ searchParams }: AdminResultsPag
                       )}
                     </div>
                   </TableCell>
-                  <TableCell>{result.events.chapters?.name || '—'}</TableCell>
-                  <TableCell>
+                  <TableCell className="hidden md:table-cell">
+                    {result.events.chapters?.name || '—'}
+                  </TableCell>
+                  <TableCell className="hidden lg:table-cell">
                     {parseLocalDate(result.events.event_date).toLocaleDateString('en-CA', {
                       month: 'short',
                       day: 'numeric',
                       year: 'numeric',
                     })}
                   </TableCell>
-                  <TableCell>{result.distance_km} km</TableCell>
+                  <TableCell className="hidden sm:table-cell">{result.distance_km} km</TableCell>
                   <TableCell>
                     {result.finish_time ? (
                       <span className="inline-flex items-center gap-1">

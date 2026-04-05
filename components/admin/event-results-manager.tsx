@@ -822,7 +822,7 @@ export function EventResultsManager({
 
   return (
     <Card>
-      <CardHeader className="flex flex-row items-start justify-between space-y-0">
+      <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between space-y-0">
         <div>
           <CardTitle>Registrations & Results</CardTitle>
           {isPastEvent && (
@@ -831,7 +831,7 @@ export function EventResultsManager({
             </CardDescription>
           )}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {sortedParticipants.length > 0 && (
             <Button variant="outline" size="sm" onClick={handleCopyRiderInfo}>
               {copied ? (

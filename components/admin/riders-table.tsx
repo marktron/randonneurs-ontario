@@ -176,7 +176,7 @@ export function RidersTable({
       )}
 
       {/* Search and filters */}
-      <div className="flex items-center gap-4 mb-4">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center mb-4">
         <form className="flex items-center gap-2 max-w-md" role="search">
           {chapterFilter && <input type="hidden" name="chapter" value={chapterFilter} />}
           <InputGroup className="flex-1">
@@ -247,12 +247,12 @@ export function RidersTable({
                 />
               </TableHead>
               <TableHead>Name</TableHead>
-              <TableHead className="text-center">Registrations</TableHead>
-              <TableHead className="text-center">Results</TableHead>
-              <TableHead>Chapter</TableHead>
-              <TableHead>Membership</TableHead>
-              <TableHead>Since</TableHead>
-              <TableHead className="w-[100px]">Actions</TableHead>
+              <TableHead className="hidden sm:table-cell text-center">Registrations</TableHead>
+              <TableHead className="hidden sm:table-cell text-center">Results</TableHead>
+              <TableHead className="hidden md:table-cell">Chapter</TableHead>
+              <TableHead className="hidden lg:table-cell">Membership</TableHead>
+              <TableHead className="hidden lg:table-cell">Since</TableHead>
+              <TableHead className="w-[50px]">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -282,21 +282,21 @@ export function RidersTable({
                     <TableCell className="font-medium">
                       {rider.first_name} {rider.last_name}
                     </TableCell>
-                    <TableCell className="text-center">
+                    <TableCell className="hidden sm:table-cell text-center">
                       {regCount > 0 ? (
                         <Badge variant="secondary">{regCount}</Badge>
                       ) : (
                         <span className="text-muted-foreground">0</span>
                       )}
                     </TableCell>
-                    <TableCell className="text-center">
+                    <TableCell className="hidden sm:table-cell text-center">
                       {resultCount > 0 ? (
                         <Badge>{resultCount}</Badge>
                       ) : (
                         <span className="text-muted-foreground">0</span>
                       )}
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="hidden md:table-cell">
                       {(() => {
                         const latest = rider.rider_memberships
                           ?.slice()
@@ -308,7 +308,7 @@ export function RidersTable({
                         )
                       })()}
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="hidden lg:table-cell">
                       {(() => {
                         const currentSeason = parseInt(
                           process.env.NEXT_PUBLIC_CURRENT_SEASON || '2026',
@@ -324,7 +324,7 @@ export function RidersTable({
                         )
                       })()}
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="hidden lg:table-cell">
                       {rider.member_since ?? <span className="text-muted-foreground">—</span>}
                     </TableCell>
                     <TableCell>
@@ -343,7 +343,7 @@ export function RidersTable({
       </div>
 
       {/* Pagination */}
-      <div className="flex items-center justify-between mt-4">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mt-4">
         <p className="text-sm text-muted-foreground">
           Showing {(page - 1) * pageSize + 1}–{Math.min(page * pageSize, totalCount)} of{' '}
           {totalCount} riders{searchQuery ? ` matching "${searchQuery}"` : ''}

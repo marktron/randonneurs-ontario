@@ -24,7 +24,7 @@ export function AdminPagination({
   const end = Math.min(page * pageSize, totalCount)
 
   return (
-    <div className="flex items-center justify-between">
+    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
       <p className="text-sm text-muted-foreground">
         Showing {start}–{end} of {totalCount} {label}
       </p>

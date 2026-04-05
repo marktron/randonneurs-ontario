@@ -7,15 +7,18 @@ import Link from 'next/link'
 import { ArrowLeft, ExternalLink } from 'lucide-react'
 
 // Lazy-load PageEditor (includes MarkdownEditor and react-markdown)
-const PageEditor = dynamic(() => import('@/components/admin/page-editor').then(mod => ({ default: mod.PageEditor })), {
-  loading: () => (
-    <div className="space-y-6 max-w-4xl">
-      <div className="h-10 bg-muted animate-pulse rounded" />
-      <div className="h-10 bg-muted animate-pulse rounded" />
-      <div className="h-[500px] bg-muted animate-pulse rounded" />
-    </div>
-  ),
-})
+const PageEditor = dynamic(
+  () => import('@/components/admin/page-editor').then((mod) => ({ default: mod.PageEditor })),
+  {
+    loading: () => (
+      <div className="space-y-6 max-w-4xl">
+        <div className="h-10 bg-muted animate-pulse rounded" />
+        <div className="h-10 bg-muted animate-pulse rounded" />
+        <div className="h-[500px] bg-muted animate-pulse rounded" />
+      </div>
+    ),
+  }
+)
 
 interface PageProps {
   params: Promise<{ slug: string }>
@@ -32,7 +35,7 @@ export default async function AdminEditPagePage({ params }: PageProps) {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-4">
           <Button variant="ghost" size="icon" asChild>
             <Link href="/admin/pages">
@@ -41,12 +44,10 @@ export default async function AdminEditPagePage({ params }: PageProps) {
           </Button>
           <div>
             <h1 className="text-3xl font-bold">Edit Page</h1>
-            <p className="text-muted-foreground">
-              {page.title}
-            </p>
+            <p className="text-muted-foreground">{page.title}</p>
           </div>
         </div>
-        <Button variant="outline" asChild>
+        <Button variant="outline" asChild className="self-start">
           <Link href={`/${slug}`} target="_blank">
             <ExternalLink className="h-4 w-4 mr-2" />
             View Page

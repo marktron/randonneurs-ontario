@@ -143,7 +143,7 @@ export default async function RiderDetailPage({ params }: RiderPageProps) {
         <h1 className="text-3xl font-bold">
           {rider.first_name} {rider.last_name}
         </h1>
-        <div className="flex items-center gap-4 text-sm text-muted-foreground">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
           <span>
             Gender: <span className="font-medium text-foreground">{rider.gender || '—'}</span>
           </span>
@@ -251,8 +251,8 @@ export default async function RiderDetailPage({ params }: RiderPageProps) {
                   <TableRow>
                     <TableHead>Event</TableHead>
                     <TableHead>Event Date</TableHead>
-                    <TableHead>Distance</TableHead>
-                    <TableHead>Registered</TableHead>
+                    <TableHead className="hidden sm:table-cell">Distance</TableHead>
+                    <TableHead className="hidden md:table-cell">Registered</TableHead>
                     <TableHead>Status</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -276,8 +276,10 @@ export default async function RiderDetailPage({ params }: RiderPageProps) {
                             year: 'numeric',
                           })}
                         </TableCell>
-                        <TableCell>{reg.events!.distance_km} km</TableCell>
-                        <TableCell>
+                        <TableCell className="hidden sm:table-cell">
+                          {reg.events!.distance_km} km
+                        </TableCell>
+                        <TableCell className="hidden md:table-cell">
                           {reg.registered_at
                             ? new Date(reg.registered_at).toLocaleDateString('en-CA', {
                                 month: 'short',
@@ -312,7 +314,7 @@ export default async function RiderDetailPage({ params }: RiderPageProps) {
                   <TableRow>
                     <TableHead>Event</TableHead>
                     <TableHead>Date</TableHead>
-                    <TableHead>Distance</TableHead>
+                    <TableHead className="hidden sm:table-cell">Distance</TableHead>
                     <TableHead>Time</TableHead>
                     <TableHead>Status</TableHead>
                   </TableRow>
@@ -342,7 +344,9 @@ export default async function RiderDetailPage({ params }: RiderPageProps) {
                             year: 'numeric',
                           })}
                         </TableCell>
-                        <TableCell>{result.distance_km} km</TableCell>
+                        <TableCell className="hidden sm:table-cell">
+                          {result.distance_km} km
+                        </TableCell>
                         <TableCell>
                           {result.finish_time ? (
                             <span className="inline-flex items-center gap-1">

@@ -214,12 +214,12 @@ export function RoutesTable({ routes, chapters, defaultChapterId }: RoutesTableP
                 />
               </TableHead>
               <TableHead>Name</TableHead>
-              <TableHead>Chapter</TableHead>
-              <TableHead>Distance</TableHead>
-              <TableHead>Collection</TableHead>
-              <TableHead>RWGPS</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead className="w-[120px]">Actions</TableHead>
+              <TableHead className="hidden md:table-cell">Chapter</TableHead>
+              <TableHead className="hidden sm:table-cell">Distance</TableHead>
+              <TableHead className="hidden lg:table-cell">Collection</TableHead>
+              <TableHead className="hidden lg:table-cell">RWGPS</TableHead>
+              <TableHead className="hidden sm:table-cell">Status</TableHead>
+              <TableHead className="w-[100px]">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -246,10 +246,14 @@ export function RoutesTable({ routes, chapters, defaultChapterId }: RoutesTableP
                     <p className="font-medium">{route.name}</p>
                     <p className="text-xs text-muted-foreground">{route.slug}</p>
                   </TableCell>
-                  <TableCell>{route.chapters?.name || '—'}</TableCell>
-                  <TableCell>{route.distance_km ? `${route.distance_km} km` : '—'}</TableCell>
-                  <TableCell>{route.collection || '—'}</TableCell>
-                  <TableCell>
+                  <TableCell className="hidden md:table-cell">
+                    {route.chapters?.name || '—'}
+                  </TableCell>
+                  <TableCell className="hidden sm:table-cell">
+                    {route.distance_km ? `${route.distance_km} km` : '—'}
+                  </TableCell>
+                  <TableCell className="hidden lg:table-cell">{route.collection || '—'}</TableCell>
+                  <TableCell className="hidden lg:table-cell">
                     {route.rwgps_id ? (
                       <a
                         href={`https://ridewithgps.com/routes/${route.rwgps_id}`}
@@ -264,7 +268,7 @@ export function RoutesTable({ routes, chapters, defaultChapterId }: RoutesTableP
                       '—'
                     )}
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="hidden sm:table-cell">
                     <Badge variant={route.is_active ? 'default' : 'secondary'}>
                       {route.is_active ? 'Active' : 'Inactive'}
                     </Badge>

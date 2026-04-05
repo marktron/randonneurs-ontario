@@ -1,7 +1,14 @@
 import { requireAdmin } from '@/lib/auth/get-admin'
 import { getAllPages } from '@/lib/content'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
 import { ClickableTableRow } from '@/components/admin/clickable-table-row'
 import { FileText, Plus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -13,14 +20,12 @@ export default async function AdminPagesPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-3xl font-bold">Pages</h1>
-          <p className="text-muted-foreground">
-            Manage static content pages
-          </p>
+          <p className="text-muted-foreground">Manage static content pages</p>
         </div>
-        <Button asChild>
+        <Button asChild className="self-start">
           <Link href="/admin/pages/new">
             <Plus className="h-4 w-4 mr-2" />
             New Page
@@ -60,15 +65,13 @@ export default async function AdminPagesPage() {
                       <TableCell>
                         <span className="font-medium">{page.title}</span>
                         {page.description && (
-                          <p className="text-sm text-muted-foreground truncate max-w-md">
+                          <p className="text-sm text-muted-foreground truncate max-w-[200px] sm:max-w-md">
                             {page.description}
                           </p>
                         )}
                       </TableCell>
                       <TableCell>
-                        <code className="text-sm bg-muted px-2 py-1 rounded">
-                          /{page.slug}
-                        </code>
+                        <code className="text-sm bg-muted px-2 py-1 rounded">/{page.slug}</code>
                       </TableCell>
                       <TableCell className="text-muted-foreground">
                         {page.lastUpdated || '—'}
