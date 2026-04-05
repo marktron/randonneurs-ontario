@@ -89,7 +89,9 @@ describe('FlecheRegistrationForm', () => {
     expect(screen.getByLabelText('Last name')).toBeInTheDocument()
     expect(screen.getByLabelText('Email address')).toBeInTheDocument()
     expect(screen.getByText('Emergency contact')).toBeInTheDocument()
-    expect(screen.getByLabelText('Share my registration')).toBeInTheDocument()
+    expect(
+      screen.getByRole('checkbox', { name: /appear on the registered riders list/i })
+    ).toBeInTheDocument()
   })
 
   it('renders fleche team helper text', () => {

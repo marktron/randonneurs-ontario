@@ -123,7 +123,7 @@ describe('RegistrationForm', () => {
           lastName: 'Doe',
           email: 'john@example.com',
           gender: undefined,
-          shareRegistration: false,
+          shareRegistration: true,
           notes: undefined,
           emergencyContactName: 'Jane Doe',
           emergencyContactPhone: '555-1234',
@@ -257,11 +257,13 @@ describe('RegistrationForm', () => {
       const user = userEvent.setup()
       render(<RegistrationForm {...defaultProps} />)
 
-      const checkbox = screen.getByLabelText(/share my registration/i)
-      expect(checkbox).not.toBeChecked()
+      const checkbox = screen.getByRole('checkbox', {
+        name: /appear on the registered riders list/i,
+      })
+      expect(checkbox).toBeChecked()
 
       await user.click(checkbox)
-      expect(checkbox).toBeChecked()
+      expect(checkbox).not.toBeChecked()
     })
 
     it('allows entering notes', async () => {

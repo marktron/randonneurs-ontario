@@ -106,7 +106,7 @@ export function PermanentRegistrationForm({ routes }: PermanentRegistrationFormP
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
   const [email, setEmail] = useState('')
-  const [shareRegistration, setShareRegistration] = useState(false)
+  const [shareRegistration, setShareRegistration] = useState(true)
   const [gender, setGender] = useState<string>('')
   const [emergencyContactName, setEmergencyContactName] = useState('')
   const [emergencyContactPhone, setEmergencyContactPhone] = useState('')
@@ -556,24 +556,27 @@ export function PermanentRegistrationForm({ routes }: PermanentRegistrationFormP
           </div>
 
           {/* Share Registration */}
-          <div className="space-y-2">
-            <div className="flex items-start gap-3">
-              <Checkbox
-                id="share"
-                checked={shareRegistration}
-                onCheckedChange={(checked) => setShareRegistration(checked === true)}
-                className="mt-0.5"
-                disabled={isPending}
-              />
-              <div className="space-y-1">
-                <Label htmlFor="share" className="cursor-pointer">
-                  Share my registration
-                </Label>
-                <p className="text-xs text-muted-foreground">
-                  Share your name with other riders before the event. All riders will appear on the
-                  results after the event.
-                </p>
-              </div>
+          <div className="flex items-start gap-3">
+            <Checkbox
+              checked={shareRegistration}
+              onCheckedChange={(checked) => setShareRegistration(checked === true)}
+              className="mt-1"
+              disabled={isPending}
+              aria-label="Appear on the registered riders list"
+            />
+            {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- checkbox is keyboard-accessible via aria-label */}
+            <div
+              className="space-y-1 cursor-pointer"
+              onClick={() => {
+                if (!isPending) setShareRegistration((v) => !v)
+              }}
+            >
+              <span className="text-sm font-medium leading-none">
+                Appear on the registered riders list
+              </span>
+              <p className="text-xs text-muted-foreground">
+                Allow other riders to see you're signed up. Results always include all riders.
+              </p>
             </div>
           </div>
 
