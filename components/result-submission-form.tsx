@@ -120,13 +120,29 @@ export function ResultSubmissionForm({ token, initialData }: ResultSubmissionFor
       return
     }
 
+    // Browsers (especially Safari/macOS) don't always recognize the GPX MIME
+    // type and report file.type as "" or "application/octet-stream" for .gpx
+    // files, which would fail both our server validation and Supabase Storage's
+    // bucket allowlist. Since the form already knows this is a GPX upload,
+    // bake the canonical MIME type into a new File object — supabase-js's
+    // uploadToSignedUrl wraps Blob bodies in FormData and uses the File's
+    // intrinsic .type as the multipart Content-Type, ignoring any contentType
+    // option we pass.
+    let fileToUpload = uploadFile
+    if (fileType === 'gpx' && uploadFile.type !== 'application/gpx+xml') {
+      fileToUpload = new File([uploadFile], uploadFile.name, {
+        type: 'application/gpx+xml',
+        lastModified: uploadFile.lastModified,
+      })
+    }
+
     // 1. Ask the server for a signed upload URL (avoids the server-action body limit)
     const signed = await createResultUploadUrl({
       token,
       fileType,
-      fileName: uploadFile.name,
-      contentType: uploadFile.type,
-      fileSize: uploadFile.size,
+      fileName: fileToUpload.name,
+      contentType: fileToUpload.type,
+      fileSize: fileToUpload.size,
     })
 
     if (!signed.success || !signed.data) {
@@ -142,8 +158,7 @@ export function ResultSubmissionForm({ token, initialData }: ResultSubmissionFor
     const supabase = createSupabaseBrowserClient()
     const { error: uploadError } = await supabase.storage
       .from('rider-submissions')
-      .uploadToSignedUrl(signed.data.path, signed.data.uploadToken, uploadFile, {
-        contentType: uploadFile.type,
+      .uploadToSignedUrl(signed.data.path, signed.data.uploadToken, fileToUpload, {
         upsert: false,
       })
 

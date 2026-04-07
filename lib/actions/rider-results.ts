@@ -11,7 +11,13 @@ import type {
 } from '@/types/queries'
 
 const BUCKET_NAME = 'rider-submissions'
-const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
+// Images are browser-compressed before upload and typically arrive at ~2 MB;
+// 10 MB is a generous backstop. GPX files are plain XML that can grow large
+// for long brevets (a 600 km ride at 1 Hz recording is ~30-40 MB), so we allow
+// up to 100 MB. The Supabase bucket's own file_size_limit matches (see
+// supabase/migrations/*_raise_rider_submissions_size_limit.sql).
+const MAX_IMAGE_SIZE = 10 * 1024 * 1024 // 10 MB
+const MAX_GPX_SIZE = 100 * 1024 * 1024 // 100 MB
 const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp']
 const ALLOWED_GPX_TYPES = ['application/gpx+xml', 'application/xml', 'text/xml']
 
@@ -252,18 +258,23 @@ export async function createResultUploadUrl(
     return { success: false, error: 'Invalid submission token' }
   }
 
-  // Validate size before issuing a signed URL
+  // Validate size before issuing a signed URL. GPX files can get large for
+  // long brevets, so they have a higher ceiling than images.
   if (typeof fileSize !== 'number' || fileSize <= 0) {
     return { success: false, error: 'Invalid file size' }
   }
-  if (fileSize > MAX_FILE_SIZE) {
+  const maxSize = fileType === 'gpx' ? MAX_GPX_SIZE : MAX_IMAGE_SIZE
+  if (fileSize > maxSize) {
     return {
       success: false,
-      error: `File too large. Maximum size is ${MAX_FILE_SIZE / 1024 / 1024}MB.`,
+      error: `File too large. Maximum size is ${maxSize / 1024 / 1024}MB.`,
     }
   }
 
-  // Validate content type
+  // Validate content type. The client is responsible for sending a valid
+  // contentType — for GPX uploads it always normalizes to application/gpx+xml
+  // before calling this action, since browsers (especially Safari) don't
+  // always recognize the GPX MIME type from a .gpx file extension.
   const allowedTypes = fileType === 'gpx' ? ALLOWED_GPX_TYPES : ALLOWED_IMAGE_TYPES
   if (!allowedTypes.includes(contentType)) {
     const typeDescription = fileType === 'gpx' ? 'GPX/XML' : 'image (JPEG, PNG, WebP)'

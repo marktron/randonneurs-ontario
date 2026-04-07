@@ -23,7 +23,7 @@ const COMPRESSIBLE_IMAGE_TYPES = [
 
 const HEIC_MIME_TYPES = ['image/heic', 'image/heif']
 
-const MAX_INPUT_BYTES = 25 * 1024 * 1024 // 25 MB pre-check ceiling
+const MAX_IMAGE_INPUT_BYTES = 25 * 1024 * 1024 // 25 MB — canvas OOM guard for image decoding
 const SKIP_BELOW_BYTES = 500 * 1024 // 500 KB — already small enough
 
 export interface CompressOptions {
@@ -40,28 +40,31 @@ const FRIENDLY_ERROR = "We couldn't process this image. Please try a different f
 /**
  * Compress an image file for upload. Returns a new File ready to upload.
  *
- * - Non-image files (PDF, DOCX, GPX, XML, GIF) → returned unchanged
+ * - Non-image files (PDF, DOCX, GPX, XML, GIF) → returned unchanged, no size check
  * - HEIC / HEIF → converted to JPEG via heic2any (lazy-loaded), then compressed
  * - Small JPEG/PNG/WebP (< 500 KB) → returned unchanged
  * - Otherwise → resized and re-encoded as JPEG
  *
  * Throws a friendly error message on any decoder/compression failure, or if
- * the input is larger than 25 MB.
+ * the input is an image larger than 25 MB (canvas OOM guard). Non-image files
+ * bypass this check — their size is enforced server-side.
  */
 export async function compressImageForUpload(
   file: File,
   options: CompressOptions = {}
 ): Promise<File> {
-  if (file.size > MAX_INPUT_BYTES) {
+  if (!COMPRESSIBLE_IMAGE_TYPES.includes(file.type)) {
+    return file
+  }
+
+  // Image-only OOM guard: canvas decoding of huge files crashes browsers.
+  // Documents, GPX, etc. pass through above this check.
+  if (file.size > MAX_IMAGE_INPUT_BYTES) {
     throw new Error(
       `That file is too large to process in the browser (${Math.round(
         file.size / 1024 / 1024
       )} MB). Please choose a smaller file.`
     )
-  }
-
-  if (!COMPRESSIBLE_IMAGE_TYPES.includes(file.type)) {
-    return file
   }
 
   let workingFile = file

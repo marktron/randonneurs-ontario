@@ -102,8 +102,11 @@ port = 54324
 
 [storage]
 enabled = true
-# The maximum file size allowed (e.g. "5MB", "500KB").
-file_size_limit = "10MiB"
+# The maximum file size allowed (e.g. "5MB", "500KB"). Sets the HTTP-level
+# ceiling for the local storage server. Per-bucket limits below cap individual
+# buckets at lower values; this global must be at least as large as the
+# largest per-bucket limit.
+file_size_limit = "100MiB"
 
 # Image transformation API is available to Supabase Pro plan.
 # [storage.image_transformation]
@@ -123,6 +126,24 @@ allowed_mime_types = [
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
   "application/vnd.ms-excel",
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+]
+
+# Storage bucket for rider-submitted GPX files and control card photos.
+# GPX files for long brevets can grow large (a 600 km ride at 1 Hz recording
+# is roughly 30-40 MB), so the limit is much higher than the images bucket.
+# The bucket itself is created via migration; this entry mirrors that limit
+# locally so behavior matches production. Photos are browser-compressed
+# before upload (see lib/image-compression.ts) so practical sizes are small.
+[storage.buckets.rider-submissions]
+public = true
+file_size_limit = "100MiB"
+allowed_mime_types = [
+  "image/png",
+  "image/jpeg",
+  "image/webp",
+  "application/gpx+xml",
+  "application/xml",
+  "text/xml",
 ]
 
 [auth]

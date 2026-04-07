@@ -167,12 +167,23 @@ describe('compressImageForUpload', () => {
   })
 
   describe('pre-check', () => {
-    it('rejects files larger than 25 MB before touching any decoder', async () => {
+    it('rejects image files larger than 25 MB before touching any decoder', async () => {
       const huge = createMockFile('insane.jpg', 'image/jpeg', 30 * 1024 * 1024) // 30 MB
 
       await expect(compressImageForUpload(huge)).rejects.toThrow(/too large/i)
       expect(mockedCompression).not.toHaveBeenCalled()
       expect(mockedHeic2any).not.toHaveBeenCalled()
+    })
+
+    it('does not apply the 25 MB pre-check to non-image files', async () => {
+      // A 50 MB GPX file should pass through unchanged — the pre-check is only
+      // there to prevent canvas OOM on huge images, not to cap GPX uploads.
+      const bigGpx = createMockFile('long-brevet.gpx', 'application/gpx+xml', 50 * 1024 * 1024)
+
+      const result = await compressImageForUpload(bigGpx)
+
+      expect(result).toBe(bigGpx)
+      expect(mockedCompression).not.toHaveBeenCalled()
     })
   })
 

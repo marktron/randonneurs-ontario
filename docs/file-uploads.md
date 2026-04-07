@@ -72,11 +72,13 @@ The `rider-submissions` bucket stores GPX files and control card photos uploaded
   1. `createResultUploadUrl()` — service-role client validates token / size / content type and mints a one-time signed upload URL via `supabase.storage.from(...).createSignedUploadUrl(path)`
   2. Browser PUTs the file directly to Supabase Storage using `uploadToSignedUrl(path, token, file)`
   3. `confirmResultUpload()` — service-role client verifies the path is scoped to the event/rider, removes any prior file, and persists the new path
-- **Why signed URLs:** Vercel caps Serverless Function request bodies at 4.5 MB (and Next.js Server Actions default to 1 MB). Direct-to-Storage uploads bypass both limits so we can keep the full 10 MB file ceiling.
+- **Why signed URLs:** Vercel caps Serverless Function request bodies at 4.5 MB (and Next.js Server Actions default to 1 MB). Direct-to-Storage uploads bypass both limits so we can support uploads well beyond either ceiling.
 - **Access control:** Token-based (each result row has a unique `submission_token` UUID); both server actions validate the token before issuing or confirming an upload
 - **RLS policies:** Public read (the bucket is public), no anonymous insert — uploads happen via service-role-issued signed URLs
-- **Allowed types:** JPEG, PNG, WebP, GPX/XML
-- **Max size:** 10MB
+- **Allowed types:** JPEG, PNG, WebP, HEIC/HEIF (converted to JPEG client-side), GPX/XML
+- **Max size:**
+  - **Photos (control cards):** 10 MB. In practice browser-side compression brings typical phone photos down to ~1–2 MB, so the 10 MB ceiling is a backstop.
+  - **GPX files:** 100 MB. A 600 km brevet recorded at 1 Hz can easily exceed 30 MB; 1000 km+ randonnées can be much larger. The matching Supabase bucket-level cap is set in `supabase/migrations/20260407120000_raise_rider_submissions_size_limit.sql`.
 - **File path pattern:** `{eventId}/{riderId}/{fileType}-{timestamp}-{randomId}.{ext}`
 
 ## Testing

@@ -359,13 +359,48 @@ describe('createResultUploadUrl', () => {
     expect(result.error).toBe('Invalid submission token')
   })
 
-  it('rejects oversized files', async () => {
+  it('rejects oversized image files (> 10 MB)', async () => {
     const result = await createResultUploadUrl({
       token: 'valid-token',
       fileType: 'control_card_front',
       fileName: 'card.jpg',
       contentType: 'image/jpeg',
       fileSize: 11 * 1024 * 1024, // 11MB
+    })
+
+    expect(result.success).toBe(false)
+    expect(result.error).toMatch(/file too large/i)
+  })
+
+  it('accepts large GPX files up to the 100 MB GPX ceiling', async () => {
+    mockModule.__mockResultFound({
+      id: 'result-1',
+      event_id: 'event-1',
+      rider_id: 'rider-1',
+      events: { status: 'completed' },
+    })
+
+    // A 50 MB GPX file — roughly a 600 km brevet at 1 Hz recording.
+    // Images are still capped at 10 MB; GPX goes up to 100 MB.
+    const result = await createResultUploadUrl({
+      token: 'valid-token',
+      fileType: 'gpx',
+      fileName: 'long-brevet.gpx',
+      contentType: 'application/gpx+xml',
+      fileSize: 50 * 1024 * 1024,
+    })
+
+    expect(result.success).toBe(true)
+    expect(result.data?.path).toMatch(/^event-1\/rider-1\/gpx-/)
+  })
+
+  it('rejects GPX files larger than 100 MB', async () => {
+    const result = await createResultUploadUrl({
+      token: 'valid-token',
+      fileType: 'gpx',
+      fileName: 'absurd.gpx',
+      contentType: 'application/gpx+xml',
+      fileSize: 101 * 1024 * 1024, // 101 MB
     })
 
     expect(result.success).toBe(false)
