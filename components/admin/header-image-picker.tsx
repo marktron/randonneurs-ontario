@@ -23,9 +23,16 @@ export function HeaderImagePicker({ value, onChange }: HeaderImagePickerProps) {
 
   const handleImageUpload = useCallback(
     async (file: File) => {
-      const allowedTypes = ['image/png', 'image/jpeg', 'image/webp', 'image/gif']
+      const allowedTypes = [
+        'image/png',
+        'image/jpeg',
+        'image/webp',
+        'image/gif',
+        'image/heic',
+        'image/heif',
+      ]
       if (!allowedTypes.includes(file.type)) {
-        toast.error('Invalid file type. Use PNG, JPEG, WebP, or GIF.')
+        toast.error('Invalid file type. Use PNG, JPEG, WebP, GIF, or HEIC.')
         return
       }
 
@@ -155,7 +162,7 @@ export function HeaderImagePicker({ value, onChange }: HeaderImagePickerProps) {
       <input
         ref={fileInputRef}
         type="file"
-        accept="image/png,image/jpeg,image/webp,image/gif"
+        accept="image/png,image/jpeg,image/webp,image/gif,image/heic,image/heif"
         className="hidden"
         onChange={handleFileSelect}
       />
@@ -228,7 +235,7 @@ export function HeaderImagePicker({ value, onChange }: HeaderImagePickerProps) {
                 <ImageIcon className="h-10 w-10 text-muted-foreground mb-2" />
                 <p className="text-sm font-medium">Drop an image here or click to upload</p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  PNG, JPEG, WebP, or GIF up to 10MB
+                  PNG, JPEG, WebP, GIF, or HEIC up to 10MB
                 </p>
               </>
             )}

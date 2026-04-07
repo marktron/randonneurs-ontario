@@ -532,7 +532,7 @@ export function ResultSubmissionForm({ token, initialData }: ResultSubmissionFor
                 <FileUploadField
                   inputRef={frontInputRef}
                   state={controlCardFront}
-                  accept="image/jpeg,image/png,image/webp"
+                  accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
                   icon={<ImageIcon className="h-4 w-4" />}
                   label="Upload front"
                   disabled={isPending}
@@ -550,7 +550,7 @@ export function ResultSubmissionForm({ token, initialData }: ResultSubmissionFor
                 <FileUploadField
                   inputRef={backInputRef}
                   state={controlCardBack}
-                  accept="image/jpeg,image/png,image/webp"
+                  accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
                   icon={<ImageIcon className="h-4 w-4" />}
                   label="Upload back"
                   disabled={isPending}

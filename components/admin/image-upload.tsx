@@ -27,7 +27,14 @@ interface ImageUploadProps {
 }
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
-const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
+const ALLOWED_TYPES = [
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/gif',
+  'image/heic',
+  'image/heif',
+]
 
 export function ImageUpload({
   value,
@@ -44,7 +51,7 @@ export function ImageUpload({
 
   const validateFile = (file: File): string | null => {
     if (!ALLOWED_TYPES.includes(file.type)) {
-      return `Invalid file type. Allowed: JPEG, PNG, WebP, GIF`
+      return `Invalid file type. Allowed: JPEG, PNG, WebP, GIF, HEIC`
     }
     if (file.size > MAX_FILE_SIZE) {
       return `File too large. Maximum size: 10MB`
@@ -281,7 +288,9 @@ export function ImageUpload({
               <p className="text-sm text-muted-foreground text-center mb-1">
                 {isDragging ? 'Drop image here' : 'Drag and drop an image, or click to browse'}
               </p>
-              <p className="text-xs text-muted-foreground">JPEG, PNG, WebP, or GIF up to 10MB</p>
+              <p className="text-xs text-muted-foreground">
+                JPEG, PNG, WebP, GIF, or HEIC up to 10MB
+              </p>
             </>
           )}
         </div>

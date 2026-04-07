@@ -6,7 +6,7 @@ The admin interface supports uploading files (images and documents) to Supabase 
 
 | Category  | Types                                   | Max Size |
 | --------- | --------------------------------------- | -------- |
-| Images    | JPEG, PNG, WebP, GIF                    | 10MB     |
+| Images    | JPEG, PNG, WebP, GIF, HEIC/HEIF         | 10MB     |
 | Documents | PDF                                     | 10MB     |
 | Office    | Word (.doc, .docx), Excel (.xls, .xlsx) | 10MB     |
 
