@@ -9,6 +9,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Loader2, Upload, X, ImageIcon, AlertCircle } from 'lucide-react'
 import { createImageUploadUrl, confirmImageUpload } from '@/lib/actions/images'
 import { createClient as createSupabaseBrowserClient } from '@/lib/supabase-browser'
+import { compressImageForUpload } from '@/lib/image-compression'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 
@@ -63,11 +64,20 @@ export function ImageUpload({
       setIsUploading(true)
 
       try {
+        // 0. Compress images in the browser before upload (HEIC → JPEG, resize)
+        let uploadFile: File
+        try {
+          uploadFile = await compressImageForUpload(file)
+        } catch (err) {
+          setError(err instanceof Error ? err.message : 'Failed to upload image')
+          return
+        }
+
         // 1. Mint a signed upload URL (avoids the Server Action body limit)
         const signed = await createImageUploadUrl({
-          filename: file.name,
-          contentType: file.type,
-          sizeBytes: file.size,
+          filename: uploadFile.name,
+          contentType: uploadFile.type,
+          sizeBytes: uploadFile.size,
           folder,
         })
 
@@ -80,8 +90,8 @@ export function ImageUpload({
         const supabase = createSupabaseBrowserClient()
         const { error: uploadError } = await supabase.storage
           .from('images')
-          .uploadToSignedUrl(signed.data.storagePath, signed.data.uploadToken, file, {
-            contentType: file.type,
+          .uploadToSignedUrl(signed.data.storagePath, signed.data.uploadToken, uploadFile, {
+            contentType: uploadFile.type,
             upsert: false,
           })
 
@@ -93,9 +103,9 @@ export function ImageUpload({
         // 3. Persist metadata
         const confirmed = await confirmImageUpload({
           storagePath: signed.data.storagePath,
-          filename: file.name,
-          contentType: file.type,
-          sizeBytes: file.size,
+          filename: uploadFile.name,
+          contentType: uploadFile.type,
+          sizeBytes: uploadFile.size,
           altText: altText || null,
         })
 
