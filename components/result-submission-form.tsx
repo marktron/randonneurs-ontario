@@ -24,6 +24,7 @@ import {
   type UpcomingEvent,
 } from '@/lib/actions/rider-results'
 import { createClient as createSupabaseBrowserClient } from '@/lib/supabase-browser'
+import { compressImageForUpload } from '@/lib/image-compression'
 import {
   Upload,
   X,
@@ -106,13 +107,26 @@ export function ResultSubmissionForm({ token, initialData }: ResultSubmissionFor
   ) {
     setState((prev) => ({ ...prev, uploading: true, error: null }))
 
+    // 0. Compress images in the browser before upload (HEIC → JPEG, resize)
+    let uploadFile: File
+    try {
+      uploadFile = await compressImageForUpload(file)
+    } catch (err) {
+      setState((prev) => ({
+        ...prev,
+        uploading: false,
+        error: err instanceof Error ? err.message : 'Upload failed',
+      }))
+      return
+    }
+
     // 1. Ask the server for a signed upload URL (avoids the server-action body limit)
     const signed = await createResultUploadUrl({
       token,
       fileType,
-      fileName: file.name,
-      contentType: file.type,
-      fileSize: file.size,
+      fileName: uploadFile.name,
+      contentType: uploadFile.type,
+      fileSize: uploadFile.size,
     })
 
     if (!signed.success || !signed.data) {
@@ -128,8 +142,8 @@ export function ResultSubmissionForm({ token, initialData }: ResultSubmissionFor
     const supabase = createSupabaseBrowserClient()
     const { error: uploadError } = await supabase.storage
       .from('rider-submissions')
-      .uploadToSignedUrl(signed.data.path, signed.data.uploadToken, file, {
-        contentType: file.type,
+      .uploadToSignedUrl(signed.data.path, signed.data.uploadToken, uploadFile, {
+        contentType: uploadFile.type,
         upsert: false,
       })
 
