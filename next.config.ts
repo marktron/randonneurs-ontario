@@ -4,7 +4,12 @@ import type { NextConfig } from 'next'
 const nextConfig: NextConfig = {
   experimental: {
     serverActions: {
-      bodySizeLimit: '6mb',
+      // Vercel caps Serverless/Fluid Compute request bodies at 4.5 MB, so
+      // setting this any higher has no effect in production. Files larger than
+      // this should be uploaded directly to Supabase Storage via signed URLs
+      // (see lib/actions/rider-results.ts → createResultUploadUrl for the
+      // pattern).
+      bodySizeLimit: '4.5mb',
     },
     staleTimes: {
       dynamic: 0,
