@@ -5,7 +5,8 @@ import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { MarkdownContent } from '@/components/markdown-content'
 import { Eye, Edit3, Upload, Loader2, AlertCircle, HelpCircle } from 'lucide-react'
-import { uploadFile } from '@/lib/actions/images'
+import { createImageUploadUrl, confirmImageUpload } from '@/lib/actions/images'
+import { createClient as createSupabaseBrowserClient } from '@/lib/supabase-browser'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { Label } from '@/components/ui/label'
@@ -102,32 +103,62 @@ export function MarkdownEditor({ value, onChange, placeholder, label }: Markdown
 
       insertAtCursor(uploadingPlaceholder)
 
-      try {
-        const formData = new FormData()
-        formData.append('file', file)
-        formData.append('folder', 'pages')
-
-        const result = await uploadFile(formData)
-
-        if (result.success && result.data) {
-          const markdown = isImage
-            ? `![${file.name}](${result.data.url})`
-            : `[${file.name}](${result.data.url})`
-          onChange(valueRef.current.replace(uploadingPlaceholder, markdown))
-          toast.success(isImage ? 'Image uploaded' : 'File uploaded')
-        } else {
-          onChange(valueRef.current.replace(uploadingPlaceholder, ''))
-          const msg = result.error || 'Failed to upload file'
-          setUploadError(msg)
-          toast.error(msg)
-          console.error('Upload failed:', msg)
-        }
-      } catch (error) {
+      const failWith = (msg: string) => {
         onChange(valueRef.current.replace(uploadingPlaceholder, ''))
-        const msg = 'Failed to upload file'
         setUploadError(msg)
         toast.error(msg)
+      }
+
+      try {
+        // 1. Mint a signed upload URL
+        const signed = await createImageUploadUrl({
+          filename: file.name,
+          contentType: file.type,
+          sizeBytes: file.size,
+          folder: 'pages',
+        })
+
+        if (!signed.success || !signed.data) {
+          failWith(signed.error || 'Failed to upload file')
+          return
+        }
+
+        // 2. Upload directly to Supabase Storage
+        const supabase = createSupabaseBrowserClient()
+        const { error: uploadError } = await supabase.storage
+          .from('images')
+          .uploadToSignedUrl(signed.data.storagePath, signed.data.uploadToken, file, {
+            contentType: file.type,
+            upsert: false,
+          })
+
+        if (uploadError) {
+          failWith(uploadError.message || 'Failed to upload file')
+          return
+        }
+
+        // 3. Persist metadata
+        const confirmed = await confirmImageUpload({
+          storagePath: signed.data.storagePath,
+          filename: file.name,
+          contentType: file.type,
+          sizeBytes: file.size,
+          altText: null,
+        })
+
+        if (!confirmed.success || !confirmed.data) {
+          failWith(confirmed.error || 'Failed to upload file')
+          return
+        }
+
+        const markdown = isImage
+          ? `![${file.name}](${confirmed.data.url})`
+          : `[${file.name}](${confirmed.data.url})`
+        onChange(valueRef.current.replace(uploadingPlaceholder, markdown))
+        toast.success(isImage ? 'Image uploaded' : 'File uploaded')
+      } catch (error) {
         console.error('Upload error:', error)
+        failWith('Failed to upload file')
       } finally {
         setIsUploading(false)
       }

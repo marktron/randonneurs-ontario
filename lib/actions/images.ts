@@ -2,7 +2,7 @@
 
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { requireAdmin } from '@/lib/auth/get-admin'
-import { handleActionError, handleSupabaseError, createActionResult } from '@/lib/errors'
+import { handleActionError, handleSupabaseError, createActionResult, logError } from '@/lib/errors'
 import type { ActionResult } from '@/types/actions'
 
 const BUCKET_NAME = 'images'
@@ -19,6 +19,11 @@ const ALLOWED_TYPES = [
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
 ]
 
+// Folder names allowed in storage paths. Keeps confirmImageUpload from being
+// used to claim arbitrary paths inside the bucket. Add to this list as new
+// upload locations appear.
+const ALLOWED_FOLDERS = ['general', 'events', 'pages', 'headers']
+
 export interface UploadedFile {
   id: string
   url: string
@@ -29,108 +34,201 @@ export interface UploadedFile {
   sizeBytes: number
 }
 
-/** @deprecated Use UploadedFile instead */
-export type UploadedImage = UploadedFile
+export interface CreateImageUploadUrlInput {
+  filename: string
+  contentType: string
+  sizeBytes: number
+  folder?: string
+}
+
+export interface CreateImageUploadUrlData {
+  signedUrl: string
+  uploadToken: string
+  storagePath: string
+  publicUrl: string
+}
 
 /**
- * Upload a file (image, PDF, or document) to Supabase Storage
+ * Mint a one-time signed upload URL for an image or document. The browser
+ * uploads directly to Supabase Storage with this URL, bypassing Next.js
+ * Server Action body limits and Vercel's 4.5 MB request body cap.
+ *
+ * After the upload finishes, callers must invoke confirmImageUpload to
+ * persist the metadata row in the images table.
+ *
+ * Admin only.
  */
-export async function uploadFile(formData: FormData): Promise<ActionResult<UploadedFile>> {
+export async function createImageUploadUrl(
+  input: CreateImageUploadUrlInput
+): Promise<ActionResult<CreateImageUploadUrlData>> {
   try {
-    const admin = await requireAdmin()
+    await requireAdmin()
 
-    const file = formData.get('file') as File | null
-    const altText = formData.get('altText') as string | null
-    const folder = (formData.get('folder') as string) || 'general'
+    const { filename, contentType, sizeBytes } = input
+    const folder = input.folder || 'general'
 
-    if (!file) {
-      return { success: false, error: 'No file provided' }
+    if (!filename) {
+      return { success: false, error: 'No filename provided' }
     }
 
-    // Validate file type
-    if (!ALLOWED_TYPES.includes(file.type)) {
+    if (!ALLOWED_FOLDERS.includes(folder)) {
+      return { success: false, error: `Invalid folder. Allowed: ${ALLOWED_FOLDERS.join(', ')}` }
+    }
+
+    if (!ALLOWED_TYPES.includes(contentType)) {
       return {
         success: false,
         error: `Invalid file type. Allowed: ${ALLOWED_TYPES.join(', ')}`,
       }
     }
 
-    // Validate file size
-    if (file.size > MAX_FILE_SIZE) {
+    if (typeof sizeBytes !== 'number' || sizeBytes <= 0) {
+      return { success: false, error: 'Invalid file size' }
+    }
+
+    if (sizeBytes > MAX_FILE_SIZE) {
       return {
         success: false,
         error: `File too large. Maximum size: ${MAX_FILE_SIZE / 1024 / 1024}MB`,
       }
     }
 
-    // Generate unique filename
-    const ext = file.name.split('.').pop()?.toLowerCase() || 'bin'
+    const ext = sanitizeExtension(filename)
     const timestamp = Date.now()
     const randomId = Math.random().toString(36).substring(2, 8)
     const storagePath = `${folder}/${timestamp}-${randomId}.${ext}`
 
     const supabase = getSupabaseAdmin()
 
-    // Convert File to ArrayBuffer for upload
-    const arrayBuffer = await file.arrayBuffer()
-    const fileBuffer = new Uint8Array(arrayBuffer)
-
-    // Upload to storage
-    const { error: uploadError } = await supabase.storage
+    const { data: signedData, error: signError } = await supabase.storage
       .from(BUCKET_NAME)
-      .upload(storagePath, fileBuffer, {
-        contentType: file.type,
-        upsert: false,
-      })
+      .createSignedUploadUrl(storagePath)
 
-    if (uploadError) {
+    if (signError || !signedData) {
       return handleSupabaseError(
-        uploadError,
-        { operation: 'uploadFile.storage' },
-        'Failed to upload file'
+        signError,
+        { operation: 'createImageUploadUrl.sign' },
+        'Failed to create upload URL'
       )
     }
 
-    // Get public URL
     const { data: urlData } = supabase.storage.from(BUCKET_NAME).getPublicUrl(storagePath)
 
-    // Insert metadata into database
+    return createActionResult({
+      signedUrl: signedData.signedUrl,
+      uploadToken: signedData.token,
+      storagePath,
+      publicUrl: urlData.publicUrl,
+    })
+  } catch (error) {
+    return handleActionError(
+      error,
+      { operation: 'createImageUploadUrl' },
+      'An unexpected error occurred'
+    )
+  }
+}
+
+export interface ConfirmImageUploadInput {
+  storagePath: string
+  filename: string
+  contentType: string
+  sizeBytes: number
+  altText?: string | null
+}
+
+/**
+ * Persist an uploaded file's metadata in the images table after the browser
+ * has finished uploading directly to Supabase Storage via the signed URL from
+ * createImageUploadUrl. If the database insert fails the uploaded file is
+ * removed to avoid orphaning storage.
+ *
+ * Admin only.
+ */
+export async function confirmImageUpload(
+  input: ConfirmImageUploadInput
+): Promise<ActionResult<UploadedFile>> {
+  try {
+    const admin = await requireAdmin()
+
+    const { storagePath, filename, contentType, sizeBytes, altText } = input
+
+    if (!isValidStoragePath(storagePath)) {
+      return { success: false, error: 'Invalid storage path' }
+    }
+
+    if (!ALLOWED_TYPES.includes(contentType)) {
+      return {
+        success: false,
+        error: `Invalid file type. Allowed: ${ALLOWED_TYPES.join(', ')}`,
+      }
+    }
+
+    if (typeof sizeBytes !== 'number' || sizeBytes <= 0 || sizeBytes > MAX_FILE_SIZE) {
+      return { success: false, error: 'Invalid file size' }
+    }
+
+    const supabase = getSupabaseAdmin()
+
     const { data: imageRecord, error: dbError } = await supabase
       .from('images')
       .insert({
         storage_path: storagePath,
-        filename: file.name,
+        filename,
         alt_text: altText || null,
-        content_type: file.type,
-        size_bytes: file.size,
+        content_type: contentType,
+        size_bytes: sizeBytes,
         uploaded_by: admin.id,
       })
       .select('id')
       .single()
 
-    if (dbError) {
-      // Try to clean up the uploaded file
-      await supabase.storage.from(BUCKET_NAME).remove([storagePath])
+    if (dbError || !imageRecord) {
+      // Clean up the uploaded file so we don't orphan storage
+      const { error: removeError } = await supabase.storage.from(BUCKET_NAME).remove([storagePath])
+      if (removeError) {
+        logError(removeError, {
+          operation: 'confirmImageUpload.cleanup',
+          context: { storagePath },
+        })
+      }
       return handleSupabaseError(
         dbError,
-        { operation: 'uploadFile.database' },
+        { operation: 'confirmImageUpload.database' },
         'Failed to save file metadata'
       )
     }
+
+    const { data: urlData } = supabase.storage.from(BUCKET_NAME).getPublicUrl(storagePath)
 
     return createActionResult({
       id: imageRecord.id,
       url: urlData.publicUrl,
       storagePath,
-      filename: file.name,
+      filename,
       altText: altText || null,
-      contentType: file.type,
-      sizeBytes: file.size,
+      contentType,
+      sizeBytes,
     })
   } catch (error) {
-    return handleActionError(error, { operation: 'uploadFile' }, 'An unexpected error occurred')
+    return handleActionError(
+      error,
+      { operation: 'confirmImageUpload' },
+      'An unexpected error occurred'
+    )
   }
 }
 
-/** @deprecated Use uploadFile instead */
-export const uploadImage = uploadFile
+function sanitizeExtension(filename: string): string {
+  const raw = filename.split('.').pop()?.toLowerCase() || ''
+  const safe = raw.replace(/[^a-z0-9]/g, '')
+  return safe || 'bin'
+}
+
+function isValidStoragePath(path: string): boolean {
+  if (!path) return false
+  // No path traversal, no leading slash, must be inside an allowed folder
+  if (path.includes('..') || path.startsWith('/')) return false
+  const [folder] = path.split('/')
+  return ALLOWED_FOLDERS.includes(folder)
+}

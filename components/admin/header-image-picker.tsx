@@ -3,7 +3,8 @@
 import { useState, useRef, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
-import { uploadImage } from '@/lib/actions/images'
+import { createImageUploadUrl, confirmImageUpload } from '@/lib/actions/images'
+import { createClient as createSupabaseBrowserClient } from '@/lib/supabase-browser'
 import { toast } from 'sonner'
 import { ImageIcon, Loader2, Upload, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -27,26 +28,57 @@ export function HeaderImagePicker({ value, onChange }: HeaderImagePickerProps) {
         return
       }
 
-      if (file.size > 5 * 1024 * 1024) {
-        toast.error('File too large. Maximum size is 5MB.')
+      if (file.size > 10 * 1024 * 1024) {
+        toast.error('File too large. Maximum size is 10MB.')
         return
       }
 
       setIsUploading(true)
 
       try {
-        const formData = new FormData()
-        formData.append('file', file)
-        formData.append('folder', 'headers')
+        // 1. Mint a signed upload URL
+        const signed = await createImageUploadUrl({
+          filename: file.name,
+          contentType: file.type,
+          sizeBytes: file.size,
+          folder: 'headers',
+        })
 
-        const result = await uploadImage(formData)
-
-        if (result.success && result.data) {
-          onChange(result.data.url)
-          toast.success('Header image uploaded')
-        } else {
-          toast.error(result.error || 'Failed to upload image')
+        if (!signed.success || !signed.data) {
+          toast.error(signed.error || 'Failed to upload image')
+          return
         }
+
+        // 2. Upload directly to Supabase Storage
+        const supabase = createSupabaseBrowserClient()
+        const { error: uploadError } = await supabase.storage
+          .from('images')
+          .uploadToSignedUrl(signed.data.storagePath, signed.data.uploadToken, file, {
+            contentType: file.type,
+            upsert: false,
+          })
+
+        if (uploadError) {
+          toast.error(uploadError.message || 'Failed to upload image')
+          return
+        }
+
+        // 3. Persist metadata
+        const confirmed = await confirmImageUpload({
+          storagePath: signed.data.storagePath,
+          filename: file.name,
+          contentType: file.type,
+          sizeBytes: file.size,
+          altText: null,
+        })
+
+        if (!confirmed.success || !confirmed.data) {
+          toast.error(confirmed.error || 'Failed to upload image')
+          return
+        }
+
+        onChange(confirmed.data.url)
+        toast.success('Header image uploaded')
       } catch {
         toast.error('Failed to upload image')
       } finally {
@@ -186,7 +218,7 @@ export function HeaderImagePicker({ value, onChange }: HeaderImagePickerProps) {
                 <ImageIcon className="h-10 w-10 text-muted-foreground mb-2" />
                 <p className="text-sm font-medium">Drop an image here or click to upload</p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  PNG, JPEG, WebP, or GIF up to 5MB
+                  PNG, JPEG, WebP, or GIF up to 10MB
                 </p>
               </>
             )}

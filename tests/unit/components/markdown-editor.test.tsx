@@ -6,11 +6,26 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import { MarkdownEditor } from '@/components/admin/markdown-editor'
 
-// Mock server action
+// Mock server actions
+const mockCreateImageUploadUrl = vi.fn()
+const mockConfirmImageUpload = vi.fn()
+// Kept so existing test arrangements that reference uploadFile still compile
 const mockUploadFile = vi.fn()
 
 vi.mock('@/lib/actions/images', () => ({
-  uploadFile: (...args: unknown[]) => mockUploadFile(...args),
+  createImageUploadUrl: (...args: unknown[]) => mockCreateImageUploadUrl(...args),
+  confirmImageUpload: (...args: unknown[]) => mockConfirmImageUpload(...args),
+}))
+
+// Mock the Supabase browser client used for direct uploads
+vi.mock('@/lib/supabase-browser', () => ({
+  createClient: () => ({
+    storage: {
+      from: () => ({
+        uploadToSignedUrl: vi.fn().mockResolvedValue({ error: null }),
+      }),
+    },
+  }),
 }))
 
 // Mock toast

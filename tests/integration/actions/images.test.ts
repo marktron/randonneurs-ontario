@@ -3,11 +3,17 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 /**
  * Integration tests for image upload actions.
  *
+ * The upload path uses a two-step signed-URL flow to bypass Vercel's 4.5 MB
+ * Server Action body limit:
+ *   1. createImageUploadUrl validates inputs and mints a signed upload URL
+ *   2. The browser PUTs the file directly to Supabase Storage
+ *   3. confirmImageUpload inserts the metadata row
+ *
  * These tests focus on:
- * 1. File validation (type, size)
- * 2. Upload success/failure
- * 3. Database error handling
- * 4. Cleanup on failure
+ * 1. Input validation (type, size)
+ * 2. Admin gating
+ * 3. Signed-URL minting
+ * 4. Database insert + cleanup-on-failure for confirmImageUpload
  */
 
 // Mock dependencies before imports
@@ -50,16 +56,23 @@ vi.mock('@/lib/supabase-server', () => {
   const queryBuilder = createQueryBuilder()
 
   // Create shared storage mocks that persist across calls
-  const uploadMock = vi.fn().mockResolvedValue({ error: null })
   const removeMock = vi.fn().mockResolvedValue({ error: null })
   const getPublicUrlMock = vi.fn().mockReturnValue({
     data: { publicUrl: 'https://example.com/image.jpg' },
   })
+  const createSignedUploadUrlMock = vi.fn().mockResolvedValue({
+    data: {
+      signedUrl: 'https://example.com/signed-upload-url',
+      token: 'signed-token',
+      path: 'mock-path',
+    },
+    error: null,
+  })
 
   const storageBucketMock = {
-    upload: uploadMock,
     remove: removeMock,
     getPublicUrl: getPublicUrlMock,
+    createSignedUploadUrl: createSignedUploadUrlMock,
   }
 
   return {
@@ -70,24 +83,38 @@ vi.mock('@/lib/supabase-server', () => {
       },
     })),
     __queryBuilder: queryBuilder,
-    __uploadMock: uploadMock,
     __removeMock: removeMock,
+    __createSignedUploadUrlMock: createSignedUploadUrlMock,
     __reset: () => {
       queryBuilder.single.mockReset()
       queryBuilder.single.mockResolvedValue({
         data: { id: 'image-1' },
         error: null,
       })
-      uploadMock.mockReset()
-      uploadMock.mockResolvedValue({ error: null })
       removeMock.mockReset()
       removeMock.mockResolvedValue({ error: null })
+      createSignedUploadUrlMock.mockReset()
+      createSignedUploadUrlMock.mockResolvedValue({
+        data: {
+          signedUrl: 'https://example.com/signed-upload-url',
+          token: 'signed-token',
+          path: 'mock-path',
+        },
+        error: null,
+      })
     },
-    __mockUploadSuccess: () => {
-      uploadMock.mockResolvedValueOnce({ error: null })
+    __mockSignSuccess: () => {
+      createSignedUploadUrlMock.mockResolvedValueOnce({
+        data: {
+          signedUrl: 'https://example.com/signed-upload-url',
+          token: 'signed-token',
+          path: 'mock-path',
+        },
+        error: null,
+      })
     },
-    __mockUploadError: (error: unknown) => {
-      uploadMock.mockResolvedValueOnce({ error })
+    __mockSignError: (error: unknown) => {
+      createSignedUploadUrlMock.mockResolvedValueOnce({ data: null, error })
     },
     __mockDbInsertSuccess: () => {
       queryBuilder.single.mockResolvedValueOnce({
@@ -104,55 +131,62 @@ vi.mock('@/lib/supabase-server', () => {
   }
 })
 
+const requireAdminMock = vi.fn().mockResolvedValue({
+  id: 'admin-1',
+  email: 'admin@test.com',
+  name: 'Test Admin',
+})
+
 vi.mock('@/lib/auth/get-admin', () => ({
-  requireAdmin: vi
-    .fn()
-    .mockResolvedValue({ id: 'admin-1', email: 'admin@test.com', name: 'Test Admin' }),
+  requireAdmin: () => requireAdminMock(),
 }))
 
 // Import after mocks
-import { uploadImage } from '@/lib/actions/images'
+import { createImageUploadUrl, confirmImageUpload } from '@/lib/actions/images'
 
 const mockModule = await vi.importMock<{
   __queryBuilder: Record<string, ReturnType<typeof vi.fn>>
-  __uploadMock: ReturnType<typeof vi.fn>
   __removeMock: ReturnType<typeof vi.fn>
+  __createSignedUploadUrlMock: ReturnType<typeof vi.fn>
   __reset: () => void
-  __mockUploadSuccess: () => void
-  __mockUploadError: (error: unknown) => void
+  __mockSignSuccess: () => void
+  __mockSignError: (error: unknown) => void
   __mockDbInsertSuccess: () => void
   __mockDbInsertError: (error: unknown) => void
 }>('@/lib/supabase-server')
 
-// Helper to create a mock File
-function createMockFile(name: string, type: string, size: number): File {
-  const file = new File([''], name, { type })
-  Object.defineProperty(file, 'size', { value: size })
-  return file
-}
-
-describe('uploadImage', () => {
+describe('createImageUploadUrl', () => {
   beforeEach(() => {
     mockModule.__reset()
     vi.clearAllMocks()
+    requireAdminMock.mockResolvedValue({
+      id: 'admin-1',
+      email: 'admin@test.com',
+      name: 'Test Admin',
+    })
+  })
+
+  describe('admin gating', () => {
+    it('rejects non-admin callers', async () => {
+      requireAdminMock.mockRejectedValueOnce(new Error('Not authorized'))
+
+      const result = await createImageUploadUrl({
+        filename: 'test.jpg',
+        contentType: 'image/jpeg',
+        sizeBytes: 1000,
+      })
+
+      expect(result.success).toBe(false)
+    })
   })
 
   describe('validation', () => {
-    it('returns error when no file provided', async () => {
-      const formData = new FormData()
-
-      const result = await uploadImage(formData)
-
-      expect(result.success).toBe(false)
-      expect(result.error).toBe('No file provided')
-    })
-
     it('returns error for invalid file type', async () => {
-      const formData = new FormData()
-      const file = createMockFile('test.zip', 'application/zip', 1000)
-      formData.append('file', file)
-
-      const result = await uploadImage(formData)
+      const result = await createImageUploadUrl({
+        filename: 'archive.zip',
+        contentType: 'application/zip',
+        sizeBytes: 1000,
+      })
 
       expect(result.success).toBe(false)
       expect(result.error).toContain('Invalid file type')
@@ -163,238 +197,222 @@ describe('uploadImage', () => {
 
       for (const type of validTypes) {
         mockModule.__reset()
-        const formData = new FormData()
-        const file = createMockFile('test.jpg', type, 1000)
-        formData.append('file', file)
 
-        mockModule.__mockUploadSuccess()
-        mockModule.__mockDbInsertSuccess()
-
-        const result = await uploadImage(formData)
+        const result = await createImageUploadUrl({
+          filename: 'test.jpg',
+          contentType: type,
+          sizeBytes: 1000,
+        })
 
         expect(result.success).toBe(true)
       }
     })
 
     it('returns error for file too large', async () => {
-      const formData = new FormData()
-      const file = createMockFile('large.jpg', 'image/jpeg', 11 * 1024 * 1024) // 11MB
-      formData.append('file', file)
-
-      const result = await uploadImage(formData)
+      const result = await createImageUploadUrl({
+        filename: 'large.jpg',
+        contentType: 'image/jpeg',
+        sizeBytes: 11 * 1024 * 1024, // 11MB
+      })
 
       expect(result.success).toBe(false)
       expect(result.error).toContain('File too large')
     })
 
     it('accepts file at maximum size', async () => {
-      const formData = new FormData()
-      const file = createMockFile('max.jpg', 'image/jpeg', 10 * 1024 * 1024) // 10MB
-      formData.append('file', file)
-
-      mockModule.__mockUploadSuccess()
-      mockModule.__mockDbInsertSuccess()
-
-      const result = await uploadImage(formData)
-
-      expect(result.success).toBe(true)
-    })
-  })
-
-  describe('upload flow', () => {
-    it('uploads image successfully', async () => {
-      const formData = new FormData()
-      const file = createMockFile('test.jpg', 'image/jpeg', 1000)
-      formData.append('file', file)
-      formData.append('altText', 'Test image')
-      formData.append('folder', 'events')
-
-      mockModule.__mockUploadSuccess()
-      mockModule.__mockDbInsertSuccess()
-
-      const result = await uploadImage(formData)
-
-      expect(result.success).toBe(true)
-      if (result.success && result.data) {
-        expect(result.data).toBeDefined()
-        expect(result.data.url).toBeDefined()
-        expect(result.data.filename).toBe('test.jpg')
-        expect(result.data.altText).toBe('Test image')
-      }
-    })
-
-    it('handles upload failure', async () => {
-      const formData = new FormData()
-      const file = createMockFile('test.jpg', 'image/jpeg', 1000)
-      formData.append('file', file)
-
-      mockModule.__mockUploadError({
-        message: 'Storage error',
+      const result = await createImageUploadUrl({
+        filename: 'max.jpg',
+        contentType: 'image/jpeg',
+        sizeBytes: 10 * 1024 * 1024, // 10MB
       })
 
-      const result = await uploadImage(formData)
-
-      expect(result.success).toBe(false)
-      expect(result.error).toBeDefined()
+      expect(result.success).toBe(true)
     })
 
-    it('cleans up uploaded file when database insert fails', async () => {
-      const formData = new FormData()
-      const file = createMockFile('test.jpg', 'image/jpeg', 1000)
-      formData.append('file', file)
-
-      mockModule.__mockUploadSuccess()
-      mockModule.__mockDbInsertError({
-        code: '23505',
-        message: 'duplicate key',
+    it('rejects zero-byte and negative sizes', async () => {
+      const zero = await createImageUploadUrl({
+        filename: 'empty.jpg',
+        contentType: 'image/jpeg',
+        sizeBytes: 0,
       })
+      expect(zero.success).toBe(false)
 
-      const result = await uploadImage(formData)
-
-      expect(result.success).toBe(false)
-      expect(mockModule.__removeMock).toHaveBeenCalled()
-    })
-
-    it('handles database errors', async () => {
-      const formData = new FormData()
-      const file = createMockFile('test.jpg', 'image/jpeg', 1000)
-      formData.append('file', file)
-
-      mockModule.__mockUploadSuccess()
-      mockModule.__mockDbInsertError({
-        code: '23505',
-        message: 'duplicate key',
+      const negative = await createImageUploadUrl({
+        filename: 'bogus.jpg',
+        contentType: 'image/jpeg',
+        sizeBytes: -1,
       })
-
-      const result = await uploadImage(formData)
-
-      expect(result.success).toBe(false)
-      expect(result.error).toBeDefined()
-    })
-  })
-
-  describe('file naming', () => {
-    it('generates unique filename with timestamp', async () => {
-      const formData = new FormData()
-      const file = createMockFile('original.jpg', 'image/jpeg', 1000)
-      formData.append('file', file)
-
-      mockModule.__mockUploadSuccess()
-      mockModule.__mockDbInsertSuccess()
-
-      const result = await uploadImage(formData)
-
-      expect(result.success).toBe(true)
-      if (result.success && result.data) {
-        // Storage path uses generated unique name: folder/timestamp-randomid.ext
-        expect(result.data.storagePath).toMatch(/^general\/\d+-[a-z0-9]+\.jpg$/)
-        // Original filename is preserved in the filename field
-        expect(result.data.filename).toBe('original.jpg')
-      }
-    })
-
-    it('uses folder parameter in storage path', async () => {
-      const formData = new FormData()
-      const file = createMockFile('test.jpg', 'image/jpeg', 1000)
-      formData.append('file', file)
-      formData.append('folder', 'custom-folder')
-
-      mockModule.__mockUploadSuccess()
-      mockModule.__mockDbInsertSuccess()
-
-      const result = await uploadImage(formData)
-
-      expect(result.success).toBe(true)
-      if (result.success && result.data) {
-        expect(result.data.storagePath).toContain('custom-folder/')
-      }
-    })
-
-    it('defaults to general folder when not specified', async () => {
-      const formData = new FormData()
-      const file = createMockFile('test.jpg', 'image/jpeg', 1000)
-      formData.append('file', file)
-
-      mockModule.__mockUploadSuccess()
-      mockModule.__mockDbInsertSuccess()
-
-      const result = await uploadImage(formData)
-
-      expect(result.success).toBe(true)
-      if (result.success && result.data) {
-        expect(result.data.storagePath).toContain('general/')
-      }
+      expect(negative.success).toBe(false)
     })
   })
 
   describe('document uploads', () => {
     it('accepts PDF files', async () => {
-      const formData = new FormData()
-      const file = createMockFile('document.pdf', 'application/pdf', 2000)
-      formData.append('file', file)
-
-      mockModule.__mockUploadSuccess()
-      mockModule.__mockDbInsertSuccess()
-
-      const result = await uploadImage(formData)
+      const result = await createImageUploadUrl({
+        filename: 'document.pdf',
+        contentType: 'application/pdf',
+        sizeBytes: 2000,
+      })
 
       expect(result.success).toBe(true)
-      if (result.success && result.data) {
-        expect(result.data.filename).toBe('document.pdf')
-        expect(result.data.contentType).toBe('application/pdf')
-      }
     })
 
     it('accepts Word documents', async () => {
-      const formData = new FormData()
-      const file = createMockFile(
-        'report.docx',
-        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-        3000
-      )
-      formData.append('file', file)
-
-      mockModule.__mockUploadSuccess()
-      mockModule.__mockDbInsertSuccess()
-
-      const result = await uploadImage(formData)
+      const result = await createImageUploadUrl({
+        filename: 'report.docx',
+        contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        sizeBytes: 3000,
+      })
 
       expect(result.success).toBe(true)
-      if (result.success && result.data) {
-        expect(result.data.filename).toBe('report.docx')
-      }
     })
 
     it('accepts Excel spreadsheets', async () => {
-      const formData = new FormData()
-      const file = createMockFile(
-        'data.xlsx',
-        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        4000
-      )
-      formData.append('file', file)
-
-      mockModule.__mockUploadSuccess()
-      mockModule.__mockDbInsertSuccess()
-
-      const result = await uploadImage(formData)
+      const result = await createImageUploadUrl({
+        filename: 'data.xlsx',
+        contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        sizeBytes: 4000,
+      })
 
       expect(result.success).toBe(true)
-      if (result.success && result.data) {
-        expect(result.data.filename).toBe('data.xlsx')
-      }
     })
 
     it('returns descriptive error for unsupported types', async () => {
-      const formData = new FormData()
-      const file = createMockFile('archive.zip', 'application/zip', 1000)
-      formData.append('file', file)
-
-      const result = await uploadImage(formData)
+      const result = await createImageUploadUrl({
+        filename: 'archive.zip',
+        contentType: 'application/zip',
+        sizeBytes: 1000,
+      })
 
       expect(result.success).toBe(false)
       expect(result.error).toContain('Invalid file type')
       expect(result.error).toContain('Allowed:')
     })
+  })
+
+  describe('signed URL minting', () => {
+    it('returns a signed upload URL with a generated storage path', async () => {
+      const result = await createImageUploadUrl({
+        filename: 'photo.jpg',
+        contentType: 'image/jpeg',
+        sizeBytes: 1000,
+        folder: 'events',
+      })
+
+      expect(result.success).toBe(true)
+      if (result.success && result.data) {
+        expect(result.data.signedUrl).toBe('https://example.com/signed-upload-url')
+        expect(result.data.uploadToken).toBe('signed-token')
+        expect(result.data.storagePath).toMatch(/^events\/\d+-[a-z0-9]+\.jpg$/)
+        expect(result.data.publicUrl).toBe('https://example.com/image.jpg')
+      }
+      expect(mockModule.__createSignedUploadUrlMock).toHaveBeenCalledTimes(1)
+    })
+
+    it('defaults to general folder when not specified', async () => {
+      const result = await createImageUploadUrl({
+        filename: 'test.jpg',
+        contentType: 'image/jpeg',
+        sizeBytes: 1000,
+      })
+
+      expect(result.success).toBe(true)
+      if (result.success && result.data) {
+        expect(result.data.storagePath).toMatch(/^general\//)
+      }
+    })
+
+    it('handles signed URL minting failure', async () => {
+      mockModule.__mockSignError({ message: 'Storage error' })
+
+      const result = await createImageUploadUrl({
+        filename: 'test.jpg',
+        contentType: 'image/jpeg',
+        sizeBytes: 1000,
+      })
+
+      expect(result.success).toBe(false)
+      expect(result.error).toBeDefined()
+    })
+  })
+})
+
+describe('confirmImageUpload', () => {
+  beforeEach(() => {
+    mockModule.__reset()
+    vi.clearAllMocks()
+    requireAdminMock.mockResolvedValue({
+      id: 'admin-1',
+      email: 'admin@test.com',
+      name: 'Test Admin',
+    })
+  })
+
+  it('rejects non-admin callers', async () => {
+    requireAdminMock.mockRejectedValueOnce(new Error('Not authorized'))
+
+    const result = await confirmImageUpload({
+      storagePath: 'events/123-abc.jpg',
+      filename: 'photo.jpg',
+      contentType: 'image/jpeg',
+      sizeBytes: 1000,
+      altText: null,
+    })
+
+    expect(result.success).toBe(false)
+  })
+
+  it('rejects invalid storage paths', async () => {
+    const result = await confirmImageUpload({
+      storagePath: '../../etc/passwd',
+      filename: 'photo.jpg',
+      contentType: 'image/jpeg',
+      sizeBytes: 1000,
+      altText: null,
+    })
+
+    expect(result.success).toBe(false)
+    expect(result.error).toMatch(/invalid storage path/i)
+  })
+
+  it('inserts the images row and returns metadata on success', async () => {
+    mockModule.__mockDbInsertSuccess()
+
+    const result = await confirmImageUpload({
+      storagePath: 'events/123-abc.jpg',
+      filename: 'photo.jpg',
+      contentType: 'image/jpeg',
+      sizeBytes: 1000,
+      altText: 'Event photo',
+    })
+
+    expect(result.success).toBe(true)
+    if (result.success && result.data) {
+      expect(result.data.id).toBe('image-1')
+      expect(result.data.filename).toBe('photo.jpg')
+      expect(result.data.altText).toBe('Event photo')
+      expect(result.data.contentType).toBe('image/jpeg')
+      expect(result.data.sizeBytes).toBe(1000)
+      expect(result.data.storagePath).toBe('events/123-abc.jpg')
+      expect(result.data.url).toBe('https://example.com/image.jpg')
+    }
+  })
+
+  it('removes the uploaded file when database insert fails', async () => {
+    mockModule.__mockDbInsertError({
+      code: '23505',
+      message: 'duplicate key',
+    })
+
+    const result = await confirmImageUpload({
+      storagePath: 'events/123-abc.jpg',
+      filename: 'photo.jpg',
+      contentType: 'image/jpeg',
+      sizeBytes: 1000,
+      altText: null,
+    })
+
+    expect(result.success).toBe(false)
+    expect(mockModule.__removeMock).toHaveBeenCalledWith(['events/123-abc.jpg'])
   })
 })

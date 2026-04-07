@@ -7,7 +7,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Loader2, Upload, X, ImageIcon, AlertCircle } from 'lucide-react'
-import { uploadImage } from '@/lib/actions/images'
+import { createImageUploadUrl, confirmImageUpload } from '@/lib/actions/images'
+import { createClient as createSupabaseBrowserClient } from '@/lib/supabase-browser'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 
@@ -24,7 +25,7 @@ interface ImageUploadProps {
   className?: string
 }
 
-const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5MB
+const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
 
 export function ImageUpload({
@@ -45,7 +46,7 @@ export function ImageUpload({
       return `Invalid file type. Allowed: JPEG, PNG, WebP, GIF`
     }
     if (file.size > MAX_FILE_SIZE) {
-      return `File too large. Maximum size: 5MB`
+      return `File too large. Maximum size: 10MB`
     }
     return null
   }
@@ -62,22 +63,50 @@ export function ImageUpload({
       setIsUploading(true)
 
       try {
-        const formData = new FormData()
-        formData.append('file', file)
-        formData.append('folder', folder)
-        if (altText) {
-          formData.append('altText', altText)
+        // 1. Mint a signed upload URL (avoids the Server Action body limit)
+        const signed = await createImageUploadUrl({
+          filename: file.name,
+          contentType: file.type,
+          sizeBytes: file.size,
+          folder,
+        })
+
+        if (!signed.success || !signed.data) {
+          setError(signed.error || 'Failed to upload image')
+          return
         }
 
-        const result = await uploadImage(formData)
+        // 2. Upload directly to Supabase Storage
+        const supabase = createSupabaseBrowserClient()
+        const { error: uploadError } = await supabase.storage
+          .from('images')
+          .uploadToSignedUrl(signed.data.storagePath, signed.data.uploadToken, file, {
+            contentType: file.type,
+            upsert: false,
+          })
 
-        if (result.success && result.data) {
-          onChange(result.data.url)
-          setAltText('')
-          toast.success('Image uploaded successfully')
-        } else {
-          setError(result.error || 'Failed to upload image')
+        if (uploadError) {
+          setError(uploadError.message || 'Failed to upload image')
+          return
         }
+
+        // 3. Persist metadata
+        const confirmed = await confirmImageUpload({
+          storagePath: signed.data.storagePath,
+          filename: file.name,
+          contentType: file.type,
+          sizeBytes: file.size,
+          altText: altText || null,
+        })
+
+        if (!confirmed.success || !confirmed.data) {
+          setError(confirmed.error || 'Failed to upload image')
+          return
+        }
+
+        onChange(confirmed.data.url)
+        setAltText('')
+        toast.success('Image uploaded successfully')
       } catch (err) {
         console.error('Upload error:', err)
         setError('An unexpected error occurred')
@@ -163,7 +192,11 @@ export function ImageUpload({
             onClick={handleBrowseClick}
             disabled={disabled || isUploading}
           >
-            {isUploading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Upload className="h-4 w-4 mr-2" />}
+            {isUploading ? (
+              <Loader2 className="h-4 w-4 animate-spin mr-2" />
+            ) : (
+              <Upload className="h-4 w-4 mr-2" />
+            )}
             Replace
           </Button>
           <Button
@@ -238,7 +271,7 @@ export function ImageUpload({
               <p className="text-sm text-muted-foreground text-center mb-1">
                 {isDragging ? 'Drop image here' : 'Drag and drop an image, or click to browse'}
               </p>
-              <p className="text-xs text-muted-foreground">JPEG, PNG, WebP, or GIF up to 5MB</p>
+              <p className="text-xs text-muted-foreground">JPEG, PNG, WebP, or GIF up to 10MB</p>
             </>
           )}
         </div>
