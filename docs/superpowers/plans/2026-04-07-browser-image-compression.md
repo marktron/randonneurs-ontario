@@ -419,7 +419,7 @@ Run:
 npx vitest run tests/unit/lib/image-compression.test.ts
 ```
 
-Expected: All 17 tests pass.
+Expected: All 15 tests pass.
 
 - [ ] **Step 3: Verify typecheck**
 
@@ -1037,7 +1037,7 @@ Run:
 npm test --silent
 ```
 
-Expected: All test files pass. Test count should be **baseline + 17 new** (one new test file with 17 tests covering compressImageForUpload).
+Expected: All test files pass. Test count should be **baseline + 15 new** (one new test file with 15 tests covering compressImageForUpload).
 
 - [ ] **Step 2: Run typecheck**
 
