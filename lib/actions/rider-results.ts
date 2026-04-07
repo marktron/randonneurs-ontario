@@ -218,31 +218,54 @@ export async function submitRiderResult(input: SubmitResultInput): Promise<Actio
   return createActionResult()
 }
 
+export interface CreateResultUploadUrlInput {
+  token: string
+  fileType: 'gpx' | 'control_card_front' | 'control_card_back'
+  fileName: string
+  contentType: string
+  fileSize: number
+}
+
+export interface CreateResultUploadUrlData {
+  signedUrl: string
+  uploadToken: string
+  path: string
+  publicUrl: string
+}
+
 /**
- * Upload a file (GPX or control card photo) for a result. No authentication required.
+ * Generate a one-time signed upload URL for a result file. The browser uploads
+ * the file directly to Supabase Storage using this URL, bypassing Next.js
+ * Server Action body limits and Vercel's request body limits.
+ *
+ * After the upload finishes, the client must call confirmResultUpload to
+ * persist the file path against the result.
+ *
+ * No authentication required — token-scoped.
  */
-export async function uploadResultFile(
-  token: string,
-  fileType: 'gpx' | 'control_card_front' | 'control_card_back',
-  formData: FormData
-): Promise<ActionResult<{ path: string; url: string }>> {
+export async function createResultUploadUrl(
+  input: CreateResultUploadUrlInput
+): Promise<ActionResult<CreateResultUploadUrlData>> {
+  const { token, fileType, fileName, contentType, fileSize } = input
+
   if (!token) {
     return { success: false, error: 'Invalid submission token' }
   }
 
-  const file = formData.get('file') as File | null
-  if (!file) {
-    return { success: false, error: 'No file provided' }
+  // Validate size before issuing a signed URL
+  if (typeof fileSize !== 'number' || fileSize <= 0) {
+    return { success: false, error: 'Invalid file size' }
+  }
+  if (fileSize > MAX_FILE_SIZE) {
+    return {
+      success: false,
+      error: `File too large. Maximum size is ${MAX_FILE_SIZE / 1024 / 1024}MB.`,
+    }
   }
 
-  // Validate file size
-  if (file.size > MAX_FILE_SIZE) {
-    return { success: false, error: 'File too large. Maximum size is 10MB.' }
-  }
-
-  // Validate file type
+  // Validate content type
   const allowedTypes = fileType === 'gpx' ? ALLOWED_GPX_TYPES : ALLOWED_IMAGE_TYPES
-  if (!allowedTypes.includes(file.type)) {
+  if (!allowedTypes.includes(contentType)) {
     const typeDescription = fileType === 'gpx' ? 'GPX/XML' : 'image (JPEG, PNG, WebP)'
     return { success: false, error: `Invalid file type. Please upload a ${typeDescription} file.` }
   }
@@ -269,43 +292,121 @@ export async function uploadResultFile(
     }
   }
 
-  // Generate unique file path
+  // Generate unique file path scoped to this event/rider
   const timestamp = Date.now()
   const randomId = Math.random().toString(36).substring(2, 8)
-  const ext = file.name.split('.').pop()?.toLowerCase() || (fileType === 'gpx' ? 'gpx' : 'jpg')
-  const filePath = `${typedResult.event_id}/${typedResult.rider_id}/${fileType}-${timestamp}-${randomId}.${ext}`
+  const safeExt = sanitizeExtension(fileName, fileType)
+  const filePath = `${typedResult.event_id}/${typedResult.rider_id}/${fileType}-${timestamp}-${randomId}.${safeExt}`
 
-  // Convert File to ArrayBuffer for upload
-  const arrayBuffer = await file.arrayBuffer()
-  const fileBuffer = new Uint8Array(arrayBuffer)
-
-  // Upload to Supabase Storage
-  const { error: uploadError } = await supabase.storage
+  // Mint a one-time signed upload URL via the service-role client
+  const { data: signedData, error: signError } = await supabase.storage
     .from(BUCKET_NAME)
-    .upload(filePath, fileBuffer, {
-      contentType: file.type,
-      upsert: false,
-    })
+    .createSignedUploadUrl(filePath)
 
-  if (uploadError) {
+  if (signError || !signedData) {
     return handleSupabaseError(
-      uploadError,
-      { operation: 'uploadResultFile.storage' },
-      'Failed to upload file'
+      signError,
+      { operation: 'createResultUploadUrl.sign' },
+      'Failed to create upload URL'
     )
   }
 
-  // Get public URL
   const { data: urlData } = supabase.storage.from(BUCKET_NAME).getPublicUrl(filePath)
-  const publicUrl = urlData.publicUrl
 
-  // Update the result with the file path
+  return {
+    success: true,
+    data: {
+      signedUrl: signedData.signedUrl,
+      uploadToken: signedData.token,
+      path: filePath,
+      publicUrl: urlData.publicUrl,
+    },
+  }
+}
+
+export interface ConfirmResultUploadInput {
+  token: string
+  fileType: 'gpx' | 'control_card_front' | 'control_card_back'
+  path: string
+}
+
+/**
+ * Persist a file path against a result after the browser has finished uploading
+ * to Supabase Storage via the signed URL from createResultUploadUrl.
+ * Removes any previously stored file of the same type.
+ *
+ * No authentication required — token-scoped.
+ */
+export async function confirmResultUpload(
+  input: ConfirmResultUploadInput
+): Promise<ActionResult<{ path: string; url: string }>> {
+  const { token, fileType, path } = input
+
+  if (!token) {
+    return { success: false, error: 'Invalid submission token' }
+  }
+
+  if (!path) {
+    return { success: false, error: 'Missing file path' }
+  }
+
+  const supabase = getSupabaseAdmin()
+
+  // Verify token and get the existing file paths so we can clean up
+  const { data: result, error: fetchError } = await supabase
+    .from('results')
+    .select(
+      'id, event_id, rider_id, gpx_file_path, control_card_front_path, control_card_back_path, events(status)'
+    )
+    .eq('submission_token', token)
+    .single()
+
+  if (fetchError || !result) {
+    return { success: false, error: 'Result not found or invalid token' }
+  }
+
+  const typedResult = result as ResultForFileUpload
+
+  if (typedResult.events?.status === 'submitted') {
+    return {
+      success: false,
+      error: 'Results have already been submitted. Contact your chapter VP for changes.',
+    }
+  }
+
+  // Verify the path belongs to this event/rider — prevents a valid token from
+  // being used to claim files uploaded under a different scope.
+  const expectedPrefix = `${typedResult.event_id}/${typedResult.rider_id}/${fileType}-`
+  if (!path.startsWith(expectedPrefix)) {
+    return { success: false, error: 'Invalid file path for this submission' }
+  }
+
+  // Remove any previously stored file of this type to avoid orphans
+  const previousPath =
+    fileType === 'gpx'
+      ? typedResult.gpx_file_path
+      : fileType === 'control_card_front'
+        ? typedResult.control_card_front_path
+        : typedResult.control_card_back_path
+
+  if (previousPath && previousPath !== path) {
+    const { error: removeError } = await supabase.storage.from(BUCKET_NAME).remove([previousPath])
+    if (removeError) {
+      logError(removeError, {
+        operation: 'confirmResultUpload.removePrevious',
+        context: { previousPath },
+      })
+      // Continue — orphan cleanup is not fatal
+    }
+  }
+
+  // Persist the new path
   const updateField: ResultUpdate =
     fileType === 'gpx'
-      ? { gpx_file_path: filePath }
+      ? { gpx_file_path: path }
       : fileType === 'control_card_front'
-        ? { control_card_front_path: filePath }
-        : { control_card_back_path: filePath }
+        ? { control_card_front_path: path }
+        : { control_card_back_path: path }
 
   const { error: updateError } = await supabase
     .from('results')
@@ -313,19 +414,29 @@ export async function uploadResultFile(
     .eq('submission_token', token)
 
   if (updateError) {
-    // Try to clean up the uploaded file
-    await supabase.storage.from(BUCKET_NAME).remove([filePath])
     return handleSupabaseError(
       updateError,
-      { operation: 'uploadResultFile.database' },
+      { operation: 'confirmResultUpload.database' },
       'Failed to save file reference'
     )
   }
 
+  const { data: urlData } = supabase.storage.from(BUCKET_NAME).getPublicUrl(path)
+
   return {
     success: true,
-    data: { path: filePath, url: publicUrl },
+    data: { path, url: urlData.publicUrl },
   }
+}
+
+function sanitizeExtension(
+  fileName: string,
+  fileType: 'gpx' | 'control_card_front' | 'control_card_back'
+): string {
+  const raw = fileName.split('.').pop()?.toLowerCase() || ''
+  const safe = raw.replace(/[^a-z0-9]/g, '')
+  if (safe) return safe
+  return fileType === 'gpx' ? 'gpx' : 'jpg'
 }
 
 /**

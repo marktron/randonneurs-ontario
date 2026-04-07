@@ -10,17 +10,30 @@ import type { ResultSubmissionData } from '@/lib/actions/rider-results'
 
 // Mock server actions
 const mockSubmitRiderResult = vi.fn()
-const mockUploadResultFile = vi.fn()
+const mockCreateResultUploadUrl = vi.fn()
+const mockConfirmResultUpload = vi.fn()
 const mockDeleteResultFile = vi.fn()
 const mockGetRiderUpcomingEvents = vi.fn()
 const mockGetChapterUpcomingEvents = vi.fn()
 
 vi.mock('@/lib/actions/rider-results', () => ({
   submitRiderResult: (...args: unknown[]) => mockSubmitRiderResult(...args),
-  uploadResultFile: (...args: unknown[]) => mockUploadResultFile(...args),
+  createResultUploadUrl: (...args: unknown[]) => mockCreateResultUploadUrl(...args),
+  confirmResultUpload: (...args: unknown[]) => mockConfirmResultUpload(...args),
   deleteResultFile: (...args: unknown[]) => mockDeleteResultFile(...args),
   getRiderUpcomingEvents: (...args: unknown[]) => mockGetRiderUpcomingEvents(...args),
   getChapterUpcomingEvents: (...args: unknown[]) => mockGetChapterUpcomingEvents(...args),
+}))
+
+// Mock the Supabase browser client used for direct uploads
+vi.mock('@/lib/supabase-browser', () => ({
+  createClient: () => ({
+    storage: {
+      from: () => ({
+        uploadToSignedUrl: vi.fn().mockResolvedValue({ error: null }),
+      }),
+    },
+  }),
 }))
 
 // Mock router
@@ -77,7 +90,16 @@ describe('ResultSubmissionForm', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockSubmitRiderResult.mockResolvedValue({ success: true })
-    mockUploadResultFile.mockResolvedValue({
+    mockCreateResultUploadUrl.mockResolvedValue({
+      success: true,
+      data: {
+        signedUrl: 'https://example.com/signed-upload-url',
+        uploadToken: 'signed-token',
+        path: 'test.gpx',
+        publicUrl: 'https://example.com/test.gpx',
+      },
+    })
+    mockConfirmResultUpload.mockResolvedValue({
       success: true,
       data: { path: 'test.gpx', url: 'https://example.com/test.gpx' },
     })

@@ -22,6 +22,20 @@ vi.mock('@/lib/supabase-server', () => {
 
   const queryBuilder = createQueryBuilder()
 
+  const storageMock = {
+    upload: vi.fn().mockResolvedValue({ error: null }),
+    remove: vi.fn().mockResolvedValue({ error: null }),
+    getPublicUrl: vi.fn().mockReturnValue({ data: { publicUrl: 'https://example.com/file.jpg' } }),
+    createSignedUploadUrl: vi.fn().mockResolvedValue({
+      data: {
+        signedUrl: 'https://example.com/signed-upload-url',
+        token: 'signed-token',
+        path: 'mock-path',
+      },
+      error: null,
+    }),
+  }
+
   return {
     getSupabaseAdmin: vi.fn(() => ({
       from: vi.fn((table: string) => {
@@ -29,20 +43,26 @@ vi.mock('@/lib/supabase-server', () => {
         return queryBuilder
       }),
       storage: {
-        from: vi.fn(() => ({
-          upload: vi.fn().mockResolvedValue({ error: null }),
-          remove: vi.fn().mockResolvedValue({ error: null }),
-          getPublicUrl: vi
-            .fn()
-            .mockReturnValue({ data: { publicUrl: 'https://example.com/file.jpg' } }),
-        })),
+        from: vi.fn(() => storageMock),
       },
     })),
     __calls: calls,
     __queryBuilder: queryBuilder,
+    __storage: storageMock,
     __reset: () => {
       calls.length = 0
       queryBuilder.single.mockReset()
+      storageMock.upload.mockClear()
+      storageMock.remove.mockClear()
+      storageMock.createSignedUploadUrl.mockClear()
+      storageMock.createSignedUploadUrl.mockResolvedValue({
+        data: {
+          signedUrl: 'https://example.com/signed-upload-url',
+          token: 'signed-token',
+          path: 'mock-path',
+        },
+        error: null,
+      })
     },
     __mockResultFound: (result: unknown) => {
       queryBuilder.single.mockResolvedValueOnce({ data: result, error: null })
@@ -64,11 +84,19 @@ import {
   getRiderUpcomingEvents,
   getChapterUpcomingEvents,
   getUpcomingEventsByEventId,
+  createResultUploadUrl,
+  confirmResultUpload,
 } from '@/lib/actions/rider-results'
 
 const mockModule = await vi.importMock<{
   __calls: Array<{ table: string; method: string; args?: unknown[] }>
   __queryBuilder: Record<string, ReturnType<typeof vi.fn>>
+  __storage: {
+    upload: ReturnType<typeof vi.fn>
+    remove: ReturnType<typeof vi.fn>
+    getPublicUrl: ReturnType<typeof vi.fn>
+    createSignedUploadUrl: ReturnType<typeof vi.fn>
+  }
   __reset: () => void
   __mockResultFound: (result: unknown) => void
   __mockResultNotFound: () => void
@@ -309,5 +337,201 @@ describe('getUpcomingEventsByEventId', () => {
 
     expect(result.success).toBe(false)
     expect(result.error).toBe('Invalid event')
+  })
+})
+
+describe('createResultUploadUrl', () => {
+  beforeEach(() => {
+    mockModule.__reset()
+    vi.clearAllMocks()
+  })
+
+  it('returns error for empty token', async () => {
+    const result = await createResultUploadUrl({
+      token: '',
+      fileType: 'gpx',
+      fileName: 'ride.gpx',
+      contentType: 'application/gpx+xml',
+      fileSize: 1000,
+    })
+
+    expect(result.success).toBe(false)
+    expect(result.error).toBe('Invalid submission token')
+  })
+
+  it('rejects oversized files', async () => {
+    const result = await createResultUploadUrl({
+      token: 'valid-token',
+      fileType: 'control_card_front',
+      fileName: 'card.jpg',
+      contentType: 'image/jpeg',
+      fileSize: 11 * 1024 * 1024, // 11MB
+    })
+
+    expect(result.success).toBe(false)
+    expect(result.error).toMatch(/file too large/i)
+  })
+
+  it('rejects invalid GPX content types', async () => {
+    const result = await createResultUploadUrl({
+      token: 'valid-token',
+      fileType: 'gpx',
+      fileName: 'ride.exe',
+      contentType: 'application/octet-stream',
+      fileSize: 1000,
+    })
+
+    expect(result.success).toBe(false)
+    expect(result.error).toMatch(/invalid file type/i)
+  })
+
+  it('rejects invalid image content types for control card', async () => {
+    const result = await createResultUploadUrl({
+      token: 'valid-token',
+      fileType: 'control_card_back',
+      fileName: 'card.gif',
+      contentType: 'image/gif',
+      fileSize: 1000,
+    })
+
+    expect(result.success).toBe(false)
+    expect(result.error).toMatch(/invalid file type/i)
+  })
+
+  it('returns error when token does not match a result', async () => {
+    mockModule.__mockResultNotFound()
+
+    const result = await createResultUploadUrl({
+      token: 'invalid-token',
+      fileType: 'gpx',
+      fileName: 'ride.gpx',
+      contentType: 'application/gpx+xml',
+      fileSize: 1000,
+    })
+
+    expect(result.success).toBe(false)
+    expect(result.error).toBe('Result not found or invalid token')
+  })
+
+  it('returns error if event already submitted to ACP', async () => {
+    mockModule.__mockResultFound({
+      id: 'result-1',
+      event_id: 'event-1',
+      rider_id: 'rider-1',
+      events: { status: 'submitted' },
+    })
+
+    const result = await createResultUploadUrl({
+      token: 'valid-token',
+      fileType: 'gpx',
+      fileName: 'ride.gpx',
+      contentType: 'application/gpx+xml',
+      fileSize: 1000,
+    })
+
+    expect(result.success).toBe(false)
+    expect(result.error).toMatch(/already been submitted/i)
+  })
+
+  it('returns a signed upload URL for a valid request', async () => {
+    mockModule.__mockResultFound({
+      id: 'result-1',
+      event_id: 'event-1',
+      rider_id: 'rider-1',
+      events: { status: 'completed' },
+    })
+
+    const result = await createResultUploadUrl({
+      token: 'valid-token',
+      fileType: 'control_card_front',
+      fileName: 'card.jpg',
+      contentType: 'image/jpeg',
+      fileSize: 2 * 1024 * 1024,
+    })
+
+    expect(result.success).toBe(true)
+    expect(result.data).toBeDefined()
+    expect(result.data?.signedUrl).toBe('https://example.com/signed-upload-url')
+    expect(result.data?.uploadToken).toBe('signed-token')
+    expect(result.data?.path).toMatch(/^event-1\/rider-1\/control_card_front-/)
+    expect(result.data?.publicUrl).toBe('https://example.com/file.jpg')
+
+    // Verify the signed URL was requested with the generated path
+    expect(mockModule.__storage.createSignedUploadUrl).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('confirmResultUpload', () => {
+  beforeEach(() => {
+    mockModule.__reset()
+    vi.clearAllMocks()
+  })
+
+  it('returns error for empty token', async () => {
+    const result = await confirmResultUpload({
+      token: '',
+      fileType: 'gpx',
+      path: 'event-1/rider-1/gpx-1.gpx',
+    })
+
+    expect(result.success).toBe(false)
+    expect(result.error).toBe('Invalid submission token')
+  })
+
+  it('returns error when token does not match a result', async () => {
+    mockModule.__mockResultNotFound()
+
+    const result = await confirmResultUpload({
+      token: 'invalid-token',
+      fileType: 'gpx',
+      path: 'event-1/rider-1/gpx-1.gpx',
+    })
+
+    expect(result.success).toBe(false)
+    expect(result.error).toBe('Result not found or invalid token')
+  })
+
+  it('rejects paths that do not match event/rider scope', async () => {
+    mockModule.__mockResultFound({
+      id: 'result-1',
+      event_id: 'event-1',
+      rider_id: 'rider-1',
+      gpx_file_path: null,
+      control_card_front_path: null,
+      control_card_back_path: null,
+      events: { status: 'completed' },
+    })
+
+    const result = await confirmResultUpload({
+      token: 'valid-token',
+      fileType: 'gpx',
+      // Path is for a different event/rider
+      path: 'other-event/other-rider/gpx-1.gpx',
+    })
+
+    expect(result.success).toBe(false)
+    expect(result.error).toMatch(/invalid file path/i)
+  })
+
+  it('updates the database with the file path on success', async () => {
+    mockModule.__mockResultFound({
+      id: 'result-1',
+      event_id: 'event-1',
+      rider_id: 'rider-1',
+      gpx_file_path: null,
+      control_card_front_path: null,
+      control_card_back_path: null,
+      events: { status: 'completed' },
+    })
+    mockModule.__mockUpdateSuccess()
+
+    const result = await confirmResultUpload({
+      token: 'valid-token',
+      fileType: 'gpx',
+      path: 'event-1/rider-1/gpx-12345.gpx',
+    })
+
+    expect(result.success).toBe(true)
+    expect(mockModule.__queryBuilder.update).toHaveBeenCalled()
   })
 })

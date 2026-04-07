@@ -15,13 +15,15 @@ import {
 } from '@/components/ui/select'
 import {
   submitRiderResult,
-  uploadResultFile,
+  createResultUploadUrl,
+  confirmResultUpload,
   deleteResultFile,
   getRiderUpcomingEvents,
   getChapterUpcomingEvents,
   type ResultSubmissionData,
   type UpcomingEvent,
 } from '@/lib/actions/rider-results'
+import { createClient as createSupabaseBrowserClient } from '@/lib/supabase-browser'
 import {
   Upload,
   X,
@@ -104,25 +106,64 @@ export function ResultSubmissionForm({ token, initialData }: ResultSubmissionFor
   ) {
     setState((prev) => ({ ...prev, uploading: true, error: null }))
 
-    const formData = new FormData()
-    formData.append('file', file)
+    // 1. Ask the server for a signed upload URL (avoids the server-action body limit)
+    const signed = await createResultUploadUrl({
+      token,
+      fileType,
+      fileName: file.name,
+      contentType: file.type,
+      fileSize: file.size,
+    })
 
-    const result = await uploadResultFile(token, fileType, formData)
-
-    if (result.success && result.data) {
-      setState({
-        uploading: false,
-        path: result.data.path,
-        url: result.data.url,
-        error: null,
-      })
-    } else {
+    if (!signed.success || !signed.data) {
       setState((prev) => ({
         ...prev,
         uploading: false,
-        error: result.error || 'Upload failed',
+        error: signed.error || 'Upload failed',
       }))
+      return
     }
+
+    // 2. Upload directly to Supabase Storage using the signed URL
+    const supabase = createSupabaseBrowserClient()
+    const { error: uploadError } = await supabase.storage
+      .from('rider-submissions')
+      .uploadToSignedUrl(signed.data.path, signed.data.uploadToken, file, {
+        contentType: file.type,
+        upsert: false,
+      })
+
+    if (uploadError) {
+      setState((prev) => ({
+        ...prev,
+        uploading: false,
+        error: uploadError.message || 'Upload failed',
+      }))
+      return
+    }
+
+    // 3. Tell the server the upload finished so it persists the path
+    const confirmed = await confirmResultUpload({
+      token,
+      fileType,
+      path: signed.data.path,
+    })
+
+    if (!confirmed.success || !confirmed.data) {
+      setState((prev) => ({
+        ...prev,
+        uploading: false,
+        error: confirmed.error || 'Upload failed',
+      }))
+      return
+    }
+
+    setState({
+      uploading: false,
+      path: confirmed.data.path,
+      url: confirmed.data.url,
+      error: null,
+    })
   }
 
   async function handleFileDelete(

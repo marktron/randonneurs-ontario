@@ -235,11 +235,15 @@ export async function getResultByToken(token: string): Promise<ActionResult<Resu
 // Submit rider's result (status, finish time, files, notes)
 export async function submitRiderResult(input: SubmitResultInput): Promise<ActionResult>
 
-// Upload GPX or control card files
-export async function uploadResultFile(
-  token: string,
-  fileType: string,
-  formData: FormData
+// Mint a one-time signed upload URL for a result file. The browser uploads
+// the file directly to Supabase Storage to bypass Server Action body limits.
+export async function createResultUploadUrl(
+  input: CreateResultUploadUrlInput
+): Promise<ActionResult<CreateResultUploadUrlData>>
+
+// Persist the file path against the result after the browser upload succeeds
+export async function confirmResultUpload(
+  input: ConfirmResultUploadInput
 ): Promise<ActionResult<{ path: string; url: string }>>
 
 // Delete uploaded files
