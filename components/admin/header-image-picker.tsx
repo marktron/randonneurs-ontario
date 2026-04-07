@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { createImageUploadUrl, confirmImageUpload } from '@/lib/actions/images'
 import { createClient as createSupabaseBrowserClient } from '@/lib/supabase-browser'
+import { compressImageForUpload } from '@/lib/image-compression'
 import { toast } from 'sonner'
 import { ImageIcon, Loader2, Upload, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -36,11 +37,20 @@ export function HeaderImagePicker({ value, onChange }: HeaderImagePickerProps) {
       setIsUploading(true)
 
       try {
+        // 0. Compress images in the browser before upload (HEIC → JPEG, resize)
+        let uploadFile: File
+        try {
+          uploadFile = await compressImageForUpload(file)
+        } catch (err) {
+          toast.error(err instanceof Error ? err.message : 'Failed to upload image')
+          return
+        }
+
         // 1. Mint a signed upload URL
         const signed = await createImageUploadUrl({
-          filename: file.name,
-          contentType: file.type,
-          sizeBytes: file.size,
+          filename: uploadFile.name,
+          contentType: uploadFile.type,
+          sizeBytes: uploadFile.size,
           folder: 'headers',
         })
 
@@ -53,8 +63,8 @@ export function HeaderImagePicker({ value, onChange }: HeaderImagePickerProps) {
         const supabase = createSupabaseBrowserClient()
         const { error: uploadError } = await supabase.storage
           .from('images')
-          .uploadToSignedUrl(signed.data.storagePath, signed.data.uploadToken, file, {
-            contentType: file.type,
+          .uploadToSignedUrl(signed.data.storagePath, signed.data.uploadToken, uploadFile, {
+            contentType: uploadFile.type,
             upsert: false,
           })
 
@@ -66,9 +76,9 @@ export function HeaderImagePicker({ value, onChange }: HeaderImagePickerProps) {
         // 3. Persist metadata
         const confirmed = await confirmImageUpload({
           storagePath: signed.data.storagePath,
-          filename: file.name,
-          contentType: file.type,
-          sizeBytes: file.size,
+          filename: uploadFile.name,
+          contentType: uploadFile.type,
+          sizeBytes: uploadFile.size,
           altText: null,
         })
 
