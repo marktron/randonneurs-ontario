@@ -7,6 +7,7 @@ import { MarkdownContent } from '@/components/markdown-content'
 import { Eye, Edit3, Upload, Loader2, AlertCircle, HelpCircle } from 'lucide-react'
 import { createImageUploadUrl, confirmImageUpload } from '@/lib/actions/images'
 import { createClient as createSupabaseBrowserClient } from '@/lib/supabase-browser'
+import { compressImageForUpload } from '@/lib/image-compression'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { Label } from '@/components/ui/label'
@@ -110,11 +111,21 @@ export function MarkdownEditor({ value, onChange, placeholder, label }: Markdown
       }
 
       try {
+        // 0. Compress images in the browser before upload (HEIC → JPEG, resize).
+        // Documents (PDF, DOCX, etc.) pass through unchanged.
+        let uploadFile: File
+        try {
+          uploadFile = await compressImageForUpload(file)
+        } catch (err) {
+          failWith(err instanceof Error ? err.message : 'Failed to upload file')
+          return
+        }
+
         // 1. Mint a signed upload URL
         const signed = await createImageUploadUrl({
-          filename: file.name,
-          contentType: file.type,
-          sizeBytes: file.size,
+          filename: uploadFile.name,
+          contentType: uploadFile.type,
+          sizeBytes: uploadFile.size,
           folder: 'pages',
         })
 
@@ -127,8 +138,8 @@ export function MarkdownEditor({ value, onChange, placeholder, label }: Markdown
         const supabase = createSupabaseBrowserClient()
         const { error: uploadError } = await supabase.storage
           .from('images')
-          .uploadToSignedUrl(signed.data.storagePath, signed.data.uploadToken, file, {
-            contentType: file.type,
+          .uploadToSignedUrl(signed.data.storagePath, signed.data.uploadToken, uploadFile, {
+            contentType: uploadFile.type,
             upsert: false,
           })
 
@@ -140,9 +151,9 @@ export function MarkdownEditor({ value, onChange, placeholder, label }: Markdown
         // 3. Persist metadata
         const confirmed = await confirmImageUpload({
           storagePath: signed.data.storagePath,
-          filename: file.name,
-          contentType: file.type,
-          sizeBytes: file.size,
+          filename: uploadFile.name,
+          contentType: uploadFile.type,
+          sizeBytes: uploadFile.size,
           altText: null,
         })
 
@@ -152,8 +163,8 @@ export function MarkdownEditor({ value, onChange, placeholder, label }: Markdown
         }
 
         const markdown = isImage
-          ? `![${file.name}](${confirmed.data.url})`
-          : `[${file.name}](${confirmed.data.url})`
+          ? `![${uploadFile.name}](${confirmed.data.url})`
+          : `[${uploadFile.name}](${confirmed.data.url})`
         onChange(valueRef.current.replace(uploadingPlaceholder, markdown))
         toast.success(isImage ? 'Image uploaded' : 'File uploaded')
       } catch (error) {

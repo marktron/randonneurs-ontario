@@ -28,6 +28,11 @@ vi.mock('@/lib/supabase-browser', () => ({
   }),
 }))
 
+// Mock browser-side image compression — pass through unchanged in tests
+vi.mock('@/lib/image-compression', () => ({
+  compressImageForUpload: vi.fn(async (file: File) => file),
+}))
+
 // Mock toast
 const mockToast = {
   success: vi.fn(),
