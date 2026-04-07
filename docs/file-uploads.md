@@ -20,6 +20,17 @@ The admin interface supports uploading files (images and documents) to Supabase 
 2. **Browser uploads directly** to Supabase Storage using `supabase.storage.from('images').uploadToSignedUrl(storagePath, uploadToken, file)`.
 3. **`confirmImageUpload({ storagePath, filename, contentType, sizeBytes, altText })`** — admin-only. Re-validates the storage path against the allowed folder list, inserts the metadata row in the `images` table, and returns the full `UploadedFile` record. If the database insert fails the uploaded object is removed to avoid orphaning storage.
 
+### Browser-Side Compression
+
+Before any image is uploaded, the browser runs `lib/image-compression.ts → compressImageForUpload()` on it:
+
+- Non-image files (PDF, DOCX, GPX, GIF) pass through unchanged.
+- HEIC/HEIF (iPhone photos) are converted to JPEG via a lazy-imported `heic2any`.
+- JPEG/PNG/WebP files larger than 500 KB are resized to fit within 2400 px on the longest edge and re-encoded as JPEG with quality 0.85, targeting ~2 MB.
+- Files larger than 25 MB are rejected up front to avoid browser OOM.
+
+This means the 10 MB server-side ceiling on `lib/actions/images.ts` and `lib/actions/rider-results.ts` is effectively a backstop — typical phone photos arrive at ~1–2 MB.
+
 ### Markdown Editor (Page Content)
 
 The `MarkdownEditor` component (`components/admin/markdown-editor.tsx`) supports:
