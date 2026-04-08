@@ -2,7 +2,7 @@ import { SESv2Client, SendEmailCommand } from '@aws-sdk/client-sesv2'
 import MailComposer from 'nodemailer/lib/mail-composer'
 
 const client = new SESv2Client({
-  region: process.env.AWS_REGION || 'ca-central-1',
+  region: process.env.AWS_REGION || 'us-east-1',
 })
 
 export const fromEmail = process.env.SES_FROM_EMAIL || 'no-reply@randonneurs.to'

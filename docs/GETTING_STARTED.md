@@ -49,7 +49,7 @@ For local development, the environment variables will be populated after startin
 | `SUPABASE_SERVICE_ROLE_KEY`     | Server-side admin key                                 | `npx supabase status` after starting                    |
 | `AWS_ACCESS_KEY_ID`             | AWS IAM access key for SES (optional for dev)         | [AWS IAM Console](https://console.aws.amazon.com/iam)   |
 | `AWS_SECRET_ACCESS_KEY`         | AWS IAM secret key for SES (optional for dev)         | [AWS IAM Console](https://console.aws.amazon.com/iam)   |
-| `AWS_REGION`                    | AWS region for SES (default: `ca-central-1`)          | Set in `.env.local`                                     |
+| `AWS_REGION`                    | AWS region for SES (default: `us-east-1`)             | Set in `.env.local`                                     |
 | `SES_FROM_EMAIL`                | Verified sender address for SES                       | Set in `.env.local`                                     |
 | `SUPPRESS_ADMIN_EMAILS`         | Set to `true` to prevent emails to admins/VPs in dev  | Add to `.env.local`                                     |
 | `NEXT_PUBLIC_CURRENT_SEASON`    | Current riding season year                            | Set to current year (e.g., `2025`)                      |
