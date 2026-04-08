@@ -3,9 +3,10 @@ import { PageHero } from '@/components/page-hero'
 import { RoutePreviewLink } from '@/components/route-preview-link'
 
 export interface Route {
+  slug: string
   name: string
   distance: string
-  url: string
+  rwgpsUrl: string
 }
 
 export interface RouteCollection {
@@ -15,12 +16,19 @@ export interface RouteCollection {
 
 export interface RoutesPageProps {
   chapter: string
+  chapterSlug: string
   description: string
   coverImage?: string
   collections: RouteCollection[]
 }
 
-export function RoutesPage({ chapter, description, coverImage, collections }: RoutesPageProps) {
+export function RoutesPage({
+  chapter,
+  chapterSlug,
+  description,
+  coverImage,
+  collections,
+}: RoutesPageProps) {
   return (
     <PageShell>
       <PageHero image={coverImage} eyebrow="Routes" title={chapter} description={description} />
@@ -31,10 +39,15 @@ export function RoutesPage({ chapter, description, coverImage, collections }: Ro
               <header className="mb-6 pb-3 border-b border-border">
                 <h2 className="font-serif text-2xl tracking-tight">{collection.name}</h2>
               </header>
-              <ul className="grid grid-cols-1 sm:grid-cols-2 gap-x-12 gap-y-2">
-                {collection.routes.map((route, index) => (
-                  <li key={`${route.url}-${index}`}>
-                    <RoutePreviewLink name={route.name} distance={route.distance} url={route.url} />
+              <ul className="grid grid-cols-1 sm:grid-cols-2 gap-x-12">
+                {collection.routes.map((route) => (
+                  <li key={route.slug}>
+                    <RoutePreviewLink
+                      name={route.name}
+                      distance={route.distance}
+                      detailHref={`/routes/${chapterSlug}/${route.slug}`}
+                      rwgpsUrl={route.rwgpsUrl}
+                    />
                   </li>
                 ))}
               </ul>

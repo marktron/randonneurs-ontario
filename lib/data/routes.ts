@@ -234,7 +234,7 @@ const getRoutesByChapterInner = cache(async (urlSlug: string): Promise<RouteColl
   // Fetch routes for this chapter using a join, that have rwgps_id and are active
   const { data: routes, error: routesError } = await getSupabase()
     .from('routes')
-    .select('name, distance_km, rwgps_id, chapters!inner(slug)')
+    .select('slug, name, distance_km, rwgps_id, chapters!inner(slug)')
     .eq('chapters.slug', dbSlug)
     .eq('is_active', true)
     .not('rwgps_id', 'is', null)
@@ -248,7 +248,7 @@ const getRoutesByChapterInner = cache(async (urlSlug: string): Promise<RouteColl
   const groupedRoutes: Record<string, RouteBasic[]> = {}
 
   for (const route of routes as RouteBasic[]) {
-    if (!route.distance_km || !route.rwgps_id) continue
+    if (!route.slug || !route.distance_km || !route.rwgps_id) continue
 
     const category = getCategoryForDistance(route.distance_km)
     if (!groupedRoutes[category]) {
@@ -271,9 +271,10 @@ const getRoutesByChapterInner = cache(async (urlSlug: string): Promise<RouteColl
       collections.push({
         name: category.name,
         routes: categoryRoutes.map((route) => ({
+          slug: route.slug!,
           name: route.name,
           distance: route.distance_km!.toString(),
-          url: buildRwgpsUrl(route.rwgps_id!),
+          rwgpsUrl: buildRwgpsUrl(route.rwgps_id!),
         })),
       })
     }

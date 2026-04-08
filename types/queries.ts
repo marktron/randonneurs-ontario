@@ -103,7 +103,7 @@ export type EventWithPublicResultsForRoute = Pick<Event, 'name' | 'event_date'> 
 /**
  * Route with basic fields for chapter listings
  */
-export type RouteBasic = Pick<Route, 'name' | 'distance_km' | 'rwgps_id'>
+export type RouteBasic = Pick<Route, 'slug' | 'name' | 'distance_km' | 'rwgps_id'>
 
 /**
  * Event with results for rider profile pages

@@ -159,8 +159,8 @@ describe('getRoutesByChapter', () => {
 
   it('groups routes by distance category', async () => {
     const mockRoutes = [
-      { name: 'Route 200', distance_km: 200, rwgps_id: '123' },
-      { name: 'Route 300', distance_km: 300, rwgps_id: '456' },
+      { slug: 'route-200', name: 'Route 200', distance_km: 200, rwgps_id: '123' },
+      { slug: 'route-300', name: 'Route 300', distance_km: 300, rwgps_id: '456' },
     ]
 
     mockModule.__mockRoutesFound(mockRoutes)

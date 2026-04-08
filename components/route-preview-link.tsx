@@ -1,113 +1,124 @@
-"use client";
+'use client'
 
-import { useEffect, useState } from "react";
-import Link from "next/link";
-import {
-  HoverCard,
-  HoverCardContent,
-  HoverCardTrigger,
-} from "@/components/ui/hover-card";
-import {
-  Dialog,
-  DialogContent,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
+import { useEffect, useState } from 'react'
+import Link from 'next/link'
+import { ArrowUpRight } from 'lucide-react'
+import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card'
+import { Dialog, DialogContent, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
+import { VisuallyHidden } from '@radix-ui/react-visually-hidden'
 
 interface RoutePreviewLinkProps {
-  name: string;
-  distance: string;
-  url: string;
+  name: string
+  distance: string
+  detailHref: string
+  rwgpsUrl: string
 }
 
 function extractRwgpsRouteId(url: string): string | null {
-  const match = url.match(/ridewithgps\.com\/routes\/(\d+)/);
-  return match ? match[1] : null;
+  const match = url.match(/ridewithgps\.com\/routes\/(\d+)/)
+  return match ? match[1] : null
 }
 
-export function RoutePreviewLink({ name, distance, url }: RoutePreviewLinkProps) {
-  const rwgpsRouteId = extractRwgpsRouteId(url);
-  const [isTouchDevice, setIsTouchDevice] = useState(false);
+export function RoutePreviewLink({ name, distance, detailHref, rwgpsUrl }: RoutePreviewLinkProps) {
+  const rwgpsRouteId = extractRwgpsRouteId(rwgpsUrl)
+  const [isTouchDevice, setIsTouchDevice] = useState(false)
 
   useEffect(() => {
-    // Check for touch capability
-    setIsTouchDevice(
-      'ontouchstart' in window || navigator.maxTouchPoints > 0
-    );
-  }, []);
+    setIsTouchDevice('ontouchstart' in window || navigator.maxTouchPoints > 0)
+  }, [])
 
-  const linkContent = (
-    <Link
-      href={url}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="group inline-flex items-baseline gap-2 py-1.5 text-sm"
-    >
-      <span className="group-hover:text-primary transition-colors">
+  const primaryLink = (
+    <Link href={detailHref} className="group flex min-w-0 flex-1 items-baseline gap-3 text-sm">
+      <span className="truncate text-foreground transition-colors group-hover:text-primary">
         {name}
       </span>
-      <span className="text-muted-foreground tabular-nums text-xs">
-        {distance}
-      </span>
+      <span className="shrink-0 text-xs tabular-nums text-muted-foreground/80">{distance}</span>
     </Link>
-  );
+  )
 
-  if (!rwgpsRouteId) {
-    return linkContent;
-  }
+  const mapChipClassName =
+    'group/map inline-flex shrink-0 items-center gap-1 rounded-sm py-1 text-muted-foreground/60 transition-colors hover:text-primary focus-visible:text-primary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background'
 
-  const previewIframe = (
-    <iframe
-      src={`https://ridewithgps.com/embeds?type=route&id=${rwgpsRouteId}&sampleGraph=false&metricUnits=true&hideSurface=true`}
-      className="w-full h-full"
-      style={{ border: "none" }}
-      title={`${name} route preview`}
-    />
-  );
+  const mapChipInner = (
+    <>
+      <span className="text-xs font-medium uppercase tracking-[0.18em]">Map</span>
+      <ArrowUpRight className="h-3 w-3" />
+    </>
+  )
 
-  // Touch devices: Use Dialog with tap-to-preview button
-  if (isTouchDevice) {
-    return (
-      <div className="flex items-baseline gap-3">
-        {linkContent}
+  // Plain external link — used as fallback and as the rendered trigger
+  const plainRwgpsLink = (
+    <a
+      href={rwgpsUrl}
+      target="_blank"
+      rel="noopener noreferrer"
+      aria-label={`${name} on RideWithGPS`}
+      className={mapChipClassName}
+    >
+      {mapChipInner}
+    </a>
+  )
+
+  let secondary: React.ReactNode = plainRwgpsLink
+
+  if (rwgpsRouteId) {
+    const previewIframe = (
+      <iframe
+        src={`https://ridewithgps.com/embeds?type=route&id=${rwgpsRouteId}&sampleGraph=false&metricUnits=true&hideSurface=true`}
+        className="h-full w-full"
+        style={{ border: 'none' }}
+        title={`${name} route preview`}
+      />
+    )
+
+    if (isTouchDevice) {
+      secondary = (
         <Dialog>
           <DialogTrigger asChild>
-            <button
-              className="text-xs text-muted-foreground hover:text-primary transition-colors underline underline-offset-2"
-              aria-label={`Preview ${name} route`}
-            >
-              preview
+            <button type="button" aria-label={`Preview ${name} route`} className={mapChipClassName}>
+              {mapChipInner}
             </button>
           </DialogTrigger>
-          <DialogContent className="max-w-3xl w-[95vw] p-0 overflow-hidden">
+          <DialogContent className="w-[95vw] max-w-3xl overflow-hidden p-0">
             <VisuallyHidden>
-              <DialogTitle>{name} Route Preview</DialogTitle>
+              <DialogTitle>{name} route preview</DialogTitle>
             </VisuallyHidden>
-            <div className="aspect-[4/3] w-full">
-              {previewIframe}
+            <div className="aspect-[4/3] w-full bg-muted">{previewIframe}</div>
+            <div className="flex items-center justify-between gap-3 border-t border-border bg-muted/30 px-5 py-3">
+              <span className="font-serif text-base tracking-tight">{name}</span>
+              <a
+                href={rwgpsUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-[0.18em] text-primary underline decoration-primary/30 underline-offset-4 transition-colors hover:decoration-primary"
+              >
+                View on RideWithGPS
+                <ArrowUpRight className="h-3.5 w-3.5" strokeWidth={1.75} />
+              </a>
             </div>
           </DialogContent>
         </Dialog>
-      </div>
-    );
+      )
+    } else {
+      secondary = (
+        <HoverCard openDelay={200} closeDelay={100}>
+          <HoverCardTrigger asChild>{plainRwgpsLink}</HoverCardTrigger>
+          <HoverCardContent
+            side="right"
+            align="start"
+            className="w-[600px] overflow-hidden rounded-lg p-0"
+          >
+            <div className="aspect-[4/3] w-full bg-muted">{previewIframe}</div>
+          </HoverCardContent>
+        </HoverCard>
+      )
+    }
   }
 
-  // Desktop: Use HoverCard
   return (
-    <HoverCard openDelay={300} closeDelay={100}>
-      <HoverCardTrigger asChild>
-        {linkContent}
-      </HoverCardTrigger>
-      <HoverCardContent
-        side="right"
-        align="start"
-        className="w-[600px] p-0 overflow-hidden rounded-lg"
-      >
-        <div className="aspect-[4/3] w-full">
-          {previewIframe}
-        </div>
-      </HoverCardContent>
-    </HoverCard>
-  );
+    <div className="flex items-center justify-between gap-4 border-b border-border/50 py-2">
+      {primaryLink}
+      {secondary}
+    </div>
+  )
 }

@@ -41,6 +41,7 @@ export default async function ChapterRoutesPage({ params }: PageProps) {
   return (
     <RoutesPage
       chapter={chapterInfo.name}
+      chapterSlug={chapter}
       description={chapterInfo.description}
       coverImage={chapterInfo.coverImage}
       collections={collections}
