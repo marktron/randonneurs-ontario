@@ -232,9 +232,9 @@ export async function cancelRegistration(
   }
 
   // Revalidate caches
-  revalidateTag('registrations', 'max')
-  revalidateTag('events', 'max')
-  revalidateTag(`event-${reg.events.slug}`, 'max')
+  revalidateTag('registrations', { expire: 0 })
+  revalidateTag('events', { expire: 0 })
+  revalidateTag(`event-${reg.events.slug}`, { expire: 0 })
   revalidatePath(`/register/${reg.events.slug}`)
 
   return { success: true }

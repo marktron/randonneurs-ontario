@@ -155,6 +155,88 @@ describe('createResult', () => {
     vi.clearAllMocks()
   })
 
+  it('revalidates the permanent results path for permanent events', async () => {
+    mockModule.__mockNoExistingResult()
+    mockModule.__mockInsertSuccess()
+    // Permanent event stored under a chapter (e.g. toronto) but with event_type='permanent'
+    mockModule.__mockResultFound({
+      event_id: 'event-1',
+      season: 2026,
+      event_type: 'permanent',
+      chapters: { slug: 'toronto' },
+    })
+
+    const result = await createResult({
+      eventId: 'event-1',
+      riderId: 'rider-1',
+      status: 'finished',
+      finishTime: '10:00',
+      season: 2026,
+      distanceKm: 200,
+    })
+
+    expect(result.success).toBe(true)
+
+    const { revalidatePath } = await import('next/cache')
+    expect(revalidatePath).toHaveBeenCalledWith('/results/2026/permanent')
+  })
+
+  it('revalidates the fleche results path for fleche events', async () => {
+    mockModule.__mockNoExistingResult()
+    mockModule.__mockInsertSuccess()
+    mockModule.__mockResultFound({
+      event_id: 'event-1',
+      season: 2026,
+      event_type: 'fleche',
+      chapters: { slug: 'toronto' },
+    })
+
+    const result = await createResult({
+      eventId: 'event-1',
+      riderId: 'rider-1',
+      status: 'finished',
+      finishTime: '24:00',
+      season: 2026,
+      distanceKm: 360,
+    })
+
+    expect(result.success).toBe(true)
+
+    const { revalidatePath } = await import('next/cache')
+    expect(revalidatePath).toHaveBeenCalledWith('/results/2026/fleche')
+  })
+
+  it('revalidates result cache tags with immediate expiration profile', async () => {
+    mockModule.__mockNoExistingResult()
+    mockModule.__mockInsertSuccess()
+    mockModule.__mockResultFound({
+      event_id: 'event-1',
+      season: 2026,
+      event_type: 'brevet',
+      chapters: { slug: 'toronto' },
+    })
+
+    const result = await createResult({
+      eventId: 'event-1',
+      riderId: 'rider-1',
+      status: 'finished',
+      finishTime: '13:30',
+      season: 2026,
+      distanceKm: 200,
+    })
+
+    expect(result.success).toBe(true)
+
+    const { revalidateTag } = await import('next/cache')
+    // The second arg 'max' uses the max cache-life profile (30-day revalidate,
+    // 1-year expire) and does NOT force immediate invalidation. Only a profile
+    // with expire: 0 (or no profile) triggers hard path revalidation in Next 16.
+    const calls = vi.mocked(revalidateTag).mock.calls
+    const resultsCall = calls.find((c) => c[0] === 'results')
+    expect(resultsCall, 'revalidateTag was not called with "results"').toBeDefined()
+    expect(resultsCall![1]).toEqual({ expire: 0 })
+  })
+
   it('returns error when result already exists', async () => {
     mockModule.__mockExistingResult({ id: 'result-1' })
 

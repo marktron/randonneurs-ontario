@@ -36,22 +36,22 @@ async function revalidateCalendarTags(chapterId: string, eventType: string, even
       const urlSlug = getUrlSlugFromDbSlug(typedChapter.slug)
       if (urlSlug) {
         // Revalidate chapter-specific events cache
-        revalidateTag(`chapter-${urlSlug}`, 'max')
+        revalidateTag(`chapter-${urlSlug}`, { expire: 0 })
       }
     }
   }
 
   // Revalidate general events cache
-  revalidateTag('events', 'max')
+  revalidateTag('events', { expire: 0 })
 
   // Revalidate specific event if slug provided
   if (eventSlug) {
-    revalidateTag(`event-${eventSlug}`, 'max')
+    revalidateTag(`event-${eventSlug}`, { expire: 0 })
   }
 
   // Also revalidate permanents cache if it's a permanent event
   if (eventType === 'permanent') {
-    revalidateTag('permanents', 'max')
+    revalidateTag('permanents', { expire: 0 })
   }
 }
 

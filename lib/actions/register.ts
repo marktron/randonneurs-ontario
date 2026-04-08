@@ -645,9 +645,9 @@ export async function registerForEvent(data: RegistrationData): Promise<Registra
     })
 
     // Revalidate cache tags for registration data
-    revalidateTag('registrations', 'max')
-    revalidateTag('events', 'max') // Revalidate chapter calendar caches (registration counts)
-    revalidateTag(`event-${event.slug}`, 'max')
+    revalidateTag('registrations', { expire: 0 })
+    revalidateTag('events', { expire: 0 }) // Revalidate chapter calendar caches (registration counts)
+    revalidateTag(`event-${event.slug}`, { expire: 0 })
     // Also revalidate the path for immediate UI update
     revalidatePath(`/register/${event.slug}`)
 
@@ -1000,10 +1000,10 @@ export async function registerForPermanent(
     })
 
     // Revalidate cache tags for registration data
-    revalidateTag('registrations', 'max')
-    revalidateTag('events', 'max') // Revalidate events cache (used by getPermanentEvents)
-    revalidateTag('permanents', 'max') // Revalidate permanents calendar cache
-    revalidateTag(`event-${eventSlug}`, 'max')
+    revalidateTag('registrations', { expire: 0 })
+    revalidateTag('events', { expire: 0 }) // Revalidate events cache (used by getPermanentEvents)
+    revalidateTag('permanents', { expire: 0 }) // Revalidate permanents calendar cache
+    revalidateTag(`event-${eventSlug}`, { expire: 0 })
     // Also revalidate the paths for immediate UI update
     revalidatePath(`/register/${eventSlug}`)
     revalidatePath('/calendar/permanents')
@@ -1353,9 +1353,9 @@ export async function completeRegistrationWithRider(
   })
 
   // Revalidate cache tags for registration data
-  revalidateTag('registrations', 'max')
-  revalidateTag('events', 'max') // Revalidate chapter calendar caches (registration counts)
-  revalidateTag(`event-${event.slug}`, 'max')
+  revalidateTag('registrations', { expire: 0 })
+  revalidateTag('events', { expire: 0 }) // Revalidate chapter calendar caches (registration counts)
+  revalidateTag(`event-${event.slug}`, { expire: 0 })
   // Also revalidate the path for immediate UI update
   revalidatePath(`/register/${event.slug}`)
 

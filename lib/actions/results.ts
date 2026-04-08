@@ -18,27 +18,40 @@ import type {
 
 // Helper to revalidate cache tags for results pages
 async function revalidateResultsTags(eventId: string) {
-  // Get event info including season and chapter
+  // Get event info including season, chapter, and event_type.
+  // event_type matters because permanent/fleche results pages are queried by
+  // event_type (not chapter), so they live at /results/{year}/permanent and
+  // /results/{year}/fleche regardless of which chapter owns the event row.
   const { data: event } = await getSupabaseAdmin()
     .from('events')
-    .select('season, chapters (slug)')
+    .select('season, event_type, chapters (slug)')
     .eq('id', eventId)
     .single()
 
   if (event) {
     const typedEvent = event as EventForResultsRevalidation
-    // Revalidate general results cache
-    revalidateTag('results', 'max')
+    // Revalidate general results cache. { expire: 0 } forces immediate
+    // path revalidation; passing a named profile like 'max' only schedules a
+    // background refresh and leaves stale pages served in the meantime.
+    revalidateTag('results', { expire: 0 })
 
-    if (typedEvent.season && typedEvent.chapters?.slug) {
-      const urlSlug = getUrlSlugFromDbSlug(typedEvent.chapters.slug)
-      if (urlSlug) {
-        // Revalidate chapter-specific results cache
-        revalidateTag(`chapter-${urlSlug}`, 'max')
-        // Revalidate year-specific results cache
-        revalidateTag(`year-${typedEvent.season}`, 'max')
-        // Also revalidate the path for immediate UI update
-        revalidatePath(`/results/${typedEvent.season}/${urlSlug}`)
+    if (typedEvent.season) {
+      // Year-specific cache spans all chapters for the season.
+      revalidateTag(`year-${typedEvent.season}`, { expire: 0 })
+
+      if (typedEvent.chapters?.slug) {
+        const urlSlug = getUrlSlugFromDbSlug(typedEvent.chapters.slug)
+        if (urlSlug) {
+          revalidateTag(`chapter-${urlSlug}`, { expire: 0 })
+          revalidatePath(`/results/${typedEvent.season}/${urlSlug}`)
+        }
+      }
+
+      // Permanent/fleche results pages are grouped by event_type, not chapter,
+      // so they need their own path revalidation.
+      if (typedEvent.event_type === 'permanent' || typedEvent.event_type === 'fleche') {
+        revalidateTag(`chapter-${typedEvent.event_type}`, { expire: 0 })
+        revalidatePath(`/results/${typedEvent.season}/${typedEvent.event_type}`)
       }
     }
   }
@@ -269,7 +282,7 @@ export async function updateRegistrationTeamName(
   }
 
   revalidatePath('/admin/events')
-  revalidateTag('registrations', 'max')
+  revalidateTag('registrations', { expire: 0 })
 
   return createActionResult()
 }
@@ -321,10 +334,10 @@ export async function adminCancelRegistration(registrationId: string): Promise<A
   }
 
   revalidatePath('/admin/events')
-  revalidateTag('registrations', 'max')
-  revalidateTag('events', 'max')
+  revalidateTag('registrations', { expire: 0 })
+  revalidateTag('events', { expire: 0 })
   if (reg.events?.slug) {
-    revalidateTag(`event-${reg.events.slug}`, 'max')
+    revalidateTag(`event-${reg.events.slug}`, { expire: 0 })
     revalidatePath(`/register/${reg.events.slug}`)
   }
 
@@ -521,7 +534,7 @@ export async function revalidateMembership(
   }
 
   revalidatePath(`/admin/events/${reg.event_id}`)
-  revalidateTag('registrations', 'max')
+  revalidateTag('registrations', { expire: 0 })
 
   return { success: true, data: { membershipFound: true } }
 }

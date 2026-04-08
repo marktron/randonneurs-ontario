@@ -20,11 +20,11 @@ import type {
 // Helper to revalidate cache tags for routes pages
 async function revalidateRoutesTags(chapterId: string | null, routeSlug?: string) {
   // Revalidate general routes cache
-  revalidateTag('routes', 'max')
+  revalidateTag('routes', { expire: 0 })
 
   if (routeSlug) {
     // Revalidate specific route cache
-    revalidateTag(`route-${routeSlug}`, 'max')
+    revalidateTag(`route-${routeSlug}`, { expire: 0 })
   }
 
   if (!chapterId) return
@@ -42,7 +42,7 @@ async function revalidateRoutesTags(chapterId: string | null, routeSlug?: string
       const urlSlug = getUrlSlugFromDbSlug(typedChapter.slug)
       if (urlSlug) {
         // Revalidate chapter-specific routes cache
-        revalidateTag(`chapter-${urlSlug}`, 'max')
+        revalidateTag(`chapter-${urlSlug}`, { expire: 0 })
         // Also revalidate the path for immediate UI update
         revalidatePath(`/routes/${urlSlug}`)
       }

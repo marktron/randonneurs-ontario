@@ -392,10 +392,16 @@ All `unstable_cache()` calls include cache tags. Server actions call `revalidate
 
 ```typescript
 // lib/actions/register.ts
-revalidateTag('registrations', 'max')
-revalidateTag('events', 'max')
-revalidateTag(`event-${event.slug}`, 'max')
+revalidateTag('registrations', { expire: 0 })
+revalidateTag('events', { expire: 0 })
+revalidateTag(`event-${event.slug}`, { expire: 0 })
 ```
+
+The `{ expire: 0 }` profile is important: Next.js 16 requires a second argument
+to `revalidateTag`, and passing a named profile like `'max'` only schedules a
+lazy background refresh (the built-in `max` profile is 30-day revalidate,
+1-year expire). Only a profile with `expire: 0` (or no profile at all) marks
+the route as hard-revalidated so pages update immediately.
 
 Top-level cache tags used across the codebase:
 

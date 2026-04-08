@@ -469,9 +469,9 @@ export type EventForCronCompletion = Pick<
 }
 
 /**
- * Event with season and chapter slug for results revalidation
+ * Event with season, event_type, and chapter slug for results revalidation
  */
-export type EventForResultsRevalidation = Pick<Event, 'season'> & {
+export type EventForResultsRevalidation = Pick<Event, 'season' | 'event_type'> & {
   chapters: Pick<Chapter, 'slug'> | null
 }
 

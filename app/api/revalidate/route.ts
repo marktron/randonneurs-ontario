@@ -59,7 +59,10 @@ export async function POST(request: Request) {
   }
 
   for (const tag of tagsToRevalidate) {
-    revalidateTag(tag, 'max')
+    // { expire: 0 } forces immediate path revalidation in Next.js 16.
+    // Passing a named profile like 'max' would only schedule a lazy background
+    // refresh — the 'max' profile is 30-day revalidate, 1-year expire.
+    revalidateTag(tag, { expire: 0 })
   }
 
   return NextResponse.json({

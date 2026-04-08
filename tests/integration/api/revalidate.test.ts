@@ -50,8 +50,8 @@ describe('POST /api/revalidate', () => {
     expect(res.status).toBe(200)
     expect(json.revalidated).toEqual(['events', 'results'])
     expect(revalidateTagMock).toHaveBeenCalledTimes(2)
-    expect(revalidateTagMock).toHaveBeenCalledWith('events', 'max')
-    expect(revalidateTagMock).toHaveBeenCalledWith('results', 'max')
+    expect(revalidateTagMock).toHaveBeenCalledWith('events', { expire: 0 })
+    expect(revalidateTagMock).toHaveBeenCalledWith('results', { expire: 0 })
   })
 
   it('revalidates all tags when all: true', async () => {
