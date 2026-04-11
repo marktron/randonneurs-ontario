@@ -77,52 +77,49 @@ export function ControlCardsPrint({
           .page-break {
             page-break-after: always;
           }
-          /* Hide admin sidebar and wrapper when printing */
+          /* Hide admin sidebar, header, and nav when printing */
           [data-sidebar],
           aside,
           nav,
+          header,
           [data-slot='sidebar'] {
             display: none !important;
             width: 0 !important;
           }
-          /* Reset all layout containers */
-          main,
-          [data-slot='sidebar-inset'],
-          [data-sidebar-inset],
-          .flex,
-          body > div {
+          /* Reset all ancestor containers of the print content */
+          body :has(.control-cards-print) {
             margin: 0 !important;
             padding: 0 !important;
-            margin-left: 0 !important;
-            padding-left: 0 !important;
             width: 100% !important;
             max-width: 100% !important;
             transform: none !important;
           }
-          /* Reset fixed positioning for print */
-          .control-cards-print {
-            position: static !important;
-            overflow: visible !important;
-            inset: auto !important;
-            z-index: auto !important;
+          /* Don't add a trailing empty page after the last back page */
+          .control-cards-print > div:last-child > .page-break {
+            page-break-after: auto;
           }
         }
 
-        /* On screen: make print page full width overlay */
         .control-cards-print {
-          position: fixed;
-          top: 0;
-          left: 0;
-          right: 0;
-          bottom: 0;
-          z-index: 50;
-          background: #f5f5f5;
-          overflow: auto;
           font-family: 'Noto Sans', sans-serif;
           font-stretch: 62.5%;
           font-size: 7.5pt;
           line-height: 1.3;
           color: #000;
+        }
+
+        /* On screen: make print page full width overlay */
+        @media screen {
+          .control-cards-print {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            z-index: 50;
+            background: #f5f5f5;
+            overflow: auto;
+          }
         }
 
         .card-page {
@@ -135,12 +132,27 @@ export function ControlCardsPrint({
         }
 
         .card-half {
-          width: 8.5in;
+          width: 100%;
           height: 5.5in;
           box-sizing: border-box;
           border-bottom: 1px solid #d9d9d9;
           display: grid;
           grid-template-columns: 1fr 1fr 1fr;
+          grid-template-rows: 1fr;
+          overflow: hidden;
+          position: relative;
+        }
+
+        .rider-name-vertical {
+          position: absolute;
+          top: 0.2in;
+          right: 0.2in;
+          writing-mode: vertical-rl;
+          font-family: 'Noto Sans', sans-serif;
+          font-size: 12pt;
+          font-weight: 500;
+          color: #808080;
+          white-space: nowrap;
         }
 
         .card-half:last-child {
@@ -384,6 +396,7 @@ export function ControlCardsPrint({
         style={{ padding: '1rem', background: '#f5f5f5', borderBottom: '1px solid #ddd' }}
       >
         <button
+          type="button"
           onClick={() => window.print()}
           style={{
             padding: '0.5rem 1rem',
@@ -453,8 +466,14 @@ function CardFront({
   formattedDate: string
   rwgpsUrl?: string
 }) {
+  const verticalName =
+    rider?.lastName || rider?.firstName
+      ? `${rider.lastName}, ${rider.firstName}`.trim().replace(/^,\s*|,\s*$/g, '')
+      : ''
+
   return (
     <div className="card-half">
+      {verticalName && <div className="rider-name-vertical">{verticalName}</div>}
       {/* Left column - Regulations */}
       <div className="card-column front-left">
         <p>
