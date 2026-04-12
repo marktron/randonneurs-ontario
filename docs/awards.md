@@ -48,15 +48,47 @@ RLS: public SELECT, admin-only INSERT/UPDATE/DELETE (not chapter_admin, since se
 | First Brevet         | result | Rode their first brevet with Randonneurs Ontario           | Zinc          |
 | Super Randonneur     | season | Completed 200, 300, 400, and 600 km brevets in one season  | Amber         |
 | Completed Devil Week | result | Completed 200, 300, 400, and 600 km during Devil Week      | Red           |
-| Ontario Rover        | result | 1200 km of Permanents with at least two 300+ km            | Lime          |
-| Ontario Explorer     | result | Completed a brevet in every chapter during a calendar year | Emerald       |
-| O-5000               | result | Completed 5000+ km of sanctioned events in a calendar year | Cyan          |
+| Ontario Rover        | season | 1200 km of Permanents with at least two 300+ km            | Lime          |
+| Ontario Explorer     | season | Completed a brevet in every chapter during a calendar year | Emerald       |
+| O-5000               | season | Completed 5000+ km of sanctioned events in a calendar year | Cyan          |
 | O-12                 | result | Completed a 200+ km event for 12 consecutive months        | Violet        |
+| Ontario Rouleur      | season | Completed 4 populaires, a brevet, and an Audax-style event | Sky           |
 | Paris-Brest-Paris    | result | Completed Paris-Brest-Paris                                | Blue          |
 | Granite Anvil        | result | Completed the Granite Anvil 1200 km brevet                 | Fuchsia       |
 | Course Record\*      | —      | Fastest recorded time for a route                          | Gold gradient |
 
 \*Course Record is a **calculated award** that is not stored in the database. It is computed dynamically on the route detail page (`/routes/[chapter]/[slug]`) by finding the fastest finish time among all results for that route. If multiple riders share the same fastest time, they all receive the Course Record badge.
+
+## Awards Page (`/awards`)
+
+Dedicated page displaying Ontario club awards and ACP distance awards. Each Ontario award section shows the award badge image, description, and a table of recipients. The O-5000 section includes a distance column showing the rider's total season distance.
+
+### Ontario Awards
+
+Displayed in order: O-12, Ontario Explorer, O-5000, Ontario Rouleur, Ontario Rover.
+
+### ACP Awards
+
+Randonneur 10000 and Randonneur 5000 — moved here from the `/records` page.
+
+### Data Fetching
+
+Award recipient data is fetched in `lib/data/awards.ts`:
+
+- **`getOntarioAwards()`** — Fetches recipients for all five Ontario awards in parallel. Uses `get_award_recipients` for most awards, and `get_award_recipients_with_distance` for O-5000.
+- **`getAcpAwards()`** — Fetches Randonneur 10000 and 5000 recipients.
+
+Both use `unstable_cache` with 24-hour TTL and `awards` cache tags.
+
+### Components
+
+- **`AwardRecipientTable`** — Displays rider name and year. Title prop is optional.
+- **`AwardRecipientDistanceTable`** — Like `AwardRecipientTable` but with a distance column showing `seasonDistance`. Used for O-5000.
+- **`RecordSection`** — Shared with `/records`. Accepts an optional `image` prop for badge display alongside the section header.
+
+### Database Function
+
+**`get_award_recipients_with_distance(slug)`** — Returns recipients with their total season distance. Uses `results.distance_km` (not `events.distance_km`) for correct flèche handling. Like `get_award_recipients`, it handles both season-scoped and result-scoped awards via `UNION ALL`.
 
 ## Components
 
@@ -145,6 +177,7 @@ Season awards are grouped by year and attached to the corresponding `RiderYearRe
 The `/records` page functions handle both award scopes:
 
 - **`get_award_recipients(slug)`** — UNION query across `rider_awards` (season) and `result_awards` (result), branching on `awards.award_type`
+- **`get_award_recipients_with_distance(slug)`** — Same dual-source pattern as above, but also returns each recipient's total season distance via `results.distance_km`
 - **`get_rider_award_counts(slug, limit)`** — Same dual-source pattern, counting distinct seasons
 - **`get_rider_sr_streaks(season, limit)`** — Queries `rider_awards` directly for SR streak calculations
 

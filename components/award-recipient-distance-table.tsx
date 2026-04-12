@@ -10,16 +10,21 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import type { AwardRecipient } from '@/types/records'
+import type { AwardRecipientWithDistance } from '@/types/records'
 
 const INITIAL_DISPLAY_COUNT = 10
 
-interface AwardRecipientTableProps {
+interface AwardRecipientDistanceTableProps {
   title?: string
-  recipients: AwardRecipient[]
+  recipients: AwardRecipientWithDistance[]
 }
 
-export function AwardRecipientTable({ title, recipients }: AwardRecipientTableProps) {
+const formatDistance = (km: number) => `${(km ?? 0).toLocaleString()} km`
+
+export function AwardRecipientDistanceTable({
+  title,
+  recipients,
+}: AwardRecipientDistanceTableProps) {
   const [showAll, setShowAll] = useState(false)
   const titleId = title ? `record-table-${title.toLowerCase().replace(/\s+/g, '-')}` : undefined
 
@@ -53,6 +58,7 @@ export function AwardRecipientTable({ title, recipients }: AwardRecipientTablePr
           <TableHeader>
             <TableRow>
               <TableHead>Rider</TableHead>
+              <TableHead className="text-right">Distance</TableHead>
               <TableHead className="text-right">Year</TableHead>
             </TableRow>
           </TableHeader>
@@ -67,6 +73,9 @@ export function AwardRecipientTable({ title, recipients }: AwardRecipientTablePr
                   ) : (
                     recipient.riderName
                   )}
+                </TableCell>
+                <TableCell className="text-right tabular-nums">
+                  {formatDistance(recipient.seasonDistance)}
                 </TableCell>
                 <TableCell className="text-right tabular-nums">{recipient.awardYear}</TableCell>
               </TableRow>
@@ -93,6 +102,9 @@ export function AwardRecipientTable({ title, recipients }: AwardRecipientTablePr
               ) : (
                 <span className="font-medium">{recipient.riderName}</span>
               )}
+              <p className="text-sm text-muted-foreground tabular-nums">
+                {formatDistance(recipient.seasonDistance)}
+              </p>
             </div>
             <div className="text-right shrink-0">
               <span className="font-medium tabular-nums">{recipient.awardYear}</span>

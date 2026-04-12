@@ -23,8 +23,6 @@ import type {
   RouteRecords,
   PbpRecords,
   GraniteAnvilRecords,
-  AwardRecipientRecords,
-  AwardRecipient,
   RiderRecord,
   RiderTimeRecord,
   SeasonRiderRecord,
@@ -438,51 +436,6 @@ const getGraniteAnvilRecordsInner = cache(async (): Promise<GraniteAnvilRecords>
 export async function getGraniteAnvilRecords(): Promise<GraniteAnvilRecords> {
   return unstable_cache(async () => getGraniteAnvilRecordsInner(), ['records-granite-anvil'], {
     tags: ['records', 'records-granite-anvil'],
-    revalidate: CACHE_TTL_HISTORICAL,
-  })()
-}
-
-// ============================================================================
-// AWARD RECIPIENTS (Randonneur 5000 / 10000)
-// ============================================================================
-
-// Helper to convert RPC result to AwardRecipient array
-function toAwardRecipients(
-  data: Array<{ rider_slug: string; rider_name: string; award_year: number }> | null
-): AwardRecipient[] {
-  if (!data) return []
-  return data.map((row) => ({
-    riderSlug: row.rider_slug,
-    riderName: row.rider_name,
-    awardYear: row.award_year,
-  }))
-}
-
-const getAwardRecipientsInner = cache(async (): Promise<AwardRecipientRecords> => {
-  const supabase = getSupabase()
-
-  const [r10000Result, r5000Result] = await Promise.all([
-    supabase.rpc('get_award_recipients', { p_award_slug: 'r-10000' }),
-    supabase.rpc('get_award_recipients', { p_award_slug: 'r-5000' }),
-  ])
-
-  if (r10000Result.error) {
-    return handleDataError(
-      r10000Result.error,
-      { operation: 'getAwardRecipients' },
-      { r10000: [], r5000: [] }
-    )
-  }
-
-  return {
-    r10000: toAwardRecipients(r10000Result.data),
-    r5000: toAwardRecipients(r5000Result.data),
-  }
-})
-
-export async function getAwardRecipients(): Promise<AwardRecipientRecords> {
-  return unstable_cache(async () => getAwardRecipientsInner(), ['records-award-recipients'], {
-    tags: ['records', 'records-award-recipients'],
     revalidate: CACHE_TTL_HISTORICAL,
   })()
 }

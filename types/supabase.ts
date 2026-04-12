@@ -904,6 +904,15 @@ export type Database = {
           rider_slug: string
         }[]
       }
+      get_award_recipients_with_distance: {
+        Args: { p_award_slug: string }
+        Returns: {
+          rider_slug: string
+          rider_name: string
+          award_year: number
+          season_distance: number
+        }[]
+      }
       get_best_season_distances: {
         Args: { limit_count?: number }
         Returns: {

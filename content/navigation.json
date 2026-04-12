@@ -150,6 +150,10 @@
           "href": "/riders"
         },
         {
+          "label": "Awards",
+          "href": "/awards"
+        },
+        {
           "label": "Records",
           "href": "/records"
         }

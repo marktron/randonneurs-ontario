@@ -135,11 +135,13 @@ export interface AwardRecipient {
 }
 
 /**
- * Award recipient records
+ * A recipient of a distance-based award (e.g., O-5000) with season distance
  */
-export interface AwardRecipientRecords {
-  r10000: AwardRecipient[]
-  r5000: AwardRecipient[]
+export interface AwardRecipientWithDistance {
+  riderSlug: string
+  riderName: string
+  awardYear: number
+  seasonDistance: number
 }
 
 /**

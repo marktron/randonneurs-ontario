@@ -8,7 +8,6 @@ import {
   RouteRecordTable,
   StreakRecordTable,
 } from '@/components/record-table'
-import { AwardRecipientTable } from '@/components/award-recipient-table'
 import {
   getLifetimeRecords,
   getSeasonRecords,
@@ -17,7 +16,6 @@ import {
   getRouteRecords,
   getPbpRecords,
   getGraniteAnvilRecords,
-  getAwardRecipients,
 } from '@/lib/data/records'
 
 export const revalidate = 3600 // Revalidate every hour (driven by current season data)
@@ -32,25 +30,16 @@ export const metadata = {
 
 export default async function RecordsPage() {
   // Fetch all records in parallel
-  const [
-    lifetime,
-    season,
-    currentSeasonDistance,
-    club,
-    routes,
-    pbp,
-    graniteAnvil,
-    awardRecipients,
-  ] = await Promise.all([
-    getLifetimeRecords(),
-    getSeasonRecords(),
-    getCurrentSeasonDistance(),
-    getClubAchievements(),
-    getRouteRecords(),
-    getPbpRecords(),
-    getGraniteAnvilRecords(),
-    getAwardRecipients(),
-  ])
+  const [lifetime, season, currentSeasonDistance, club, routes, pbp, graniteAnvil] =
+    await Promise.all([
+      getLifetimeRecords(),
+      getSeasonRecords(),
+      getCurrentSeasonDistance(),
+      getClubAchievements(),
+      getRouteRecords(),
+      getPbpRecords(),
+      getGraniteAnvilRecords(),
+    ])
 
   const formatDistance = (km: number) => `${km.toLocaleString()} km`
 
@@ -117,38 +106,6 @@ export default async function RecordsPage() {
             currentSeason={parseInt(currentSeason, 10)}
             valueLabel="Seasons"
           />
-        </div>
-      </RecordSection>
-
-      <RecordSection
-        title="ACP Awards"
-        description={
-          <>
-            Recipients of the{' '}
-            <a
-              href="https://www.audax-club-parisien.com/en/our-organizations/randonneur-10000-en/"
-              className="underline hover:text-foreground"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Randonneur 10000
-            </a>{' '}
-            and{' '}
-            <a
-              href="https://www.audax-club-parisien.com/en/our-organizations/randonneur-5000-en/"
-              className="underline hover:text-foreground"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Randonneur 5000
-            </a>{' '}
-            distance awards from Audax Club Parisien.
-          </>
-        }
-      >
-        <div className="grid gap-10 lg:grid-cols-2">
-          <AwardRecipientTable title="Randonneur 10000" recipients={awardRecipients.r10000} />
-          <AwardRecipientTable title="Randonneur 5000" recipients={awardRecipients.r5000} />
         </div>
       </RecordSection>
 
