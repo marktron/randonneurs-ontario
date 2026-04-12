@@ -12,6 +12,7 @@ import { revalidateTag } from 'next/cache'
  */
 
 const ALL_TAGS = [
+  'awards',
   'events',
   'permanents',
   'registrations',
