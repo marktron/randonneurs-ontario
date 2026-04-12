@@ -51,7 +51,7 @@ RLS: public SELECT, admin-only INSERT/UPDATE/DELETE (not chapter_admin, since se
 | Ontario Rover        | season | 1200 km of Permanents with at least two 300+ km            | Lime          |
 | Ontario Explorer     | season | Completed a brevet in every chapter during a calendar year | Emerald       |
 | O-5000               | season | Completed 5000+ km of sanctioned events in a calendar year | Cyan          |
-| O-12                 | result | Completed a 200+ km event for 12 consecutive months        | Violet        |
+| O-12                 | season | Completed a 200+ km event for 12 consecutive months        | Violet        |
 | Ontario Rouleur      | season | Completed 4 populaires, a brevet, and an Audax-style event | Sky           |
 | Paris-Brest-Paris    | result | Completed Paris-Brest-Paris                                | Blue          |
 | Granite Anvil        | result | Completed the Granite Anvil 1200 km brevet                 | Fuchsia       |
