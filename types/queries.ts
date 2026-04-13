@@ -420,6 +420,9 @@ export type RegistrationForControlCards = Pick<Registration, 'id' | 'rider_id'> 
   riders: Pick<Rider, 'id' | 'first_name' | 'last_name'> | null
 }
 
+export type RegistrationForControlCardsWithToken = RegistrationForControlCards &
+  Pick<Registration, 'management_token'>
+
 /**
  * Rider detail for admin rider page
  */

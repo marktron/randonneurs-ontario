@@ -10,7 +10,7 @@ import {
   createTorontoDate,
 } from '@/lib/brmTimes'
 import type { ControlPoint, CardRider, OrganizerInfo, CardEvent } from '@/types/control-card'
-import type { EventForControlCards, RegistrationForControlCards } from '@/types/queries'
+import type { EventForControlCards, RegistrationForControlCardsWithToken } from '@/types/queries'
 
 interface ControlInput {
   name: string
@@ -39,13 +39,14 @@ async function getEventDetails(eventId: string): Promise<EventForControlCards | 
   return event as EventForControlCards | null
 }
 
-async function getRegistrations(eventId: string): Promise<RegistrationForControlCards[]> {
+async function getRegistrations(eventId: string): Promise<RegistrationForControlCardsWithToken[]> {
   const { data } = await getSupabaseAdmin()
     .from('registrations')
     .select(
       `
       id,
       rider_id,
+      management_token,
       riders (id, first_name, last_name)
     `
     )
@@ -53,7 +54,7 @@ async function getRegistrations(eventId: string): Promise<RegistrationForControl
     .eq('status', 'registered')
     .order('registered_at', { ascending: true })
 
-  return (data as RegistrationForControlCards[]) ?? []
+  return (data as RegistrationForControlCardsWithToken[]) ?? []
 }
 
 interface PrintPageProps {
@@ -150,12 +151,16 @@ export default async function PrintPage({ params, searchParams }: PrintPageProps
 
   // Format riders - if no registrations, create two blank entries
   // Also add any extra blank cards requested
+  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://randonneursontario.ca'
   const registeredRiders: CardRider[] = registrations
     .filter((r) => r.riders)
     .map((r) => ({
       id: r.riders!.id,
       firstName: r.riders!.first_name,
       lastName: r.riders!.last_name,
+      submissionUrl: r.management_token
+        ? `${baseUrl}/results/submit/${r.management_token}`
+        : undefined,
     }))
 
   // Create extra blank cards

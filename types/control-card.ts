@@ -18,6 +18,7 @@ export interface CardRider {
   id: string
   firstName: string
   lastName: string
+  submissionUrl?: string
 }
 
 /**

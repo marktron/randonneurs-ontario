@@ -557,21 +557,31 @@ function CardFront({
           <div style={{ borderBottom: '1px solid #000', height: '0.4in' }}></div>
         </div>
 
-        {rwgpsUrl && (
+        {(rwgpsUrl || rider?.submissionUrl) && (
           <div
             style={{
               marginTop: 'auto',
               display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
+              gap: '0.15in',
+              justifyContent: 'space-between',
             }}
           >
-            <div className="field-label" style={{ marginBottom: '0.08in' }}>
-              Scan for Route Map
-            </div>
-            <div>
-              <QRCodeSVG value={rwgpsUrl} size={86} />
-            </div>
+            {rwgpsUrl && (
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                <div className="field-label" style={{ marginBottom: '0.06in' }}>
+                  Route Map
+                </div>
+                <QRCodeSVG value={rwgpsUrl} size={rider?.submissionUrl ? 72 : 86} />
+              </div>
+            )}
+            {rider?.submissionUrl && (
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                <div className="field-label" style={{ marginBottom: '0.06in' }}>
+                  Submit Your Results
+                </div>
+                <QRCodeSVG value={rider.submissionUrl} size={rwgpsUrl ? 72 : 86} />
+              </div>
+            )}
           </div>
         )}
       </div>
