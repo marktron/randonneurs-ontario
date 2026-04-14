@@ -1,11 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-const { mockSend } = vi.hoisted(() => ({ mockSend: vi.fn() }))
+const { mockSendEmail } = vi.hoisted(() => ({ mockSendEmail: vi.fn() }))
 
-vi.mock('@/lib/email/sendgrid', () => ({
-  sendgrid: { send: mockSend },
+vi.mock('@/lib/email/ses', () => ({
+  sendEmail: mockSendEmail,
   fromEmail: 'no-reply@randonneurs.to',
-  suppressAdminEmails: false,
+  isEmailConfigured: () => true,
 }))
 
 vi.mock('@/lib/email/templates', () => ({
@@ -65,66 +65,30 @@ describe('sendRegistrationConfirmationEmail', () => {
     vi.clearAllMocks()
   })
 
-  it('sends email successfully on first attempt', async () => {
-    mockSend.mockResolvedValueOnce({})
+  it('sends email successfully', async () => {
+    mockSendEmail.mockResolvedValueOnce(undefined)
 
     const result = await sendRegistrationConfirmationEmail(registrationData)
 
     expect(result.success).toBe(true)
-    expect(mockSend).toHaveBeenCalledTimes(1)
-  })
-
-  it('retries on transient TLS socket disconnection error', async () => {
-    mockSend
-      .mockRejectedValueOnce(
-        new Error('Client network socket disconnected before secure TLS connection was established')
-      )
-      .mockResolvedValueOnce({})
-
-    const result = await sendRegistrationConfirmationEmail(registrationData)
-
-    expect(result.success).toBe(true)
-    expect(mockSend).toHaveBeenCalledTimes(2)
-  })
-
-  it('retries on ECONNRESET error', async () => {
-    mockSend.mockRejectedValueOnce(new Error('ECONNRESET')).mockResolvedValueOnce({})
-
-    const result = await sendRegistrationConfirmationEmail(registrationData)
-
-    expect(result.success).toBe(true)
-    expect(mockSend).toHaveBeenCalledTimes(2)
-  })
-
-  it('retries on ETIMEDOUT error', async () => {
-    mockSend.mockRejectedValueOnce(new Error('ETIMEDOUT')).mockResolvedValueOnce({})
-
-    const result = await sendRegistrationConfirmationEmail(registrationData)
-
-    expect(result.success).toBe(true)
-    expect(mockSend).toHaveBeenCalledTimes(2)
-  })
-
-  it('does not retry on non-transient errors', async () => {
-    mockSend.mockRejectedValueOnce(new Error('Unauthorized'))
-
-    const result = await sendRegistrationConfirmationEmail(registrationData)
-
-    expect(result.success).toBe(false)
-    expect(result.error).toBe('Unauthorized')
-    expect(mockSend).toHaveBeenCalledTimes(1)
-  })
-
-  it('fails after retry is exhausted', async () => {
-    const tlsError = new Error(
-      'Client network socket disconnected before secure TLS connection was established'
+    expect(mockSendEmail).toHaveBeenCalledTimes(1)
+    expect(mockSendEmail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: 'rider@test.com',
+        from: 'no-reply@randonneurs.to',
+        cc: 'vp@test.com',
+        replyTo: 'vp@test.com',
+      })
     )
-    mockSend.mockRejectedValueOnce(tlsError).mockRejectedValueOnce(tlsError)
+  })
+
+  it('returns error on failure', async () => {
+    mockSendEmail.mockRejectedValueOnce(new Error('SES error'))
 
     const result = await sendRegistrationConfirmationEmail(registrationData)
 
     expect(result.success).toBe(false)
-    expect(mockSend).toHaveBeenCalledTimes(2)
+    expect(result.error).toBe('SES error')
   })
 })
 
@@ -133,12 +97,27 @@ describe('sendCancellationConfirmationEmail', () => {
     vi.clearAllMocks()
   })
 
-  it('retries on transient error', async () => {
-    mockSend.mockRejectedValueOnce(new Error('ECONNRESET')).mockResolvedValueOnce({})
+  it('sends email successfully', async () => {
+    mockSendEmail.mockResolvedValueOnce(undefined)
 
     const result = await sendCancellationConfirmationEmail(cancellationData)
 
     expect(result.success).toBe(true)
-    expect(mockSend).toHaveBeenCalledTimes(2)
+    expect(mockSendEmail).toHaveBeenCalledTimes(1)
+    expect(mockSendEmail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: 'rider@test.com',
+        cc: 'vp@test.com',
+      })
+    )
+  })
+
+  it('returns error on failure', async () => {
+    mockSendEmail.mockRejectedValueOnce(new Error('SES error'))
+
+    const result = await sendCancellationConfirmationEmail(cancellationData)
+
+    expect(result.success).toBe(false)
+    expect(result.error).toBe('SES error')
   })
 })

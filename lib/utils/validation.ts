@@ -5,7 +5,7 @@
 /**
  * Validate that a string looks like a plausible email address.
  * Not exhaustive — just catches obviously malformed input that would
- * bounce at SendGrid. Trims and lowercases before checking.
+ * bounce at SES. Trims and lowercases before checking.
  */
 export function validateEmail(email: string): { valid: boolean; normalized: string } {
   const normalized = email.toLowerCase().trim()

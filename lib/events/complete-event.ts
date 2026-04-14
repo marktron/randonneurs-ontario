@@ -1,5 +1,5 @@
 import { getSupabaseAdmin } from '@/lib/supabase-server'
-import { sendgrid, fromEmail, suppressAdminEmails } from '@/lib/email/sendgrid'
+import { sendEmail, fromEmail, isEmailConfigured } from '@/lib/email/ses'
 import { buildResultSubmissionRequestEmail } from '@/lib/email/templates'
 import { format } from 'date-fns'
 import { parseLocalDate } from '@/lib/utils'
@@ -125,11 +125,6 @@ export async function createPendingResultsAndSendEmails(
   }
 
   // Send emails to riders with their submission links
-  if (suppressAdminEmails) {
-    console.warn('SUPPRESS_ADMIN_EMAILS is set, skipping rider result submission emails')
-    return { resultsCreated: created.length, emailsSent: 0, errors }
-  }
-
   const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://randonneursontario.ca'
 
   for (const result of created) {
@@ -148,21 +143,18 @@ export async function createPendingResultsAndSendEmails(
     const { subject, text, html } = buildResultSubmissionRequestEmail(emailData)
 
     try {
-      if (process.env.SENDGRID_API_KEY) {
-        await sendgrid.send({
+      if (isEmailConfigured()) {
+        await sendEmail({
           to: result.riderEmail,
           from: fromEmail,
           subject,
           text,
           html,
-          trackingSettings: {
-            clickTracking: { enable: false },
-          },
         })
         emailsSent++
         console.log(`Sent result submission email for event ${event.name}`)
       } else {
-        console.warn('SendGrid not configured, skipping result submission email')
+        console.warn('AWS SES not configured, skipping result submission email')
       }
     } catch (emailError) {
       const errorMessage = emailError instanceof Error ? emailError.message : 'Unknown error'

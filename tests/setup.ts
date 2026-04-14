@@ -47,4 +47,6 @@ vi.mock('next/navigation', () => ({
 process.env.NEXT_PUBLIC_SUPABASE_URL = 'http://localhost:54321'
 process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = 'test-anon-key'
 process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-service-role-key'
-process.env.SENDGRID_API_KEY = 'test-sendgrid-key'
+process.env.AWS_ACCESS_KEY_ID = 'test-aws-key'
+process.env.AWS_SECRET_ACCESS_KEY = 'test-aws-secret'
+process.env.AWS_REGION = 'us-east-1'

@@ -3,7 +3,7 @@
 import { revalidatePath, revalidateTag } from 'next/cache'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { requireAdmin } from '@/lib/auth/get-admin'
-import { sendgrid, fromEmail, suppressAdminEmails } from '@/lib/email/sendgrid'
+import { sendEmail, fromEmail, isEmailConfigured } from '@/lib/email/ses'
 import { parseLocalDate, createSlug } from '@/lib/utils'
 import { getUrlSlugFromDbSlug } from '@/lib/chapter-config'
 import { createPendingResultsAndSendEmails } from '@/lib/events/complete-event'
@@ -557,21 +557,19 @@ This email was sent from the Randonneurs Ontario admin system.
       }
 
       // Send email
-      if (!process.env.SENDGRID_API_KEY) {
-        console.warn('SendGrid API key not configured, skipping email')
+      if (!isEmailConfigured()) {
+        console.warn('AWS SES not configured, skipping email')
       } else {
         try {
-          const toAddress = suppressAdminEmails ? admin.email : 'leissp@mac.com' // NOTE: change to vp-admin@randonneursontario.ca when someone other than Peter handles the admin emails
-          // Deduplicate recipients to avoid SendGrid 400
-          const ccAddresses = suppressAdminEmails
-            ? undefined
-            : [
-                ...new Set(
-                  [admin.email, 'vp-toronto@randonneursontario.ca'].map((e) => e.toLowerCase())
-                ),
-              ].filter((email) => email !== toAddress.toLowerCase())
+          const toAddress = 'leissp@mac.com' // NOTE: change to vp-admin@randonneursontario.ca when someone other than Peter handles the admin emails
+          // Deduplicate recipients
+          const ccAddresses = [
+            ...new Set(
+              [admin.email, 'vp-toronto@randonneursontario.ca'].map((e) => e.toLowerCase())
+            ),
+          ].filter((email) => email !== toAddress.toLowerCase())
 
-          await sendgrid.send({
+          await sendEmail({
             to: toAddress,
             cc: ccAddresses && ccAddresses.length > 0 ? ccAddresses : undefined,
             from: fromEmail,
@@ -579,17 +577,9 @@ This email was sent from the Randonneurs Ontario admin system.
             subject,
             text: emailBody,
             attachments: [attachment],
-            trackingSettings: {
-              clickTracking: { enable: false },
-            },
           })
         } catch (emailError) {
-          const errBody = (emailError as { response?: { body?: unknown } })?.response?.body
-          console.error(
-            'Failed to send results email:',
-            emailError,
-            errBody ? JSON.stringify(errBody) : ''
-          )
+          console.error('Failed to send results email:', emailError)
           return { success: false, error: 'Failed to send email. Please try again.' }
         }
       }

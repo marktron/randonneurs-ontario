@@ -1,4 +1,4 @@
-import { sendgrid, fromEmail, suppressAdminEmails } from './sendgrid'
+import { sendEmail, fromEmail, isEmailConfigured } from './ses'
 import {
   buildRegistrationConfirmationEmail,
   buildCancellationConfirmationEmail,
@@ -13,33 +13,11 @@ export interface SendEmailResult {
   error?: string
 }
 
-function isTransientError(error: unknown): boolean {
-  if (!(error instanceof Error)) return false
-  return (
-    error.message.includes('socket disconnected') ||
-    error.message.includes('ECONNRESET') ||
-    error.message.includes('ETIMEDOUT')
-  )
-}
-
-async function withRetry<T>(fn: () => Promise<T>, retries = 1, delayMs = 1000): Promise<T> {
-  try {
-    return await fn()
-  } catch (error) {
-    if (retries > 0 && isTransientError(error)) {
-      await new Promise((r) => setTimeout(r, delayMs))
-      return withRetry(fn, retries - 1, delayMs)
-    }
-    throw error
-  }
-}
-
 export async function sendRegistrationConfirmationEmail(
   data: RegistrationEmailData
 ): Promise<SendEmailResult> {
-  // Check if SendGrid is configured
-  if (!process.env.SENDGRID_API_KEY) {
-    console.warn('SendGrid API key not configured, skipping email')
+  if (!isEmailConfigured()) {
+    console.warn('AWS SES not configured, skipping email')
     return { success: true }
   }
 
@@ -47,20 +25,15 @@ export async function sendRegistrationConfirmationEmail(
   const vpEmail = getVpEmail(data.chapterSlug)
 
   try {
-    await withRetry(() =>
-      sendgrid.send({
-        to: data.registrantEmail,
-        from: fromEmail,
-        replyTo: suppressAdminEmails ? undefined : vpEmail || undefined,
-        cc: suppressAdminEmails ? undefined : vpEmail || undefined,
-        subject,
-        text,
-        html,
-        trackingSettings: {
-          clickTracking: { enable: false },
-        },
-      })
-    )
+    await sendEmail({
+      to: data.registrantEmail,
+      from: fromEmail,
+      replyTo: vpEmail || undefined,
+      cc: vpEmail || undefined,
+      subject,
+      text,
+      html,
+    })
 
     console.log('Registration email sent successfully')
     return { success: true }
@@ -78,8 +51,8 @@ export async function sendRegistrationConfirmationEmail(
 export async function sendCancellationConfirmationEmail(
   data: CancellationEmailData
 ): Promise<SendEmailResult> {
-  if (!process.env.SENDGRID_API_KEY) {
-    console.warn('SendGrid API key not configured, skipping email')
+  if (!isEmailConfigured()) {
+    console.warn('AWS SES not configured, skipping email')
     return { success: true }
   }
 
@@ -87,20 +60,15 @@ export async function sendCancellationConfirmationEmail(
   const vpEmail = getVpEmail(data.chapterSlug)
 
   try {
-    await withRetry(() =>
-      sendgrid.send({
-        to: data.registrantEmail,
-        from: fromEmail,
-        replyTo: suppressAdminEmails ? undefined : vpEmail || undefined,
-        cc: suppressAdminEmails ? undefined : vpEmail || undefined,
-        subject,
-        text,
-        html,
-        trackingSettings: {
-          clickTracking: { enable: false },
-        },
-      })
-    )
+    await sendEmail({
+      to: data.registrantEmail,
+      from: fromEmail,
+      replyTo: vpEmail || undefined,
+      cc: vpEmail || undefined,
+      subject,
+      text,
+      html,
+    })
 
     console.log('Cancellation email sent successfully')
     return { success: true }
