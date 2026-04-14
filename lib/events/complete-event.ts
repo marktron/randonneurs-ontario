@@ -1,5 +1,5 @@
 import { getSupabaseAdmin } from '@/lib/supabase-server'
-import { sendEmail, fromEmail, suppressAdminEmails, isEmailConfigured } from '@/lib/email/ses'
+import { sendEmail, fromEmail, isEmailConfigured } from '@/lib/email/ses'
 import { buildResultSubmissionRequestEmail } from '@/lib/email/templates'
 import { format } from 'date-fns'
 import { parseLocalDate } from '@/lib/utils'
@@ -125,11 +125,6 @@ export async function createPendingResultsAndSendEmails(
   }
 
   // Send emails to riders with their submission links
-  if (suppressAdminEmails) {
-    console.warn('SUPPRESS_ADMIN_EMAILS is set, skipping rider result submission emails')
-    return { resultsCreated: created.length, emailsSent: 0, errors }
-  }
-
   const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://randonneursontario.ca'
 
   for (const result of created) {

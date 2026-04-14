@@ -121,7 +121,6 @@ vi.mock('@/lib/events/complete-event', () => ({
 vi.mock('@/lib/email/ses', () => ({
   sendEmail: vi.fn().mockResolvedValue(undefined),
   fromEmail: 'no-reply@randonneurs.to',
-  suppressAdminEmails: false,
   isEmailConfigured: vi.fn().mockReturnValue(true),
 }))
 

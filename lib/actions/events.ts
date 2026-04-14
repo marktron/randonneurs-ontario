@@ -3,7 +3,7 @@
 import { revalidatePath, revalidateTag } from 'next/cache'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { requireAdmin } from '@/lib/auth/get-admin'
-import { sendEmail, fromEmail, suppressAdminEmails, isEmailConfigured } from '@/lib/email/ses'
+import { sendEmail, fromEmail, isEmailConfigured } from '@/lib/email/ses'
 import { parseLocalDate, createSlug } from '@/lib/utils'
 import { getUrlSlugFromDbSlug } from '@/lib/chapter-config'
 import { createPendingResultsAndSendEmails } from '@/lib/events/complete-event'
@@ -561,15 +561,13 @@ This email was sent from the Randonneurs Ontario admin system.
         console.warn('AWS SES not configured, skipping email')
       } else {
         try {
-          const toAddress = suppressAdminEmails ? admin.email : 'vp-admin@randonneursontario.ca'
+          const toAddress = 'vp-admin@randonneursontario.ca'
           // Deduplicate recipients
-          const ccAddresses = suppressAdminEmails
-            ? undefined
-            : [
-                ...new Set(
-                  [admin.email, 'vp-toronto@randonneursontario.ca'].map((e) => e.toLowerCase())
-                ),
-              ].filter((email) => email !== toAddress.toLowerCase())
+          const ccAddresses = [
+            ...new Set(
+              [admin.email, 'vp-toronto@randonneursontario.ca'].map((e) => e.toLowerCase())
+            ),
+          ].filter((email) => email !== toAddress.toLowerCase())
 
           await sendEmail({
             to: toAddress,

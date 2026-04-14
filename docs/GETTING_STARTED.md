@@ -52,7 +52,7 @@ For local development, the environment variables will be populated after startin
 | `AWS_REGION`                    | AWS region for SES (default: `us-east-1`)             | Set in `.env.local`                                     |
 | `SES_FROM_EMAIL`                | Verified sender address for SES                       | Set in `.env.local`                                     |
 | `SES_CONFIGURATION_SET`         | SES configuration set for monitoring (optional)       | Set in `.env.local`                                     |
-| `SUPPRESS_ADMIN_EMAILS`         | Set to `true` to prevent emails to admins/VPs in dev  | Add to `.env.local`                                     |
+| `SES_OVERRIDE_RECIPIENT`        | Redirect all emails to this address (dev only)        | Set in `.env.local`                                     |
 | `NEXT_PUBLIC_CURRENT_SEASON`    | Current riding season year                            | Set to current year (e.g., `2025`)                      |
 | `CRON_SECRET`                   | Secret for authenticating cron jobs (production only) | Generate a random string (e.g., `openssl rand -hex 32`) |
 | `REVALIDATE_SECRET`             | Secret for on-demand cache revalidation (production)  | Generate a random string (e.g., `openssl rand -hex 32`) |

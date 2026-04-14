@@ -6,11 +6,6 @@ const client = new SESv2Client({
 })
 
 export const fromEmail = process.env.SES_FROM_EMAIL || 'no-reply@randonneurs.to'
-export const suppressAdminEmails = process.env.SUPPRESS_ADMIN_EMAILS === 'true'
-
-if (suppressAdminEmails) {
-  console.warn('SUPPRESS_ADMIN_EMAILS is enabled — emails will only be sent to end users')
-}
 
 export function isEmailConfigured(): boolean {
   return !!process.env.AWS_ACCESS_KEY_ID

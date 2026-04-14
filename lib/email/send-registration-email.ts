@@ -1,4 +1,4 @@
-import { sendEmail, fromEmail, suppressAdminEmails, isEmailConfigured } from './ses'
+import { sendEmail, fromEmail, isEmailConfigured } from './ses'
 import {
   buildRegistrationConfirmationEmail,
   buildCancellationConfirmationEmail,
@@ -28,8 +28,8 @@ export async function sendRegistrationConfirmationEmail(
     await sendEmail({
       to: data.registrantEmail,
       from: fromEmail,
-      replyTo: suppressAdminEmails ? undefined : vpEmail || undefined,
-      cc: suppressAdminEmails ? undefined : vpEmail || undefined,
+      replyTo: vpEmail || undefined,
+      cc: vpEmail || undefined,
       subject,
       text,
       html,
@@ -63,8 +63,8 @@ export async function sendCancellationConfirmationEmail(
     await sendEmail({
       to: data.registrantEmail,
       from: fromEmail,
-      replyTo: suppressAdminEmails ? undefined : vpEmail || undefined,
-      cc: suppressAdminEmails ? undefined : vpEmail || undefined,
+      replyTo: vpEmail || undefined,
+      cc: vpEmail || undefined,
       subject,
       text,
       html,
