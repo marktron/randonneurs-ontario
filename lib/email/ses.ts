@@ -56,6 +56,7 @@ export async function sendEmail(options: SendEmailOptions): Promise<void> {
 
   await client.send(
     new SendEmailCommand({
+      ConfigurationSetName: process.env.SES_CONFIGURATION_SET || undefined,
       Content: {
         Raw: { Data: message },
       },
