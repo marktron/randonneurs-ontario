@@ -289,9 +289,9 @@ describe('submitEventResults', () => {
     // Mock chapter query for revalidation
     mockModule.__mockEventFound({ slug: 'toronto' })
 
-    process.env.SENDGRID_API_KEY = 'test-key'
+    process.env.AWS_ACCESS_KEY_ID = 'test-key'
     const result = await submitEventResults('test-event-id')
-    delete process.env.SENDGRID_API_KEY
+    delete process.env.AWS_ACCESS_KEY_ID
 
     expect(result.success).toBe(true)
 
@@ -340,9 +340,9 @@ describe('submitEventResults', () => {
     // Mock chapter query for revalidation
     mockModule.__mockEventFound({ slug: 'toronto' })
 
-    process.env.SENDGRID_API_KEY = 'test-key'
+    process.env.AWS_ACCESS_KEY_ID = 'test-key'
     const result = await submitEventResults('test-event-id')
-    delete process.env.SENDGRID_API_KEY
+    delete process.env.AWS_ACCESS_KEY_ID
 
     expect(result.success).toBe(true)
 
@@ -382,9 +382,9 @@ describe('submitEventResults', () => {
     // Mock chapter query for revalidation
     mockModule.__mockEventFound({ slug: 'toronto' })
 
-    process.env.SENDGRID_API_KEY = 'test-key'
+    process.env.AWS_ACCESS_KEY_ID = 'test-key'
     const result = await submitEventResults('test-event-id')
-    delete process.env.SENDGRID_API_KEY
+    delete process.env.AWS_ACCESS_KEY_ID
 
     expect(result.success).toBe(true)
 
@@ -429,9 +429,9 @@ describe('submitEventResults', () => {
     // Mock chapter query for revalidation
     mockModule.__mockEventFound({ slug: 'toronto' })
 
-    process.env.SENDGRID_API_KEY = 'test-key'
+    process.env.AWS_ACCESS_KEY_ID = 'test-key'
     const result = await submitEventResults('test-event-id')
-    delete process.env.SENDGRID_API_KEY
+    delete process.env.AWS_ACCESS_KEY_ID
 
     expect(result.success).toBe(true)
 

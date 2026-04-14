@@ -3,6 +3,7 @@
 The official website for [Randonneurs Ontario](https://randonneursontario.ca), a volunteer-run organization dedicated to **randonneuring** - non-competitive, long-distance cycling in Ontario, Canada.
 
 This site serves as the central hub for:
+
 - **Event calendars** for 4 regional chapters (Toronto, Ottawa, Simcoe-Muskoka, Huron)
 - **Route information** with RideWithGPS integration
 - **Event registration** for scheduled and permanent rides
@@ -13,15 +14,15 @@ This site serves as the central hub for:
 
 New to the project? Start here:
 
-| Document | Description |
-|----------|-------------|
-| **[Getting Started](docs/GETTING_STARTED.md)** | Step-by-step setup guide for new developers |
-| **[Architecture](docs/ARCHITECTURE.md)** | High-level system overview and key concepts |
-| **[Data Layer](docs/DATA_LAYER.md)** | How data flows through the application |
-| **[Contributing](docs/CONTRIBUTING.md)** | Coding standards and contribution guidelines |
-| [Database Schema](docs/database-schema-plan.md) | Database design and ERD |
-| [Database Setup](docs/database-setup.md) | Local database setup details |
-| [Style Guide](docs/style_guide.md) | UI/UX design guidelines |
+| Document                                        | Description                                  |
+| ----------------------------------------------- | -------------------------------------------- |
+| **[Getting Started](docs/GETTING_STARTED.md)**  | Step-by-step setup guide for new developers  |
+| **[Architecture](docs/ARCHITECTURE.md)**        | High-level system overview and key concepts  |
+| **[Data Layer](docs/DATA_LAYER.md)**            | How data flows through the application       |
+| **[Contributing](docs/CONTRIBUTING.md)**        | Coding standards and contribution guidelines |
+| [Database Schema](docs/database-schema-plan.md) | Database design and ERD                      |
+| [Database Setup](docs/database-setup.md)        | Local database setup details                 |
+| [Style Guide](docs/style_guide.md)              | UI/UX design guidelines                      |
 
 ## Tech Stack
 
@@ -30,7 +31,7 @@ New to the project? Start here:
 - **Database**: Supabase (PostgreSQL)
 - **Styling**: Tailwind CSS 4
 - **UI Components**: shadcn/ui (Radix UI primitives)
-- **Email**: SendGrid
+- **Email**: Amazon SES
 - **Maps**: RideWithGPS integration
 
 ## Prerequisites
@@ -105,6 +106,7 @@ types/                  # TypeScript type definitions
 ### Chapters
 
 Randonneurs Ontario is organized into regional chapters:
+
 - **Toronto** - GTA, Niagara, surrounding regions
 - **Ottawa** - Eastern Ontario, Ottawa Valley
 - **Simcoe-Muskoka** - Georgian Bay, Kawarthas, Muskoka
@@ -115,6 +117,7 @@ Each chapter organizes its own events and maintains routes.
 ### Events
 
 Events have types:
+
 - **Brevet** - Timed long-distance rides (200km+) with ACP homologation
 - **Populaire** - Shorter introductory rides (typically 100-150km)
 - **Fleche** - Team 24-hour rides
@@ -131,6 +134,7 @@ Historical results are tracked per rider with finish times and statuses (finishe
 ## Database
 
 The database schema includes:
+
 - `chapters` - Regional chapter information
 - `routes` - Route definitions with RWGPS links
 - `events` - Scheduled events linked to routes
@@ -183,17 +187,20 @@ npx supabase migration new   # Create new migration
 ## Learn More
 
 ### Project Documentation
+
 - [Architecture Overview](docs/ARCHITECTURE.md) - System design and key concepts
 - [Data Layer Guide](docs/DATA_LAYER.md) - Database patterns and queries
 - [Contributing Guide](docs/CONTRIBUTING.md) - How to contribute
 
 ### External Resources
+
 - [Next.js Documentation](https://nextjs.org/docs) - Framework reference
 - [Supabase Documentation](https://supabase.com/docs) - Database and auth
 - [shadcn/ui Documentation](https://ui.shadcn.com/) - UI components
 - [Tailwind CSS](https://tailwindcss.com/docs) - Styling reference
 
 ### About Randonneuring
+
 - [Randonneurs Ontario](https://randonneursontario.ca) - Club website
 - [Audax Club Parisien](https://www.audax-club-parisien.com/) - International organization
 - [Randonneurs USA](https://rusa.org/) - US randonneuring
