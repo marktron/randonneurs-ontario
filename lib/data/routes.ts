@@ -33,6 +33,7 @@ export interface RouteDetail {
   distanceKm: number | null
   description: string | null
   rwgpsId: string | null
+  cueSheetUrl: string | null
   chapterSlug: string
   chapterName: string
 }
@@ -56,7 +57,7 @@ const getRouteBySlugInner = cache(async (slug: string): Promise<RouteDetail | nu
     .from('routes')
     .select(
       `
-      slug, name, distance_km, description, rwgps_id,
+      slug, name, distance_km, description, rwgps_id, cue_sheet_url,
       chapters (slug, name)
     `
     )
@@ -73,6 +74,7 @@ const getRouteBySlugInner = cache(async (slug: string): Promise<RouteDetail | nu
     distanceKm: typedRoute.distance_km,
     description: typedRoute.description,
     rwgpsId: typedRoute.rwgps_id,
+    cueSheetUrl: typedRoute.cue_sheet_url ?? null,
     chapterSlug: chapterDbSlug ? getUrlSlugFromDbSlug(chapterDbSlug) : '',
     chapterName: typedRoute.chapters?.name ?? '',
   }
@@ -231,13 +233,13 @@ const getRoutesByChapterInner = cache(async (urlSlug: string): Promise<RouteColl
   const dbSlug = getDbSlug(urlSlug)
   if (!dbSlug) return []
 
-  // Fetch routes for this chapter using a join, that have rwgps_id and are active
+  // Fetch active routes for this chapter that have a map or cue sheet
   const { data: routes, error: routesError } = await getSupabase()
     .from('routes')
-    .select('slug, name, distance_km, rwgps_id, chapters!inner(slug)')
+    .select('slug, name, distance_km, rwgps_id, cue_sheet_url, chapters!inner(slug)')
     .eq('chapters.slug', dbSlug)
     .eq('is_active', true)
-    .not('rwgps_id', 'is', null)
+    .or('rwgps_id.not.is.null,cue_sheet_url.not.is.null')
 
   if (routesError) {
     console.error('Error fetching routes:', routesError)
@@ -248,7 +250,7 @@ const getRoutesByChapterInner = cache(async (urlSlug: string): Promise<RouteColl
   const groupedRoutes: Record<string, RouteBasic[]> = {}
 
   for (const route of routes as RouteBasic[]) {
-    if (!route.slug || !route.distance_km || !route.rwgps_id) continue
+    if (!route.slug || !route.distance_km) continue
 
     const category = getCategoryForDistance(route.distance_km)
     if (!groupedRoutes[category]) {
@@ -274,7 +276,8 @@ const getRoutesByChapterInner = cache(async (urlSlug: string): Promise<RouteColl
           slug: route.slug!,
           name: route.name,
           distance: route.distance_km!.toString(),
-          rwgpsUrl: buildRwgpsUrl(route.rwgps_id!),
+          rwgpsUrl: route.rwgps_id ? buildRwgpsUrl(route.rwgps_id) : null,
+          cueSheetUrl: route.cue_sheet_url ?? null,
         })),
       })
     }

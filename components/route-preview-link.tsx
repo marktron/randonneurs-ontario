@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { ArrowUpRight } from 'lucide-react'
+import { ArrowUpRight, FileText } from 'lucide-react'
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card'
 import { Dialog, DialogContent, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { VisuallyHidden } from '@radix-ui/react-visually-hidden'
@@ -11,7 +11,8 @@ interface RoutePreviewLinkProps {
   name: string
   distance: string
   detailHref: string
-  rwgpsUrl: string
+  rwgpsUrl: string | null
+  cueSheetUrl?: string | null
 }
 
 function extractRwgpsRouteId(url: string): string | null {
@@ -19,8 +20,14 @@ function extractRwgpsRouteId(url: string): string | null {
   return match ? match[1] : null
 }
 
-export function RoutePreviewLink({ name, distance, detailHref, rwgpsUrl }: RoutePreviewLinkProps) {
-  const rwgpsRouteId = extractRwgpsRouteId(rwgpsUrl)
+export function RoutePreviewLink({
+  name,
+  distance,
+  detailHref,
+  rwgpsUrl,
+  cueSheetUrl,
+}: RoutePreviewLinkProps) {
+  const rwgpsRouteId = rwgpsUrl ? extractRwgpsRouteId(rwgpsUrl) : null
   const [isTouchDevice, setIsTouchDevice] = useState(false)
 
   useEffect(() => {
@@ -41,13 +48,13 @@ export function RoutePreviewLink({ name, distance, detailHref, rwgpsUrl }: Route
 
   const mapChipInner = (
     <>
-      <span className="text-xs font-medium uppercase tracking-[0.18em]">Map</span>
+      <span className="text-xs font-medium uppercase">Map</span>
       <ArrowUpRight className="h-3 w-3" />
     </>
   )
 
   // Plain external link — used as fallback and as the rendered trigger
-  const plainRwgpsLink = (
+  const plainRwgpsLink = rwgpsUrl ? (
     <a
       href={rwgpsUrl}
       target="_blank"
@@ -57,11 +64,11 @@ export function RoutePreviewLink({ name, distance, detailHref, rwgpsUrl }: Route
     >
       {mapChipInner}
     </a>
-  )
+  ) : null
 
-  let secondary: React.ReactNode = plainRwgpsLink
+  let mapChip: React.ReactNode = plainRwgpsLink
 
-  if (rwgpsRouteId) {
+  if (rwgpsRouteId && rwgpsUrl) {
     const previewIframe = (
       <iframe
         src={`https://ridewithgps.com/embeds?type=route&id=${rwgpsRouteId}&sampleGraph=false&metricUnits=true&hideSurface=true`}
@@ -72,7 +79,7 @@ export function RoutePreviewLink({ name, distance, detailHref, rwgpsUrl }: Route
     )
 
     if (isTouchDevice) {
-      secondary = (
+      mapChip = (
         <Dialog>
           <DialogTrigger asChild>
             <button type="button" aria-label={`Preview ${name} route`} className={mapChipClassName}>
@@ -100,7 +107,7 @@ export function RoutePreviewLink({ name, distance, detailHref, rwgpsUrl }: Route
         </Dialog>
       )
     } else {
-      secondary = (
+      mapChip = (
         <HoverCard openDelay={200} closeDelay={100}>
           <HoverCardTrigger asChild>{plainRwgpsLink}</HoverCardTrigger>
           <HoverCardContent
@@ -115,10 +122,26 @@ export function RoutePreviewLink({ name, distance, detailHref, rwgpsUrl }: Route
     }
   }
 
+  const cueSheetChip = cueSheetUrl ? (
+    <a
+      href={cueSheetUrl}
+      target="_blank"
+      rel="noopener noreferrer"
+      aria-label={`${name} cue sheet`}
+      className={mapChipClassName}
+    >
+      <span className="text-xs font-medium uppercase">PDF</span>
+      <FileText className="h-3 w-3" />
+    </a>
+  ) : null
+
   return (
     <div className="flex items-center justify-between gap-4 border-b border-border/50 py-2">
       {primaryLink}
-      {secondary}
+      <div className="flex shrink-0 items-center gap-3">
+        {cueSheetChip}
+        {mapChip}
+      </div>
     </div>
   )
 }

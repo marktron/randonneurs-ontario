@@ -50,6 +50,16 @@ A placeholder is shown during upload, and replaced with the final markdown on su
 
 The `ImageUpload` component (`components/admin/image-upload.tsx`) provides a standalone drag-and-drop zone for uploading hero images on events and pages. This only accepts image files. The `HeaderImagePicker` component (`components/admin/header-image-picker.tsx`) is similar but tuned for the wide 3:1 page header aspect ratio.
 
+### Cue Sheet Upload
+
+The `CueSheetField` component (`components/admin/cue-sheet-field.tsx`) is used on the route admin form. It combines a URL text input with a PDF upload button:
+
+- Admins can paste an external URL directly, or click "Upload PDF" to upload a file to the `cue-sheets/` folder in the `images` bucket.
+- The uploaded file's public URL is stored in the route's `cue_sheet_url` column — no separate storage path column needed.
+- Only PDF files are accepted, up to 10 MB.
+- When a URL is set, the field shows a preview link with view and remove actions.
+- Uses the same signed-URL flow as `ImageUpload` (`createImageUploadUrl` → browser upload → `confirmImageUpload`).
+
 ## Error Handling
 
 - Client-side validation catches invalid types and oversized files before upload

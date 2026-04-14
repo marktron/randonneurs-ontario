@@ -137,12 +137,17 @@ export async function getAvailableYears(): Promise<number[]>
 ### lib/data/routes.ts
 
 ```typescript
-// Get routes for a chapter
+// Get routes for a chapter (active routes with a map or cue sheet)
 export async function getRoutesByChapter(chapter: string)
+
+// Get a single route's details (includes cueSheetUrl)
+export async function getRouteBySlug(slug: string)
 
 // Get permanent routes
 export async function getPermanentRoutes()
 ```
+
+`getRoutesByChapter` returns routes that have either an RWGPS map link or a cue sheet URL (or both). `getRouteBySlug` returns a `RouteDetail` which includes `cueSheetUrl` for display on the route detail page.
 
 ### lib/data/riders.ts
 

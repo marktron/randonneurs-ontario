@@ -22,7 +22,7 @@ const ALLOWED_TYPES = [
 // Folder names allowed in storage paths. Keeps confirmImageUpload from being
 // used to claim arbitrary paths inside the bucket. Add to this list as new
 // upload locations appear.
-const ALLOWED_FOLDERS = ['general', 'events', 'pages', 'headers']
+const ALLOWED_FOLDERS = ['general', 'events', 'pages', 'headers', 'cue-sheets']
 
 export interface UploadedFile {
   id: string

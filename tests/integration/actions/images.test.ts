@@ -309,6 +309,32 @@ describe('createImageUploadUrl', () => {
       expect(mockModule.__createSignedUploadUrlMock).toHaveBeenCalledTimes(1)
     })
 
+    it('accepts the cue-sheets folder', async () => {
+      const result = await createImageUploadUrl({
+        filename: 'route-cuesheet.pdf',
+        contentType: 'application/pdf',
+        sizeBytes: 2000,
+        folder: 'cue-sheets',
+      })
+
+      expect(result.success).toBe(true)
+      if (result.success && result.data) {
+        expect(result.data.storagePath).toMatch(/^cue-sheets\//)
+      }
+    })
+
+    it('rejects an invalid folder name', async () => {
+      const result = await createImageUploadUrl({
+        filename: 'test.jpg',
+        contentType: 'image/jpeg',
+        sizeBytes: 1000,
+        folder: 'not-a-folder',
+      })
+
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('Invalid folder')
+    })
+
     it('defaults to general folder when not specified', async () => {
       const result = await createImageUploadUrl({
         filename: 'test.jpg',

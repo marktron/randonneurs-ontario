@@ -126,6 +126,7 @@ describe('getRouteBySlug', () => {
       distance_km: 200,
       description: 'Test route',
       rwgps_id: '12345678',
+      cue_sheet_url: 'https://example.com/cue.pdf',
       chapters: {
         slug: 'toronto',
         name: 'Toronto',
@@ -141,6 +142,7 @@ describe('getRouteBySlug', () => {
       expect(result.name).toBe('Toronto 200')
       expect(result.distanceKm).toBe(200)
       expect(result.rwgpsId).toBe('12345678')
+      expect(result.cueSheetUrl).toBe('https://example.com/cue.pdf')
     }
   })
 })
@@ -159,8 +161,20 @@ describe('getRoutesByChapter', () => {
 
   it('groups routes by distance category', async () => {
     const mockRoutes = [
-      { slug: 'route-200', name: 'Route 200', distance_km: 200, rwgps_id: '123' },
-      { slug: 'route-300', name: 'Route 300', distance_km: 300, rwgps_id: '456' },
+      {
+        slug: 'route-200',
+        name: 'Route 200',
+        distance_km: 200,
+        rwgps_id: '123',
+        cue_sheet_url: null,
+      },
+      {
+        slug: 'route-300',
+        name: 'Route 300',
+        distance_km: 300,
+        rwgps_id: '456',
+        cue_sheet_url: 'https://example.com/cue.pdf',
+      },
     ]
 
     mockModule.__mockRoutesFound(mockRoutes)

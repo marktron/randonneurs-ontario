@@ -6,7 +6,8 @@ export interface Route {
   slug: string
   name: string
   distance: string
-  rwgpsUrl: string
+  rwgpsUrl: string | null
+  cueSheetUrl: string | null
 }
 
 export interface RouteCollection {
@@ -47,6 +48,7 @@ export function RoutesPage({
                       distance={route.distance}
                       detailHref={`/routes/${chapterSlug}/${route.slug}`}
                       rwgpsUrl={route.rwgpsUrl}
+                      cueSheetUrl={route.cueSheetUrl}
                     />
                   </li>
                 ))}

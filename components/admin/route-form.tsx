@@ -17,6 +17,7 @@ import {
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { AlertCircle, Loader2, ExternalLink } from 'lucide-react'
+import { CueSheetField } from '@/components/admin/cue-sheet-field'
 import { createRoute, updateRoute } from '@/lib/actions/routes'
 import { createSlug } from '@/lib/utils'
 import { toast } from 'sonner'
@@ -226,16 +227,7 @@ export function RouteForm({ chapters, route, mode }: RouteFormProps) {
             )}
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="cueSheet">Cue Sheet URL</Label>
-            <Input
-              id="cueSheet"
-              value={cueSheetUrl}
-              onChange={(e) => setCueSheetUrl(e.target.value)}
-              placeholder="https://example.com/cuesheet.pdf"
-              disabled={isPending}
-            />
-          </div>
+          <CueSheetField value={cueSheetUrl} onChange={setCueSheetUrl} disabled={isPending} />
 
           <div className="space-y-2">
             <Label htmlFor="description">Description</Label>
