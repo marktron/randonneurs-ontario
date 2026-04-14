@@ -50,14 +50,20 @@ const MAX_RETRIES = 2
 const RETRY_DELAY_MS = 1000
 
 export async function sendEmail(options: SendEmailOptions): Promise<void> {
-  const ccList = options.cc ? (Array.isArray(options.cc) ? options.cc : [options.cc]) : undefined
+  const overrideRecipient = process.env.SES_OVERRIDE_RECIPIENT
+
+  const to = overrideRecipient || options.to
+  const cc = overrideRecipient ? undefined : options.cc
+  const subject = overrideRecipient ? `[→ ${options.to}] ${options.subject}` : options.subject
+
+  const ccList = cc ? (Array.isArray(cc) ? cc : [cc]) : undefined
 
   const mail = new MailComposer({
     from: options.from,
-    to: options.to,
+    to,
     cc: ccList,
     replyTo: options.replyTo,
-    subject: options.subject,
+    subject,
     text: options.text,
     html: options.html,
     attachments: options.attachments?.map((a) => ({
