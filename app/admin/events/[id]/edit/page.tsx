@@ -106,12 +106,17 @@ export default async function EditEventPage({ params }: EditEventPageProps) {
       </Link>
 
       <div className="max-w-2xl">
-        {event.eventType !== 'permanent' && (
-          <div className="flex justify-end mb-4">
-            <ErwSyncButton eventId={event.id!} erwCanonicalUrl={event.erwCanonicalUrl} />
-          </div>
-        )}
-        <EventForm chapters={chapters} routes={routes} event={event} mode="edit" />
+        <EventForm
+          chapters={chapters}
+          routes={routes}
+          event={event}
+          mode="edit"
+          headerAction={
+            event.eventType !== 'permanent' ? (
+              <ErwSyncButton eventId={event.id!} erwCanonicalUrl={event.erwCanonicalUrl} />
+            ) : undefined
+          }
+        />
       </div>
     </div>
   )

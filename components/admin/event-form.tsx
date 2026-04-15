@@ -65,6 +65,7 @@ interface EventFormProps {
   defaultChapterId?: string | null
   event?: EventFormData | null
   mode?: 'create' | 'edit'
+  headerAction?: React.ReactNode
 }
 
 // Match the order used in the main site navbar
@@ -83,6 +84,7 @@ export function EventForm({
   defaultChapterId,
   event,
   mode = 'create',
+  headerAction,
 }: EventFormProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
@@ -248,10 +250,15 @@ export function EventForm({
       </Dialog>
       <Card>
         <CardHeader>
-          <CardTitle>{mode === 'edit' ? 'Edit Event' : 'Create Event'}</CardTitle>
-          <CardDescription>
-            {mode === 'edit' ? 'Update event details' : 'Add a new event to the schedule'}
-          </CardDescription>
+          <div className="flex items-start justify-between">
+            <div>
+              <CardTitle>{mode === 'edit' ? 'Edit Event' : 'Create Event'}</CardTitle>
+              <CardDescription>
+                {mode === 'edit' ? 'Update event details' : 'Add a new event to the schedule'}
+              </CardDescription>
+            </div>
+            {headerAction}
+          </div>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-6">
