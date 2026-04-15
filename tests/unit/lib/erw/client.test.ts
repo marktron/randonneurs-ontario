@@ -134,10 +134,10 @@ describe('ERW API Client', () => {
         distance: 200,
         units: 'intl',
         date: '2026-06-15',
-        published: true,
+        published: false,
         tags: ['brevet'],
-        url: 'https://randonneursontario.ca/register/huron-200',
-        registrationUrl: 'https://randonneursontario.ca/register/huron-200',
+        url: 'https://register.randonneursontario.ca/register/huron-200',
+        registrationUrl: 'https://register.randonneursontario.ca/register/huron-200',
         routes: [
           {
             name: 'Test Brevet 200',

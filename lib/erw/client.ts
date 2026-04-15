@@ -177,7 +177,7 @@ function buildErwPayload(event: ErwEventData): Record<string, unknown> {
     distance: event.distanceKm,
     units: 'intl',
     date: event.eventDate,
-    published: true,
+    published: false,
     tags: ['brevet'],
   }
 
@@ -187,12 +187,14 @@ function buildErwPayload(event: ErwEventData): Record<string, unknown> {
   }
 
   if (event.rwgpsId) {
+    // startTime is HH:MM — append :00 for seconds only if needed
     const startTime = event.startTime || '08:00'
+    const timeWithSeconds = startTime.split(':').length === 2 ? `${startTime}:00` : startTime
     payload.routes = [
       {
         name: event.name,
         sourceRouteUrl: `https://ridewithgps.com/routes/${event.rwgpsId}`,
-        startDate: `${event.eventDate}T${startTime}:00`,
+        startDate: `${event.eventDate}T${timeWithSeconds}`,
       },
     ]
   }
@@ -217,7 +219,12 @@ export async function createErwEvent(event: ErwEventData): Promise<ErwResult<Erw
       const message = `ERW create event failed: ${result.status}`
       logError(new Error(message), {
         operation: 'erw:createEvent',
-        context: { status: result.status, eventName: event.name, response: result.data, payload },
+        context: {
+          status: result.status,
+          eventName: event.name,
+          response: JSON.stringify(result.data, null, 2),
+          payload: JSON.stringify(payload, null, 2),
+        },
       })
       return { success: false, error: message }
     }
