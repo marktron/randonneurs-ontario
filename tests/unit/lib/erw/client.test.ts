@@ -69,11 +69,10 @@ describe('ERW API Client', () => {
         'https://events.epicrideweather.com/api/public/v1/auth/token',
         expect.objectContaining({
           method: 'POST',
-          body: JSON.stringify({
-            grant_type: 'client_credentials',
-            client_id: 'test-client-id',
-            client_secret: 'test-secret',
+          headers: expect.objectContaining({
+            'Content-Type': 'application/x-www-form-urlencoded',
           }),
+          body: 'grant_type=client_credentials&client_id=test-client-id&client_secret=test-secret',
         })
       )
     })
