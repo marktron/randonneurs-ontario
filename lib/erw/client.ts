@@ -169,7 +169,7 @@ async function erwFetch<T>(
 
 function buildErwPayload(event: ErwEventData): Record<string, unknown> {
   // Always use production URL — ERW events should link to the live site, not localhost
-  const baseUrl = 'https://randonneursontario.ca'
+  const baseUrl = 'https://register.randonneursontario.ca'
 
   const payload: Record<string, unknown> = {
     name: event.name,
