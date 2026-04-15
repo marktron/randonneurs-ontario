@@ -69,7 +69,11 @@ describe('ERW API Client', () => {
         'https://events.epicrideweather.com/api/public/v1/auth/token',
         expect.objectContaining({
           method: 'POST',
-          body: JSON.stringify({ clientId: 'test-client-id', secret: 'test-secret' }),
+          body: JSON.stringify({
+            grant_type: 'client_credentials',
+            client_id: 'test-client-id',
+            client_secret: 'test-secret',
+          }),
         })
       )
     })
@@ -291,13 +295,17 @@ describe('ERW API Client', () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         status: 200,
-        json: async () => ({}),
+        json: async () => ({ id: 'erw-123', canonicalUrl: 'https://erw.com/e/erw-123' }),
       })
 
       const { updateErwEvent } = await import('@/lib/erw/client')
       const result = await updateErwEvent('erw-123', testEvent)
 
       expect(result.success).toBe(true)
+      expect(result.data).toEqual({
+        erwEventId: 'erw-123',
+        canonicalUrl: 'https://erw.com/e/erw-123',
+      })
 
       // Verify GET was called first
       const getCall = mockFetch.mock.calls[1]
@@ -344,13 +352,17 @@ describe('ERW API Client', () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         status: 200,
-        json: async () => ({}),
+        json: async () => ({ id: 'erw-123', canonicalUrl: 'https://erw.com/e/erw-123' }),
       })
 
       const { updateErwEvent } = await import('@/lib/erw/client')
       const result = await updateErwEvent('erw-123', testEvent)
 
       expect(result.success).toBe(true)
+      expect(result.data).toEqual({
+        erwEventId: 'erw-123',
+        canonicalUrl: 'https://erw.com/e/erw-123',
+      })
 
       // Verify the retry PUT used the fresh timestamp
       const retryPutCall = mockFetch.mock.calls[4]

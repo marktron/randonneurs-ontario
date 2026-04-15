@@ -73,7 +73,11 @@ async function getAccessToken(): Promise<string> {
   const response = await fetch(`${ERW_BASE_URL}/auth/token`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ clientId, secret }),
+    body: JSON.stringify({
+      grant_type: 'client_credentials',
+      client_id: clientId,
+      client_secret: secret,
+    }),
   })
 
   if (!response.ok) {
@@ -96,7 +100,7 @@ async function getAccessToken(): Promise<string> {
 // ---------------------------------------------------------------------------
 
 function isTransientError(status: number): boolean {
-  return status >= 500 && status < 600
+  return status === 429 || (status >= 500 && status < 600)
 }
 
 interface ErwFetchOptions {
@@ -217,11 +221,16 @@ export async function createErwEvent(event: ErwEventData): Promise<ErwResult<Erw
       return { success: false, error: message }
     }
 
+    const data = result.data
+    if (!data?.id || !data?.canonicalUrl) {
+      return { success: false, error: 'ERW returned incomplete data' }
+    }
+
     return {
       success: true,
       data: {
-        erwEventId: result.data!.id,
-        canonicalUrl: result.data!.canonicalUrl,
+        erwEventId: data.id,
+        canonicalUrl: data.canonicalUrl,
       },
     }
   } catch (error) {
@@ -234,7 +243,10 @@ export async function createErwEvent(event: ErwEventData): Promise<ErwResult<Erw
   }
 }
 
-export async function updateErwEvent(erwEventId: string, event: ErwEventData): Promise<ErwResult> {
+export async function updateErwEvent(
+  erwEventId: string,
+  event: ErwEventData
+): Promise<ErwResult<ErwCreateResult>> {
   try {
     // GET current event to obtain the `updated` timestamp for optimistic locking
     const getResult = await erwFetch<{ updated: string }>({
@@ -251,12 +263,17 @@ export async function updateErwEvent(erwEventId: string, event: ErwEventData): P
       return { success: false, error: message }
     }
 
-    const payload = {
-      ...buildErwPayload(event),
-      updated: getResult.data!.updated,
+    const getResultData = getResult.data
+    if (!getResultData?.updated) {
+      return { success: false, error: 'ERW returned incomplete data' }
     }
 
-    const putResult = await erwFetch<Record<string, unknown>>({
+    const payload = {
+      ...buildErwPayload(event),
+      updated: getResultData.updated,
+    }
+
+    const putResult = await erwFetch<{ id: string; canonicalUrl: string }>({
       method: 'PUT',
       path: `/events/${erwEventId}`,
       body: payload,
@@ -277,12 +294,17 @@ export async function updateErwEvent(erwEventId: string, event: ErwEventData): P
         return { success: false, error: message }
       }
 
-      const retryPayload = {
-        ...buildErwPayload(event),
-        updated: freshGet.data!.updated,
+      const freshGetData = freshGet.data
+      if (!freshGetData?.updated) {
+        return { success: false, error: 'ERW returned incomplete data' }
       }
 
-      const retryPut = await erwFetch<Record<string, unknown>>({
+      const retryPayload = {
+        ...buildErwPayload(event),
+        updated: freshGetData.updated,
+      }
+
+      const retryPut = await erwFetch<{ id: string; canonicalUrl: string }>({
         method: 'PUT',
         path: `/events/${erwEventId}`,
         body: retryPayload,
@@ -297,7 +319,18 @@ export async function updateErwEvent(erwEventId: string, event: ErwEventData): P
         return { success: false, error: message }
       }
 
-      return { success: true }
+      const retryPutData = retryPut.data
+      if (!retryPutData?.id || !retryPutData?.canonicalUrl) {
+        return { success: false, error: 'ERW returned incomplete data' }
+      }
+
+      return {
+        success: true,
+        data: {
+          erwEventId: retryPutData.id,
+          canonicalUrl: retryPutData.canonicalUrl,
+        },
+      }
     }
 
     if (!putResult.ok) {
@@ -309,7 +342,18 @@ export async function updateErwEvent(erwEventId: string, event: ErwEventData): P
       return { success: false, error: message }
     }
 
-    return { success: true }
+    const putResultData = putResult.data
+    if (!putResultData?.id || !putResultData?.canonicalUrl) {
+      return { success: false, error: 'ERW returned incomplete data' }
+    }
+
+    return {
+      success: true,
+      data: {
+        erwEventId: putResultData.id,
+        canonicalUrl: putResultData.canonicalUrl,
+      },
+    }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     logError(error, {
