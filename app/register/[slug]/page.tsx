@@ -170,6 +170,19 @@ export default async function RegisterPage({ params }: PageProps) {
               <CalendarIcon className="h-4 w-4 text-muted-foreground" />
               <span>{formatEventDate(event.date, event.startTime)}</span>
             </div>
+            {event.erwCanonicalUrl && (
+              <div className="flex items-center gap-2">
+                <CloudSun className="h-4 w-4 text-muted-foreground" />
+                <a
+                  href={event.erwCanonicalUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-primary hover:underline underline-offset-2"
+                >
+                  Weather forecast
+                </a>
+              </div>
+            )}
             {event.startLocation ? (
               <div className="flex items-center gap-2">
                 <MapPinIcon className="h-4 w-4 text-muted-foreground" />
@@ -261,29 +274,6 @@ export default async function RegisterPage({ params }: PageProps) {
                 )}
               </div>
             ) : null}
-
-            {/* Weather Forecast */}
-            {event.erwCanonicalUrl && (
-              <div className="mb-8 md:mb-12">
-                <a
-                  href={event.erwCanonicalUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 text-primary hover:underline underline-offset-2"
-                >
-                  <CloudSun className="h-4 w-4" />
-                  Weather forecast
-                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
-                    />
-                  </svg>
-                </a>
-              </div>
-            )}
 
             {/* Registered Riders */}
             <div className="">
