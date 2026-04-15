@@ -143,6 +143,7 @@ describe('ERW API Client', () => {
             name: 'Test Brevet 200',
             sourceRouteUrl: 'https://ridewithgps.com/routes/12345',
             startDate: '2026-06-15T07:30:00',
+            averageSpeed: 20,
           },
         ],
       })
@@ -164,6 +165,7 @@ describe('ERW API Client', () => {
           name: 'Test Brevet 200',
           sourceRouteUrl: 'https://ridewithgps.com/routes/99999',
           startDate: '2026-06-15T07:30:00',
+          averageSpeed: 20,
         },
       ])
     })

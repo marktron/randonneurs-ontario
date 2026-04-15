@@ -195,6 +195,7 @@ function buildErwPayload(event: ErwEventData): Record<string, unknown> {
         name: event.name,
         sourceRouteUrl: `https://ridewithgps.com/routes/${event.rwgpsId}`,
         startDate: `${event.eventDate}T${timeWithSeconds}`,
+        averageSpeed: 20,
       },
     ]
   }
