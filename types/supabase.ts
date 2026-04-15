@@ -174,6 +174,8 @@ export type Database = {
           created_at: string | null
           description: string | null
           distance_km: number
+          erw_canonical_url: string | null
+          erw_event_id: string | null
           event_date: string
           event_type: string
           external_register_url: string | null
@@ -196,6 +198,8 @@ export type Database = {
           created_at?: string | null
           description?: string | null
           distance_km: number
+          erw_canonical_url?: string | null
+          erw_event_id?: string | null
           event_date: string
           event_type: string
           external_register_url?: string | null
@@ -218,6 +222,8 @@ export type Database = {
           created_at?: string | null
           description?: string | null
           distance_km?: number
+          erw_canonical_url?: string | null
+          erw_event_id?: string | null
           event_date?: string
           event_type?: string
           external_register_url?: string | null
@@ -812,6 +818,30 @@ export type Database = {
           status: string | null
           team_name: string | null
         }
+        Insert: {
+          cancelled_at?: string | null
+          event_id?: string | null
+          id?: string | null
+          is_team_captain?: boolean | null
+          notes?: string | null
+          registered_at?: string | null
+          rider_id?: string | null
+          share_registration?: boolean | null
+          status?: string | null
+          team_name?: string | null
+        }
+        Update: {
+          cancelled_at?: string | null
+          event_id?: string | null
+          id?: string | null
+          is_team_captain?: boolean | null
+          notes?: string | null
+          registered_at?: string | null
+          rider_id?: string | null
+          share_registration?: boolean | null
+          status?: string | null
+          team_name?: string | null
+        }
         Relationships: [
           {
             foreignKeyName: 'registrations_event_id_fkey'
@@ -907,9 +937,9 @@ export type Database = {
       get_award_recipients_with_distance: {
         Args: { p_award_slug: string }
         Returns: {
-          rider_slug: string
-          rider_name: string
           award_year: number
+          rider_name: string
+          rider_slug: string
           season_distance: number
         }[]
       }
@@ -1131,9 +1161,9 @@ export type Database = {
       get_riders_by_latest_chapter: {
         Args: {
           p_chapter_name: string
-          p_search?: string | null
           p_limit?: number
           p_offset?: number
+          p_search?: string
         }
         Returns: {
           rider_id: string

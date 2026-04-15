@@ -50,7 +50,7 @@ async function getRiders(
     const offset = (page - 1) * PAGE_SIZE
     const { data: rpcData } = await getSupabaseAdmin().rpc('get_riders_by_latest_chapter', {
       p_chapter_name: chapterFilter,
-      p_search: search || null,
+      p_search: search || undefined,
       p_limit: PAGE_SIZE,
       p_offset: offset,
     })

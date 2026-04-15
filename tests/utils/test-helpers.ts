@@ -38,6 +38,8 @@ export function createMockEvent(overrides?: Partial<Event>): Event {
     external_register_url: null,
     registration_opens_at: null,
     registration_closes_at: null,
+    erw_event_id: null,
+    erw_canonical_url: null,
     ...overrides,
   }
 }
