@@ -41,15 +41,19 @@ async function main() {
 
   console.log(`Database: ${supabaseUrl}\n`)
 
-  // Fetch scheduled events without ERW sync (excluding permanents)
+  const today = new Date().toISOString().split('T')[0]
+
+  // Fetch future scheduled events with RWGPS routes, without ERW sync (excluding permanents)
   const { data: events, error } = await supabase
     .from('events')
     .select(
-      'id, slug, name, description, distance_km, event_date, start_time, event_type, route_id'
+      'id, slug, name, description, distance_km, event_date, start_time, event_type, route_id, routes!inner(rwgps_id)'
     )
     .eq('status', 'scheduled')
     .is('erw_event_id', null)
     .neq('event_type', 'permanent')
+    .not('routes.rwgps_id', 'is', null)
+    .gte('event_date', today)
     .order('event_date', { ascending: true })
 
   if (error) {
@@ -77,16 +81,8 @@ async function main() {
   let failed = 0
 
   for (const event of events) {
-    // Look up RWGPS route ID
-    let rwgpsId: string | null = null
-    if (event.route_id) {
-      const { data: route } = await supabase
-        .from('routes')
-        .select('rwgps_id')
-        .eq('id', event.route_id)
-        .single()
-      rwgpsId = route?.rwgps_id ?? null
-    }
+    const routes = event.routes as unknown as { rwgps_id: string }
+    const rwgpsId = routes.rwgps_id
 
     const erwResult = await createErwEvent({
       name: event.name,
