@@ -168,7 +168,8 @@ async function erwFetch<T>(
 // ---------------------------------------------------------------------------
 
 function buildErwPayload(event: ErwEventData): Record<string, unknown> {
-  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://randonneursontario.ca'
+  // Always use production URL — ERW events should link to the live site, not localhost
+  const baseUrl = 'https://randonneursontario.ca'
 
   const payload: Record<string, unknown> = {
     name: event.name,
@@ -216,7 +217,7 @@ export async function createErwEvent(event: ErwEventData): Promise<ErwResult<Erw
       const message = `ERW create event failed: ${result.status}`
       logError(new Error(message), {
         operation: 'erw:createEvent',
-        context: { status: result.status, eventName: event.name },
+        context: { status: result.status, eventName: event.name, response: result.data, payload },
       })
       return { success: false, error: message }
     }
