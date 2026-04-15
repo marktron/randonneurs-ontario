@@ -165,7 +165,7 @@ export default async function RegisterPage({ params }: PageProps) {
           )}
 
           {/* Meta */}
-          <div className="flex flex-wrap gap-x-8 gap-y-3 text-sm">
+          <div className="flex flex-col sm:flex-row sm:flex-wrap gap-x-8 gap-y-3 text-sm">
             <div className="flex items-center gap-2">
               <CalendarIcon className="h-4 w-4 text-muted-foreground" />
               <span>{formatEventDate(event.date, event.startTime)}</span>
