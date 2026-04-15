@@ -170,19 +170,6 @@ export default async function RegisterPage({ params }: PageProps) {
               <CalendarIcon className="h-4 w-4 text-muted-foreground" />
               <span>{formatEventDate(event.date, event.startTime)}</span>
             </div>
-            {event.erwCanonicalUrl && (
-              <div className="flex items-center gap-2">
-                <CloudSun className="h-4 w-4 text-muted-foreground" />
-                <a
-                  href={event.erwCanonicalUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-primary hover:underline underline-offset-2"
-                >
-                  Weather forecast
-                </a>
-              </div>
-            )}
             {event.startLocation ? (
               <div className="flex items-center gap-2">
                 <MapPinIcon className="h-4 w-4 text-muted-foreground" />
@@ -190,7 +177,7 @@ export default async function RegisterPage({ params }: PageProps) {
                   href={createGoogleMapsUrl(event.startLocation)}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-primary hover:underline underline-offset-2"
+                  className="text-foreground hover:text-primary underline underline-offset-4 decoration-(--foreground)/20 hover:decoration-primary"
                 >
                   {event.startLocation}
                 </Link>
@@ -199,6 +186,19 @@ export default async function RegisterPage({ params }: PageProps) {
               <div className="flex items-center gap-2">
                 <MapPinIcon className="h-4 w-4 text-muted-foreground" />
                 <span className="text-muted-foreground">Start control per route</span>
+              </div>
+            )}
+            {event.erwCanonicalUrl && (
+              <div className="flex items-center gap-2">
+                <CloudSun className="h-4 w-4 text-muted-foreground" />
+                <a
+                  href={event.erwCanonicalUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-foreground hover:text-primary underline underline-offset-4 decoration-(--foreground)/20 hover:decoration-primary"
+                >
+                  Weather forecast
+                </a>
               </div>
             )}
           </div>
