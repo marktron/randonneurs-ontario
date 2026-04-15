@@ -5,19 +5,23 @@ import dynamic from 'next/dynamic'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { ChevronLeft } from 'lucide-react'
+import { ErwSyncButton } from '@/components/admin/erw-sync-button'
 import type { EventDetailForEdit } from '@/types/queries'
 import type { EventFormData } from '@/components/admin/event-form'
 
 // Lazy-load EventForm (complex form component)
-const EventForm = dynamic(() => import('@/components/admin/event-form').then(mod => ({ default: mod.EventForm })), {
-  loading: () => (
-    <div className="space-y-6">
-      <div className="h-10 bg-muted animate-pulse rounded" />
-      <div className="h-10 bg-muted animate-pulse rounded" />
-      <div className="h-32 bg-muted animate-pulse rounded" />
-    </div>
-  ),
-})
+const EventForm = dynamic(
+  () => import('@/components/admin/event-form').then((mod) => ({ default: mod.EventForm })),
+  {
+    loading: () => (
+      <div className="space-y-6">
+        <div className="h-10 bg-muted animate-pulse rounded" />
+        <div className="h-10 bg-muted animate-pulse rounded" />
+        <div className="h-32 bg-muted animate-pulse rounded" />
+      </div>
+    ),
+  }
+)
 
 async function getChapters() {
   const { data } = await getSupabaseAdmin()
@@ -28,10 +32,15 @@ async function getChapters() {
   return data ?? []
 }
 
-async function getEvent(eventId: string): Promise<EventFormData | null> {
+interface EventForEdit extends EventFormData {
+  erwCanonicalUrl: string | null
+}
+
+async function getEvent(eventId: string): Promise<EventForEdit | null> {
   const { data: event } = await getSupabaseAdmin()
     .from('events')
-    .select(`
+    .select(
+      `
       id,
       name,
       chapter_id,
@@ -42,14 +51,16 @@ async function getEvent(eventId: string): Promise<EventFormData | null> {
       start_time,
       start_location,
       description,
-      image_url
-    `)
+      image_url,
+      erw_canonical_url
+    `
+    )
     .eq('id', eventId)
     .single()
 
   if (!event) return null
 
-  const e = event as EventDetailForEdit
+  const e = event as EventDetailForEdit & { erw_canonical_url: string | null }
   return {
     id: e.id,
     name: e.name,
@@ -62,6 +73,7 @@ async function getEvent(eventId: string): Promise<EventFormData | null> {
     startLocation: e.start_location,
     description: e.description,
     imageUrl: e.image_url,
+    erwCanonicalUrl: e.erw_canonical_url,
   }
 }
 
@@ -94,12 +106,12 @@ export default async function EditEventPage({ params }: EditEventPageProps) {
       </Link>
 
       <div className="max-w-2xl">
-        <EventForm
-          chapters={chapters}
-          routes={routes}
-          event={event}
-          mode="edit"
-        />
+        {event.eventType !== 'permanent' && (
+          <div className="flex justify-end mb-4">
+            <ErwSyncButton eventId={event.id!} erwCanonicalUrl={event.erwCanonicalUrl} />
+          </div>
+        )}
+        <EventForm chapters={chapters} routes={routes} event={event} mode="edit" />
       </div>
     </div>
   )
