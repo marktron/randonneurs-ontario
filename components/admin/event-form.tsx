@@ -251,9 +251,7 @@ export function EventForm({
       <Card>
         <CardHeader>
           <CardTitle>{mode === 'edit' ? 'Edit Event' : 'Create Event'}</CardTitle>
-          <CardDescription>
-            {mode === 'edit' ? 'Update event details' : 'Add a new event to the schedule'}
-          </CardDescription>
+          {mode === 'create' && <CardDescription>Add a new event to the schedule</CardDescription>}
           {headerAction && <div data-slot="card-action">{headerAction}</div>}
         </CardHeader>
         <CardContent>
