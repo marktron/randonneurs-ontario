@@ -41,9 +41,10 @@ describe('ERW API Client', () => {
     vi.stubEnv('EPIC_RIDE_WEATHER_SECRET', 'test-secret')
     vi.stubEnv('NEXT_PUBLIC_SITE_URL', 'https://randonneursontario.ca')
     mockFetch.mockReset()
-    // Reset token cache to prevent test interdependence
-    const { _resetTokenCache } = await import('@/lib/erw/client')
+    // Reset token cache and zero out publish delays for tests
+    const { _resetTokenCache, PUBLISH_RETRY_DELAYS } = await import('@/lib/erw/client')
     _resetTokenCache()
+    PUBLISH_RETRY_DELAYS.length = 0
   })
 
   afterEach(() => {

@@ -230,6 +230,9 @@ export async function createErwEvent(event: ErwEventData): Promise<ErwResult<Erw
       return { success: false, error: 'ERW returned incomplete data' }
     }
 
+    // Attempt to publish after route import completes
+    await publishErwEvent(data.id)
+
     return {
       success: true,
       data: {
@@ -366,6 +369,50 @@ export async function updateErwEvent(
     })
     return { success: false, error: message }
   }
+}
+
+// Delay between publish attempts (overridable for tests)
+export const PUBLISH_RETRY_DELAYS = [3000, 5000, 10000] // 3s, 5s, 10s
+
+/**
+ * Publish an ERW event, retrying while the RWGPS route import is in progress.
+ * Best-effort — logs a warning if publishing fails but doesn't block the caller.
+ */
+async function publishErwEvent(erwEventId: string): Promise<void> {
+  const delays = PUBLISH_RETRY_DELAYS
+
+  for (const delay of delays) {
+    await new Promise((r) => setTimeout(r, delay))
+
+    const getResult = await erwFetch<{ updated: string }>({
+      method: 'GET',
+      path: `/events/${erwEventId}`,
+    })
+
+    if (!getResult.ok || !getResult.data?.updated) continue
+
+    const putResult = await erwFetch({
+      method: 'PUT',
+      path: `/events/${erwEventId}`,
+      body: { published: true, updated: getResult.data.updated },
+    })
+
+    if (putResult.ok) return
+
+    // If it's not a validation error (route still importing), stop retrying
+    if (putResult.status !== 400) {
+      logError(new Error(`ERW publish failed: ${putResult.status}`), {
+        operation: 'erw:publishEvent',
+        context: { erwEventId, status: putResult.status },
+      })
+      return
+    }
+  }
+
+  logError(new Error('ERW publish timed out — event remains as draft'), {
+    operation: 'erw:publishEvent',
+    context: { erwEventId },
+  })
 }
 
 export async function deleteErwEvent(erwEventId: string): Promise<ErwResult> {
