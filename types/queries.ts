@@ -285,7 +285,16 @@ export type ResultForAdminList = Pick<
  */
 export type EventDetailForAdmin = Pick<
   Event,
-  'id' | 'name' | 'event_date' | 'start_time' | 'distance_km' | 'event_type' | 'status' | 'season'
+  | 'id'
+  | 'name'
+  | 'event_date'
+  | 'start_time'
+  | 'distance_km'
+  | 'event_type'
+  | 'status'
+  | 'season'
+  | 'erw_event_id'
+  | 'erw_canonical_url'
 > & {
   chapters: Pick<Chapter, 'id' | 'name'> | null
 }

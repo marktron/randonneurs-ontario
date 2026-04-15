@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { EventResultsManager } from '@/components/admin/event-results-manager'
 import { EventStatusSelect } from '@/components/admin/event-status-select'
 import { EventDeleteButton } from '@/components/admin/event-delete-button'
+import { ErwSyncButton } from '@/components/admin/erw-sync-button'
 import type { EventStatus } from '@/lib/actions/events'
 import type {
   EventDetailForAdmin,
@@ -29,6 +30,8 @@ async function getEventDetails(eventId: string): Promise<EventDetailForAdmin | n
       event_type,
       status,
       season,
+      erw_event_id,
+      erw_canonical_url,
       chapters (id, name)
     `
     )
@@ -179,6 +182,9 @@ export default async function EventDetailPage({ params, searchParams }: EventPag
             isPastEvent={event.event_date < new Date().toISOString().split('T')[0]}
             registrationsCount={registrations.length}
           />
+          {event.event_type !== 'permanent' && (
+            <ErwSyncButton eventId={event.id} erwCanonicalUrl={event.erw_canonical_url} />
+          )}
         </div>
       </div>
 
