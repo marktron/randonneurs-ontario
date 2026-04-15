@@ -217,12 +217,13 @@ export async function createErwEvent(event: ErwEventData): Promise<ErwResult<Erw
     })
 
     if (!result.ok) {
-      const message = `ERW create event failed: ${result.status}`
-      logError(new Error(message), {
+      const erwError = result.data as { message?: string } | undefined
+      const detail = erwError?.message || `HTTP ${result.status}`
+      logError(new Error(`ERW create event failed: ${detail}`), {
         operation: 'erw:createEvent',
         context: { status: result.status, eventName: event.name, response: result.data },
       })
-      return { success: false, error: message }
+      return { success: false, error: `Epic Ride Weather: ${detail}` }
     }
 
     const data = result.data
@@ -341,12 +342,13 @@ export async function updateErwEvent(
     }
 
     if (!putResult.ok) {
-      const message = `ERW update event failed: ${putResult.status}`
-      logError(new Error(message), {
+      const erwError = putResult.data as { message?: string } | undefined
+      const detail = erwError?.message || `HTTP ${putResult.status}`
+      logError(new Error(`ERW update event failed: ${detail}`), {
         operation: 'erw:updateEvent',
-        context: { erwEventId, status: putResult.status },
+        context: { erwEventId, status: putResult.status, response: putResult.data },
       })
-      return { success: false, error: message }
+      return { success: false, error: `Epic Ride Weather: ${detail}` }
     }
 
     const putResultData = putResult.data
