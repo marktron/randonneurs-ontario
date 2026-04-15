@@ -248,6 +248,7 @@ export interface EventDetails {
   cueSheetUrl: string | null // PDF cue sheet download URL
   description: string | null // Optional markdown event description
   imageUrl: string | null // Optional event image URL
+  erwCanonicalUrl: string | null // Epic Ride Weather event page URL
 }
 
 /**
@@ -468,6 +469,7 @@ const getEventBySlugInner = cache(async (slug: string): Promise<EventDetails | n
       event_type,
       description,
       image_url,
+      erw_canonical_url,
       chapters (name, slug),
       routes (slug, rwgps_id, cue_sheet_url)
     `
@@ -502,6 +504,7 @@ const getEventBySlugInner = cache(async (slug: string): Promise<EventDetails | n
     cueSheetUrl: typedEvent.routes?.cue_sheet_url || null,
     description: typedEvent.description || null,
     imageUrl: typedEvent.image_url || null,
+    erwCanonicalUrl: typedEvent.erw_canonical_url || null,
   }
 })
 
