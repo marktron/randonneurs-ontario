@@ -172,7 +172,7 @@ function buildErwPayload(event: ErwEventData): Record<string, unknown> {
 
   const payload: Record<string, unknown> = {
     name: event.name,
-    description: event.description || event.name,
+    description: event.description || `A ${event.distanceKm}km ride hosted by Randonneurs Ontario`,
     distance: event.distanceKm,
     units: 'intl',
     date: event.eventDate,

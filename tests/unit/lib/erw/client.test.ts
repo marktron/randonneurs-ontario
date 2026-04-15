@@ -188,7 +188,7 @@ describe('ERW API Client', () => {
 
       const body = JSON.parse(mockFetch.mock.calls[1][1].body)
       expect(body.routes).toBeUndefined()
-      expect(body.description).toBe('Simple Brevet') // fallback to name
+      expect(body.description).toBe('A 100km ride hosted by Randonneurs Ontario') // fallback
     })
 
     it('retries on 5xx and succeeds', async () => {
