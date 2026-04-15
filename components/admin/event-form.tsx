@@ -250,15 +250,11 @@ export function EventForm({
       </Dialog>
       <Card>
         <CardHeader>
-          <div className="flex items-start justify-between">
-            <div>
-              <CardTitle>{mode === 'edit' ? 'Edit Event' : 'Create Event'}</CardTitle>
-              <CardDescription>
-                {mode === 'edit' ? 'Update event details' : 'Add a new event to the schedule'}
-              </CardDescription>
-            </div>
-            {headerAction}
-          </div>
+          <CardTitle>{mode === 'edit' ? 'Edit Event' : 'Create Event'}</CardTitle>
+          <CardDescription>
+            {mode === 'edit' ? 'Update event details' : 'Add a new event to the schedule'}
+          </CardDescription>
+          {headerAction && <div data-slot="card-action">{headerAction}</div>}
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-6">

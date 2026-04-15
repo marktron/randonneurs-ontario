@@ -380,11 +380,13 @@ export const PUBLISH_RETRY_DELAYS = [3000, 5000, 10000] // 3s, 5s, 10s
  */
 async function publishErwEvent(erwEventId: string): Promise<void> {
   const delays = PUBLISH_RETRY_DELAYS
+  let lastResponse: unknown = null
 
   for (const delay of delays) {
     await new Promise((r) => setTimeout(r, delay))
 
-    const getResult = await erwFetch<{ updated: string }>({
+    // GET full event — PUT requires all required fields, not just published
+    const getResult = await erwFetch<Record<string, unknown>>({
       method: 'GET',
       path: `/events/${erwEventId}`,
     })
@@ -394,16 +396,18 @@ async function publishErwEvent(erwEventId: string): Promise<void> {
     const putResult = await erwFetch({
       method: 'PUT',
       path: `/events/${erwEventId}`,
-      body: { published: true, updated: getResult.data.updated },
+      body: { ...getResult.data, published: true },
     })
 
     if (putResult.ok) return
+
+    lastResponse = putResult.data
 
     // If it's not a validation error (route still importing), stop retrying
     if (putResult.status !== 400) {
       logError(new Error(`ERW publish failed: ${putResult.status}`), {
         operation: 'erw:publishEvent',
-        context: { erwEventId, status: putResult.status },
+        context: { erwEventId, status: putResult.status, response: lastResponse },
       })
       return
     }
@@ -411,7 +415,7 @@ async function publishErwEvent(erwEventId: string): Promise<void> {
 
   logError(new Error('ERW publish timed out — event remains as draft'), {
     operation: 'erw:publishEvent',
-    context: { erwEventId },
+    context: { erwEventId, lastResponse },
   })
 }
 
