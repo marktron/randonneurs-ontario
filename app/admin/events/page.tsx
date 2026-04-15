@@ -17,7 +17,6 @@ import { EventFilters, type DateFilter } from '@/components/admin/event-filters'
 import { AdminPagination } from '@/components/admin/admin-pagination'
 import { Plus } from 'lucide-react'
 import Link from 'next/link'
-import { ErwBulkSyncButton } from '@/components/admin/erw-bulk-sync-button'
 import type { EventForAdminList } from '@/types/queries'
 
 const currentSeason = process.env.NEXT_PUBLIC_CURRENT_SEASON || '2026'
@@ -198,7 +197,6 @@ export default async function AdminEventsPage({ searchParams }: AdminEventsPageP
           <p className="text-muted-foreground">Manage event registrations and results</p>
         </div>
         <div className="flex flex-wrap items-center gap-2 self-start">
-          <ErwBulkSyncButton />
           <Button asChild>
             <Link href="/admin/events/new">
               <Plus className="h-4 w-4 mr-2" />
