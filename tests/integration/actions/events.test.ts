@@ -190,6 +190,29 @@ describe('deleteEvent', () => {
     expect(result.error).toBe('Event not found')
   })
 
+  it('calls ERW deleteErwEvent when event has erw_event_id', async () => {
+    const futureDate = new Date()
+    futureDate.setFullYear(futureDate.getFullYear() + 1)
+
+    mockModule.__mockEventFound({
+      id: 'test-event-id',
+      name: 'Test Event',
+      event_date: futureDate.toISOString().split('T')[0],
+      chapter_id: 'chapter-1',
+      event_type: 'brevet',
+      erw_event_id: 'erw-to-delete',
+    })
+    mockModule.__mockUpdateSuccess() // DB delete
+    mockModule.__mockEventFound({ slug: 'toronto' }) // Chapter revalidation
+
+    const result = await deleteEvent('test-event-id')
+
+    expect(result.success).toBe(true)
+
+    const { deleteErwEvent: mockDeleteErw } = await import('@/lib/erw/client')
+    expect(mockDeleteErw).toHaveBeenCalledWith('erw-to-delete')
+  })
+
   it('returns error when trying to delete past event', async () => {
     const pastDate = new Date()
     pastDate.setFullYear(pastDate.getFullYear() - 1)
@@ -729,6 +752,53 @@ describe('updateEvent', () => {
     expect(updateData.name).toBeUndefined()
   })
 
+  it('calls ERW updateErwEvent when event has erw_event_id', async () => {
+    mockModule.__mockUpdateSuccess() // DB update
+    mockModule.__mockEventFound({
+      chapter_id: 'chapter-1',
+      event_type: 'brevet',
+      slug: 'test-event',
+      erw_event_id: 'erw-existing-123',
+      route_id: 'route-1',
+      name: 'Updated Name',
+      description: null,
+      distance_km: 200,
+      event_date: '2025-06-15',
+      start_time: '08:00',
+    })
+    mockModule.__mockEventFound({ rwgps_id: '99999' }) // Route lookup
+    mockModule.__mockUpdateSuccess() // ERW canonical URL update
+    mockModule.__mockEventFound({ slug: 'toronto' }) // Chapter revalidation (happens inside revalidateCalendarTags)
+
+    const result = await updateEvent('event-1', { name: 'Updated Name' })
+
+    expect(result.success).toBe(true)
+
+    const { updateErwEvent: mockUpdateErw } = await import('@/lib/erw/client')
+    expect(mockUpdateErw).toHaveBeenCalledWith(
+      'erw-existing-123',
+      expect.objectContaining({ name: 'Updated Name' })
+    )
+  })
+
+  it('skips ERW sync when event has no erw_event_id', async () => {
+    mockModule.__mockUpdateSuccess()
+    mockModule.__mockEventFound({
+      chapter_id: 'chapter-1',
+      event_type: 'brevet',
+      slug: 'test-event',
+      erw_event_id: null,
+    })
+    mockModule.__mockEventFound({ slug: 'toronto' })
+
+    const result = await updateEvent('event-1', { name: 'Updated Name' })
+
+    expect(result.success).toBe(true)
+
+    const { updateErwEvent: mockUpdateErw } = await import('@/lib/erw/client')
+    expect(mockUpdateErw).not.toHaveBeenCalled()
+  })
+
   it('returns error when update fails', async () => {
     mockModule.__mockUpdateError({
       code: '23503',
@@ -850,6 +920,31 @@ describe('updateEventStatus', () => {
     // (only triggered when transitioning from 'scheduled' to 'completed')
     const { createPendingResultsAndSendEmails } = await import('@/lib/events/complete-event')
     expect(createPendingResultsAndSendEmails).not.toHaveBeenCalled()
+  })
+
+  it('calls ERW deleteErwEvent when cancelling event with erw_event_id', async () => {
+    mockModule.__mockEventFound({
+      id: 'event-1',
+      name: 'Test Event',
+      event_date: '2025-06-15',
+      distance_km: 200,
+      chapter_id: 'chapter-1',
+      event_type: 'brevet',
+      status: 'scheduled',
+      erw_event_id: 'erw-cancel-123',
+      chapters: { name: 'Toronto' },
+    })
+    mockModule.__mockUpdateSuccess() // Delete results
+    mockModule.__mockUpdateSuccess() // Status update
+    mockModule.__mockUpdateSuccess() // Clear ERW columns
+    mockModule.__mockEventFound({ slug: 'toronto' })
+
+    const result = await updateEventStatus('event-1', 'cancelled')
+
+    expect(result.success).toBe(true)
+
+    const { deleteErwEvent: mockDeleteErw } = await import('@/lib/erw/client')
+    expect(mockDeleteErw).toHaveBeenCalledWith('erw-cancel-123')
   })
 
   it('returns error when result deletion fails during cancellation', async () => {

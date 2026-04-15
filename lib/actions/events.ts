@@ -7,7 +7,7 @@ import { sendEmail, fromEmail, isEmailConfigured } from '@/lib/email/ses'
 import { parseLocalDate, createSlug } from '@/lib/utils'
 import { getUrlSlugFromDbSlug } from '@/lib/chapter-config'
 import { createPendingResultsAndSendEmails } from '@/lib/events/complete-event'
-import { createErwEvent } from '@/lib/erw/client'
+import { createErwEvent, updateErwEvent, deleteErwEvent } from '@/lib/erw/client'
 import { logAuditEvent } from '@/lib/audit-log'
 import { generateAcpXlsx, generateAcpCsv } from '@/lib/email/results-spreadsheet'
 import type { AcpResultRow, SpreadsheetData } from '@/lib/email/results-spreadsheet'
@@ -259,15 +259,47 @@ export async function updateEvent(eventId: string, data: UpdateEventData): Promi
     revalidatePath('/admin/events')
     revalidatePath('/admin')
 
-    // Fetch event to get chapter, type, and slug for cache tag revalidation
+    // Fetch event to get chapter, type, slug, and ERW fields for cache tag revalidation and ERW sync
     const { data: event } = await getSupabaseAdmin()
       .from('events')
-      .select('chapter_id, event_type, slug')
+      .select(
+        'chapter_id, event_type, slug, erw_event_id, route_id, name, description, distance_km, event_date, start_time'
+      )
       .eq('id', eventId)
       .single()
 
     if (event) {
       await revalidateCalendarTags(event.chapter_id, event.event_type, event.slug)
+    }
+
+    // Sync to Epic Ride Weather if event is linked
+    if (event?.erw_event_id) {
+      let rwgpsId: string | null = null
+      if (event.route_id) {
+        const { data: route } = await getSupabaseAdmin()
+          .from('routes')
+          .select('rwgps_id')
+          .eq('id', event.route_id)
+          .single()
+        rwgpsId = route?.rwgps_id ?? null
+      }
+
+      const erwResult = await updateErwEvent(event.erw_event_id, {
+        name: event.name,
+        description: event.description || '',
+        distanceKm: event.distance_km,
+        eventDate: event.event_date,
+        startTime: event.start_time || null,
+        slug: event.slug,
+        rwgpsId,
+      })
+
+      if (erwResult.success && erwResult.data) {
+        await getSupabaseAdmin()
+          .from('events')
+          .update({ erw_canonical_url: erwResult.data.canonicalUrl })
+          .eq('id', eventId)
+      }
     }
 
     await logAuditEvent({
@@ -291,7 +323,7 @@ export async function deleteEvent(eventId: string): Promise<ActionResult> {
     // Fetch the event to check the date and get chapter info for revalidation
     const { data: event, error: fetchError } = await getSupabaseAdmin()
       .from('events')
-      .select('id, name, event_date, chapter_id, event_type')
+      .select('id, name, event_date, chapter_id, event_type, erw_event_id')
       .eq('id', eventId)
       .single()
 
@@ -302,12 +334,17 @@ export async function deleteEvent(eventId: string): Promise<ActionResult> {
     const typedEvent = event as Pick<
       Event,
       'id' | 'name' | 'event_date' | 'chapter_id' | 'event_type'
-    >
+    > & { erw_event_id: string | null }
 
     // Check if event is in the past
     const today = new Date().toISOString().split('T')[0]
     if (typedEvent.event_date < today) {
       return { success: false, error: 'Cannot delete past events' }
+    }
+
+    // Delete from Epic Ride Weather if linked
+    if (typedEvent.erw_event_id) {
+      await deleteErwEvent(typedEvent.erw_event_id)
     }
 
     // Delete the event (registrations and results cascade-delete automatically)
@@ -368,7 +405,9 @@ export async function updateEventStatus(
     // Fetch event details before updating (needed for completion emails)
     const { data: event, error: fetchError } = await getSupabaseAdmin()
       .from('events')
-      .select('id, name, event_date, distance_km, chapter_id, event_type, status, chapters(name)')
+      .select(
+        'id, name, event_date, distance_km, chapter_id, event_type, status, erw_event_id, chapters(name)'
+      )
       .eq('id', eventId)
       .single()
 
@@ -377,7 +416,7 @@ export async function updateEventStatus(
       return { success: false, error: 'Event not found' }
     }
 
-    const typedEvent = event as EventWithChapterName
+    const typedEvent = event as EventWithChapterName & { erw_event_id: string | null }
 
     const updateData: EventUpdate = { status }
     const { error } = await getSupabaseAdmin().from('events').update(updateData).eq('id', eventId)
@@ -385,6 +424,15 @@ export async function updateEventStatus(
     if (error) {
       console.error('Error updating event status:', error)
       return { success: false, error: 'Failed to update event status' }
+    }
+
+    // Delete from Epic Ride Weather when cancelling
+    if (status === 'cancelled' && typedEvent.erw_event_id) {
+      await deleteErwEvent(typedEvent.erw_event_id)
+      await getSupabaseAdmin()
+        .from('events')
+        .update({ erw_event_id: null, erw_canonical_url: null })
+        .eq('id', eventId)
     }
 
     // If transitioning to "completed", create pending results and send emails
