@@ -7,6 +7,7 @@ import { sendEmail, fromEmail, isEmailConfigured } from '@/lib/email/ses'
 import { parseLocalDate, createSlug } from '@/lib/utils'
 import { getUrlSlugFromDbSlug } from '@/lib/chapter-config'
 import { createPendingResultsAndSendEmails } from '@/lib/events/complete-event'
+import { createErwEvent } from '@/lib/erw/client'
 import { logAuditEvent } from '@/lib/audit-log'
 import { generateAcpXlsx, generateAcpCsv } from '@/lib/email/results-spreadsheet'
 import type { AcpResultRow, SpreadsheetData } from '@/lib/email/results-spreadsheet'
@@ -136,6 +137,39 @@ export async function createEvent(data: CreateEventData): Promise<ActionResult<{
     }
 
     const typedNewEvent = newEvent as EventIdOnly
+
+    // Sync to Epic Ride Weather (skip permanents)
+    if (eventType !== 'permanent') {
+      let rwgpsId: string | null = null
+      if (routeId) {
+        const { data: route } = await getSupabaseAdmin()
+          .from('routes')
+          .select('rwgps_id')
+          .eq('id', routeId)
+          .single()
+        rwgpsId = route?.rwgps_id ?? null
+      }
+
+      const erwResult = await createErwEvent({
+        name: name.trim(),
+        description: description || '',
+        distanceKm,
+        eventDate,
+        startTime: startTime || null,
+        slug,
+        rwgpsId,
+      })
+
+      if (erwResult.success && erwResult.data) {
+        await getSupabaseAdmin()
+          .from('events')
+          .update({
+            erw_event_id: erwResult.data.erwEventId,
+            erw_canonical_url: erwResult.data.canonicalUrl,
+          })
+          .eq('id', typedNewEvent.id)
+      }
+    }
 
     // Revalidate admin pages (still use revalidatePath for admin routes)
     revalidatePath('/admin/events')

@@ -124,6 +124,24 @@ vi.mock('@/lib/email/ses', () => ({
   isEmailConfigured: vi.fn().mockReturnValue(true),
 }))
 
+vi.mock('@/lib/erw/client', () => ({
+  createErwEvent: vi.fn().mockResolvedValue({
+    success: true,
+    data: {
+      erwEventId: 'erw-test-123',
+      canonicalUrl: 'https://events.epicrideweather.com/events/erw-test-123',
+    },
+  }),
+  updateErwEvent: vi.fn().mockResolvedValue({
+    success: true,
+    data: {
+      erwEventId: 'erw-test-123',
+      canonicalUrl: 'https://events.epicrideweather.com/events/erw-test-123',
+    },
+  }),
+  deleteErwEvent: vi.fn().mockResolvedValue({ success: true }),
+}))
+
 vi.mock('@/lib/email/results-spreadsheet', () => ({
   generateAcpXlsx: vi.fn().mockResolvedValue({
     buffer: Buffer.from('mock-xlsx-content'),
@@ -511,6 +529,7 @@ describe('createEvent', () => {
   describe('successful creation', () => {
     it('returns success with event id when creation succeeds', async () => {
       mockModule.__mockInsertSuccess({ id: 'new-event-id' })
+      mockModule.__mockUpdateSuccess() // For ERW column update
       mockModule.__mockEventFound({ slug: 'toronto' }) // For chapter revalidation
 
       const result = await createEvent({
@@ -547,6 +566,82 @@ describe('createEvent', () => {
       // Verify cache was revalidated
       const { revalidatePath } = await import('next/cache')
       expect(revalidatePath).toHaveBeenCalledWith('/admin/events')
+    })
+
+    it('calls ERW createErwEvent after successful creation for brevet events', async () => {
+      mockModule.__mockInsertSuccess({ id: 'new-event-id' })
+      // Mock the route lookup query for rwgps_id
+      mockModule.__mockEventFound({ rwgps_id: '12345678' })
+      // Mock the ERW column update
+      mockModule.__mockUpdateSuccess()
+      // Mock chapter slug for revalidation
+      mockModule.__mockEventFound({ slug: 'toronto' })
+
+      const result = await createEvent({
+        name: 'Test Brevet',
+        chapterId: 'chapter-1',
+        routeId: 'route-1',
+        eventType: 'brevet',
+        distanceKm: 200,
+        eventDate: '2025-06-15',
+        startTime: '08:00',
+      })
+
+      expect(result.success).toBe(true)
+
+      const { createErwEvent: mockCreateErw } = await import('@/lib/erw/client')
+      expect(mockCreateErw).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: 'Test Brevet',
+          distanceKm: 200,
+          eventDate: '2025-06-15',
+          rwgpsId: '12345678',
+        })
+      )
+    })
+
+    it('skips ERW sync for permanent events', async () => {
+      mockModule.__mockInsertSuccess({ id: 'new-permanent-id' })
+      mockModule.__mockEventFound({ slug: 'toronto' })
+
+      const result = await createEvent({
+        name: 'Permanent Ride',
+        chapterId: 'chapter-1',
+        eventType: 'permanent',
+        distanceKm: 200,
+        eventDate: '2025-06-15',
+      })
+
+      expect(result.success).toBe(true)
+
+      const { createErwEvent: mockCreateErw } = await import('@/lib/erw/client')
+      expect(mockCreateErw).not.toHaveBeenCalled()
+    })
+
+    it('still creates event locally when ERW fails', async () => {
+      mockModule.__mockInsertSuccess({ id: 'new-event-id' })
+      mockModule.__mockEventFound({ rwgps_id: null })
+      mockModule.__mockEventFound({ slug: 'toronto' })
+
+      const { createErwEvent: mockCreateErw } = await import('@/lib/erw/client')
+      vi.mocked(mockCreateErw).mockResolvedValueOnce({
+        success: false,
+        error: 'ERW API error: 500',
+      })
+
+      const result = await createEvent({
+        name: 'Test Brevet',
+        chapterId: 'chapter-1',
+        routeId: 'route-1',
+        eventType: 'brevet',
+        distanceKm: 200,
+        eventDate: '2025-06-15',
+      })
+
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data?.id).toBe('new-event-id')
+      }
     })
   })
 
