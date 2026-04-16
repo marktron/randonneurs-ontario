@@ -55,11 +55,28 @@ export type EventWithRegistrationCount = Event & {
 }
 
 /**
+ * Event with registration count and route RWGPS ID (for calendar views)
+ */
+export type EventWithRegistrationCountAndRoute = Event & {
+  public_registrations: Array<{ count: number }> | null
+  routes: Pick<Route, 'rwgps_id'> | null
+}
+
+/**
  * Event with registration count and chapter name (for all-chapters calendar)
  */
 export type EventWithRegistrationCountAndChapter = Event & {
   public_registrations: Array<{ count: number }> | null
   chapters: Pick<Chapter, 'slug' | 'name'> | null
+}
+
+/**
+ * Event with registration count, chapter name, and route RWGPS ID (for all-chapters calendar)
+ */
+export type EventWithRegistrationCountAndChapterAndRoute = Event & {
+  public_registrations: Array<{ count: number }> | null
+  chapters: Pick<Chapter, 'slug' | 'name'> | null
+  routes: Pick<Route, 'rwgps_id'> | null
 }
 
 /**

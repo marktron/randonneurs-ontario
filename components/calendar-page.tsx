@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
+import { useRouter } from 'next/navigation'
 import dynamic from 'next/dynamic'
 import { ListIcon, CalendarDaysIcon } from 'lucide-react'
 import { PageShell } from '@/components/page-shell'
@@ -27,8 +28,16 @@ type CalendarView = 'list' | 'grid'
 
 const STORAGE_KEY = 'ro-calendar-view'
 
+const chapterOptions: { value: string; label: string }[] = [
+  { value: 'all', label: 'All Chapters' },
+  { value: 'huron', label: 'Huron' },
+  { value: 'ottawa', label: 'Ottawa' },
+  { value: 'simcoe-muskoka', label: 'Simcoe-Muskoka' },
+  { value: 'toronto', label: 'Toronto' },
+]
+
 const distanceFilterOptions: { value: DistanceFilter; label: string }[] = [
-  { value: 'all', label: 'All distances' },
+  { value: 'all', label: 'All Distances' },
   { value: 'populaire', label: 'Populaires (under 200 km)' },
   { value: '200', label: '200 km' },
   { value: '300', label: '300 km' },
@@ -86,6 +95,7 @@ export function CalendarPage({
   coverImage,
   events,
 }: CalendarPageProps) {
+  const router = useRouter()
   const [distanceFilter, setDistanceFilter] = useState<DistanceFilter>('all')
   const [view, setView] = useState<CalendarView>('list')
 
@@ -115,40 +125,71 @@ export function CalendarPage({
         description={description}
       />
       <div className="content-container pt-6 pb-16 md:pt-10 md:pb-20">
-        <div className="flex flex-wrap items-center justify-end gap-3 mb-8">
-          <ToggleGroup
-            type="single"
-            value={view}
-            onValueChange={handleViewChange}
-            variant="outline"
-            size="sm"
-            aria-label="Calendar view"
-          >
-            <ToggleGroupItem value="list" aria-label="List view">
-              <ListIcon className="size-4" />
-              <span className="sr-only sm:not-sr-only sm:ml-1 text-xs">List</span>
-            </ToggleGroupItem>
-            <ToggleGroupItem value="grid" aria-label="Grid view">
-              <CalendarDaysIcon className="size-4" />
-              <span className="sr-only sm:not-sr-only sm:ml-1 text-xs">Grid</span>
-            </ToggleGroupItem>
-          </ToggleGroup>
-          <Select
-            value={distanceFilter}
-            onValueChange={(value) => setDistanceFilter(value as DistanceFilter)}
-          >
-            <SelectTrigger size="sm" aria-label="Filter by distance">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {distanceFilterOptions.map((option) => (
-                <SelectItem key={option.value} value={option.value}>
-                  {option.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <CalendarSubscribeButton chapter={chapterSlug} />
+        <div className="flex flex-col gap-3 mb-8 md:flex-row md:flex-wrap md:items-center md:justify-end">
+          <div className="flex items-center justify-between md:contents">
+            <ToggleGroup
+              type="single"
+              value={view}
+              onValueChange={handleViewChange}
+              variant="outline"
+              size="sm"
+              aria-label="Calendar view"
+            >
+              <ToggleGroupItem value="list" aria-label="List view">
+                <ListIcon className="size-4" />
+                <span className="ml-1 text-sm">List</span>
+              </ToggleGroupItem>
+              <ToggleGroupItem value="grid" aria-label="Grid view">
+                <CalendarDaysIcon className="size-4" />
+                <span className="ml-1 text-sm">Grid</span>
+              </ToggleGroupItem>
+            </ToggleGroup>
+            <div className="md:order-last">
+              <CalendarSubscribeButton chapter={chapterSlug} />
+            </div>
+          </div>
+          <div className="flex items-center gap-3 md:contents">
+            <Select
+              value={chapterSlug}
+              onValueChange={(value) => {
+                router.push(value === 'all' ? '/calendar' : `/calendar/${value}`)
+              }}
+            >
+              <SelectTrigger
+                size="sm"
+                className="flex-1 md:flex-none"
+                aria-label="Filter by chapter"
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {chapterOptions.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select
+              value={distanceFilter}
+              onValueChange={(value) => setDistanceFilter(value as DistanceFilter)}
+            >
+              <SelectTrigger
+                size="sm"
+                className="flex-1 md:flex-none"
+                aria-label="Filter by distance"
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {distanceFilterOptions.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
         <div aria-live="polite" aria-atomic="true">
           <p className="sr-only">

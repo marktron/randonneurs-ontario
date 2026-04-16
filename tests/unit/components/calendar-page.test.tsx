@@ -27,6 +27,11 @@ vi.mock('next/dynamic', () => ({
   },
 }))
 
+// Mock next/navigation
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: vi.fn() }),
+}))
+
 // Mock PageHero since it uses next/image
 vi.mock('@/components/page-hero', () => ({
   PageHero: ({ title }: { title: string }) => <div data-testid="page-hero">{title}</div>,
@@ -95,7 +100,7 @@ describe('CalendarPage', () => {
   it('renders the distance filter dropdown', () => {
     render(<CalendarPage {...defaultProps} />)
 
-    expect(screen.getByRole('combobox')).toBeInTheDocument()
+    expect(screen.getByRole('combobox', { name: 'Filter by distance' })).toBeInTheDocument()
   })
 
   it('renders the view toggle', () => {
@@ -161,7 +166,7 @@ describe('CalendarPage', () => {
     const user = userEvent.setup()
     render(<CalendarPage {...defaultProps} />)
 
-    await user.click(screen.getByRole('combobox'))
+    await user.click(screen.getByRole('combobox', { name: 'Filter by distance' }))
     await user.click(screen.getByRole('option', { name: '200 km' }))
 
     expect(screen.getByText('Spring 200')).toBeInTheDocument()
@@ -174,7 +179,7 @@ describe('CalendarPage', () => {
     const user = userEvent.setup()
     render(<CalendarPage {...defaultProps} />)
 
-    await user.click(screen.getByRole('combobox'))
+    await user.click(screen.getByRole('combobox', { name: 'Filter by distance' }))
     await user.click(screen.getByRole('option', { name: 'Populaires (under 200 km)' }))
 
     expect(screen.getByText('Spring 100')).toBeInTheDocument()
@@ -187,7 +192,7 @@ describe('CalendarPage', () => {
     const user = userEvent.setup()
     render(<CalendarPage {...defaultProps} />)
 
-    await user.click(screen.getByRole('combobox'))
+    await user.click(screen.getByRole('combobox', { name: 'Filter by distance' }))
     await user.click(screen.getByRole('option', { name: '400 km' }))
 
     const matches = screen.getAllByText('No events match the selected filter.')
@@ -201,14 +206,14 @@ describe('CalendarPage', () => {
     render(<CalendarPage {...defaultProps} />)
 
     // Filter to 200 km
-    await user.click(screen.getByRole('combobox'))
+    await user.click(screen.getByRole('combobox', { name: 'Filter by distance' }))
     await user.click(screen.getByRole('option', { name: '200 km' }))
 
     expect(screen.queryByText('Spring 100')).not.toBeInTheDocument()
 
     // Switch back to all
-    await user.click(screen.getByRole('combobox'))
-    await user.click(screen.getByRole('option', { name: 'All distances' }))
+    await user.click(screen.getByRole('combobox', { name: 'Filter by distance' }))
+    await user.click(screen.getByRole('option', { name: 'All Distances' }))
 
     expect(screen.getByText('Spring 100')).toBeInTheDocument()
     expect(screen.getByText('Spring 200')).toBeInTheDocument()
@@ -224,7 +229,7 @@ describe('CalendarPage', () => {
     await user.click(screen.getByRole('radio', { name: 'Grid view' }))
 
     // Filter to 200 km
-    await user.click(screen.getByRole('combobox'))
+    await user.click(screen.getByRole('combobox', { name: 'Filter by distance' }))
     await user.click(screen.getByRole('option', { name: '200 km' }))
 
     // Only the 200km event text should appear

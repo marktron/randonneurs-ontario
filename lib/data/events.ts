@@ -36,7 +36,9 @@ import {
 } from '@/lib/chapter-config'
 import type {
   EventWithRegistrationCount,
+  EventWithRegistrationCountAndRoute,
   EventWithRegistrationCountAndChapter,
+  EventWithRegistrationCountAndChapterAndRoute,
   EventWithRelations,
   EventSlug,
   GetRegisteredRidersResult,
@@ -73,7 +75,7 @@ const getEventsByChapterInner = cache(async (urlSlug: string): Promise<Event[]> 
   const [chapterResult, flecheResult] = await Promise.all([
     getSupabase()
       .from('events')
-      .select('*, public_registrations(count), chapters!inner(slug)')
+      .select('*, public_registrations(count), chapters!inner(slug), routes(rwgps_id)')
       .eq('chapters.slug', dbSlug)
       .eq('public_registrations.status', 'registered')
       .eq('status', 'scheduled')
@@ -84,7 +86,7 @@ const getEventsByChapterInner = cache(async (urlSlug: string): Promise<Event[]> 
       .order('distance_km', { ascending: false }),
     getSupabase()
       .from('events')
-      .select('*, public_registrations(count)')
+      .select('*, public_registrations(count), routes(rwgps_id)')
       .eq('public_registrations.status', 'registered')
       .eq('status', 'scheduled')
       .eq('event_type', 'fleche')
@@ -99,7 +101,7 @@ const getEventsByChapterInner = cache(async (urlSlug: string): Promise<Event[]> 
     )
   }
 
-  const transformEvent = (event: EventWithRegistrationCount) => ({
+  const transformEvent = (event: EventWithRegistrationCountAndRoute) => ({
     id: event.id,
     slug: event.slug,
     date: event.event_date,
@@ -109,12 +111,15 @@ const getEventsByChapterInner = cache(async (urlSlug: string): Promise<Event[]> 
     startLocation: event.start_location || '',
     startTime: event.start_time || '08:00',
     registeredCount: event.public_registrations?.[0]?.count ?? 0,
+    rwgpsId: event.routes?.rwgps_id ?? null,
   })
 
-  const chapterEvents = (chapterResult.data as EventWithRegistrationCount[]).map(transformEvent)
+  const chapterEvents = (chapterResult.data as EventWithRegistrationCountAndRoute[]).map(
+    transformEvent
+  )
   const flecheEvents = flecheResult.error
     ? []
-    : ((flecheResult.data || []) as EventWithRegistrationCount[]).map(transformEvent)
+    : ((flecheResult.data || []) as EventWithRegistrationCountAndRoute[]).map(transformEvent)
 
   // Merge and sort by date, then distance descending
   return [...chapterEvents, ...flecheEvents].sort((a, b) => {
@@ -149,7 +154,7 @@ const getAllUpcomingEventsInner = cache(async (): Promise<Event[]> => {
   const today = new Date().toISOString().split('T')[0]
   const { data: events, error } = await getSupabase()
     .from('events')
-    .select('*, public_registrations(count), chapters!inner(slug, name)')
+    .select('*, public_registrations(count), chapters!inner(slug, name), routes(rwgps_id)')
     .eq('public_registrations.status', 'registered')
     .eq('status', 'scheduled')
     .neq('event_type', 'permanent')
@@ -161,7 +166,7 @@ const getAllUpcomingEventsInner = cache(async (): Promise<Event[]> => {
     return handleDataError(error, { operation: 'getAllUpcomingEvents' }, [])
   }
 
-  return (events as EventWithRegistrationCountAndChapter[]).map((event) => ({
+  return (events as EventWithRegistrationCountAndChapterAndRoute[]).map((event) => ({
     id: event.id,
     slug: event.slug,
     date: event.event_date,
@@ -172,6 +177,7 @@ const getAllUpcomingEventsInner = cache(async (): Promise<Event[]> => {
     startTime: event.start_time || '08:00',
     registeredCount: event.public_registrations?.[0]?.count ?? 0,
     chapterName: event.chapters?.name || '',
+    rwgpsId: event.routes?.rwgps_id ?? null,
   }))
 })
 
@@ -192,7 +198,7 @@ const getPermanentEventsInner = cache(async (): Promise<Event[]> => {
   const today = new Date().toISOString().split('T')[0]
   const { data: events, error } = await getSupabase()
     .from('events')
-    .select('*, public_registrations(count)')
+    .select('*, public_registrations(count), routes(rwgps_id)')
     .eq('public_registrations.status', 'registered')
     .eq('event_type', 'permanent')
     .eq('status', 'scheduled')
@@ -205,7 +211,7 @@ const getPermanentEventsInner = cache(async (): Promise<Event[]> => {
   }
 
   // Transform to Event type
-  return (events as EventWithRegistrationCount[]).map((event) => ({
+  return (events as EventWithRegistrationCountAndRoute[]).map((event) => ({
     id: event.id,
     slug: event.slug,
     date: event.event_date,
@@ -215,6 +221,7 @@ const getPermanentEventsInner = cache(async (): Promise<Event[]> => {
     startLocation: event.start_location || '',
     startTime: event.start_time || '08:00',
     registeredCount: event.public_registrations?.[0]?.count ?? 0,
+    rwgpsId: event.routes?.rwgps_id ?? null,
   }))
 })
 

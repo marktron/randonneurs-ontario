@@ -90,9 +90,9 @@ describe('getMyUpcomingRides', () => {
     const regChain = setupRegistrationsQuery([
       {
         events: {
-          slug: 'test-ride-200km-2026-04-15',
+          slug: 'test-ride-200km-2026-07-15',
           name: 'Test Ride',
-          event_date: '2026-04-15',
+          event_date: '2026-07-15',
           distance_km: 200,
           start_time: '07:00',
           start_location: 'City Hall',
@@ -102,9 +102,9 @@ describe('getMyUpcomingRides', () => {
       },
       {
         events: {
-          slug: 'spring-ride-100km-2026-05-01',
+          slug: 'spring-ride-100km-2026-08-01',
           name: 'Spring Ride',
-          event_date: '2026-05-01',
+          event_date: '2026-08-01',
           distance_km: 100,
           start_time: '08:00',
           start_location: 'Park',
@@ -126,9 +126,9 @@ describe('getMyUpcomingRides', () => {
     expect(result.success).toBe(true)
     expect(result.data).toHaveLength(2)
     expect(result.data![0]).toEqual({
-      slug: 'test-ride-200km-2026-04-15',
+      slug: 'test-ride-200km-2026-07-15',
       name: 'Test Ride',
-      date: '2026-04-15',
+      date: '2026-07-15',
       distance: 200,
       startTime: '07:00',
       startLocation: 'City Hall',

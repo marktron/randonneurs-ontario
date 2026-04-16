@@ -14,6 +14,7 @@ export interface Event {
   startTime: string // HH:MM format
   registeredCount?: number // Number of registered riders
   chapterName?: string // Chapter name for all-chapters view
+  rwgpsId?: string | null // RideWithGPS route ID for route link
 }
 
 function formatDate(dateString: string): {
@@ -127,8 +128,19 @@ export function EventCard({
           )}
         </div>
 
-        <div className="mt-3 md:mt-0 md:absolute md:right-0 md:opacity-0 md:group-hover:opacity-100 md:transition-opacity">
-          <Button variant="outline" size="sm" asChild>
+        <div className="mt-3 md:mt-0 md:absolute md:right-0 md:opacity-0 md:group-hover:opacity-100 md:transition-opacity flex items-center gap-2">
+          {event.rwgpsId && (
+            <Button variant="outline" size="sm" asChild>
+              <a
+                href={`https://ridewithgps.com/routes/${event.rwgpsId}`}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Route
+              </a>
+            </Button>
+          )}
+          <Button variant="outline" size="sm" className="text-red-600 hover:text-red-600" asChild>
             <Link href={`/register/${event.slug}`}>Register</Link>
           </Button>
         </div>
