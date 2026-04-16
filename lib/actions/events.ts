@@ -406,7 +406,7 @@ export async function updateEventStatus(
     const { data: event, error: fetchError } = await getSupabaseAdmin()
       .from('events')
       .select(
-        'id, name, event_date, distance_km, chapter_id, event_type, status, erw_event_id, chapters(name)'
+        'id, name, event_date, distance_km, chapter_id, event_type, status, erw_event_id, chapters(name, slug)'
       )
       .eq('id', eventId)
       .single()

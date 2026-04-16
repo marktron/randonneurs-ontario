@@ -58,7 +58,7 @@ export async function GET(request: Request) {
     // Fetch all scheduled events (exclude cancelled and already completed/submitted)
     const { data: events, error: fetchError } = await supabase
       .from('events')
-      .select('id, name, event_date, start_time, distance_km, chapters(name)')
+      .select('id, name, event_date, start_time, distance_km, chapters(name, slug)')
       .eq('status', 'scheduled')
 
     if (fetchError) {

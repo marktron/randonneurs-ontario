@@ -239,7 +239,7 @@ export type EventWithChapterName = Pick<
   Event,
   'id' | 'name' | 'event_date' | 'distance_km' | 'chapter_id' | 'event_type' | 'status'
 > & {
-  chapters: Pick<Chapter, 'name'> | null
+  chapters: Pick<Chapter, 'name' | 'slug'> | null
 }
 
 /**
@@ -494,7 +494,7 @@ export type EventForCronCompletion = Pick<
   Event,
   'id' | 'name' | 'event_date' | 'start_time' | 'distance_km'
 > & {
-  chapters: Pick<Chapter, 'name'> | null
+  chapters: Pick<Chapter, 'name' | 'slug'> | null
 }
 
 /**

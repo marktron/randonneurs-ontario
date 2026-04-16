@@ -1,6 +1,7 @@
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { sendEmail, fromEmail, isEmailConfigured } from '@/lib/email/ses'
 import { buildResultSubmissionRequestEmail } from '@/lib/email/templates'
+import { getVpEmail } from '@/lib/email/vp-emails'
 import { format } from 'date-fns'
 import { parseLocalDate } from '@/lib/utils'
 import type {
@@ -15,7 +16,7 @@ interface EventForCompletion {
   name: string
   event_date: string
   distance_km: number
-  chapters: { name: string } | null
+  chapters: { name: string; slug: string } | null
 }
 
 interface CreatedResult {
@@ -126,6 +127,7 @@ export async function createPendingResultsAndSendEmails(
 
   // Send emails to riders with their submission links
   const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://randonneursontario.ca'
+  const vpEmail = event.chapters?.slug ? getVpEmail(event.chapters.slug) : null
 
   for (const result of created) {
     const submissionUrl = `${baseUrl}/results/submit/${result.submissionToken}`
@@ -147,6 +149,7 @@ export async function createPendingResultsAndSendEmails(
         await sendEmail({
           to: result.riderEmail,
           from: fromEmail,
+          replyTo: vpEmail || undefined,
           subject,
           text,
           html,
