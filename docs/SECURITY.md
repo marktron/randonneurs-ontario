@@ -32,6 +32,15 @@ The following headers are set on all responses via `next.config.ts`:
 - `Referrer-Policy: strict-origin-when-cross-origin` - limits referrer leakage
 - `Permissions-Policy` - disables camera, microphone, geolocation
 
+## Anti-Spam on Public Forms
+
+Event registration (`/register/[slug]`, `/register/permanent`) is publicly accessible and has two layers of bot protection. Both guards return a silent `{ success: true }` so that bots can't infer which check tripped:
+
+1. **Honeypot field** — `HoneypotField` renders a hidden `homepage_url` input in each registration form. Real users can't see or tab to it; bots that fill every field trip the guard. Checked at the top of `registerForEvent`, `registerForPermanent`, and `completeRegistrationWithRider`.
+2. **Vercel BotID** — invisible challenge run by `initBotId` (in `instrumentation-client.ts`) and verified server-side via `checkBotId()`. Protected paths are declared as `POST /register/*`. In local dev `checkBotId()` always returns `{ isBot: false }`; to simulate a bot verdict use `developmentOptions: { bypass: 'BAD-BOT' }`.
+
+Rate limiting by email (`isRateLimited`) still applies as a third layer.
+
 ## Input Validation
 
 - **Email templates** escape all user-supplied values with `escapeHtml()` to prevent HTML injection

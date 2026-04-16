@@ -26,6 +26,7 @@
  */
 'use server'
 
+import { checkBotId } from 'botid/server'
 import { revalidatePath, revalidateTag } from 'next/cache'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { sendRegistrationConfirmationEmail } from '@/lib/email/send-registration-email'
@@ -65,6 +66,8 @@ export interface RegistrationData {
   emergencyContactPhone: string
   teamName?: string
   isTeamCaptain?: boolean
+  /** Honeypot field — must be empty. Non-empty value means bot; we silently drop. */
+  homepageUrl?: string
 }
 
 export interface RegistrationResult {
@@ -366,6 +369,16 @@ async function createRegistrationRecord(
  * @returns Success/error result
  */
 export async function registerForEvent(data: RegistrationData): Promise<RegistrationResult> {
+  // Silent spam guards — honeypot and BotID. Bots see a success response; no
+  // DB write happens and no email is sent.
+  if (data.homepageUrl && data.homepageUrl.trim() !== '') {
+    return { success: true }
+  }
+  const verification = await checkBotId()
+  if (verification.isBot) {
+    return { success: true }
+  }
+
   const {
     eventId,
     firstName,
@@ -671,11 +684,21 @@ export interface PermanentRegistrationData {
   notes?: string
   emergencyContactName: string
   emergencyContactPhone: string
+  /** Honeypot field — must be empty. Non-empty value means bot; we silently drop. */
+  homepageUrl?: string
 }
 
 export async function registerForPermanent(
   data: PermanentRegistrationData
 ): Promise<RegistrationResult> {
+  if (data.homepageUrl && data.homepageUrl.trim() !== '') {
+    return { success: true }
+  }
+  const verification = await checkBotId()
+  if (verification.isBot) {
+    return { success: true }
+  }
+
   const {
     routeId,
     eventDate,
@@ -1031,6 +1054,8 @@ export interface CompleteRegistrationData {
   emergencyContactPhone: string
   teamName?: string
   isTeamCaptain?: boolean
+  /** Honeypot field — must be empty. Non-empty value means bot; we silently drop. */
+  homepageUrl?: string
 }
 
 /**
@@ -1048,6 +1073,14 @@ export interface CompleteRegistrationData {
 export async function completeRegistrationWithRider(
   data: CompleteRegistrationData
 ): Promise<RegistrationResult> {
+  if (data.homepageUrl && data.homepageUrl.trim() !== '') {
+    return { success: true }
+  }
+  const verification = await checkBotId()
+  if (verification.isBot) {
+    return { success: true }
+  }
+
   const {
     eventId,
     selectedRiderId,

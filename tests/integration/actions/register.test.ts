@@ -9,16 +9,25 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
  */
 
 // Mock Supabase with a minimal implementation
-vi.mock('@/lib/supabase-server', () => ({
-  getSupabaseAdmin: vi.fn(() => ({
-    from: vi.fn(() => ({
-      select: vi.fn(() => ({
-        eq: vi.fn(() => ({
-          single: vi.fn().mockResolvedValue({ data: null, error: { code: 'PGRST116' } }),
-        })),
+const mockGetSupabaseAdmin = vi.fn(() => ({
+  from: vi.fn(() => ({
+    select: vi.fn(() => ({
+      eq: vi.fn(() => ({
+        single: vi.fn().mockResolvedValue({ data: null, error: { code: 'PGRST116' } }),
       })),
     })),
   })),
+}))
+
+vi.mock('@/lib/supabase-server', () => ({
+  getSupabaseAdmin: () => mockGetSupabaseAdmin(),
+}))
+
+// Mock BotID — default to human (not-bot), individual tests can override
+const mockCheckBotId = vi.fn(async () => ({ isBot: false }))
+
+vi.mock('botid/server', () => ({
+  checkBotId: () => mockCheckBotId(),
 }))
 
 // Mock Next.js cache
@@ -215,6 +224,131 @@ describe('registerForPermanent', () => {
 
       expect(result.success).toBe(false)
       expect(result.error).toBe('Missing required fields')
+    })
+  })
+})
+
+describe('spam guards', () => {
+  beforeEach(() => {
+    mockGetSupabaseAdmin.mockClear()
+    mockCheckBotId.mockReset()
+    mockCheckBotId.mockResolvedValue({ isBot: false })
+  })
+
+  describe('honeypot', () => {
+    it('registerForEvent returns silent success and does not touch the database when honeypot is filled', async () => {
+      const result = await registerForEvent({
+        eventId: 'event-123',
+        firstName: 'Spam',
+        lastName: 'Bot',
+        email: 'spam@example.com',
+        shareRegistration: false,
+        emergencyContactName: 'Emergency Contact',
+        emergencyContactPhone: '555-1234',
+        homepageUrl: 'https://spam.example.com',
+      })
+
+      expect(result).toEqual({ success: true })
+      expect(mockGetSupabaseAdmin).not.toHaveBeenCalled()
+      expect(mockCheckBotId).not.toHaveBeenCalled()
+    })
+
+    it('registerForPermanent returns silent success when honeypot is filled', async () => {
+      vi.useFakeTimers()
+      vi.setSystemTime(new Date('2025-01-01T12:00:00'))
+
+      const result = await registerForPermanent({
+        routeId: 'route-123',
+        eventDate: '2025-01-20',
+        startTime: '08:00',
+        direction: 'as_posted',
+        firstName: 'Spam',
+        lastName: 'Bot',
+        email: 'spam@example.com',
+        shareRegistration: false,
+        emergencyContactName: 'Emergency Contact',
+        emergencyContactPhone: '555-1234',
+        homepageUrl: 'x',
+      })
+
+      expect(result).toEqual({ success: true })
+      expect(mockGetSupabaseAdmin).not.toHaveBeenCalled()
+      vi.useRealTimers()
+    })
+
+    it('empty honeypot string does not trigger the guard', async () => {
+      const result = await registerForEvent({
+        eventId: 'event-123',
+        firstName: 'Real',
+        lastName: 'User',
+        email: 'real@example.com',
+        shareRegistration: false,
+        emergencyContactName: 'Emergency Contact',
+        emergencyContactPhone: '555-1234',
+        homepageUrl: '',
+      })
+
+      // Proceeds to normal flow (which hits the mocked event-not-found path)
+      expect(result.success).toBe(false)
+      expect(mockCheckBotId).toHaveBeenCalled()
+    })
+
+    it('whitespace-only honeypot does not trigger the guard', async () => {
+      const result = await registerForEvent({
+        eventId: 'event-123',
+        firstName: 'Real',
+        lastName: 'User',
+        email: 'real@example.com',
+        shareRegistration: false,
+        emergencyContactName: 'Emergency Contact',
+        emergencyContactPhone: '555-1234',
+        homepageUrl: '   ',
+      })
+
+      expect(result.success).toBe(false)
+      expect(mockCheckBotId).toHaveBeenCalled()
+    })
+  })
+
+  describe('BotID', () => {
+    it('registerForEvent returns silent success when BotID flags request as bot', async () => {
+      mockCheckBotId.mockResolvedValue({ isBot: true })
+
+      const result = await registerForEvent({
+        eventId: 'event-123',
+        firstName: 'Stealth',
+        lastName: 'Bot',
+        email: 'stealth@example.com',
+        shareRegistration: false,
+        emergencyContactName: 'Emergency Contact',
+        emergencyContactPhone: '555-1234',
+      })
+
+      expect(result).toEqual({ success: true })
+      expect(mockGetSupabaseAdmin).not.toHaveBeenCalled()
+    })
+
+    it('registerForPermanent returns silent success when BotID flags request as bot', async () => {
+      mockCheckBotId.mockResolvedValue({ isBot: true })
+      vi.useFakeTimers()
+      vi.setSystemTime(new Date('2025-01-01T12:00:00'))
+
+      const result = await registerForPermanent({
+        routeId: 'route-123',
+        eventDate: '2025-01-20',
+        startTime: '08:00',
+        direction: 'as_posted',
+        firstName: 'Stealth',
+        lastName: 'Bot',
+        email: 'stealth@example.com',
+        shareRegistration: false,
+        emergencyContactName: 'Emergency Contact',
+        emergencyContactPhone: '555-1234',
+      })
+
+      expect(result).toEqual({ success: true })
+      expect(mockGetSupabaseAdmin).not.toHaveBeenCalled()
+      vi.useRealTimers()
     })
   })
 })

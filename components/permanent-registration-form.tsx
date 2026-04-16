@@ -31,6 +31,7 @@ import { RiderMatchDialog } from '@/components/rider-match-dialog'
 import { MembershipErrorModal } from '@/components/membership-error-modal'
 import type { RiderMatchCandidate } from '@/lib/actions/rider-match'
 import type { ActiveRoute } from '@/lib/data/routes'
+import { HoneypotField } from '@/components/honeypot-field'
 
 const STORAGE_KEY = 'ro-registration'
 
@@ -111,6 +112,7 @@ export function PermanentRegistrationForm({ routes }: PermanentRegistrationFormP
   const [emergencyContactName, setEmergencyContactName] = useState('')
   const [emergencyContactPhone, setEmergencyContactPhone] = useState('')
   const [notes, setNotes] = useState('')
+  const [homepageUrl, setHomepageUrl] = useState('')
 
   // UI state
   const [error, setError] = useState<string | null>(null)
@@ -205,6 +207,7 @@ export function PermanentRegistrationForm({ routes }: PermanentRegistrationFormP
         notes: notes || undefined,
         emergencyContactName,
         emergencyContactPhone,
+        homepageUrl,
       })
 
       if (result.success) {
@@ -246,6 +249,7 @@ export function PermanentRegistrationForm({ routes }: PermanentRegistrationFormP
         notes: notes || undefined,
         emergencyContactName,
         emergencyContactPhone,
+        homepageUrl,
       })
 
       if (result.success) {
@@ -311,6 +315,7 @@ export function PermanentRegistrationForm({ routes }: PermanentRegistrationFormP
       <h2 className="font-serif text-2xl mb-6">Schedule Your Ride</h2>
 
       <form className="space-y-6" onSubmit={handleSubmit}>
+        <HoneypotField value={homepageUrl} onChange={setHomepageUrl} />
         {error && (
           <div
             ref={errorRef}

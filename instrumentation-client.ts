@@ -3,6 +3,11 @@
 // https://docs.sentry.io/platforms/javascript/guides/nextjs/
 
 import * as Sentry from '@sentry/nextjs'
+import { initBotId } from 'botid/client/core'
+
+initBotId({
+  protect: [{ path: '/register/*', method: 'POST' }],
+})
 
 Sentry.init({
   dsn: 'https://d4b6e63820989882a9c3bf92bea953c0@o4510700580110336.ingest.us.sentry.io/4510700583321600',

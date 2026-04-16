@@ -127,6 +127,7 @@ describe('RegistrationForm', () => {
           notes: undefined,
           emergencyContactName: 'Jane Doe',
           emergencyContactPhone: '555-1234',
+          homepageUrl: '',
         })
       })
     })

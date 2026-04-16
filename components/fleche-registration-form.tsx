@@ -22,6 +22,7 @@ import { getUpcomingEventsByEventId, type UpcomingEvent } from '@/lib/actions/ri
 import { format } from 'date-fns'
 import { ArrowRight, AlertTriangle } from 'lucide-react'
 import { MembershipErrorModal } from '@/components/membership-error-modal'
+import { HoneypotField } from '@/components/honeypot-field'
 import type { FlecheTeam } from '@/lib/data/events'
 
 const STORAGE_KEY = 'ro-registration'
@@ -84,6 +85,7 @@ export function FlecheRegistrationForm({
   const [gender, setGender] = useState<string>('')
   const [emergencyContactName, setEmergencyContactName] = useState('')
   const [emergencyContactPhone, setEmergencyContactPhone] = useState('')
+  const [homepageUrl, setHomepageUrl] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
 
@@ -160,6 +162,7 @@ export function FlecheRegistrationForm({
         emergencyContactPhone,
         teamName: resolvedTeamName,
         isTeamCaptain: teamMode === 'create',
+        homepageUrl,
       })
 
       if (result.success) {
@@ -211,6 +214,7 @@ export function FlecheRegistrationForm({
         emergencyContactPhone,
         teamName: resolvedTeamName,
         isTeamCaptain: teamMode === 'create',
+        homepageUrl,
       })
 
       if (result.success) {
@@ -302,6 +306,7 @@ export function FlecheRegistrationForm({
       {variant === 'card' && <h2 className="font-serif text-2xl tracking-tight mb-6">Register</h2>}
 
       <form className="space-y-5" onSubmit={handleSubmit}>
+        <HoneypotField value={homepageUrl} onChange={setHomepageUrl} />
         {error && (
           <div
             ref={errorRef}

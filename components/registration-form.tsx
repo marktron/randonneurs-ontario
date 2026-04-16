@@ -22,6 +22,7 @@ import { getUpcomingEventsByEventId, type UpcomingEvent } from '@/lib/actions/ri
 import { format } from 'date-fns'
 import { ArrowRight } from 'lucide-react'
 import { MembershipErrorModal } from '@/components/membership-error-modal'
+import { HoneypotField } from '@/components/honeypot-field'
 
 const STORAGE_KEY = 'ro-registration'
 
@@ -74,6 +75,7 @@ export function RegistrationForm({
   const [gender, setGender] = useState<string>('')
   const [emergencyContactName, setEmergencyContactName] = useState('')
   const [emergencyContactPhone, setEmergencyContactPhone] = useState('')
+  const [homepageUrl, setHomepageUrl] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
 
@@ -140,6 +142,7 @@ export function RegistrationForm({
         notes: notes || undefined,
         emergencyContactName,
         emergencyContactPhone,
+        homepageUrl,
       })
 
       if (result.success) {
@@ -198,6 +201,7 @@ export function RegistrationForm({
         notes: pendingNotes || undefined,
         emergencyContactName,
         emergencyContactPhone,
+        homepageUrl,
       })
 
       if (result.success) {
@@ -319,6 +323,7 @@ export function RegistrationForm({
       )}
 
       <form className="space-y-5" onSubmit={handleSubmit}>
+        <HoneypotField value={homepageUrl} onChange={setHomepageUrl} />
         {error && (
           <div
             ref={errorRef}
