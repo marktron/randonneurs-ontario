@@ -59,7 +59,7 @@ export function ControlCardsPrint({
       />
       <style jsx global>{`
         @page {
-          size: letter;
+          size: letter portrait;
           margin: 0;
         }
 
@@ -102,7 +102,7 @@ export function ControlCardsPrint({
 
         .control-cards-print {
           font-family: 'Noto Sans', sans-serif;
-          font-stretch: 62.5%;
+          font-stretch: 50%;
           font-size: 7.5pt;
           line-height: 1.3;
           color: #000;
@@ -129,6 +129,7 @@ export function ControlCardsPrint({
           display: flex;
           flex-direction: column;
           background: white;
+          padding: 0.1in;
         }
 
         .card-half {
@@ -145,13 +146,13 @@ export function ControlCardsPrint({
 
         .rider-name-vertical {
           position: absolute;
-          top: 0.2in;
-          right: 0.2in;
+          top: 0.25in;
+          right: 0.25in;
           writing-mode: vertical-rl;
           font-family: 'Noto Sans', sans-serif;
           font-size: 12pt;
           font-weight: 500;
-          color: #808080;
+          color: #a8a8a8;
           white-space: nowrap;
         }
 
@@ -321,7 +322,7 @@ export function ControlCardsPrint({
 
         .control-header {
           display: grid;
-          grid-template-columns: 1fr 0.65in 0.85fr;
+          grid-template-columns: 1fr 0.6in 0.85fr;
           align-items: stretch;
           font-size: 8pt;
           text-transform: uppercase;
@@ -343,7 +344,7 @@ export function ControlCardsPrint({
 
         .control-row {
           display: grid;
-          grid-template-columns: 1fr 0.65in 0.85fr;
+          grid-template-columns: 1fr 0.6in 0.85fr;
           min-height: 1in;
           border-bottom: 1px solid #d9d9d9;
         }
@@ -355,23 +356,21 @@ export function ControlCardsPrint({
 
         .control-name {
           font-weight: 600;
-          font-size: 11pt;
-          text-transform: uppercase;
+          font-size: 10pt;
           line-height: 1.1;
         }
 
         .control-distance {
           font-size: 9pt;
           font-variant-numeric: tabular-nums;
-          color: #000;
-          margin-top: 0.02in;
+          margin-top: 0.025in;
+          margin-bottom: 0.025in;
         }
 
         .control-times {
           font-size: 9pt;
           color: #525252;
           font-variant-numeric: tabular-nums;
-          margin-top: 0.02in;
         }
 
         .time-cell {
