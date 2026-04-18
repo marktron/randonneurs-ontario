@@ -1,3 +1,5 @@
+import { formatRideName } from '@/lib/events/format'
+
 /**
  * Escape HTML special characters to prevent injection in email templates.
  */
@@ -33,7 +35,7 @@ export function buildRegistrationConfirmationEmail(data: RegistrationEmailData):
   text: string
   html: string
 } {
-  const rideName = `${data.eventName} ${data.eventDistance}`
+  const rideName = formatRideName(data.eventName, data.eventDistance)
   const subject = `Registration Received: ${rideName}`
 
   // Escape user-supplied values for safe HTML interpolation
@@ -276,7 +278,7 @@ export function buildResultSubmissionRequestEmail(data: ResultSubmissionEmailDat
   text: string
   html: string
 } {
-  const rideName = `${data.eventName} ${data.eventDistance}km`
+  const rideName = formatRideName(data.eventName, data.eventDistance)
   const subject = `Submit Your Results: ${rideName}`
 
   // Escape user-supplied values for safe HTML interpolation
@@ -397,7 +399,7 @@ export function buildCancellationConfirmationEmail(data: CancellationEmailData):
   text: string
   html: string
 } {
-  const rideName = `${data.eventName} ${data.eventDistance}km`
+  const rideName = formatRideName(data.eventName, data.eventDistance)
   const subject = `Registration Cancelled: ${rideName}`
 
   const safe = {

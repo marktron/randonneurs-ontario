@@ -15,6 +15,7 @@ import {
 import { MapPinIcon, CalendarIcon, CloudSun } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { EventJsonLd } from '@/components/structured-data'
+import { formatRideName } from '@/lib/events/format'
 
 interface PageProps {
   params: Promise<{ slug: string }>
@@ -39,11 +40,12 @@ export async function generateMetadata({ params }: PageProps) {
     ? `${new Date(event.date + 'T00:00:00').getFullYear()} Flèche${event.startLocation ? ` – ${event.startLocation}` : ''}`
     : null
 
+  const rideName = formatRideName(event.name, event.distance)
   return {
-    title: `Register for ${flecheTitle || `${event.name} ${event.distance}km`}`,
+    title: `Register for ${flecheTitle || rideName}`,
     description: isFlecheMeta
       ? `Register your team for the ${flecheTitle} on ${formatDateShort(event.date)}.`
-      : `Register for the ${event.name} ${event.distance}km ${event.type.toLowerCase()} on ${formatDateShort(event.date)}.`,
+      : `Register for the ${rideName} ${event.type.toLowerCase()} on ${formatDateShort(event.date)}.`,
   }
 }
 
@@ -97,7 +99,7 @@ export default async function RegisterPage({ params }: PageProps) {
   return (
     <PageShell>
       <EventJsonLd
-        name={flecheDisplayName || `${event.name} ${event.distance}km`}
+        name={flecheDisplayName || formatRideName(event.name, event.distance)}
         date={event.date}
         startTime={event.startTime}
         location={event.startLocation}

@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation'
 import { PageShell } from '@/components/page-shell'
 import { ResultSubmissionForm } from '@/components/result-submission-form'
 import { getResultByToken } from '@/lib/actions/rider-results'
+import { formatRideName } from '@/lib/events/format'
 
 interface PageProps {
   params: Promise<{ token: string }>
@@ -19,9 +20,10 @@ export async function generateMetadata({ params }: PageProps) {
     }
   }
 
+  const rideName = formatRideName(result.data.eventName, result.data.eventDistance)
   return {
-    title: `Submit Result: ${result.data.eventName} ${result.data.eventDistance}km`,
-    description: `Submit your result for the ${result.data.eventName} ${result.data.eventDistance}km event.`,
+    title: `Submit Result: ${rideName}`,
+    description: `Submit your result for the ${rideName} event.`,
   }
 }
 

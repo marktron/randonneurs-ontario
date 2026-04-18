@@ -3,6 +3,7 @@ import { PageShell } from '@/components/page-shell'
 import { RegistrationManage } from '@/components/registration-manage'
 import { getRegistrationByToken } from '@/lib/actions/manage-registration'
 import { createTorontoDate } from '@/lib/brmTimes'
+import { formatRideName } from '@/lib/events/format'
 import { parseISO } from 'date-fns'
 
 interface PageProps {
@@ -20,7 +21,7 @@ export async function generateMetadata({ params }: PageProps) {
   }
 
   return {
-    title: `Manage Registration: ${data.event.name} ${data.event.distance_km}km`,
+    title: `Manage Registration: ${formatRideName(data.event.name, data.event.distance_km)}`,
   }
 }
 

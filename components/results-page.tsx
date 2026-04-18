@@ -204,12 +204,10 @@ export function ResultsPage({
                           href={`/routes/${event.routeChapterSlug ?? chapterSlug}/${event.routeSlug}`}
                           className="hover:text-primary transition-colors"
                         >
-                          {event.name} {event.distance}
+                          {event.name}
                         </Link>
                       ) : (
-                        <>
-                          {event.name} {event.distance}
-                        </>
+                        <>{event.name}</>
                       )}
                     </h2>
                     <p className="text-sm text-muted-foreground mt-1">

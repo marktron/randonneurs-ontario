@@ -15,6 +15,7 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
 import { cancelRegistration, createEarlyResult } from '@/lib/actions/manage-registration'
+import { formatRideName } from '@/lib/events/format'
 import { format, parseISO } from 'date-fns'
 import { CalendarDays, MapPin, Clock, XCircle, Send } from 'lucide-react'
 import Link from 'next/link'
@@ -62,7 +63,7 @@ export function RegistrationManage({
   const [cancelled, setCancelled] = useState(registration.status === 'cancelled')
 
   const riderName = `${rider.first_name} ${rider.last_name}`
-  const rideName = `${event.name} ${event.distance_km}km`
+  const rideName = formatRideName(event.name, event.distance_km)
   const formattedDate = format(parseISO(event.event_date), 'EEEE, MMMM d, yyyy')
 
   function formatTime(timeStr: string | null): string {
