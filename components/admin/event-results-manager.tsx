@@ -865,10 +865,12 @@ export function EventResultsManager({
           <Alert className="bg-green-50 border-green-200 dark:bg-green-950/30 dark:border-green-800">
             <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" />
             <AlertTitle className="text-green-800 dark:text-green-300">
-              Results Submitted
+              {eventType === 'permanent' ? 'Results Finalized' : 'Results Submitted'}
             </AlertTitle>
             <AlertDescription className="text-green-700 dark:text-green-400">
-              Results have been emailed to the VP of Brevet Administration for recording.
+              {eventType === 'permanent'
+                ? 'Results have been finalized and recorded.'
+                : 'Results have been emailed to the VP of Brevet Administration for recording.'}
             </AlertDescription>
           </Alert>
         )}
@@ -968,6 +970,7 @@ export function EventResultsManager({
           <SubmitResultsButton
             eventId={eventId}
             eventName={eventName}
+            eventType={eventType}
             resultsCount={results.length}
             onSuccess={() => setIsSubmitted(true)}
           />

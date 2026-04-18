@@ -18,14 +18,29 @@ import { Loader2, Send } from 'lucide-react'
 interface SubmitResultsButtonProps {
   eventId: string
   eventName: string
+  eventType: string
   resultsCount: number
   onSuccess?: () => void
 }
 
-export function SubmitResultsButton({ eventId, eventName, resultsCount, onSuccess }: SubmitResultsButtonProps) {
+export function SubmitResultsButton({
+  eventId,
+  eventName,
+  eventType,
+  resultsCount,
+  onSuccess,
+}: SubmitResultsButtonProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [showConfirm, setShowConfirm] = useState(false)
+
+  const isPermanent = eventType === 'permanent'
+  const buttonLabel = isPermanent
+    ? 'Finalize Results'
+    : 'Submit Results to VP of Brevet Administration'
+  const dialogTitle = isPermanent ? 'Finalize Results?' : 'Submit Results?'
+  const confirmLabel = isPermanent ? 'Finalize Results' : 'Submit Results'
+  const riderWord = resultsCount === 1 ? 'rider' : 'riders'
 
   const handleSubmit = () => {
     setShowConfirm(false)
@@ -33,30 +48,29 @@ export function SubmitResultsButton({ eventId, eventName, resultsCount, onSucces
       const result = await submitEventResults(eventId)
 
       if (result.success) {
-        toast.success('Results submitted successfully')
+        toast.success(isPermanent ? 'Results finalized' : 'Results submitted successfully')
         onSuccess?.()
         router.refresh()
       } else {
-        toast.error(result.error || 'Failed to submit results')
+        toast.error(
+          result.error || (isPermanent ? 'Failed to finalize results' : 'Failed to submit results')
+        )
       }
     })
   }
 
   return (
     <>
-      <Button
-        onClick={() => setShowConfirm(true)}
-        disabled={isPending}
-      >
+      <Button onClick={() => setShowConfirm(true)} disabled={isPending}>
         {isPending ? (
           <>
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            Submitting...
+            {isPermanent ? 'Finalizing...' : 'Submitting...'}
           </>
         ) : (
           <>
             <Send className="mr-2 h-4 w-4" />
-            Submit Results to VP of Brevet Administration
+            {buttonLabel}
           </>
         )}
       </Button>
@@ -64,9 +78,19 @@ export function SubmitResultsButton({ eventId, eventName, resultsCount, onSucces
       <Dialog open={showConfirm} onOpenChange={setShowConfirm}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Submit Results?</DialogTitle>
+            <DialogTitle>{dialogTitle}</DialogTitle>
             <DialogDescription>
-              This will email the results for <strong>{eventName}</strong> ({resultsCount} rider{resultsCount !== 1 ? 's' : ''}) to the VP of Brevet Administration and mark the event as submitted.
+              {isPermanent ? (
+                <>
+                  This will mark <strong>{eventName}</strong> ({resultsCount} {riderWord}) as
+                  submitted.
+                </>
+              ) : (
+                <>
+                  This will email the results for <strong>{eventName}</strong> ({resultsCount}{' '}
+                  {riderWord}) to the VP of Brevet Administration and mark the event as submitted.
+                </>
+              )}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -75,7 +99,7 @@ export function SubmitResultsButton({ eventId, eventName, resultsCount, onSucces
             </Button>
             <Button onClick={handleSubmit}>
               <Send className="mr-2 h-4 w-4" />
-              Submit Results
+              {confirmLabel}
             </Button>
           </DialogFooter>
         </DialogContent>
