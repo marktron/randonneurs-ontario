@@ -24,7 +24,11 @@ Sentry.init({
   // https://docs.sentry.io/platforms/javascript/guides/nextjs/configuration/options/#sendDefaultPii
   sendDefaultPii: false,
 
-  ignoreErrors: [/Invalid call to runtime\.sendMessage/, /Java object is gone/],
+  ignoreErrors: [
+    /Invalid call to runtime\.sendMessage/,
+    /Java object is gone/,
+    /window\.webkit\.messageHandlers/,
+  ],
 })
 
 export const onRouterTransitionStart = Sentry.captureRouterTransitionStart
