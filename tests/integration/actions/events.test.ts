@@ -346,6 +346,13 @@ describe('submitEventResults', () => {
         ]),
       })
     )
+
+    // Verify body formats times as "Xh MM" with no seconds
+    const call = (sendEmail as unknown as { mock: { calls: Array<Array<{ text: string }>> } }).mock
+      .calls[0][0]
+    expect(call.text).toContain('John Doe: 10h 30')
+    expect(call.text).toContain('Jane Smith: 11h 00')
+    expect(call.text).not.toMatch(/\d:\d{2}:\d{2}/)
   })
 
   it('does not send email for permanent events', async () => {

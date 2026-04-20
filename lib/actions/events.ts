@@ -4,7 +4,7 @@ import { revalidatePath, revalidateTag } from 'next/cache'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { requireAdmin } from '@/lib/auth/get-admin'
 import { sendEmail, fromEmail, isEmailConfigured } from '@/lib/email/ses'
-import { parseLocalDate, createSlug } from '@/lib/utils'
+import { parseLocalDate, createSlug, formatFinishTimeHm } from '@/lib/utils'
 import { getUrlSlugFromDbSlug } from '@/lib/chapter-config'
 import { createPendingResultsAndSendEmails } from '@/lib/events/complete-event'
 import { createErwEvent, updateErwEvent, deleteErwEvent } from '@/lib/erw/client'
@@ -581,7 +581,7 @@ export async function submitEventResults(eventId: string): Promise<ActionResult>
 
       const resultLines = sortedForEmail.map((r) => {
         const name = `${r.riders.first_name} ${r.riders.last_name}`
-        const time = r.finish_time || '-'
+        const time = r.finish_time ? formatFinishTimeHm(r.finish_time) : '-'
         return `${name}: ${time}`
       })
 

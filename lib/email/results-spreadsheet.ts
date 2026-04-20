@@ -1,4 +1,5 @@
 import ExcelJS from 'exceljs'
+import { formatFinishTimeHm } from '@/lib/utils'
 
 export interface AcpResultRow {
   lastName: string
@@ -20,17 +21,6 @@ function sanitizeFilename(name: string): string {
     .replace(/[^a-zA-Z0-9-]/g, '-')
     .replace(/-{2,}/g, '-')
     .replace(/^-|-$/g, '')
-}
-
-function formatFinishTime(time: string): string {
-  // PostgreSQL interval comes back as "HH:MM:SS" — format as "Xh MM"
-  const parts = time.split(':')
-  if (parts.length >= 2) {
-    const hours = parseInt(parts[0], 10)
-    const minutes = parts[1]
-    return `${hours}h ${minutes}`
-  }
-  return time
 }
 
 // Shared border styles
@@ -201,7 +191,7 @@ export async function generateAcpXlsx(data: SpreadsheetData): Promise<{
       'Randonneurs Ontario',
       '',
       '',
-      rider.finishTime ? formatFinishTime(rider.finishTime) : '',
+      rider.finishTime ? formatFinishTimeHm(rider.finishTime) : '',
       '',
       rider.gender === 'F' ? 'F' : '',
     ])
@@ -304,7 +294,7 @@ export function generateAcpCsv(data: SpreadsheetData): {
         'Randonneurs Ontario',
         '',
         '',
-        row.finishTime ? formatFinishTime(row.finishTime) : '',
+        row.finishTime ? formatFinishTimeHm(row.finishTime) : '',
         '',
         row.gender === 'F' ? 'F' : '',
       ]

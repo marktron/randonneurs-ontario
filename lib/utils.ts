@@ -63,6 +63,23 @@ export function formatFinishTime(interval: string | null): string {
 }
 
 /**
+ * Format a PostgreSQL interval finish time as "Xh MM" (e.g., "10h 30").
+ * Matches the format used in ACP homologation spreadsheets.
+ */
+export function formatFinishTimeHm(interval: string | null): string {
+  if (!interval) return ''
+
+  const match = interval.match(/(?:(\d+)\s*days?\s*)?(\d+):(\d{2})(?::\d{2})?/)
+  if (!match) return interval
+
+  const days = parseInt(match[1] || '0', 10)
+  const hours = parseInt(match[2], 10) + days * 24
+  const minutes = match[3]
+
+  return `${hours}h ${minutes}`
+}
+
+/**
  * Parse a PostgreSQL interval finish time to total minutes.
  * Used for comparing finish times to find course records.
  * Returns null if the time cannot be parsed.

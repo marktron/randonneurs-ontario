@@ -4,6 +4,7 @@ import {
   formatEventType,
   parseLocalDate,
   formatFinishTime,
+  formatFinishTimeHm,
   parseFinishTimeToMinutes,
   buildParticipantMailtoUrl,
 } from '@/lib/utils'
@@ -170,6 +171,32 @@ describe('formatFinishTime', () => {
     expect(formatFinishTime('1 day 11:45:00')).toBe('35:45')
     // 1200km in 85h00m (3 days 13:00)
     expect(formatFinishTime('3 days 13:00:00')).toBe('85:00')
+  })
+})
+
+describe('formatFinishTimeHm', () => {
+  it('returns empty string for null input', () => {
+    expect(formatFinishTimeHm(null)).toBe('')
+  })
+
+  it('formats HH:MM:SS to "Xh MM"', () => {
+    expect(formatFinishTimeHm('10:30:00')).toBe('10h 30')
+    expect(formatFinishTimeHm('08:45:00')).toBe('8h 45')
+    expect(formatFinishTimeHm('07:17:00')).toBe('7h 17')
+  })
+
+  it('preserves two-digit minutes', () => {
+    expect(formatFinishTimeHm('10:05:00')).toBe('10h 05')
+    expect(formatFinishTimeHm('01:00:00')).toBe('1h 00')
+  })
+
+  it('handles PostgreSQL interval with days', () => {
+    expect(formatFinishTimeHm('1 day 11:45:00')).toBe('35h 45')
+    expect(formatFinishTimeHm('3 days 13:00:00')).toBe('85h 00')
+  })
+
+  it('returns original string if pattern does not match', () => {
+    expect(formatFinishTimeHm('invalid')).toBe('invalid')
   })
 })
 
