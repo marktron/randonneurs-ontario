@@ -18,8 +18,8 @@ export function validateEmail(email: string): { valid: boolean; normalized: stri
  * Normalize a phone number into a consistent format.
  *
  * - Strips all non-digit characters (except leading +)
- * - 10-digit North American numbers → (XXX) XXX-XXXX
- * - 11-digit starting with 1 → (XXX) XXX-XXXX (drops the leading 1)
+ * - 10-digit North American numbers → XXX-XXX-XXXX
+ * - 11-digit starting with 1 → XXX-XXX-XXXX (drops the leading 1)
  * - Other formats with 7+ digits → passed through with digits only
  * - Fewer than 7 digits → treated as invalid
  *
@@ -38,11 +38,11 @@ export function normalizePhone(phone: string): { valid: boolean; formatted: stri
     return { valid: false, formatted: trimmed }
   }
 
-  // 10-digit North American: (416) 555-1234
+  // 10-digit North American: 416-555-1234
   if (digits.length === 10) {
     return {
       valid: true,
-      formatted: `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`,
+      formatted: `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6)}`,
     }
   }
 
@@ -51,7 +51,7 @@ export function normalizePhone(phone: string): { valid: boolean; formatted: stri
     const local = digits.slice(1)
     return {
       valid: true,
-      formatted: `(${local.slice(0, 3)}) ${local.slice(3, 6)}-${local.slice(6)}`,
+      formatted: `${local.slice(0, 3)}-${local.slice(3, 6)}-${local.slice(6)}`,
     }
   }
 

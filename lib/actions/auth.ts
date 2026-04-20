@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation'
 import { createSupabaseServerClient } from '@/lib/supabase-server-client'
 import { handleSupabaseError, createActionResult } from '@/lib/errors'
 import { isRateLimited } from '@/lib/rate-limit'
+import { normalizePhone } from '@/lib/utils/validation'
 import type { ActionResult } from '@/types/actions'
 
 export interface LoginResult {
@@ -103,6 +104,15 @@ export async function updateProfile(
     return { success: false, error: 'Name is required' }
   }
 
+  let normalizedPhone: string | null = null
+  if (phone && phone.trim()) {
+    const phoneResult = normalizePhone(phone)
+    if (!phoneResult.valid) {
+      return { success: false, error: 'Please enter a valid phone number' }
+    }
+    normalizedPhone = phoneResult.formatted
+  }
+
   const supabase = await createSupabaseServerClient()
 
   // Get current user
@@ -118,7 +128,7 @@ export async function updateProfile(
     .from('admins')
     .update({
       name: name.trim(),
-      phone: phone?.trim() || null,
+      phone: normalizedPhone,
       chapter_id: chapterId || null,
       updated_at: new Date().toISOString(),
     })

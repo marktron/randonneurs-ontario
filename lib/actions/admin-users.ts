@@ -6,6 +6,7 @@ import { requireAdmin } from '@/lib/auth/get-admin'
 import { logAuditEvent } from '@/lib/audit-log'
 import { handleSupabaseError, createActionResult, logError } from '@/lib/errors'
 import { isSuperAdmin } from '@/lib/auth/roles'
+import { normalizePhone } from '@/lib/utils/validation'
 import type { Database } from '@/types/supabase'
 import type { ActionResult } from '@/types/actions'
 import type { AdminInsert, AdminUpdate } from '@/types/queries'
@@ -40,6 +41,15 @@ export async function createAdminUser(data: AdminUserData): Promise<ActionResult
     return { success: false, error: 'Chapter admins must have a chapter assigned' }
   }
 
+  let normalizedPhone: string | null = null
+  if (phone && phone.trim()) {
+    const phoneResult = normalizePhone(phone)
+    if (!phoneResult.valid) {
+      return { success: false, error: 'Please enter a valid phone number' }
+    }
+    normalizedPhone = phoneResult.formatted
+  }
+
   // Create auth user first
   const { data: authData, error: authError } = await getSupabaseAdmin().auth.admin.createUser({
     email,
@@ -60,7 +70,7 @@ export async function createAdminUser(data: AdminUserData): Promise<ActionResult
     id: authData.user.id,
     email,
     name,
-    phone,
+    phone: normalizedPhone,
     role,
     chapter_id: role === 'chapter_admin' ? chapterId : null,
   }
@@ -106,9 +116,22 @@ export async function updateAdminUser(
     return { success: false, error: 'Chapter admins must have a chapter assigned' }
   }
 
+  let normalizedPhone: string | null | undefined = undefined
+  if (phone !== undefined) {
+    if (phone && phone.trim()) {
+      const phoneResult = normalizePhone(phone)
+      if (!phoneResult.valid) {
+        return { success: false, error: 'Please enter a valid phone number' }
+      }
+      normalizedPhone = phoneResult.formatted
+    } else {
+      normalizedPhone = null
+    }
+  }
+
   const updateData: AdminUpdate = {
     name,
-    phone,
+    phone: normalizedPhone,
     role,
     chapter_id: role === 'chapter_admin' ? chapterId : null,
   }

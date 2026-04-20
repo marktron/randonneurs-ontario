@@ -32,16 +32,16 @@ describe('validateEmail', () => {
 
 describe('normalizePhone', () => {
   it('formats 10-digit North American numbers', () => {
-    expect(normalizePhone('4165551234')).toEqual({ valid: true, formatted: '(416) 555-1234' })
-    expect(normalizePhone('416-555-1234')).toEqual({ valid: true, formatted: '(416) 555-1234' })
-    expect(normalizePhone('(416) 555-1234')).toEqual({ valid: true, formatted: '(416) 555-1234' })
-    expect(normalizePhone('416.555.1234')).toEqual({ valid: true, formatted: '(416) 555-1234' })
-    expect(normalizePhone('416 555 1234')).toEqual({ valid: true, formatted: '(416) 555-1234' })
+    expect(normalizePhone('4165551234')).toEqual({ valid: true, formatted: '416-555-1234' })
+    expect(normalizePhone('416-555-1234')).toEqual({ valid: true, formatted: '416-555-1234' })
+    expect(normalizePhone('(416) 555-1234')).toEqual({ valid: true, formatted: '416-555-1234' })
+    expect(normalizePhone('416.555.1234')).toEqual({ valid: true, formatted: '416-555-1234' })
+    expect(normalizePhone('416 555 1234')).toEqual({ valid: true, formatted: '416-555-1234' })
   })
 
   it('handles 11-digit with leading 1', () => {
-    expect(normalizePhone('14165551234')).toEqual({ valid: true, formatted: '(416) 555-1234' })
-    expect(normalizePhone('1-416-555-1234')).toEqual({ valid: true, formatted: '(416) 555-1234' })
+    expect(normalizePhone('14165551234')).toEqual({ valid: true, formatted: '416-555-1234' })
+    expect(normalizePhone('1-416-555-1234')).toEqual({ valid: true, formatted: '416-555-1234' })
   })
 
   it('passes through international numbers with +', () => {
