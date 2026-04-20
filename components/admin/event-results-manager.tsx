@@ -56,6 +56,7 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
 import { Badge } from '@/components/ui/badge'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import {
   createResult,
   updateResult,
@@ -471,7 +472,17 @@ function RiderRow({
           )}
           {participant.emergencyContactName && (
             <p className="text-xs text-muted-foreground">
-              ICE: {participant.emergencyContactName}
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="underline decoration-dotted underline-offset-2 cursor-help">
+                    ICE
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>In Case of Emergency</p>
+                </TooltipContent>
+              </Tooltip>
+              : {participant.emergencyContactName}
               {participant.emergencyContactPhone && ` (${participant.emergencyContactPhone})`}
             </p>
           )}
@@ -810,7 +821,7 @@ export function EventResultsManager({
       if (p.email) lines.push(p.email)
       if (p.emergencyContactName || p.emergencyContactPhone) {
         const ice = [p.emergencyContactName, p.emergencyContactPhone].filter(Boolean).join(' ')
-        lines.push(`ICE: ${ice}`)
+        lines.push(`Emergency Contact: ${ice}`)
       }
       lines.push('')
     }
