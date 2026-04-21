@@ -152,7 +152,7 @@ export function ControlCardsPrint({
           font-family: 'Noto Sans', sans-serif;
           font-size: 12pt;
           font-weight: 500;
-          color: #a8a8a8;
+          color: #808080;
           white-space: nowrap;
         }
 
