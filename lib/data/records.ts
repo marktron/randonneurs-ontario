@@ -131,6 +131,7 @@ function toStreakRecords(
     rider_slug: string
     rider_name: string
     streak_length: number
+    streak_start_season: number
     streak_end_season: number
   }> | null
 ): StreakRecord[] {
@@ -140,6 +141,7 @@ function toStreakRecords(
     riderSlug: row.rider_slug,
     riderName: row.rider_name,
     streakLength: row.streak_length,
+    streakStartSeason: row.streak_start_season,
     streakEndSeason: row.streak_end_season,
   }))
 }

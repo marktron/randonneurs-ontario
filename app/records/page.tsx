@@ -99,12 +99,14 @@ export default async function RecordsPage() {
             records={lifetime.longestStreaks}
             currentSeason={parseInt(currentSeason, 10)}
             valueLabel="Seasons"
+            description="2020 is treated as a gap year and does not break a streak"
           />
           <StreakRecordTable
             title="Longest Super Randonneur Streak"
             records={lifetime.srStreaks}
             currentSeason={parseInt(currentSeason, 10)}
             valueLabel="Seasons"
+            description="2020 is treated as a gap year and does not break a streak"
           />
         </div>
       </RecordSection>

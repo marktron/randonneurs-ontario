@@ -70,6 +70,7 @@ const mockStreakRecords = [
     rider_slug: 'john-doe',
     rider_name: 'John Doe',
     streak_length: 8,
+    streak_start_season: 2019,
     streak_end_season: 2026,
   },
   {
@@ -77,6 +78,7 @@ const mockStreakRecords = [
     rider_slug: 'jane-smith',
     rider_name: 'Jane Smith',
     streak_length: 5,
+    streak_start_season: 2021,
     streak_end_season: 2025,
   },
 ]
@@ -165,6 +167,7 @@ describe('Records Data Module', () => {
         riderSlug: expect.any(String),
         riderName: expect.any(String),
         streakLength: expect.any(Number),
+        streakStartSeason: expect.any(Number),
         streakEndSeason: expect.any(Number),
       })
     })

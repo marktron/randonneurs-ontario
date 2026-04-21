@@ -449,12 +449,25 @@ export function RouteRecordTable({ title, records, valueLabel }: RouteRecordTabl
   )
 }
 
+// "through YYYY" for a streak that is still alive (ended in the current or
+// previous season); "YYYY–YYYY" for finished streaks; empty when the streak
+// ends in the current season (so the value speaks for itself).
+function formatStreakLabel(record: StreakRecord, currentSeason: number): string | undefined {
+  if (record.streakEndSeason >= currentSeason) return undefined
+  if (record.streakEndSeason === currentSeason - 1) return `through ${record.streakEndSeason}`
+  if (!record.streakStartSeason || record.streakStartSeason === record.streakEndSeason) {
+    return `${record.streakEndSeason}`
+  }
+  return `${record.streakStartSeason}–${record.streakEndSeason}`
+}
+
 // Streak Records (longest consecutive seasons)
 interface StreakRecordTableProps {
   title: string
   records: StreakRecord[]
   currentSeason: number
   valueLabel: string
+  description?: string
 }
 
 export function StreakRecordTable({
@@ -462,6 +475,7 @@ export function StreakRecordTable({
   records,
   currentSeason,
   valueLabel,
+  description,
 }: StreakRecordTableProps) {
   if (!records || records.length === 0) {
     return <RecordTableContainer title={title} isEmpty />
@@ -471,6 +485,7 @@ export function StreakRecordTable({
 
   return (
     <RecordTableContainer title={title}>
+      {description && <p className="text-muted-foreground text-sm -mt-2 mb-4">{description}</p>}
       {/* Desktop table */}
       <div className="hidden md:block">
         <Table aria-labelledby={titleId}>
@@ -495,13 +510,14 @@ export function StreakRecordTable({
                   ) : (
                     record.riderName
                   )}
-                  {record.streakEndSeason < currentSeason ? (
-                    <span className="text-muted-foreground ml-2 font-normal">
-                      through {record.streakEndSeason}
-                    </span>
-                  ) : (
-                    <span className="sr-only">, streak continues</span>
-                  )}
+                  {(() => {
+                    const label = formatStreakLabel(record, currentSeason)
+                    return label ? (
+                      <span className="text-muted-foreground ml-2 font-normal">{label}</span>
+                    ) : (
+                      <span className="sr-only">, streak continues</span>
+                    )
+                  })()}
                 </TableCell>
                 <TableCell className="text-right tabular-nums">{record.streakLength}</TableCell>
               </TableRow>
@@ -518,11 +534,7 @@ export function StreakRecordTable({
             rank={record.rank}
             primary={record.riderName}
             primaryHref={record.riderSlug ? `/riders/${record.riderSlug}` : undefined}
-            secondary={
-              record.streakEndSeason < currentSeason
-                ? `through ${record.streakEndSeason}`
-                : undefined
-            }
+            secondary={formatStreakLabel(record, currentSeason)}
             value={record.streakLength}
             valueLabel={valueLabel}
             highlight={record.rank === 1}

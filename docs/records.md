@@ -28,6 +28,10 @@ Only streaks that could still be active are shown (ending in current or previous
 
 Streaks that ended more than one season ago are excluded since they can no longer be extended.
 
+#### 2020 Bridge Year
+
+The 2020 season is treated as a bridge year in both the Active Streak and Super Randonneur Streak calculations. Because the club ran very few events in 2020 due to COVID-19, a rider who didn't qualify in 2020 does not have their streak broken by that single year. 2020 counts toward streak length only when the rider actually qualified that season.
+
 ### ACP Awards
 
 Recipients of distance awards from Audax Club Parisien. These lists show all recipients (not ranked), sorted by most recent first. Initially limited to 10 entries with a "Show all" toggle to expand the full list.

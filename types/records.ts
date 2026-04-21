@@ -67,6 +67,7 @@ export interface StreakRecord {
   riderSlug: string
   riderName: string
   streakLength: number
+  streakStartSeason: number
   streakEndSeason: number
 }
 

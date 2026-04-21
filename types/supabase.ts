@@ -1137,6 +1137,7 @@ export type Database = {
           rider_slug: string
           streak_end_season: number
           streak_length: number
+          streak_start_season: number
         }[]
       }
       get_rider_permanent_counts: {
@@ -1156,6 +1157,7 @@ export type Database = {
           rider_slug: string
           streak_end_season: number
           streak_length: number
+          streak_start_season: number
         }[]
       }
       get_riders_by_latest_chapter: {
