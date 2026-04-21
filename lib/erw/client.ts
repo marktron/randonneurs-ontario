@@ -171,7 +171,15 @@ function buildErwPayload(event: ErwEventData): Record<string, unknown> {
   // Always use production URL — ERW events should link to the live site, not localhost
   const baseUrl = 'https://register.randonneursontario.ca'
 
-  const erwName = `${event.name} ${event.distanceKm}`
+  // Ensure the name ends with the distance (e.g. "Gentle Start 200") without
+  // duplicating it. The Apr-2026 bulk-rename script already appended distance
+  // to DB names for every synced event, so naive concatenation produces
+  // "Gentle Start 200 200" and can push the route name past its 50-char cap.
+  const trimmedName = event.name.trim()
+  const distanceSuffix = ` ${event.distanceKm}`
+  const erwName = trimmedName.endsWith(distanceSuffix)
+    ? trimmedName
+    : `${trimmedName}${distanceSuffix}`
 
   const payload: Record<string, unknown> = {
     name: erwName,
@@ -257,13 +265,64 @@ export async function createErwEvent(event: ErwEventData): Promise<ErwResult<Erw
   }
 }
 
+type ErwExistingEvent = {
+  updated?: string
+  routes?: Array<Record<string, unknown>>
+}
+
+type ErwErrorBody = {
+  message?: string
+  errors?: Record<string, unknown>
+}
+
+function formatErwError(status: number, data: unknown): string {
+  const body = data as ErwErrorBody | undefined
+  if (body?.errors && Object.keys(body.errors).length > 0) {
+    return `${body.message || 'Validation failed'}: ${JSON.stringify(body.errors)}`
+  }
+  return body?.message || `HTTP ${status}`
+}
+
+// Carry the existing routeId onto each incoming route so ERW updates routes in
+// place. Sending a route without a routeId tells ERW to delete the existing
+// route and re-create it — which triggers a sourceRouteUrl re-import and fails
+// validation on published events whose old routes already have path data.
+function mergeRouteIds(
+  incoming: unknown,
+  existing: Array<Record<string, unknown>> | undefined
+): unknown {
+  if (!Array.isArray(incoming)) return incoming
+  return incoming.map((route, i) => {
+    const existingRouteId = existing?.[i]?.routeId
+    return existingRouteId && typeof route === 'object' && route !== null
+      ? { ...route, routeId: existingRouteId }
+      : route
+  })
+}
+
+function buildUpdatePayload(
+  event: ErwEventData,
+  existing: ErwExistingEvent
+): Record<string, unknown> {
+  const base = buildErwPayload(event)
+  const merged: Record<string, unknown> = {
+    ...base,
+    updated: existing.updated,
+  }
+  if (base.routes !== undefined) {
+    merged.routes = mergeRouteIds(base.routes, existing.routes)
+  }
+  return merged
+}
+
 export async function updateErwEvent(
   erwEventId: string,
   event: ErwEventData
 ): Promise<ErwResult<ErwCreateResult>> {
   try {
-    // GET current event to obtain the `updated` timestamp for optimistic locking
-    const getResult = await erwFetch<{ updated: string }>({
+    // GET current event — we need `updated` for optimistic locking and existing
+    // routeIds so we can update routes in place instead of delete+create.
+    const getResult = await erwFetch<ErwExistingEvent>({
       method: 'GET',
       path: `/events/${erwEventId}`,
     })
@@ -282,20 +341,15 @@ export async function updateErwEvent(
       return { success: false, error: 'ERW returned incomplete data' }
     }
 
-    const payload = {
-      ...buildErwPayload(event),
-      updated: getResultData.updated,
-    }
-
     const putResult = await erwFetch<{ id: string; canonicalUrl: string }>({
       method: 'PUT',
       path: `/events/${erwEventId}`,
-      body: payload,
+      body: buildUpdatePayload(event, getResultData),
     })
 
     // On 409 conflict, retry once with a fresh GET
     if (putResult.status === 409) {
-      const freshGet = await erwFetch<{ updated: string }>({
+      const freshGet = await erwFetch<ErwExistingEvent>({
         method: 'GET',
         path: `/events/${erwEventId}`,
       })
@@ -313,24 +367,19 @@ export async function updateErwEvent(
         return { success: false, error: 'ERW returned incomplete data' }
       }
 
-      const retryPayload = {
-        ...buildErwPayload(event),
-        updated: freshGetData.updated,
-      }
-
       const retryPut = await erwFetch<{ id: string; canonicalUrl: string }>({
         method: 'PUT',
         path: `/events/${erwEventId}`,
-        body: retryPayload,
+        body: buildUpdatePayload(event, freshGetData),
       })
 
       if (!retryPut.ok) {
-        const message = `ERW update event failed after conflict retry: ${retryPut.status}`
-        logError(new Error(message), {
+        const detail = formatErwError(retryPut.status, retryPut.data)
+        logError(new Error(`ERW update event failed after conflict retry: ${detail}`), {
           operation: 'erw:updateEvent',
-          context: { erwEventId, status: retryPut.status },
+          context: { erwEventId, status: retryPut.status, response: retryPut.data },
         })
-        return { success: false, error: message }
+        return { success: false, error: `Epic Ride Weather: ${detail}` }
       }
 
       const retryPutData = retryPut.data
@@ -348,8 +397,7 @@ export async function updateErwEvent(
     }
 
     if (!putResult.ok) {
-      const erwError = putResult.data as { message?: string } | undefined
-      const detail = erwError?.message || `HTTP ${putResult.status}`
+      const detail = formatErwError(putResult.status, putResult.data)
       logError(new Error(`ERW update event failed: ${detail}`), {
         operation: 'erw:updateEvent',
         context: { erwEventId, status: putResult.status, response: putResult.data },

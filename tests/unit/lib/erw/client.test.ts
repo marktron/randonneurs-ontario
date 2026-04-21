@@ -381,6 +381,91 @@ describe('ERW API Client', () => {
       expect(putBody.name).toBe('Gentle Start 200')
     })
 
+    it('carries the existing routeId into the PUT payload to update the route in place', async () => {
+      // Token
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          access_token: 'test-jwt',
+          token_type: 'Bearer',
+          expires_in: 3600,
+        }),
+      })
+      // GET returns an existing event with a route that has a routeId (imported from RWGPS)
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          id: 'erw-123',
+          updated: '2026-06-01T10:00:00.123Z',
+          published: true,
+          routes: [
+            {
+              routeId: 'rt-abc',
+              name: 'Test Brevet 200',
+              sourceRouteUrl: 'https://ridewithgps.com/routes/12345',
+              startDate: '2026-06-15T07:30:00',
+              averageSpeed: 5.56,
+            },
+          ],
+        }),
+      })
+      // PUT update
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ id: 'erw-123', canonicalUrl: 'https://erw.com/e/erw-123' }),
+      })
+
+      const { updateErwEvent } = await import('@/lib/erw/client')
+      await updateErwEvent('erw-123', testEvent)
+
+      const putBody = JSON.parse(mockFetch.mock.calls[2][1].body)
+      // Route must carry over the existing routeId so ERW updates it in place,
+      // rather than deleting + re-creating (which fails validation on published events).
+      expect(putBody.routes).toHaveLength(1)
+      expect(putBody.routes[0].routeId).toBe('rt-abc')
+    })
+
+    it('does not duplicate the distance when event name already ends with it', async () => {
+      // Token
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          access_token: 'test-jwt',
+          token_type: 'Bearer',
+          expires_in: 3600,
+        }),
+      })
+      // GET
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ updated: '2026-06-01T10:00:00.123Z', published: true }),
+      })
+      // PUT
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ id: 'erw-123', canonicalUrl: 'https://erw.com/e/erw-123' }),
+      })
+
+      const { updateErwEvent } = await import('@/lib/erw/client')
+      // DB names carry " {distance}" after the bulk-rename script, so the builder
+      // must not re-append it and produce "Gentle Start 200 200".
+      await updateErwEvent('erw-123', {
+        ...testEvent,
+        name: 'Gentle Start 200',
+        distanceKm: 200,
+      })
+
+      const putBody = JSON.parse(mockFetch.mock.calls[2][1].body)
+      expect(putBody.name).toBe('Gentle Start 200')
+      expect(putBody.routes[0].name).toBe('Gentle Start 200')
+    })
+
     it('retries on 409 conflict with fresh GET', async () => {
       // Token
       mockFetch.mockResolvedValueOnce({
@@ -396,7 +481,7 @@ describe('ERW API Client', () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         status: 200,
-        json: async () => ({ updated: '2026-06-01T10:00:00Z' }),
+        json: async () => ({ updated: '2026-06-01T10:00:00.000Z' }),
       })
       // PUT returns 409 conflict
       mockFetch.mockResolvedValueOnce({
@@ -408,7 +493,7 @@ describe('ERW API Client', () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         status: 200,
-        json: async () => ({ updated: '2026-06-01T10:05:00Z' }),
+        json: async () => ({ updated: '2026-06-01T10:05:00.000Z' }),
       })
       // Retry PUT succeeds
       mockFetch.mockResolvedValueOnce({
@@ -429,7 +514,7 @@ describe('ERW API Client', () => {
       // Verify the retry PUT used the fresh timestamp
       const retryPutCall = mockFetch.mock.calls[4]
       const retryBody = JSON.parse(retryPutCall[1].body)
-      expect(retryBody.updated).toBe('2026-06-01T10:05:00Z')
+      expect(retryBody.updated).toBe('2026-06-01T10:05:00.000Z')
     })
   })
 
