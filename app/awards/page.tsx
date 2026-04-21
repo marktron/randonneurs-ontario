@@ -25,7 +25,15 @@ export default async function AwardsPage() {
         <p className="mt-6 text-lg text-muted-foreground leading-relaxed">
           Recognizing the dedication and achievements of Randonnuers Ontario members. Notify the
           club Awards Administrator for verification when you have completed the requirements for an
-          award.
+          award.{' '}
+          <a
+            href="/awards/RandonneursOntarioAchievementAwards-rev 20241122.pdf"
+            className="text-muted-foreground hover:text-primary underline underline-offset-4 decoration-(--foreground)/20 hover:decoration-primary"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            More details here.
+          </a>
         </p>
       </div>
 
