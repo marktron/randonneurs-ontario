@@ -24,9 +24,9 @@ function mockTokenThenResponse(response: Partial<Response> & { json?: () => Prom
   })
 }
 
-// Shared test event data
+// Shared test event data — ERW payloads should format name as `${name} ${distance}`
 const testEvent: ErwEventData = {
-  name: 'Test Brevet 200',
+  name: 'Test Brevet',
   description: 'A nice 200km brevet',
   distanceKm: 200,
   eventDate: '2026-06-15',
@@ -150,6 +150,20 @@ describe('ERW API Client', () => {
       })
     })
 
+    it('initial POST uses published:false (route import is async); publish runs separately', async () => {
+      mockTokenThenResponse({
+        ok: true,
+        status: 200,
+        json: async () => ({ id: 'erw-1', canonicalUrl: 'https://erw.com/e/erw-1' }),
+      })
+
+      const { createErwEvent } = await import('@/lib/erw/client')
+      await createErwEvent(testEvent)
+
+      const body = JSON.parse(mockFetch.mock.calls[1][1].body)
+      expect(body.published).toBe(false)
+    })
+
     it('includes sourceRouteUrl route when rwgpsId is present', async () => {
       mockTokenThenResponse({
         ok: true,
@@ -169,6 +183,20 @@ describe('ERW API Client', () => {
           averageSpeed: 5.56,
         },
       ])
+    })
+
+    it('appends distance to event name in payload', async () => {
+      mockTokenThenResponse({
+        ok: true,
+        status: 200,
+        json: async () => ({ id: 'erw-1', canonicalUrl: 'https://erw.com/e/erw-1' }),
+      })
+
+      const { createErwEvent } = await import('@/lib/erw/client')
+      await createErwEvent({ ...testEvent, name: 'Kissing Bridge', distanceKm: 300 })
+
+      const body = JSON.parse(mockFetch.mock.calls[1][1].body)
+      expect(body.name).toBe('Kissing Bridge 300')
     })
 
     it('omits route when rwgpsId absent and falls back description to name when empty', async () => {
@@ -319,6 +347,38 @@ describe('ERW API Client', () => {
       expect(putCall[1].method).toBe('PUT')
       const putBody = JSON.parse(putCall[1].body)
       expect(putBody.updated).toBe('2026-06-01T10:00:00Z')
+    })
+
+    it('sends published:true and name-with-distance in PUT payload', async () => {
+      // Token
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          access_token: 'test-jwt',
+          token_type: 'Bearer',
+          expires_in: 3600,
+        }),
+      })
+      // GET current event
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ updated: '2026-06-01T10:00:00Z', published: true }),
+      })
+      // PUT update
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ id: 'erw-123', canonicalUrl: 'https://erw.com/e/erw-123' }),
+      })
+
+      const { updateErwEvent } = await import('@/lib/erw/client')
+      await updateErwEvent('erw-123', { ...testEvent, name: 'Gentle Start', distanceKm: 200 })
+
+      const putBody = JSON.parse(mockFetch.mock.calls[2][1].body)
+      expect(putBody.published).toBe(true)
+      expect(putBody.name).toBe('Gentle Start 200')
     })
 
     it('retries on 409 conflict with fresh GET', async () => {

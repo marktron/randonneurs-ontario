@@ -171,15 +171,17 @@ function buildErwPayload(event: ErwEventData): Record<string, unknown> {
   // Always use production URL — ERW events should link to the live site, not localhost
   const baseUrl = 'https://register.randonneursontario.ca'
 
+  const erwName = `${event.name} ${event.distanceKm}`
+
   const payload: Record<string, unknown> = {
-    name: event.name,
+    name: erwName,
     description: (
       event.description || `A ${event.distanceKm}km ride hosted by Randonneurs Ontario`
     ).slice(0, 2000),
     distance: event.distanceKm,
     units: 'intl',
     date: event.eventDate,
-    published: false,
+    published: true,
     tags: ['brevet'],
   }
 
@@ -194,7 +196,7 @@ function buildErwPayload(event: ErwEventData): Record<string, unknown> {
     const timeWithSeconds = startTime.split(':').length === 2 ? `${startTime}:00` : startTime
     payload.routes = [
       {
-        name: event.name,
+        name: erwName,
         sourceRouteUrl: `https://ridewithgps.com/routes/${event.rwgpsId}`,
         startDate: `${event.eventDate}T${timeWithSeconds}`,
         averageSpeed: 5.56, // 20 km/h in m/s
@@ -211,7 +213,9 @@ function buildErwPayload(event: ErwEventData): Record<string, unknown> {
 
 export async function createErwEvent(event: ErwEventData): Promise<ErwResult<ErwCreateResult>> {
   try {
-    const payload = buildErwPayload(event)
+    // Initial POST is published:false — RWGPS route import is async on ERW's side,
+    // so publishErwEvent below retries with delays until the import completes.
+    const payload = { ...buildErwPayload(event), published: false }
     const result = await erwFetch<{ id: string; canonicalUrl: string }>({
       method: 'POST',
       path: '/events',

@@ -8,6 +8,7 @@ import { parseLocalDate, createSlug, formatFinishTimeHm } from '@/lib/utils'
 import { getUrlSlugFromDbSlug } from '@/lib/chapter-config'
 import { createPendingResultsAndSendEmails } from '@/lib/events/complete-event'
 import { createErwEvent, updateErwEvent, deleteErwEvent } from '@/lib/erw/client'
+import { isErwSyncEnabled } from '@/lib/erw/config'
 import { logAuditEvent } from '@/lib/audit-log'
 import { generateAcpXlsx, generateAcpCsv } from '@/lib/email/results-spreadsheet'
 import type { AcpResultRow, SpreadsheetData } from '@/lib/email/results-spreadsheet'
@@ -138,8 +139,8 @@ export async function createEvent(data: CreateEventData): Promise<ActionResult<{
 
     const typedNewEvent = newEvent as EventIdOnly
 
-    // Sync to Epic Ride Weather (skip permanents)
-    if (eventType !== 'permanent') {
+    // Sync to Epic Ride Weather (skip permanents, skip outside Vercel production)
+    if (eventType !== 'permanent' && isErwSyncEnabled()) {
       let rwgpsId: string | null = null
       if (routeId) {
         const { data: route } = await getSupabaseAdmin()
@@ -272,8 +273,8 @@ export async function updateEvent(eventId: string, data: UpdateEventData): Promi
       await revalidateCalendarTags(event.chapter_id, event.event_type, event.slug)
     }
 
-    // Sync to Epic Ride Weather if event is linked
-    if (event?.erw_event_id) {
+    // Sync to Epic Ride Weather if event is linked (skip outside Vercel production)
+    if (event?.erw_event_id && isErwSyncEnabled()) {
       let rwgpsId: string | null = null
       if (event.route_id) {
         const { data: route } = await getSupabaseAdmin()
@@ -342,8 +343,8 @@ export async function deleteEvent(eventId: string): Promise<ActionResult> {
       return { success: false, error: 'Cannot delete past events' }
     }
 
-    // Delete from Epic Ride Weather if linked
-    if (typedEvent.erw_event_id) {
+    // Delete from Epic Ride Weather if linked (skip outside Vercel production)
+    if (typedEvent.erw_event_id && isErwSyncEnabled()) {
       await deleteErwEvent(typedEvent.erw_event_id)
     }
 
@@ -426,8 +427,8 @@ export async function updateEventStatus(
       return { success: false, error: 'Failed to update event status' }
     }
 
-    // Delete from Epic Ride Weather when cancelling
-    if (status === 'cancelled' && typedEvent.erw_event_id) {
+    // Delete from Epic Ride Weather when cancelling (skip outside Vercel production)
+    if (status === 'cancelled' && typedEvent.erw_event_id && isErwSyncEnabled()) {
       await deleteErwEvent(typedEvent.erw_event_id)
       await getSupabaseAdmin()
         .from('events')

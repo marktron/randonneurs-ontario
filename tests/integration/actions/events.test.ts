@@ -1,4 +1,12 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterAll } from 'vitest'
+
+// Most tests assume ERW sync is enabled (production behavior); individual tests
+// that verify the dev/preview gate stub VERCEL_ENV to something else.
+vi.stubEnv('VERCEL_ENV', 'production')
+
+afterAll(() => {
+  vi.unstubAllEnvs()
+})
 
 /**
  * Integration tests for event actions.
@@ -648,6 +656,29 @@ describe('createEvent', () => {
       expect(mockCreateErw).not.toHaveBeenCalled()
     })
 
+    it('skips ERW sync outside Vercel production (local dev / preview)', async () => {
+      vi.stubEnv('VERCEL_ENV', 'preview')
+
+      mockModule.__mockInsertSuccess({ id: 'new-event-id' })
+      mockModule.__mockEventFound({ slug: 'toronto' })
+
+      const result = await createEvent({
+        name: 'Test Brevet',
+        chapterId: 'chapter-1',
+        routeId: 'route-1',
+        eventType: 'brevet',
+        distanceKm: 200,
+        eventDate: '2025-06-15',
+      })
+
+      expect(result.success).toBe(true)
+
+      const { createErwEvent: mockCreateErw } = await import('@/lib/erw/client')
+      expect(mockCreateErw).not.toHaveBeenCalled()
+
+      vi.stubEnv('VERCEL_ENV', 'production')
+    })
+
     it('still creates event locally when ERW fails', async () => {
       mockModule.__mockInsertSuccess({ id: 'new-event-id' })
       mockModule.__mockEventFound({ rwgps_id: null })
@@ -786,6 +817,34 @@ describe('updateEvent', () => {
       'erw-existing-123',
       expect.objectContaining({ name: 'Updated Name' })
     )
+  })
+
+  it('skips ERW sync outside Vercel production even when event is linked', async () => {
+    vi.stubEnv('VERCEL_ENV', 'development')
+
+    mockModule.__mockUpdateSuccess()
+    mockModule.__mockEventFound({
+      chapter_id: 'chapter-1',
+      event_type: 'brevet',
+      slug: 'test-event',
+      erw_event_id: 'erw-existing-123',
+      route_id: 'route-1',
+      name: 'Updated Name',
+      description: null,
+      distance_km: 200,
+      event_date: '2025-06-15',
+      start_time: '08:00',
+    })
+    mockModule.__mockEventFound({ slug: 'toronto' })
+
+    const result = await updateEvent('event-1', { name: 'Updated Name' })
+
+    expect(result.success).toBe(true)
+
+    const { updateErwEvent: mockUpdateErw } = await import('@/lib/erw/client')
+    expect(mockUpdateErw).not.toHaveBeenCalled()
+
+    vi.stubEnv('VERCEL_ENV', 'production')
   })
 
   it('skips ERW sync when event has no erw_event_id', async () => {

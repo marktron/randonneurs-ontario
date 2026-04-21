@@ -3,6 +3,7 @@
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { requireAdmin } from '@/lib/auth/get-admin'
 import { createErwEvent, updateErwEvent } from '@/lib/erw/client'
+import { isErwSyncEnabled } from '@/lib/erw/config'
 import { logAuditEvent } from '@/lib/audit-log'
 import { handleActionError } from '@/lib/errors'
 import type { ActionResult } from '@/types/actions'
@@ -12,6 +13,13 @@ export async function syncEventToErw(
 ): Promise<ActionResult<{ canonicalUrl: string }>> {
   try {
     const admin = await requireAdmin()
+
+    if (!isErwSyncEnabled()) {
+      return {
+        success: false,
+        error: 'Epic Ride Weather sync is only available in production',
+      }
+    }
 
     const { data: event, error } = await getSupabaseAdmin()
       .from('events')
