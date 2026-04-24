@@ -171,3 +171,99 @@ export async function assignResultAward(data: AssignResultAwardData): Promise<Ac
     return handleActionError(error, { operation: 'assignResultAward' }, 'Failed to assign award')
   }
 }
+
+export interface AssignSeasonAwardData {
+  awardId: string
+  riderId: string
+  season: number
+  note?: string | null
+}
+
+interface RiderLookupRow {
+  first_name: string
+  last_name: string
+  slug: string
+}
+
+export async function assignSeasonAward(data: AssignSeasonAwardData): Promise<ActionResult> {
+  try {
+    const admin = await requireAdmin()
+    if (!isFullAdmin(admin.role)) {
+      return { success: false, error: 'Only full admins can assign awards' }
+    }
+
+    const maxSeason = new Date().getFullYear() + 1
+    if (data.season < 1980 || data.season > maxSeason) {
+      return { success: false, error: `Season must be between 1980 and ${maxSeason}.` }
+    }
+
+    const { data: awardRaw, error: awardError } = await getSupabaseAdmin()
+      .from('awards')
+      .select('id, title, award_type')
+      .eq('id', data.awardId)
+      .single()
+    if (awardError && (awardError as { code?: string }).code !== 'PGRST116') {
+      return handleSupabaseError(
+        awardError,
+        { operation: 'assignSeasonAward' },
+        'Failed to load award'
+      )
+    }
+    const award = awardRaw as AwardRow | null
+    if (!award) {
+      return { success: false, error: 'Award no longer exists. Reload the page.' }
+    }
+    if (award.award_type !== 'season') {
+      return { success: false, error: 'This award is result-scoped — use the result form.' }
+    }
+
+    const { data: riderRaw, error: riderError } = await getSupabaseAdmin()
+      .from('riders')
+      .select('first_name, last_name, slug')
+      .eq('id', data.riderId)
+      .single()
+    if (riderError && (riderError as { code?: string }).code !== 'PGRST116') {
+      return handleSupabaseError(
+        riderError,
+        { operation: 'assignSeasonAward' },
+        'Failed to load rider'
+      )
+    }
+    const rider = riderRaw as RiderLookupRow | null
+    if (!rider) {
+      return { success: false, error: 'Rider not found.' }
+    }
+
+    const { error } = await getSupabaseAdmin()
+      .from('rider_awards')
+      .insert({
+        rider_id: data.riderId,
+        award_id: data.awardId,
+        season: data.season,
+        note: data.note ?? null,
+      })
+
+    if (error) {
+      return handleSupabaseError(
+        error,
+        { operation: 'assignSeasonAward' },
+        'Failed to assign award'
+      )
+    }
+
+    await logAuditEvent({
+      adminId: admin.id,
+      action: 'create',
+      entityType: 'award',
+      entityId: data.awardId,
+      description: `Assigned ${award.title} to ${rider.first_name} ${rider.last_name} for ${data.season} season`,
+    })
+
+    revalidateTag('awards', { expire: 0 })
+    revalidateTag(`rider-${rider.slug}`, { expire: 0 })
+
+    return createActionResult()
+  } catch (error) {
+    return handleActionError(error, { operation: 'assignSeasonAward' }, 'Failed to assign award')
+  }
+}
