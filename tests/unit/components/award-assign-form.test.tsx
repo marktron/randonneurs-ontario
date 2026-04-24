@@ -115,4 +115,60 @@ describe('AwardAssignForm', () => {
     // Rider search reset
     expect(screen.queryByText('Jane Doe')).not.toBeInTheDocument()
   })
+
+  it('submits a result-scoped award with the picked rider+result', async () => {
+    const user = userEvent.setup()
+    mockSearchRiders.mockResolvedValue([
+      { id: 'rider-1', first_name: 'Jane', last_name: 'Doe', email: null },
+    ])
+    mockSearchRiderResults.mockResolvedValue([
+      {
+        resultId: 'res-1',
+        eventName: 'Paris-Brest-Paris',
+        eventDate: '2023-08-20',
+        distanceKm: 1200,
+        chapterName: 'Toronto',
+        status: 'finished',
+        finishTime: '78:00:00',
+      },
+    ])
+
+    render(<AwardAssignForm awards={awards} />)
+
+    await user.selectOptions(screen.getByLabelText(/award/i), 'a-pbp')
+    await user.type(screen.getByPlaceholderText(/search.*rider/i), 'jane')
+    await waitFor(() => expect(mockSearchRiders).toHaveBeenCalled())
+    await user.click(await screen.findByText('Jane Doe'))
+
+    // Wait for the result picker to appear with the rider's result
+    await waitFor(() => expect(mockSearchRiderResults).toHaveBeenCalledWith('rider-1'))
+    await user.selectOptions(await screen.findByLabelText(/result/i), 'res-1')
+
+    await user.click(screen.getByRole('button', { name: /assign/i }))
+
+    await waitFor(() =>
+      expect(mockAssignResultAward).toHaveBeenCalledWith({ awardId: 'a-pbp', resultId: 'res-1' })
+    )
+  })
+
+  it('shows an error toast when the action returns a failure', async () => {
+    const { toast } = await import('sonner')
+    const user = userEvent.setup()
+    mockAssignSeasonAward.mockResolvedValueOnce({ success: false, error: 'boom' })
+    mockSearchRiders.mockResolvedValue([
+      { id: 'rider-1', first_name: 'Jane', last_name: 'Doe', email: null },
+    ])
+
+    render(<AwardAssignForm awards={awards} />)
+
+    await user.selectOptions(screen.getByLabelText(/award/i), 'a-sr')
+    await user.type(screen.getByPlaceholderText(/search.*rider/i), 'jane')
+    await waitFor(() => expect(mockSearchRiders).toHaveBeenCalled())
+    await user.click(await screen.findByText('Jane Doe'))
+
+    await user.click(screen.getByRole('button', { name: /assign/i }))
+
+    await waitFor(() => expect(mockAssignSeasonAward).toHaveBeenCalled())
+    expect(toast.error).toHaveBeenCalledWith('boom')
+  })
 })
