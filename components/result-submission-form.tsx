@@ -36,6 +36,7 @@ import {
 } from 'lucide-react'
 import { format } from 'date-fns'
 import Link from 'next/link'
+import { formatEventTime } from '@/lib/events/format'
 
 interface ResultSubmissionFormProps {
   token: string
@@ -426,6 +427,11 @@ export function ResultSubmissionForm({ token, initialData }: ResultSubmissionFor
         {status === 'finished' && (
           <div className="space-y-2">
             <Label>Elapsed Time</Label>
+            <p className="text-xs text-muted-foreground">
+              Elapsed Time is calculated from the time the event starts (
+              {formatEventTime(initialData.eventStartTime)}) until you check in at the finish
+              control. This is not the same as the “Moving Time” on Strava.
+            </p>
             <div className="flex items-center gap-2">
               <div className="flex-1">
                 <Input

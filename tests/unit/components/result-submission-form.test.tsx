@@ -71,6 +71,7 @@ describe('ResultSubmissionForm', () => {
     riderName: 'John Doe',
     riderEmail: 'john@example.com',
     eventDate: '2025-05-15',
+    eventStartTime: '08:00',
     eventDistance: 200,
     eventType: 'brevet',
     chapterName: 'Toronto',
@@ -147,6 +148,23 @@ describe('ResultSubmissionForm', () => {
 
       // The "Finished" status is pre-selected, so time inputs should be visible
       expect(screen.getByText('Elapsed Time')).toBeInTheDocument()
+    })
+
+    it('shows the event start time in the elapsed time helper text', () => {
+      render(<ResultSubmissionForm {...defaultProps} />)
+
+      expect(screen.getByText(/the time the event starts \(8:00 AM\)/i)).toBeInTheDocument()
+    })
+
+    it('falls back to TBD when the event has no start time', () => {
+      render(
+        <ResultSubmissionForm
+          token="test-token-123"
+          initialData={{ ...mockInitialData, eventStartTime: null }}
+        />
+      )
+
+      expect(screen.getByText(/the time the event starts \(TBD\)/i)).toBeInTheDocument()
     })
 
     // Note: Status selection and time validation with Radix UI Select
