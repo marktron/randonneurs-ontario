@@ -164,6 +164,7 @@ export async function assignResultAward(data: AssignResultAwardData): Promise<Ac
     })
 
     revalidateTag('awards', { expire: 0 })
+    revalidateTag('records', { expire: 0 })
     if (result.riders?.slug) {
       revalidateTag(`rider-${result.riders.slug}`, { expire: 0 })
     }
@@ -265,6 +266,7 @@ export async function assignSeasonAward(data: AssignSeasonAwardData): Promise<Ac
     })
 
     revalidateTag('awards', { expire: 0 })
+    revalidateTag('records', { expire: 0 })
     revalidateTag(`rider-${rider.slug}`, { expire: 0 })
 
     return createActionResult()

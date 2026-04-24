@@ -152,6 +152,7 @@ describe('assignResultAward', () => {
     const insertCall = fromCalls.find((c) => c.table === 'result_awards')
     expect(insertCall?.insertPayload).toEqual({ result_id: 'res-1', award_id: 'award-pbp' })
     expect(mockRevalidateTag).toHaveBeenCalledWith('awards', { expire: 0 })
+    expect(mockRevalidateTag).toHaveBeenCalledWith('records', { expire: 0 })
     expect(mockRevalidateTag).toHaveBeenCalledWith('rider-jane-doe', { expire: 0 })
     expect(mockLogAuditEvent).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -255,6 +256,7 @@ describe('assignSeasonAward', () => {
       note: 'Earned at RM 600',
     })
     expect(mockRevalidateTag).toHaveBeenCalledWith('awards', { expire: 0 })
+    expect(mockRevalidateTag).toHaveBeenCalledWith('records', { expire: 0 })
     expect(mockRevalidateTag).toHaveBeenCalledWith('rider-jane-doe', { expire: 0 })
     expect(mockLogAuditEvent).toHaveBeenCalledWith(
       expect.objectContaining({
