@@ -56,10 +56,8 @@ vi.mock('@/lib/audit-log', () => ({
 }))
 
 const mockRevalidateTag = vi.fn()
-const mockRevalidatePath = vi.fn()
 vi.mock('next/cache', () => ({
   revalidateTag: (...args: unknown[]) => mockRevalidateTag(...args),
-  revalidatePath: (...args: unknown[]) => mockRevalidatePath(...args),
 }))
 
 import { searchRiderResults, assignResultAward } from '@/lib/actions/awards'

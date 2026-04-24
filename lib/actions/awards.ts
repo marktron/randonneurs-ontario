@@ -1,6 +1,6 @@
 'use server'
 
-import { revalidatePath, revalidateTag } from 'next/cache'
+import { revalidateTag } from 'next/cache'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { requireAdmin } from '@/lib/auth/get-admin'
 import { isFullAdmin } from '@/lib/auth/roles'
@@ -92,13 +92,20 @@ export async function assignResultAward(data: AssignResultAwardData): Promise<Ac
       return { success: false, error: 'Only full admins can assign awards' }
     }
 
-    const { data: awardRaw } = await getSupabaseAdmin()
+    const { data: awardRaw, error: awardError } = await getSupabaseAdmin()
       .from('awards')
       .select('id, title, award_type')
       .eq('id', data.awardId)
       .single()
     const award = awardRaw as AwardRow | null
 
+    if (awardError && (awardError as { code?: string }).code !== 'PGRST116') {
+      return handleSupabaseError(
+        awardError,
+        { operation: 'assignResultAward' },
+        'Failed to load award'
+      )
+    }
     if (!award) {
       return { success: false, error: 'Award no longer exists. Reload the page.' }
     }
@@ -106,13 +113,20 @@ export async function assignResultAward(data: AssignResultAwardData): Promise<Ac
       return { success: false, error: 'This award is season-scoped — use the season form.' }
     }
 
-    const { data: resultRaw } = await getSupabaseAdmin()
+    const { data: resultRaw, error: resultError } = await getSupabaseAdmin()
       .from('results')
       .select('id, rider_id, riders (first_name, last_name, slug), events (name, event_date)')
       .eq('id', data.resultId)
       .single()
     const result = resultRaw as ResultLookupRow | null
 
+    if (resultError && (resultError as { code?: string }).code !== 'PGRST116') {
+      return handleSupabaseError(
+        resultError,
+        { operation: 'assignResultAward' },
+        'Failed to load result'
+      )
+    }
     if (!result) {
       return { success: false, error: 'Result not found.' }
     }
@@ -122,15 +136,12 @@ export async function assignResultAward(data: AssignResultAwardData): Promise<Ac
       .insert({ result_id: data.resultId, award_id: data.awardId })
 
     if (error) {
-      if ((error as { code?: string }).code === '23505') {
-        return {
-          success: false,
-          error: `This rider already has the ${award.title} for that result.`,
-        }
-      }
       return handleSupabaseError(
         error,
-        { operation: 'assignResultAward' },
+        {
+          operation: 'assignResultAward',
+          userMessage: `This rider already has the ${award.title} for that result.`,
+        },
         'Failed to assign award'
       )
     }
