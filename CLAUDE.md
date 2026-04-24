@@ -24,7 +24,10 @@
 - Consult `docs/style_guide.md` for frontend design work.
 - Before starting a new dev server, check whether the app is already running at `http://localhost:3000/`.
 - For UI changes, use Playwright to capture screenshots of affected pages and visually verify the result.
-- Exception: this screenshot requirement does not apply to work in `app/admin/` (login may be unavailable).
+- Exceptions where the screenshot requirement does not apply:
+  - Work in `app/admin/` (login may be unavailable).
+  - Pages that can only be reached via seeded DB state (e.g. single-use tokens like `/results/submit/[token]`, `/registration/manage/[token]`). In these cases, rely on unit/integration test coverage and say so in the completion summary.
+- If skipping the screenshot, explicitly note why in the completion summary so the user can decide whether to spin up the dev server for a visual check.
 
 ## Code Quality
 
@@ -66,7 +69,7 @@
 
 - Documentation updated (for new features).
 - Tests added or updated (for new features/bug fixes).
-- UI screenshot captured and reviewed (except `app/admin/`).
+- UI screenshot captured and reviewed (except `app/admin/` or pages gated by seeded DB state; note the reason if skipped).
 - Typecheck passed.
 - Lint passed.
 - Full tests passed (before commit).

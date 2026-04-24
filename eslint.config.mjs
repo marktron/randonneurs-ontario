@@ -24,6 +24,10 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Skip nested build output inside git worktrees (e.g. `.claude/worktrees/*/.next/`),
+    // which the root-anchored `.next/**` pattern above doesn't catch.
+    "**/.next/**",
+    ".claude/worktrees/**",
   ]),
 ]);
 
