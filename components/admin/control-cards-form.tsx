@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label'
 import { Plus, Trash2, Printer, GripVertical, Download, Loader2, Info } from 'lucide-react'
 import type { CardRider } from '@/types/control-card'
 import { reverseControls, isReversedEvent } from '@/lib/controlPoints'
+import { fetchRwgpsControls } from '@/lib/rwgps'
 
 interface ControlInput {
   id: string
@@ -104,117 +105,28 @@ export function ControlCardsForm({ event, riders, organizer }: ControlCardsFormP
     setRwgpsError(null)
 
     try {
-      const url = `https://ridewithgps.com/routes/${event.rwgpsId}.json`
-      console.log('[RWGPS] Fetching route data from:', url)
+      const parsed = await fetchRwgpsControls(event.rwgpsId)
+      const newControls: ControlInput[] = parsed.map((c) => ({
+        id: crypto.randomUUID(),
+        name: c.name,
+        distance: c.distance,
+      }))
 
-      const response = await fetch(url)
-      if (!response.ok) {
-        throw new Error(`Failed to fetch route: ${response.status} ${response.statusText}`)
-      }
-
-      const data = await response.json()
-      // API returns route data at top level (not nested under "route")
-      const route = data.route || data
-      console.log('[RWGPS] Full API response:', data)
-      console.log('[RWGPS] Route name:', route.name)
-      console.log('[RWGPS] Route distance:', route.distance, 'meters')
-      console.log('[RWGPS] Course points count:', route.course_points?.length)
-      console.log('[RWGPS] Points of interest count:', route.points_of_interest?.length)
-
-      // Extract controls from course_points where type is "Control"
-      const coursePoints = route.course_points || []
-      const controlPoints = coursePoints.filter((cp: { t?: string }) => cp.t === 'Control')
-      console.log('[RWGPS] Control points found in course_points:', controlPoints.length)
-      console.log('[RWGPS] Control points:', controlPoints)
-
-      if (controlPoints.length === 0) {
-        // Fallback: check points_of_interest for controls
-        const pois = route.points_of_interest || []
-        const poiControls = pois.filter(
-          (poi: { poi_type_name?: string }) => poi.poi_type_name === 'control'
-        )
-        console.log('[RWGPS] POI controls found:', poiControls.length)
-
-        if (poiControls.length === 0) {
-          setRwgpsError(
-            'No control points found in the RWGPS route. Add controls with type "Control" in the RideWithGPS route editor.'
-          )
-          return
-        }
-
-        // Use POI controls (distance needs to be calculated differently - they have lat/lng but no distance)
-        // For now, show error suggesting to use course points instead
-        setRwgpsError(
-          'Found POI controls but they lack distance data. Please add controls as Course Points with type "Control" in RideWithGPS.'
-        )
-        return
-      }
-
-      // Map course_points to control inputs
-      // d is distance in meters from route start
-      const newControls: ControlInput[] = controlPoints.map(
-        (cp: { n?: string; d?: number; description?: string }) => {
-          // Clean up control name by removing common prefixes like "CTL", "CTRL", "CONTROL"
-          let name = cp.n || 'Control'
-          const prefixesToRemove = [
-            'CTL - ',
-            'CTL-',
-            'CTL ',
-            'CTRL - ',
-            'CTRL-',
-            'CTRL ',
-            'CONTROL - ',
-            'CONTROL-',
-            'CONTROL ',
-          ]
-          for (const prefix of prefixesToRemove) {
-            if (name.toUpperCase().startsWith(prefix)) {
-              name = name.substring(prefix.length).trim()
-              break
-            }
-          }
-          // Also remove any leading "- " that might remain
-          if (name.startsWith('- ')) {
-            name = name.substring(2).trim()
-          } else if (name.startsWith('-')) {
-            name = name.substring(1).trim()
-          }
-
-          const distanceMeters = cp.d ?? 0
-          const distanceKm = (distanceMeters / 1000).toFixed(1)
-          console.log(`[RWGPS] Control: "${name}" at ${distanceKm}km (${distanceMeters}m)`)
-
-          return {
-            id: crypto.randomUUID(),
-            name,
-            distance: distanceKm,
-          }
-        }
-      )
-
-      // Sort by distance
-      newControls.sort((a, b) => parseFloat(a.distance) - parseFloat(b.distance))
-
-      // Reverse controls for reversed permanent routes
       if (reversed) {
         const totalDistance = Math.max(
           ...newControls.map((c) => parseFloat(c.distance)),
           event.distance
         )
-        const reversedControls = reverseControls(newControls, totalDistance)
-        setControls(reversedControls)
-        console.log('[RWGPS] Imported controls (reversed):', reversedControls)
+        setControls(reverseControls(newControls, totalDistance))
       } else {
         setControls(newControls)
-        console.log('[RWGPS] Imported controls:', newControls)
       }
     } catch (error) {
-      console.error('[RWGPS] Error fetching route:', error)
       setRwgpsError(error instanceof Error ? error.message : 'Failed to fetch route data')
     } finally {
       setIsLoadingRwgps(false)
     }
-  }, [event.rwgpsId])
+  }, [event.rwgpsId, event.distance, reversed])
 
   // Auto-import controls from RWGPS on mount
   useEffect(() => {

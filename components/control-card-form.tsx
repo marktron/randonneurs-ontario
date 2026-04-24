@@ -18,6 +18,7 @@ import {
 } from '@/components/ui/command'
 import { Plus, Trash2, Printer, GripVertical, Download, Loader2, ChevronDown } from 'lucide-react'
 import type { ActiveRouteWithRwgps } from '@/lib/data/routes'
+import { fetchRwgpsControls } from '@/lib/rwgps'
 
 interface ControlInput {
   id: string
@@ -158,61 +159,14 @@ export function ControlCardForm({ routes }: ControlCardFormProps) {
     setRwgpsError(null)
 
     try {
-      const url = `https://ridewithgps.com/routes/${selectedRoute.rwgpsId}.json`
-      const response = await fetch(url)
-      if (!response.ok) {
-        throw new Error(`Failed to fetch route: ${response.status} ${response.statusText}`)
-      }
-
-      const data = await response.json()
-      const route = data.route || data
-      const coursePoints = route.course_points || []
-      const controlPoints = coursePoints.filter((cp: { t?: string }) => cp.t === 'Control')
-
-      if (controlPoints.length === 0) {
-        setRwgpsError(
-          'No control points found in the RWGPS route. Add controls with type "Control" in the RideWithGPS route editor.'
-        )
-        return
-      }
-
-      const newControls: ControlInput[] = controlPoints.map((cp: { n?: string; d?: number }) => {
-        let name = cp.n || 'Control'
-        const prefixesToRemove = [
-          'CTL - ',
-          'CTL-',
-          'CTL ',
-          'CTRL - ',
-          'CTRL-',
-          'CTRL ',
-          'CONTROL - ',
-          'CONTROL-',
-          'CONTROL ',
-        ]
-        for (const prefix of prefixesToRemove) {
-          if (name.toUpperCase().startsWith(prefix)) {
-            name = name.substring(prefix.length).trim()
-            break
-          }
-        }
-        if (name.startsWith('- ')) {
-          name = name.substring(2).trim()
-        } else if (name.startsWith('-')) {
-          name = name.substring(1).trim()
-        }
-
-        const distanceMeters = cp.d ?? 0
-        const distanceKm = (distanceMeters / 1000).toFixed(1)
-
-        return {
+      const parsed = await fetchRwgpsControls(selectedRoute.rwgpsId)
+      setControls(
+        parsed.map((c) => ({
           id: crypto.randomUUID(),
-          name,
-          distance: distanceKm,
-        }
-      })
-
-      newControls.sort((a, b) => parseFloat(a.distance) - parseFloat(b.distance))
-      setControls(newControls)
+          name: c.name,
+          distance: c.distance,
+        }))
+      )
     } catch (error) {
       setRwgpsError(error instanceof Error ? error.message : 'Failed to fetch route data')
     } finally {
