@@ -120,8 +120,6 @@ export async function assignResultAward(data: AssignResultAwardData): Promise<Ac
     const { error } = await getSupabaseAdmin()
       .from('result_awards')
       .insert({ result_id: data.resultId, award_id: data.awardId })
-      .select()
-      .single()
 
     if (error) {
       if ((error as { code?: string }).code === '23505') {

@@ -35,11 +35,7 @@ const mockFrom = vi.fn((table: string) => {
     insert: vi.fn((payload: unknown) => {
       call.ops.push('insert')
       call.insertPayload = payload
-      return {
-        select: vi.fn(() => ({
-          single: vi.fn(() => Promise.resolve(state.insertResponse ?? { data: null, error: null })),
-        })),
-      }
+      return Promise.resolve(state.insertResponse ?? { data: null, error: null })
     }),
   }
   return builder
