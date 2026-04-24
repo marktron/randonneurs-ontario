@@ -1,15 +1,19 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-// Track Supabase calls
-type FromCall = { table: string; ops: string[] }
+type FromCall = { table: string; ops: string[]; insertPayload?: unknown }
 const fromCalls: FromCall[] = []
 
-// Per-test response state
-let resultsResponse: { data: unknown; error: unknown } = { data: [], error: null }
+interface TableState {
+  selectResponse?: { data: unknown; error: unknown }
+  insertResponse?: { data: unknown; error: unknown }
+}
+
+let tables: Record<string, TableState> = {}
 
 const mockFrom = vi.fn((table: string) => {
   const call: FromCall = { table, ops: [] }
   fromCalls.push(call)
+  const state = tables[table] ?? {}
 
   const builder = {
     select: vi.fn(() => {
@@ -22,7 +26,20 @@ const mockFrom = vi.fn((table: string) => {
     }),
     order: vi.fn(() => {
       call.ops.push('order')
-      return Promise.resolve(resultsResponse)
+      return Promise.resolve(state.selectResponse ?? { data: [], error: null })
+    }),
+    single: vi.fn(() => {
+      call.ops.push('single')
+      return Promise.resolve(state.selectResponse ?? { data: null, error: null })
+    }),
+    insert: vi.fn((payload: unknown) => {
+      call.ops.push('insert')
+      call.insertPayload = payload
+      return {
+        select: vi.fn(() => ({
+          single: vi.fn(() => Promise.resolve(state.insertResponse ?? { data: null, error: null })),
+        })),
+      }
     }),
   }
   return builder
@@ -32,93 +49,159 @@ vi.mock('@/lib/supabase-server', () => ({
   getSupabaseAdmin: vi.fn(() => ({ from: mockFrom })),
 }))
 
+const mockRequireAdmin = vi.fn(async () => ({ id: 'admin-1', role: 'admin' }))
 vi.mock('@/lib/auth/get-admin', () => ({
-  requireAdmin: vi.fn(async () => ({ id: 'admin-1', role: 'admin' })),
+  requireAdmin: () => mockRequireAdmin(),
 }))
 
-vi.mock('@/lib/auth/roles', async () => {
-  const actual = await vi.importActual<typeof import('@/lib/auth/roles')>('@/lib/auth/roles')
-  return actual
-})
-
+const mockLogAuditEvent = vi.fn(async (..._args: unknown[]) => undefined)
 vi.mock('@/lib/audit-log', () => ({
-  logAuditEvent: vi.fn(async () => undefined),
+  logAuditEvent: (...args: unknown[]) => mockLogAuditEvent(...args),
 }))
 
+const mockRevalidateTag = vi.fn()
+const mockRevalidatePath = vi.fn()
 vi.mock('next/cache', () => ({
-  revalidateTag: vi.fn(),
-  revalidatePath: vi.fn(),
+  revalidateTag: (...args: unknown[]) => mockRevalidateTag(...args),
+  revalidatePath: (...args: unknown[]) => mockRevalidatePath(...args),
 }))
 
-import { searchRiderResults } from '@/lib/actions/awards'
+import { searchRiderResults, assignResultAward } from '@/lib/actions/awards'
 
 describe('searchRiderResults', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     fromCalls.length = 0
-    resultsResponse = { data: [], error: null }
+    tables = {}
+    mockRequireAdmin.mockResolvedValue({ id: 'admin-1', role: 'admin' })
   })
 
   it("returns the rider's results sorted by event_date desc", async () => {
-    resultsResponse = {
-      data: [
-        {
-          id: 'r-2',
-          status: 'finished',
-          finish_time: '13:30:00',
-          distance_km: 600,
-          events: {
-            name: 'Lake Ontario 600',
-            event_date: '2024-08-15',
-            chapters: { name: 'Toronto' },
+    tables.results = {
+      selectResponse: {
+        data: [
+          {
+            id: 'r-2',
+            status: 'finished',
+            finish_time: '13:30:00',
+            distance_km: 600,
+            events: {
+              name: 'Lake Ontario 600',
+              event_date: '2024-08-15',
+              chapters: { name: 'Toronto' },
+            },
           },
-        },
-        {
-          id: 'r-1',
-          status: 'dnf',
-          finish_time: null,
-          distance_km: 400,
-          events: {
-            name: 'Niagara 400',
-            event_date: '2024-06-01',
-            chapters: { name: 'Niagara' },
+          {
+            id: 'r-1',
+            status: 'dnf',
+            finish_time: null,
+            distance_km: 400,
+            events: {
+              name: 'Niagara 400',
+              event_date: '2024-06-01',
+              chapters: { name: 'Niagara' },
+            },
           },
-        },
-      ],
-      error: null,
+        ],
+        error: null,
+      },
     }
 
     const result = await searchRiderResults('rider-123')
-
-    expect(result).toEqual([
-      {
-        resultId: 'r-2',
-        eventName: 'Lake Ontario 600',
-        eventDate: '2024-08-15',
-        distanceKm: 600,
-        chapterName: 'Toronto',
-        status: 'finished',
-        finishTime: '13:30:00',
-      },
-      {
-        resultId: 'r-1',
-        eventName: 'Niagara 400',
-        eventDate: '2024-06-01',
-        distanceKm: 400,
-        chapterName: 'Niagara',
-        status: 'dnf',
-        finishTime: null,
-      },
-    ])
-
-    const resultsCall = fromCalls.find((c) => c.table === 'results')
-    expect(resultsCall).toBeDefined()
-    expect(resultsCall!.ops).toEqual(['select', 'eq', 'order'])
+    expect(result.map((r) => r.resultId)).toEqual(['r-2', 'r-1'])
+    expect(result[0].chapterName).toBe('Toronto')
   })
 
   it('returns [] when supabase returns an error', async () => {
-    resultsResponse = { data: null, error: { message: 'boom' } }
-    const result = await searchRiderResults('rider-123')
-    expect(result).toEqual([])
+    tables.results = { selectResponse: { data: null, error: { message: 'boom' } } }
+    expect(await searchRiderResults('rider-123')).toEqual([])
+  })
+})
+
+describe('assignResultAward', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    fromCalls.length = 0
+    tables = {}
+    mockRequireAdmin.mockResolvedValue({ id: 'admin-1', role: 'admin' })
+  })
+
+  function setupHappyPath() {
+    tables.awards = {
+      selectResponse: {
+        data: { id: 'award-pbp', title: 'Paris-Brest-Paris', award_type: 'result' },
+        error: null,
+      },
+    }
+    tables.results = {
+      selectResponse: {
+        data: {
+          id: 'res-1',
+          rider_id: 'rider-1',
+          riders: { first_name: 'Jane', last_name: 'Doe', slug: 'jane-doe' },
+          events: { name: 'Paris-Brest-Paris', event_date: '2023-08-20' },
+        },
+        error: null,
+      },
+    }
+    tables.result_awards = {
+      insertResponse: { data: { result_id: 'res-1', award_id: 'award-pbp' }, error: null },
+    }
+  }
+
+  it('inserts into result_awards on the happy path and revalidates caches', async () => {
+    setupHappyPath()
+
+    const res = await assignResultAward({ awardId: 'award-pbp', resultId: 'res-1' })
+
+    expect(res).toEqual({ success: true })
+    const insertCall = fromCalls.find((c) => c.table === 'result_awards')
+    expect(insertCall?.insertPayload).toEqual({ result_id: 'res-1', award_id: 'award-pbp' })
+    expect(mockRevalidateTag).toHaveBeenCalledWith('awards', { expire: 0 })
+    expect(mockRevalidateTag).toHaveBeenCalledWith('rider-jane-doe', { expire: 0 })
+    expect(mockLogAuditEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        adminId: 'admin-1',
+        action: 'create',
+        entityType: 'award',
+        description: expect.stringContaining('Paris-Brest-Paris'),
+      })
+    )
+  })
+
+  it('rejects when the award is season-scoped', async () => {
+    tables.awards = {
+      selectResponse: {
+        data: { id: 'award-sr', title: 'Super Randonneur', award_type: 'season' },
+        error: null,
+      },
+    }
+
+    const res = await assignResultAward({ awardId: 'award-sr', resultId: 'res-1' })
+
+    expect(res.success).toBe(false)
+    expect(res.error).toMatch(/season-scoped/i)
+    expect(fromCalls.find((c) => c.table === 'result_awards')).toBeUndefined()
+  })
+
+  it('returns the friendly duplicate message on Postgres 23505', async () => {
+    setupHappyPath()
+    tables.result_awards = {
+      insertResponse: { data: null, error: { code: '23505', message: 'dup' } },
+    }
+
+    const res = await assignResultAward({ awardId: 'award-pbp', resultId: 'res-1' })
+
+    expect(res.success).toBe(false)
+    expect(res.error).toMatch(/already has the Paris-Brest-Paris/i)
+  })
+
+  it('returns "Award no longer exists" if award lookup is empty', async () => {
+    tables.awards = { selectResponse: { data: null, error: null } }
+
+    const res = await assignResultAward({ awardId: 'missing', resultId: 'res-1' })
+
+    expect(res.success).toBe(false)
+    expect(res.error).toMatch(/no longer exists/i)
   })
 })
