@@ -246,6 +246,15 @@ describe('assignSeasonAward', () => {
     })
     expect(mockRevalidateTag).toHaveBeenCalledWith('awards', { expire: 0 })
     expect(mockRevalidateTag).toHaveBeenCalledWith('rider-jane-doe', { expire: 0 })
+    expect(mockLogAuditEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        adminId: 'admin-1',
+        action: 'create',
+        entityType: 'award',
+        entityId: 'award-sr',
+        description: expect.stringContaining('Super Randonneur'),
+      })
+    )
   })
 
   it('does not pre-check for duplicates (allows same rider+award+season twice)', async () => {
@@ -287,6 +296,7 @@ describe('assignSeasonAward', () => {
 
     expect(res.success).toBe(false)
     expect(res.error).toMatch(/season must be between 1980/i)
+    expect(fromCalls).toEqual([])
   })
 
   it('rejects season > currentYear + 1', async () => {
@@ -302,5 +312,6 @@ describe('assignSeasonAward', () => {
 
     expect(res.success).toBe(false)
     expect(res.error).toMatch(/season must be between 1980/i)
+    expect(fromCalls).toEqual([])
   })
 })
