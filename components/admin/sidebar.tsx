@@ -18,6 +18,7 @@ import {
 } from '@/components/ui/sidebar'
 import { Button } from '@/components/ui/button'
 import {
+  Award,
   LayoutDashboard,
   Users,
   UserCog,
@@ -99,6 +100,13 @@ const managementNavItems = [
     href: '/admin/navigation',
     icon: Navigation,
     testId: 'nav-navigation',
+    requiresSuperAdmin: false,
+  },
+  {
+    title: 'Awards',
+    href: '/admin/awards',
+    icon: Award,
+    testId: 'nav-awards',
     requiresSuperAdmin: false,
   },
   {
