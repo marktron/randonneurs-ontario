@@ -183,10 +183,19 @@ The `/records` page functions handle both award scopes:
 
 ## Adding New Awards
 
+To add a brand-new award type to the catalogue:
+
 1. Insert the award into the `awards` table with the appropriate `award_type`:
-   - `'result'` — if earned for a specific event (link via `result_awards`)
-   - `'season'` — if earned across a season (link via `rider_awards`)
+   - `'result'` — earned for a specific event (linked via `result_awards`)
+   - `'season'` — earned across a season (linked via `rider_awards`)
 2. Add color classes to `colorClassesMap` in `components/award-badge.tsx`
 3. Add a default description to `defaultDescriptions` in `components/award-badge.tsx`
-4. For result-scoped awards: link results to awards via the `result_awards` table
-5. For season-scoped awards: insert into `rider_awards` with rider_id, award_id, and season
+
+To assign an existing award to a rider:
+
+- Use the admin page at **`/admin/awards`** (full admins only). Pick the award; the form
+  adapts to the award's scope:
+  - **Result-scoped**: pick a rider, then a specific result. The result must already
+    exist; if it doesn't, create it from the event admin page first.
+  - **Season-scoped**: pick a rider, the season (year), and an optional note.
+- The page is assign-only. Mistakes are corrected directly in the database.
