@@ -198,6 +198,16 @@ describe('assignResultAward', () => {
     expect(res.success).toBe(false)
     expect(res.error).toMatch(/no longer exists/i)
   })
+
+  it('rejects when the admin is not a full admin (chapter_admin)', async () => {
+    mockRequireAdmin.mockResolvedValueOnce({ id: 'admin-1', role: 'chapter_admin' })
+
+    const res = await assignResultAward({ awardId: 'a', resultId: 'r' })
+
+    expect(res.success).toBe(false)
+    expect(res.error).toMatch(/full admins/i)
+    expect(fromCalls).toEqual([])
+  })
 })
 
 describe('assignSeasonAward', () => {
@@ -312,6 +322,16 @@ describe('assignSeasonAward', () => {
 
     expect(res.success).toBe(false)
     expect(res.error).toMatch(/season must be between 1980/i)
+    expect(fromCalls).toEqual([])
+  })
+
+  it('rejects when the admin is not a full admin (chapter_admin)', async () => {
+    mockRequireAdmin.mockResolvedValueOnce({ id: 'admin-1', role: 'chapter_admin' })
+
+    const res = await assignSeasonAward({ awardId: 'a', riderId: 'r', season: 2024 })
+
+    expect(res.success).toBe(false)
+    expect(res.error).toMatch(/full admins/i)
     expect(fromCalls).toEqual([])
   })
 })

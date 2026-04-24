@@ -13,6 +13,8 @@ import {
 } from '@/lib/errors'
 import type { ActionResult } from '@/types/actions'
 
+const MIN_AWARD_SEASON = 1980
+
 export interface RiderResultOption {
   resultId: string
   eventName: string
@@ -193,8 +195,11 @@ export async function assignSeasonAward(data: AssignSeasonAwardData): Promise<Ac
     }
 
     const maxSeason = new Date().getFullYear() + 1
-    if (data.season < 1980 || data.season > maxSeason) {
-      return { success: false, error: `Season must be between 1980 and ${maxSeason}.` }
+    if (data.season < MIN_AWARD_SEASON || data.season > maxSeason) {
+      return {
+        success: false,
+        error: `Season must be between ${MIN_AWARD_SEASON} and ${maxSeason}.`,
+      }
     }
 
     const { data: awardRaw, error: awardError } = await getSupabaseAdmin()
