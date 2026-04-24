@@ -5,6 +5,13 @@ import { Loader2, Search } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { toast } from 'sonner'
 import {
@@ -139,22 +146,24 @@ export function AwardAssignForm({ awards }: Props) {
     <div className="max-w-xl space-y-6">
       <div className="space-y-2">
         <Label htmlFor="award">Award</Label>
-        <select
-          id="award"
-          className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+        <Select
           value={awardId}
-          onChange={(e) => {
-            setAwardId(e.target.value)
+          onValueChange={(v) => {
+            setAwardId(v)
             resetExceptAward()
           }}
         >
-          <option value="">Select an award…</option>
-          {awards.map((a) => (
-            <option key={a.id} value={a.id}>
-              {a.title} ({a.award_type})
-            </option>
-          ))}
-        </select>
+          <SelectTrigger id="award" className="w-full">
+            <SelectValue placeholder="Select an award…" />
+          </SelectTrigger>
+          <SelectContent>
+            {awards.map((a) => (
+              <SelectItem key={a.id} value={a.id}>
+                {a.title} ({a.award_type})
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       {award && (
@@ -201,20 +210,19 @@ export function AwardAssignForm({ awards }: Props) {
       {award && award.award_type === 'result' && selectedRider && (
         <div className="space-y-2">
           <Label htmlFor="result">Result</Label>
-          <select
-            id="result"
-            className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-            value={resultId}
-            onChange={(e) => setResultId(e.target.value)}
-          >
-            <option value="">Select a result…</option>
-            {riderResultOptions.map((opt) => (
-              <option key={opt.resultId} value={opt.resultId}>
-                {opt.eventDate} · {opt.eventName} · {opt.distanceKm} km
-                {opt.chapterName ? ` · ${opt.chapterName}` : ''} · {opt.status}
-              </option>
-            ))}
-          </select>
+          <Select value={resultId} onValueChange={setResultId}>
+            <SelectTrigger id="result" className="w-full">
+              <SelectValue placeholder="Select a result…" />
+            </SelectTrigger>
+            <SelectContent>
+              {riderResultOptions.map((opt) => (
+                <SelectItem key={opt.resultId} value={opt.resultId}>
+                  {opt.eventDate} · {opt.eventName} · {opt.distanceKm} km
+                  {opt.chapterName ? ` · ${opt.chapterName}` : ''} · {opt.status}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           {riderResultOptions.length === 0 && (
             <p className="text-sm text-muted-foreground">This rider has no results yet.</p>
           )}

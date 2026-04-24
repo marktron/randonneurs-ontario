@@ -4,6 +4,86 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+
+// Mock the shadcn Select to a flat native <select> so happy-dom + userEvent.selectOptions
+// work as they did before the migration to Radix-based Select.
+vi.mock('@/components/ui/select', async () => {
+  const React = await import('react')
+
+  type AnyChild = React.ReactElement<{ children?: React.ReactNode; value?: string; id?: string }>
+
+  function flatten(children: React.ReactNode): React.ReactElement[] {
+    const out: React.ReactElement[] = []
+    React.Children.forEach(children, (child) => {
+      if (!child || typeof child !== 'object') return
+      const el = child as AnyChild
+      const kind = (el.type as { __kind?: string } | undefined)?.__kind
+      if (kind === 'item') {
+        out.push(
+          React.createElement(
+            'option',
+            { key: el.props.value, value: el.props.value },
+            el.props.children
+          )
+        )
+      } else if (el.props && el.props.children) {
+        out.push(...flatten(el.props.children))
+      }
+    })
+    return out
+  }
+
+  function findTriggerId(children: React.ReactNode): string | undefined {
+    let id: string | undefined
+    React.Children.forEach(children, (child) => {
+      if (!child || typeof child !== 'object') return
+      const el = child as AnyChild
+      const kind = (el.type as { __kind?: string } | undefined)?.__kind
+      if (kind === 'trigger') {
+        id = el.props.id
+      } else if (el.props && el.props.children) {
+        const found = findTriggerId(el.props.children)
+        if (found) id = found
+      }
+    })
+    return id
+  }
+
+  const SelectItem: React.FC<{ value: string; children: React.ReactNode }> = () => null
+  ;(SelectItem as unknown as { __kind: string }).__kind = 'item'
+
+  const SelectTrigger: React.FC<{
+    id?: string
+    children?: React.ReactNode
+    className?: string
+  }> = () => null
+  ;(SelectTrigger as unknown as { __kind: string }).__kind = 'trigger'
+
+  const Select: React.FC<{
+    value?: string
+    onValueChange?: (value: string) => void
+    children?: React.ReactNode
+  }> = ({ value, onValueChange, children }) =>
+    React.createElement(
+      'select',
+      {
+        id: findTriggerId(children),
+        value: value ?? '',
+        onChange: (e: React.ChangeEvent<HTMLSelectElement>) => onValueChange?.(e.target.value),
+      },
+      [
+        React.createElement('option', { key: '__placeholder', value: '', hidden: true }, ''),
+        ...flatten(children),
+      ]
+    )
+
+  const SelectContent: React.FC<{ children?: React.ReactNode }> = ({ children }) =>
+    children as React.ReactElement
+  const SelectValue: React.FC<{ placeholder?: string }> = () => null
+
+  return { Select, SelectTrigger, SelectValue, SelectContent, SelectItem }
+})
+
 import { AwardAssignForm, type AwardOption } from '@/components/admin/award-assign-form'
 
 const mockAssignResultAward =
