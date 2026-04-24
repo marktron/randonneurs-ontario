@@ -101,6 +101,7 @@ async function getResults(eventId: string): Promise<ResultWithRiderForAdmin[]> {
       control_card_back_path,
       rider_notes,
       submitted_at,
+      submission_token,
       riders (id, first_name, last_name, email)
     `
     )

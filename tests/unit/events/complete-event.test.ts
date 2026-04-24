@@ -21,15 +21,17 @@ function buildSupabase({
   registrations,
   existingResults = [],
   createdToken = 'token-123',
+  onInsert,
 }: {
   registrations: Array<{
     id: string
     rider_id: string
     management_token: string | null
-    riders: { id: string; first_name: string; last_name: string; email: string } | null
+    riders: { id: string; first_name: string; last_name: string; email: string | null } | null
   }>
   existingResults?: Array<{ rider_id: string }>
   createdToken?: string
+  onInsert?: (row: Record<string, unknown>) => void
 }) {
   return {
     from: vi.fn((table: string) => {
@@ -47,16 +49,19 @@ function buildSupabase({
           select: vi.fn(() => ({
             eq: vi.fn(() => Promise.resolve({ data: existingResults, error: null })),
           })),
-          insert: vi.fn(() => ({
-            select: vi.fn(() => ({
-              single: vi.fn(() =>
-                Promise.resolve({
-                  data: { submission_token: createdToken },
-                  error: null,
-                })
-              ),
-            })),
-          })),
+          insert: vi.fn((row: Record<string, unknown>) => {
+            onInsert?.(row)
+            return {
+              select: vi.fn(() => ({
+                single: vi.fn(() =>
+                  Promise.resolve({
+                    data: { submission_token: createdToken },
+                    error: null,
+                  })
+                ),
+              })),
+            }
+          }),
         }
       }
       throw new Error(`Unexpected table: ${table}`)
@@ -105,6 +110,46 @@ describe('createPendingResultsAndSendEmails', () => {
         replyTo: 'vp-toronto@randonneursontario.ca',
       })
     )
+  })
+
+  it('creates a pending result for a rider with no email but skips sending mail', async () => {
+    const inserted: Array<Record<string, unknown>> = []
+    mockSupabaseAdmin.mockReturnValue(
+      buildSupabase({
+        registrations: [
+          {
+            id: 'reg-1',
+            rider_id: 'rider-1',
+            management_token: 'mgmt-token-abc',
+            riders: {
+              id: 'rider-1',
+              first_name: 'No',
+              last_name: 'Email',
+              email: null,
+            },
+          },
+        ],
+        onInsert: (row) => inserted.push(row),
+      })
+    )
+
+    const result = await createPendingResultsAndSendEmails({
+      id: 'event-1',
+      name: 'Test Brevet',
+      event_date: '2026-05-10',
+      distance_km: 200,
+      chapters: { name: 'Toronto', slug: 'toronto' },
+    })
+
+    expect(result.resultsCreated).toBe(1)
+    expect(result.emailsSent).toBe(0)
+    expect(mockSendEmail).not.toHaveBeenCalled()
+    expect(inserted[0]).toMatchObject({
+      event_id: 'event-1',
+      rider_id: 'rider-1',
+      status: 'pending',
+      submission_token: 'mgmt-token-abc',
+    })
   })
 
   it('omits reply-to when chapter slug has no VP mapping', async () => {

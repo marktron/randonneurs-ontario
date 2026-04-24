@@ -46,6 +46,7 @@ export async function createPendingResultsAndSendEmails(
   const supabase = getSupabaseAdmin()
   const errors: string[] = []
   const created: CreatedResult[] = []
+  let resultsCreated = 0
   let emailsSent = 0
 
   // Get registrations for this event
@@ -74,12 +75,14 @@ export async function createPendingResultsAndSendEmails(
   const typedExistingResults = (existingResults || []) as ResultWithRiderId[]
   const existingRiderIds = new Set(typedExistingResults.map((r) => r.rider_id))
 
-  // Filter registrations that don't have results yet and have email
+  // Filter registrations that don't already have a result. Riders without an
+  // email still get a pending result (admin can share the submission URL
+  // manually); only email sending is gated on having an address.
   const typedRegistrations = (registrations || []) as (RegistrationWithRider & {
     management_token: string | null
   })[]
   const registrationsNeedingResults = typedRegistrations.filter(
-    (reg) => !existingRiderIds.has(reg.rider_id) && reg.riders?.email
+    (reg) => !existingRiderIds.has(reg.rider_id)
   )
 
   // Calculate season from event date
@@ -109,6 +112,8 @@ export async function createPendingResultsAndSendEmails(
       )
       continue
     }
+
+    resultsCreated++
 
     const typedResult = result as ResultWithSubmissionToken
     const rider = reg.riders
@@ -165,5 +170,5 @@ export async function createPendingResultsAndSendEmails(
     }
   }
 
-  return { resultsCreated: created.length, emailsSent, errors }
+  return { resultsCreated, emailsSent, errors }
 }

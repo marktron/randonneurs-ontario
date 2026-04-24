@@ -1,7 +1,14 @@
 'use client'
 
 import { useState, useTransition, useEffect } from 'react'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { useRouter } from 'next/navigation'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -30,7 +37,12 @@ interface EventStatusSelectProps {
   resultsCount: number
 }
 
-export function EventStatusSelect({ eventId, initialStatus, resultsCount }: EventStatusSelectProps) {
+export function EventStatusSelect({
+  eventId,
+  initialStatus,
+  resultsCount,
+}: EventStatusSelectProps) {
+  const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [status, setStatus] = useState<EventStatus>(initialStatus)
   const [showSaved, setShowSaved] = useState(false)
@@ -49,6 +61,7 @@ export function EventStatusSelect({ eventId, initialStatus, resultsCount }: Even
         setStatus(newStatus)
         setShowSaved(true)
         setTimeout(() => setShowSaved(false), 1500)
+        router.refresh()
       } else {
         toast.error(result.error || 'Failed to update status')
       }

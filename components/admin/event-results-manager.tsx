@@ -42,6 +42,7 @@ import {
   RefreshCw,
   Clipboard,
   ClipboardCheck,
+  Link2,
 } from 'lucide-react'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import {
@@ -106,6 +107,7 @@ interface Result {
   control_card_back_path: string | null
   rider_notes: string | null
   submitted_at: string | null
+  submission_token: string | null
   riders: {
     id: string
     first_name: string
@@ -130,6 +132,7 @@ interface Participant {
   registrationTeamName: string | null
   isTeamCaptain: boolean | null
   shareRegistration: boolean | null
+  submissionToken: string | null
 }
 
 interface CancelledRegistration {
@@ -630,6 +633,25 @@ function RiderRow({
           ) : showSaved ? (
             <Check className="h-4 w-4 text-green-600" />
           ) : null}
+          {participant.submissionToken && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 text-muted-foreground hover:text-primary"
+              title="Copy submission URL"
+              onClick={async () => {
+                const url = `${window.location.origin}/results/submit/${participant.submissionToken}`
+                try {
+                  await navigator.clipboard.writeText(url)
+                  toast.success(`Submission URL copied for ${riderName}`)
+                } catch {
+                  toast.error('Failed to copy URL')
+                }
+              }}
+            >
+              <Link2 className="h-4 w-4" />
+            </Button>
+          )}
           {registrationId &&
             participant.hasRegistration &&
             (participant.registrationStatus === 'registered' ||
@@ -741,6 +763,7 @@ export function EventResultsManager({
     .filter((reg) => reg.riders && !cancelledRegistrationIds.has(reg.id))
     .map((reg) => {
       const currentMembership = reg.riders!.rider_memberships?.find((m) => m.season === season)
+      const result = resultsByRiderId.get(reg.rider_id)
       return {
         id: reg.id,
         riderId: reg.rider_id,
@@ -756,6 +779,7 @@ export function EventResultsManager({
         registrationTeamName: reg.team_name,
         isTeamCaptain: reg.is_team_captain,
         shareRegistration: reg.share_registration,
+        submissionToken: result?.submission_token ?? null,
       }
     })
 
@@ -776,6 +800,7 @@ export function EventResultsManager({
       registrationTeamName: null,
       isTeamCaptain: false,
       shareRegistration: null,
+      submissionToken: result.submission_token,
     }))
 
   const allParticipants = [...participantsFromRegistrations, ...participantsFromResultsOnly]

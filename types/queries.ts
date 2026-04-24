@@ -373,6 +373,7 @@ export type ResultWithRiderForAdmin = Pick<
   | 'control_card_back_path'
   | 'rider_notes'
   | 'submitted_at'
+  | 'submission_token'
 > & {
   riders: Pick<Rider, 'id' | 'first_name' | 'last_name' | 'email'> | null
 }
