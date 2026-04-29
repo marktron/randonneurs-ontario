@@ -18,8 +18,7 @@
     "test:integration-real": "vitest run --config vitest.config.integration-real.mts",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
-    "prepare": "husky",
-    "validate": "npx tsx scripts/validate-results.ts"
+    "prepare": "husky"
   },
   "dependencies": {
     "@aws-sdk/client-sesv2": "^3.1015.0",
@@ -90,7 +89,6 @@
     "jsdom": "^27.0.1",
     "lint-staged": "^16.2.7",
     "msw": "^2.12.7",
-    "openai": "^6.16.0",
     "prettier": "^3.7.4",
     "secretlint": "^11.3.0",
     "tailwindcss": "^4",
