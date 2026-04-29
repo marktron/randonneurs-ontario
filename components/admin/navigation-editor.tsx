@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useRef, useMemo } from 'react'
+import { useState, useCallback, useMemo } from 'react'
 import {
   DndContext,
   closestCenter,
@@ -28,11 +28,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from '@/components/ui/collapsible'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Card, CardContent } from '@/components/ui/card'
 import {
   AlertDialog,
@@ -194,14 +190,9 @@ function SortableTopItem({
   onDelete,
   pages,
 }: SortableTopItemProps) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id: item._id })
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: item._id,
+  })
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -244,9 +235,7 @@ function SortableTopItem({
                   </span>
                 )}
                 {isDirectLink && item.href && (
-                  <span className="text-xs text-muted-foreground font-normal">
-                    {item.href}
-                  </span>
+                  <span className="text-xs text-muted-foreground font-normal">{item.href}</span>
                 )}
                 {!isDirectLink && (
                   <span className="text-xs text-muted-foreground font-normal">
@@ -271,12 +260,18 @@ function SortableTopItem({
                 <AlertDialogHeader>
                   <AlertDialogTitle>Delete &ldquo;{item.label || 'item'}&rdquo;?</AlertDialogTitle>
                   <AlertDialogDescription>
-                    This will remove the menu item{item.children && item.children.length > 0 ? ` and its ${item.children.length} child item${item.children.length !== 1 ? 's' : ''}` : ''}. You can undo by discarding your unsaved changes.
+                    This will remove the menu item
+                    {item.children && item.children.length > 0
+                      ? ` and its ${item.children.length} child item${item.children.length !== 1 ? 's' : ''}`
+                      : ''}
+                    . You can undo by discarding your unsaved changes.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
                   <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction variant="destructive" onClick={onDelete}>Delete</AlertDialogAction>
+                  <AlertDialogAction variant="destructive" onClick={onDelete}>
+                    Delete
+                  </AlertDialogAction>
                 </AlertDialogFooter>
               </AlertDialogContent>
             </AlertDialog>
@@ -284,15 +279,8 @@ function SortableTopItem({
 
           <CollapsibleContent>
             <CardContent className="pt-0 pb-4 space-y-4">
-              <TopItemFields
-                item={item}
-                onUpdate={onUpdate}
-              />
-              <ChildrenEditor
-                item={item}
-                onUpdate={onUpdate}
-                pages={pages}
-              />
+              <TopItemFields item={item} onUpdate={onUpdate} />
+              <ChildrenEditor item={item} onUpdate={onUpdate} pages={pages} />
             </CardContent>
           </CollapsibleContent>
         </Collapsible>
@@ -329,9 +317,7 @@ function TopItemFields({ item, onUpdate }: TopItemFieldsProps) {
         <Input
           id={`href-${item._id}`}
           value={item.href ?? ''}
-          onChange={(e) =>
-            onUpdate({ ...item, href: e.target.value || undefined })
-          }
+          onChange={(e) => onUpdate({ ...item, href: e.target.value || undefined })}
           placeholder="/path or https://..."
         />
       </div>
@@ -424,11 +410,7 @@ function ChildrenEditor({ item, onUpdate, pages }: ChildrenEditorProps) {
           No children. This item will render as a direct link.
         </p>
       ) : (
-        <DndContext
-          sensors={sensors}
-          collisionDetection={closestCenter}
-          onDragEnd={handleDragEnd}
-        >
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
           <SortableContext items={childIds} strategy={verticalListSortingStrategy}>
             <div className="space-y-2">
               {children.map((child) => (
@@ -461,20 +443,10 @@ interface SortableChildItemProps {
   pages: PageMeta[]
 }
 
-function SortableChildItem({
-  child,
-  onUpdate,
-  onDelete,
-  pages,
-}: SortableChildItemProps) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id: child._id })
+function SortableChildItem({ child, onUpdate, onDelete, pages }: SortableChildItemProps) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: child._id,
+  })
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -504,9 +476,7 @@ function SortableChildItem({
         <div className="flex-1 min-w-0">
           {kind === 'separator' ? (
             <div className="flex items-center gap-2">
-              <span className="text-xs font-medium bg-muted px-2 py-1 rounded">
-                Separator
-              </span>
+              <span className="text-xs font-medium bg-muted px-2 py-1 rounded">Separator</span>
             </div>
           ) : kind === 'heading' ? (
             <div>
@@ -528,17 +498,13 @@ function SortableChildItem({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <Input
                   value={child.label ?? ''}
-                  onChange={(e) =>
-                    onUpdate({ ...child, label: e.target.value })
-                  }
+                  onChange={(e) => onUpdate({ ...child, label: e.target.value })}
                   placeholder="{{chapter}}"
                   className="h-8 text-sm"
                 />
                 <Input
                   value={child.href ?? ''}
-                  onChange={(e) =>
-                    onUpdate({ ...child, href: e.target.value })
-                  }
+                  onChange={(e) => onUpdate({ ...child, href: e.target.value })}
                   placeholder="/path/{{chapter-slug}}"
                   className="h-8 text-sm"
                 />
@@ -549,26 +515,22 @@ function SortableChildItem({
               <span className="text-xs font-medium bg-muted px-2 py-1 rounded mb-1 inline-block">
                 Link
               </span>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              <Input
-                value={child.label ?? ''}
-                onChange={(e) =>
-                  onUpdate({ ...child, label: e.target.value })
-                }
-                placeholder="Link label"
-                className="h-8 text-sm"
-              />
-              <div className="relative">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <Input
-                  value={child.href ?? ''}
-                  onChange={(e) =>
-                    onUpdate({ ...child, href: e.target.value })
-                  }
-                  placeholder="/page-slug or https://..."
+                  value={child.label ?? ''}
+                  onChange={(e) => onUpdate({ ...child, label: e.target.value })}
+                  placeholder="Link label"
                   className="h-8 text-sm"
-                  list={`pages-${child._id}`}
                 />
-                {!isExternalHref(child.href) && pages.length > 0 && (
+                <div className="relative">
+                  <Input
+                    value={child.href ?? ''}
+                    onChange={(e) => onUpdate({ ...child, href: e.target.value })}
+                    placeholder="/page-slug or https://..."
+                    className="h-8 text-sm"
+                    list={`pages-${child._id}`}
+                  />
+                  {!isExternalHref(child.href) && pages.length > 0 && (
                     <datalist id={`pages-${child._id}`}>
                       {pages.map((p) => (
                         <option key={p.slug} value={`/${p.slug}`}>
@@ -598,12 +560,15 @@ function SortableChildItem({
             <AlertDialogHeader>
               <AlertDialogTitle>Delete this item?</AlertDialogTitle>
               <AlertDialogDescription>
-                This will remove the {childKindLabel(kind).toLowerCase()} from the dropdown. You can undo by discarding your unsaved changes.
+                This will remove the {childKindLabel(kind).toLowerCase()} from the dropdown. You can
+                undo by discarding your unsaved changes.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
               <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction variant="destructive" onClick={onDelete}>Delete</AlertDialogAction>
+              <AlertDialogAction variant="destructive" onClick={onDelete}>
+                Delete
+              </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
@@ -654,11 +619,7 @@ function AddChildMenu({ onAdd }: AddChildMenuProps) {
           {childKindLabel(kind)}
         </Button>
       ))}
-      <Button
-        variant="ghost"
-        size="sm"
-        onClick={() => setOpen(false)}
-      >
+      <Button variant="ghost" size="sm" onClick={() => setOpen(false)}>
         Cancel
       </Button>
     </div>
@@ -670,17 +631,17 @@ function AddChildMenu({ onAdd }: AddChildMenuProps) {
 // --------------------------------------------------------------------------
 
 export function NavigationEditor({ initialConfig, pages }: NavigationEditorProps) {
-  const [items, setItems] = useState<NavItemWithId[]>(() =>
-    addIds(initialConfig?.items ?? [])
-  )
+  const [items, setItems] = useState<NavItemWithId[]>(() => addIds(initialConfig?.items ?? []))
   const [openItems, setOpenItems] = useState<Set<string>>(new Set())
   const [saving, setSaving] = useState(false)
 
   // Snapshot of last-saved state for change detection and discard
-  const savedSnapshot = useRef(JSON.stringify(initialConfig?.items ?? []))
+  const [savedSnapshot, setSavedSnapshot] = useState(() =>
+    JSON.stringify(initialConfig?.items ?? [])
+  )
   const hasChanges = useMemo(
-    () => JSON.stringify(stripIds(items)) !== savedSnapshot.current,
-    [items]
+    () => JSON.stringify(stripIds(items)) !== savedSnapshot,
+    [items, savedSnapshot]
   )
 
   const sensors = useSensors(
@@ -732,7 +693,7 @@ export function NavigationEditor({ initialConfig, pages }: NavigationEditorProps
 
   // -- Discard changes --
   function discardChanges() {
-    const saved: NavItemRaw[] = JSON.parse(savedSnapshot.current)
+    const saved: NavItemRaw[] = JSON.parse(savedSnapshot)
     setItems(addIds(saved))
     setOpenItems(new Set())
   }
@@ -757,7 +718,7 @@ export function NavigationEditor({ initialConfig, pages }: NavigationEditorProps
       }
       const result = await saveNavigation(config)
       if (result.success) {
-        savedSnapshot.current = JSON.stringify(config.items)
+        setSavedSnapshot(JSON.stringify(config.items))
         toast.success('Navigation saved')
       } else {
         toast.error(result.error || 'Failed to save navigation')
@@ -771,11 +732,7 @@ export function NavigationEditor({ initialConfig, pages }: NavigationEditorProps
 
   return (
     <div className="space-y-4 max-w-4xl">
-      <DndContext
-        sensors={sensors}
-        collisionDetection={closestCenter}
-        onDragEnd={handleDragEnd}
-      >
+      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
         <SortableContext items={topIds} strategy={verticalListSortingStrategy}>
           <div className="space-y-2">
             {items.map((item) => (
@@ -799,11 +756,7 @@ export function NavigationEditor({ initialConfig, pages }: NavigationEditorProps
         </p>
       )}
 
-      <Button
-        variant="outline"
-        onClick={addTopItem}
-        className="w-full border-dashed"
-      >
+      <Button variant="outline" onClick={addTopItem} className="w-full border-dashed">
         <Plus className="h-4 w-4 mr-2" />
         Add top-level item
       </Button>

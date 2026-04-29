@@ -152,14 +152,16 @@ export function ControlCardForm({ routes }: ControlCardFormProps) {
     [controls.length]
   )
 
+  const rwgpsId = selectedRoute?.rwgpsId
+
   const importFromRwgps = useCallback(async () => {
-    if (!selectedRoute?.rwgpsId) return
+    if (!rwgpsId) return
 
     setIsLoadingRwgps(true)
     setRwgpsError(null)
 
     try {
-      const parsed = await fetchRwgpsControls(selectedRoute.rwgpsId)
+      const parsed = await fetchRwgpsControls(rwgpsId)
       setControls(
         parsed.map((c) => ({
           id: crypto.randomUUID(),
@@ -172,7 +174,7 @@ export function ControlCardForm({ routes }: ControlCardFormProps) {
     } finally {
       setIsLoadingRwgps(false)
     }
-  }, [selectedRoute?.rwgpsId])
+  }, [rwgpsId])
 
   // Auto-import controls from RWGPS when route changes
   useEffect(() => {
