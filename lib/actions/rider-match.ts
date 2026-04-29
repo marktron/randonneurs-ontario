@@ -72,7 +72,12 @@ export async function searchRiderCandidates(
 
   // Get all nickname variants for the first name
   // e.g., "Bob" -> ["bob", "robert", "bobby", "rob", "robbie", "bert"]
+  // getNameVariants strips PostgREST operator characters; if every char in
+  // the input was stripped, there's nothing to search for.
   const firstNameVariants = getNameVariants(trimmedFirst)
+  if (firstNameVariants.length === 0) {
+    return { candidates: [] }
+  }
 
   // Build OR filter for all name variants
   const orFilters = firstNameVariants.map((variant) => `first_name.ilike.%${variant}%`).join(',')

@@ -157,9 +157,18 @@ function normalizeSurname(surname: string): { normalized: string; withoutPrefix:
  * Get all name variants (nicknames) for a given name.
  * Used to expand database searches.
  * Example: "Bob" -> ["bob", "robert", "bobby", "rob", "robbie", "bert"]
+ *
+ * Strips characters that aren't letters, apostrophes, hyphens, or spaces
+ * before nickname lookup. The variants are interpolated into a PostgREST
+ * `or()` filter in `searchRiderCandidates`, so we must not let `,` `(` `)`
+ * `:` `*` `%` `.` or `\` through.
  */
 export function getNameVariants(name: string): string[] {
-  const normalized = name.trim().toLowerCase()
+  const normalized = name
+    .trim()
+    .toLowerCase()
+    .replace(/[^\p{L}'\- ]/gu, '')
+  if (!normalized) return []
   const variants = new Set<string>([normalized])
 
   // If it's a canonical name, add all its nicknames

@@ -50,6 +50,58 @@ describe('getNameVariants', () => {
     expect(variants).toContain('timothy')
     expect(variants).toContain('timmy')
   })
+
+  describe('sanitization (PostgREST injection guard)', () => {
+    // The variants are interpolated into a PostgREST `or()` filter in
+    // searchRiderCandidates; characters like `,` `(` `)` `:` `*` `%` `.` `\`
+    // would break out of the `first_name.ilike.%...%` expression and inject
+    // additional filter clauses targeting other columns.
+    const dangerousChars = [',', '.', '%', '@', '(', ')', ':', '*', '\\']
+
+    it('strips PostgREST operator characters from input', () => {
+      const variants = getNameVariants('bob,email.like.%@target.com%')
+      for (const variant of variants) {
+        for (const ch of dangerousChars) {
+          expect(variant).not.toContain(ch)
+        }
+      }
+    })
+
+    it('still resolves nicknames after stripping wrapping characters', () => {
+      const variants = getNameVariants('(bob)')
+      expect(variants).toContain('bob')
+      expect(variants).toContain('robert')
+    })
+
+    it("preserves apostrophes (e.g., O'Brien)", () => {
+      const variants = getNameVariants("O'Brien")
+      expect(variants).toEqual(["o'brien"])
+    })
+
+    it('preserves hyphens (e.g., Jean-Pierre)', () => {
+      const variants = getNameVariants('Jean-Pierre')
+      expect(variants).toEqual(['jean-pierre'])
+    })
+
+    it('preserves spaces (e.g., Mary Jane)', () => {
+      const variants = getNameVariants('Mary Jane')
+      expect(variants).toEqual(['mary jane'])
+    })
+
+    it('preserves accented Unicode letters', () => {
+      const variants = getNameVariants('François')
+      expect(variants).toEqual(['françois'])
+    })
+
+    it('returns an empty array when input is only special characters', () => {
+      expect(getNameVariants(',,,')).toEqual([])
+      expect(getNameVariants('()*%')).toEqual([])
+    })
+
+    it('returns an empty array for whitespace-only input', () => {
+      expect(getNameVariants('   ')).toEqual([])
+    })
+  })
 })
 
 describe('fuzzyNameScore', () => {

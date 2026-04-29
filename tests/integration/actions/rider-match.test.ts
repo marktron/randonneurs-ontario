@@ -100,6 +100,7 @@ vi.mock('@/lib/utils/fuzzy-match', () => ({
 
 // Import after mocks
 import { searchRiderCandidates } from '@/lib/actions/rider-match'
+import { getNameVariants } from '@/lib/utils/fuzzy-match'
 
 const mockModule = await vi.importMock<{
   __queryBuilder: Record<string, ReturnType<typeof vi.fn>>
@@ -148,6 +149,18 @@ describe('searchRiderCandidates', () => {
 
       // Should not error, should query with trimmed values
       expect(result.candidates).toEqual([])
+    })
+
+    it('short-circuits without querying when getNameVariants returns no variants', async () => {
+      // When the first name is composed entirely of stripped characters
+      // (e.g. PostgREST operator chars), getNameVariants returns []. The
+      // action must not fall through to `.or('')` against the riders table.
+      vi.mocked(getNameVariants).mockReturnValueOnce([])
+
+      const result = await searchRiderCandidates(',,,', 'Smith')
+
+      expect(result.candidates).toEqual([])
+      expect(mockModule.__queryBuilder.or).not.toHaveBeenCalled()
     })
   })
 
