@@ -29,7 +29,7 @@ describe('extractSchedId', () => {
 
 describe('LEGACY_EVENT_MAP', () => {
   it('contains all 2026 season events', () => {
-    expect(Object.keys(LEGACY_EVENT_MAP).length).toBe(148)
+    expect(Object.keys(LEGACY_EVENT_MAP).length).toBe(147)
   })
 
   it('maps Wizard of Oz 200km brevet correctly', () => {

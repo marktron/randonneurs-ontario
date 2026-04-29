@@ -107,7 +107,6 @@ const schedule = [
   { id: '1372', route: 'Belfountain', distance: '160', date: '2026-07-25' },
   { id: '1371', route: 'Kissing Bridge', distance: '300', date: '2026-07-25' },
   { id: '1388', route: 'Up and Back', distance: '300', date: '2026-07-25' },
-  { id: '1339', route: 'XXX', distance: '160', date: '2026-07-25' },
   { id: '1290', route: 'Spirit Catcher', distance: '400', date: '2026-07-25' },
   { id: '1291', route: 'Nassagaweya', distance: '300', date: '2026-07-28' },
   { id: '1292', route: "Queen's Bush", distance: '200', date: '2026-07-29' },
