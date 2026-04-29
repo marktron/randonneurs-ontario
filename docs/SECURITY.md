@@ -89,7 +89,10 @@ The app uses two Supabase Storage buckets with distinct access policies:
 
 Both buckets restrict write access to the service-role client (`getSupabaseAdmin()`), which bypasses RLS. Anonymous/public INSERT policies are not used — application-level token validation (submission tokens for riders, admin auth for images) gates access before the service-role upload occurs.
 
-Regression tests in `tests/integration-real/rider-submissions-bucket-policy.test.ts` verify that anonymous uploads to `rider-submissions` are rejected.
+Regression tests verify these policies against the local DB:
+
+- `tests/integration-real/rider-submissions-bucket-policy.test.ts` — anonymous uploads to `rider-submissions` are rejected.
+- `tests/integration-real/images-bucket-policy.test.ts` — both anonymous and freshly-signed-up authenticated users are rejected from the `images` bucket and `images` metadata table.
 
 ## Guidelines for Contributors
 
