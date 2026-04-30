@@ -319,7 +319,7 @@ describe('completeRegistrationWithRider (real DB)', () => {
     expect(rider).toBeTruthy()
     expect(rider!.first_name).toBe('Brand')
     expect(rider!.last_name).toBe('New')
-    expect(rider!.slug).toMatch(/^completer-[a-z0-9]+$/)
+    expect(rider!.slug).toBe('brand-new')
 
     // Verify registration exists for this event
     const { data: allRegs } = await supabase

@@ -428,7 +428,7 @@ describe('registerForEvent (real DB)', () => {
     expect(rider).toBeTruthy()
     expect(rider!.first_name).toBe('New')
     expect(rider!.last_name).toBe('Person')
-    expect(rider!.slug).toMatch(/^new-rider-[a-z0-9]+$/)
+    expect(rider!.slug).toBe('new-person')
   })
 
   it('existing rider found by email — reuses rider, creates audit entry', async () => {

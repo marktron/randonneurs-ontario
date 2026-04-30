@@ -30,7 +30,7 @@ import { checkBotId } from 'botid/server'
 import { revalidatePath, revalidateTag } from 'next/cache'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { sendRegistrationConfirmationEmail } from '@/lib/email/send-registration-email'
-import { formatEventType } from '@/lib/utils'
+import { createSlug, formatEventType } from '@/lib/utils'
 import { format, parseISO } from 'date-fns'
 import { searchRiderCandidates, type RiderMatchCandidate } from './rider-match'
 import { fuzzyNameScore } from '@/lib/utils/fuzzy-match'
@@ -88,19 +88,41 @@ export interface RegistrationResult {
 // ============================================================================
 
 /**
- * Create a URL-safe slug for a new rider based on their email.
- * Adds a random suffix to ensure uniqueness.
- *
- * @example
- * createRiderSlug("john.doe@example.com") → "john-doe-a3f2b1"
+ * Insert a new rider with a `firstName-lastName` slug, retrying with `-2`,
+ * `-3`, etc. on slug-uniqueness collisions. Mirrors the admin path in
+ * `lib/actions/riders.ts:createRider`.
  */
-function createRiderSlug(email: string): string {
-  const prefix = email
-    .split('@')[0]
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, '-')
-  const suffix = Math.random().toString(36).substring(2, 8)
-  return `${prefix}-${suffix}`
+async function insertNewRider(
+  insertData: Omit<RiderInsert, 'slug'> & { first_name: string; last_name: string }
+): Promise<RiderIdOnly> {
+  const baseSlug = createSlug(`${insertData.first_name} ${insertData.last_name}`)
+  let slug = baseSlug
+  let lastError: { code: string; message: string } | null = null
+
+  for (let attempt = 0; attempt < 5; attempt++) {
+    if (attempt > 0) {
+      slug = `${baseSlug}-${attempt + 1}`
+    }
+
+    const { data, error } = await getSupabaseAdmin()
+      .from('riders')
+      .insert({ ...insertData, slug })
+      .select('id')
+      .single()
+
+    if (!error && data) {
+      return data as RiderIdOnly
+    }
+
+    if (error?.code === '23505' && error.message?.includes('riders_slug_key')) {
+      lastError = error
+      continue
+    }
+
+    throw new Error(error?.message || 'Failed to create rider profile')
+  }
+
+  throw new Error(lastError?.message || 'Failed to create rider profile after 5 attempts')
 }
 
 /**
@@ -249,28 +271,20 @@ async function findOrCreateRider(
   }
 
   // No matches found - create new rider
-  const insertRider: RiderInsert = {
-    slug: createRiderSlug(normalizedEmail),
-    first_name: trimmedFirstName,
-    last_name: trimmedLastName,
-    email: normalizedEmail,
-    gender: parsedGender,
-    emergency_contact_name: emergencyContactName || null,
-    emergency_contact_phone: emergencyContactPhone || null,
-  }
-  const { data: newRider, error: riderError } = await getSupabaseAdmin()
-    .from('riders')
-    .insert(insertRider)
-    .select('id')
-    .single()
-
-  if (riderError || !newRider) {
-    console.error('🚨 Error creating rider:', riderError)
+  try {
+    const newRider = await insertNewRider({
+      first_name: trimmedFirstName,
+      last_name: trimmedLastName,
+      email: normalizedEmail,
+      gender: parsedGender,
+      emergency_contact_name: emergencyContactName || null,
+      emergency_contact_phone: emergencyContactPhone || null,
+    })
+    return { success: true, riderId: newRider.id }
+  } catch (error) {
+    console.error('🚨 Error creating rider:', error)
     throw new Error('Failed to create rider profile')
   }
-
-  const typedNewRider = newRider as RiderIdOnly
-  return { success: true, riderId: typedNewRider.id }
 }
 
 /**
@@ -1212,28 +1226,20 @@ export async function completeRegistrationWithRider(
     await getSupabaseAdmin().from('riders').update(updateData).eq('id', selectedRiderId)
   } else {
     // User confirmed they're a new rider - create new rider record
-    const insertRider: RiderInsert = {
-      slug: createRiderSlug(normalizedEmail),
-      first_name: trimmedFirstName,
-      last_name: trimmedLastName,
-      email: normalizedEmail,
-      gender: parsedGender,
-      emergency_contact_name: emergencyContactName?.trim() || null,
-      emergency_contact_phone: normalizedPhone || null,
-    }
-    const { data: newRider, error: riderError } = await getSupabaseAdmin()
-      .from('riders')
-      .insert(insertRider)
-      .select('id')
-      .single()
-
-    if (riderError || !newRider) {
-      console.error('Error creating rider:', riderError)
+    try {
+      const newRider = await insertNewRider({
+        first_name: trimmedFirstName,
+        last_name: trimmedLastName,
+        email: normalizedEmail,
+        gender: parsedGender,
+        emergency_contact_name: emergencyContactName?.trim() || null,
+        emergency_contact_phone: normalizedPhone || null,
+      })
+      riderId = newRider.id
+    } catch (error) {
+      console.error('Error creating rider:', error)
       return { success: false, error: 'Failed to create rider profile' }
     }
-
-    const typedNewRider = newRider as RiderIdOnly
-    riderId = typedNewRider.id
   }
 
   // Verify membership (same as registerForEvent / registerForPermanent)
