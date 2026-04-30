@@ -174,7 +174,7 @@ const getChapterResultsInner = cache(
         .eq('collection', urlSlug)
         .gte('event_date', `${year}-01-01`)
         .lte('event_date', `${year}-12-31`)
-        .order('event_date', { ascending: true })
+        .order('event_date', { ascending: false })
       events = result.data
       eventsError = result.error
     } else if (urlSlug === 'permanent' || urlSlug === 'fleche') {
@@ -193,7 +193,7 @@ const getChapterResultsInner = cache(
         .eq('event_type', urlSlug)
         .gte('event_date', `${year}-01-01`)
         .lte('event_date', `${year}-12-31`)
-        .order('event_date', { ascending: true })
+        .order('event_date', { ascending: false })
       events = result.data
       eventsError = result.error
     } else {
@@ -221,7 +221,7 @@ const getChapterResultsInner = cache(
         query = query.eq('name', 'Paris-Brest-Paris')
       }
 
-      const result = await query.order('event_date', { ascending: true })
+      const result = await query.order('event_date', { ascending: false })
       events = result.data
       eventsError = result.error
     }

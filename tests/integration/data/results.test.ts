@@ -242,6 +242,16 @@ describe('getChapterResults', () => {
     expect(mockModule.__queryBuilder.lte).toHaveBeenCalledWith('event_date', '2025-12-31')
   })
 
+  it('orders events reverse chronologically (most recent first)', async () => {
+    mockModule.__mockEventsFound([])
+
+    await getChapterResults('toronto', 2025)
+
+    expect(mockModule.__queryBuilder.order).toHaveBeenCalledWith('event_date', {
+      ascending: false,
+    })
+  })
+
   it('handles query errors gracefully', async () => {
     mockModule.__mockQueryError({
       message: 'Database error',
