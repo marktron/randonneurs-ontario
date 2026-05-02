@@ -158,6 +158,7 @@ interface EventResultsManagerProps {
   registrations: Registration[]
   cancelledRegistrations: CancelledRegistration[]
   results: Result[]
+  firstTimeRiderIds: string[]
 }
 
 const STATUS_OPTIONS: { value: ResultStatus; label: string }[] = [
@@ -178,6 +179,7 @@ interface RiderRowProps {
   season: number | null
   distanceKm: number
   registrationId: string | null
+  isFirstTimeRider: boolean
   onRegistrationCancelled: (
     registrationId: string,
     riderName: string,
@@ -267,6 +269,7 @@ function RiderRow({
   season,
   distanceKm,
   registrationId,
+  isFirstTimeRider,
   onRegistrationCancelled,
 }: RiderRowProps) {
   const [isPending, startTransition] = useTransition()
@@ -454,6 +457,18 @@ function RiderRow({
                   Trial
                 </Badge>
               )}
+            {isFirstTimeRider && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Badge variant="secondary" className="ml-1 cursor-help">
+                    First event
+                  </Badge>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>This rider has not shown up to a previous event.</p>
+                </TooltipContent>
+              </Tooltip>
+            )}
             {isFleche && participant.isTeamCaptain && (
               <Badge variant="outline" className="ml-1">
                 Captain
@@ -728,8 +743,10 @@ export function EventResultsManager({
   registrations,
   cancelledRegistrations: initialCancelledRegistrations,
   results,
+  firstTimeRiderIds,
 }: EventResultsManagerProps) {
   const isFleche = eventType === 'fleche'
+  const firstTimeRiderIdSet = new Set(firstTimeRiderIds)
   const [addRiderOpen, setAddRiderOpen] = useState(false)
   const [isSubmitted, setIsSubmitted] = useState(eventStatus === 'submitted')
   const [cancelledRegistrationIds, setCancelledRegistrationIds] = useState<Set<string>>(new Set())
@@ -941,6 +958,7 @@ export function EventResultsManager({
                     season={season}
                     distanceKm={distanceKm}
                     registrationId={participant.hasRegistration ? participant.id : null}
+                    isFirstTimeRider={firstTimeRiderIdSet.has(participant.riderId)}
                     onRegistrationCancelled={handleRegistrationCancelled}
                   />
                 ))}
