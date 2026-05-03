@@ -10,23 +10,23 @@ Self-service registration management via token-based capability URLs. Riders can
 
 ## Management page states
 
-| Condition                                      | Behavior                                           |
-| ---------------------------------------------- | -------------------------------------------------- |
-| Invalid token                                  | 404                                                |
-| Result exists with matching `submission_token` | Redirect to `/results/submit/[token]`              |
-| Registration cancelled                         | Static "cancelled" message with re-register link   |
-| Event cancelled                                | Static "event cancelled" message                   |
-| Event scheduled, before start time             | Cancel button                                      |
-| Event scheduled, after start time              | Cancel + Submit Results buttons                    |
-| Event completed, no result yet                 | Submit Results creates result on-demand, redirects |
+| Condition                                      | Behavior                                                                             |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------ |
+| Invalid token                                  | 404                                                                                  |
+| Result exists with matching `submission_token` | Redirect to `/results/submit/[token]`                                                |
+| Registration cancelled                         | Static "cancelled" message with re-register link                                     |
+| Event cancelled                                | Static "event cancelled" message                                                     |
+| Event scheduled, before start time             | Cancel button                                                                        |
+| Event scheduled, after start time, registered  | `createEarlyResult` mints a pending row, then redirects to `/results/submit/[token]` |
+| Event completed/submitted, no result yet       | Same as above — `createEarlyResult` is idempotent and handles missing-row recovery   |
 
 ## Token sharing
 
-When results are created (by cron or early submission), the registration's `management_token` value is copied to the result's `submission_token`. This means the same link works throughout the lifecycle:
+When results are created (by cron or early submission), the registration's `management_token` value is copied to the result's `submission_token`. This means the same link works throughout the lifecycle, and is also the URL encoded in the brevet card "Submit Your Results" QR code:
 
 - Before event: manage registration (cancel)
-- After event start: submit results
-- After results created: redirects to result submission form
+- After event start: redirects straight to result submission form (creating the result row on demand if needed)
+- After results created: redirects to result submission form via the existing-result check
 
 ## Database columns
 

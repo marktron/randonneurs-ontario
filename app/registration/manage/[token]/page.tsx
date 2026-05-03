@@ -1,7 +1,7 @@
 import { notFound, redirect } from 'next/navigation'
 import { PageShell } from '@/components/page-shell'
 import { RegistrationManage } from '@/components/registration-manage'
-import { getRegistrationByToken } from '@/lib/actions/manage-registration'
+import { createEarlyResult, getRegistrationByToken } from '@/lib/actions/manage-registration'
 import { createTorontoDate } from '@/lib/brmTimes'
 import { formatRideName } from '@/lib/events/format'
 import { parseISO } from 'date-fns'
@@ -51,6 +51,16 @@ export default async function RegistrationManagePage({ params }: PageProps) {
       minutes
     )
     eventStarted = new Date() >= eventStart
+  }
+
+  // Once the event has started, riders coming here from the brevet card QR
+  // (or registration email) want to submit results — create the pending result
+  // on demand and forward them to the submission page.
+  if (eventStarted && data.registration.status === 'registered') {
+    const result = await createEarlyResult(token)
+    if (result.success && result.submissionToken) {
+      redirect(`/results/submit/${result.submissionToken}`)
+    }
   }
 
   return (

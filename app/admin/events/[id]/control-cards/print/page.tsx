@@ -159,7 +159,7 @@ export default async function PrintPage({ params, searchParams }: PrintPageProps
       firstName: r.riders!.first_name,
       lastName: r.riders!.last_name,
       submissionUrl: r.management_token
-        ? `${baseUrl}/results/submit/${r.management_token}`
+        ? `${baseUrl}/registration/manage/${r.management_token}`
         : undefined,
     }))
 

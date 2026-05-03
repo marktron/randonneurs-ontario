@@ -163,7 +163,7 @@ By default `computeControlTimes` truncates distances to whole km before computin
 Rendered with `qrcode.react`. Up to two QR codes appear in the bottom of the middle column of the front:
 
 - **Route Map** — links to `https://ridewithgps.com/routes/{rwgps_id}`. Only included if the event's linked route has an `rwgps_id`.
-- **Submit Your Results** — links to `/results/submit/{management_token}`. Admin flow only; requires the registration to have a `management_token`. Size is reduced when both QR codes are present.
+- **Submit Your Results** — links to `/registration/manage/{management_token}`. Admin flow only; requires the registration to have a `management_token`. Size is reduced when both QR codes are present. The manage page redirects to `/results/submit/{token}` once the event has started, calling `createEarlyResult` to mint the pending result row on demand if the event hasn't been switched to "completed" yet (see `docs/registration-management.md`).
 
 ## Reversed permanent routes
 
@@ -287,7 +287,7 @@ When a permanent is registered as reversed, the event name includes "(Reversed)"
 
 ### Route Map and Submission QR codes
 
-If the event's route has an `rwgps_id`, a Route Map QR code is printed on the front of each card. In the admin flow, if the rider's registration has a `management_token`, a "Submit Your Results" QR code is also printed, linking to `/results/submit/{token}`.
+If the event's route has an `rwgps_id`, a Route Map QR code is printed on the front of each card. In the admin flow, if the rider's registration has a `management_token`, a "Submit Your Results" QR code is also printed, linking to `/registration/manage/{token}`. Once the event has started, that page automatically forwards the rider to the result submission form — including the case where a fast finisher submits before the event has been marked "completed".
 
 ### Organizer details
 

@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import {
   AlertDialog,
@@ -14,10 +13,10 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
-import { cancelRegistration, createEarlyResult } from '@/lib/actions/manage-registration'
+import { cancelRegistration } from '@/lib/actions/manage-registration'
 import { formatRideName } from '@/lib/events/format'
 import { format, parseISO } from 'date-fns'
-import { CalendarDays, MapPin, Clock, XCircle, Send } from 'lucide-react'
+import { CalendarDays, MapPin, Clock, XCircle } from 'lucide-react'
 import Link from 'next/link'
 
 interface RegistrationManageProps {
@@ -57,7 +56,6 @@ export function RegistrationManage({
   rider,
   eventStarted,
 }: RegistrationManageProps) {
-  const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
   const [cancelled, setCancelled] = useState(registration.status === 'cancelled')
@@ -83,18 +81,6 @@ export function RegistrationManage({
         setCancelled(true)
       } else {
         setError(result.error || 'Failed to cancel registration')
-      }
-    })
-  }
-
-  function handleSubmitResults() {
-    setError(null)
-    startTransition(async () => {
-      const result = await createEarlyResult(token)
-      if (result.success && result.submissionToken) {
-        router.push(`/results/submit/${result.submissionToken}`)
-      } else {
-        setError(result.error || 'Failed to create result')
       }
     })
   }
@@ -135,10 +121,6 @@ export function RegistrationManage({
       </div>
     )
   }
-
-  // Event completed/submitted but no result yet — handled by createEarlyResult on-demand
-  // For completed events, show the submit results action
-  const eventCompleted = event.status === 'completed' || event.status === 'submitted'
 
   return (
     <div className="space-y-8">
@@ -184,24 +166,6 @@ export function RegistrationManage({
 
       {/* Actions */}
       <div className="space-y-4">
-        {/* Submit Results — show after event start or for completed events */}
-        {(eventStarted || eventCompleted) && (
-          <div className="rounded-lg border border-border p-6 space-y-3">
-            <div>
-              <h3 className="font-semibold">I rode</h3>
-              <p className="text-sm text-muted-foreground">Submit your results for this event.</p>
-            </div>
-            <Button
-              onClick={handleSubmitResults}
-              disabled={isPending}
-              className="w-full sm:w-auto h-12"
-            >
-              <Send className="h-4 w-4 mr-2" />
-              {isPending ? 'Creating...' : 'Submit Results'}
-            </Button>
-          </div>
-        )}
-
         {/* Cancel — show when event is scheduled */}
         {event.status === 'scheduled' && (
           <div className="rounded-lg border border-border p-6 space-y-3">

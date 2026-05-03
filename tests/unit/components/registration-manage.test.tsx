@@ -9,20 +9,9 @@ import { RegistrationManage } from '@/components/registration-manage'
 
 // Mock server actions
 const mockCancelRegistration = vi.fn()
-const mockCreateEarlyResult = vi.fn()
 
 vi.mock('@/lib/actions/manage-registration', () => ({
   cancelRegistration: (...args: unknown[]) => mockCancelRegistration(...args),
-  createEarlyResult: (...args: unknown[]) => mockCreateEarlyResult(...args),
-}))
-
-// Mock router
-const mockPush = vi.fn()
-
-vi.mock('next/navigation', () => ({
-  useRouter: () => ({
-    push: mockPush,
-  }),
 }))
 
 // Mock lucide-react icons to avoid rendering issues
@@ -31,7 +20,6 @@ vi.mock('lucide-react', () => ({
   MapPin: () => <span data-testid="icon-map" />,
   Clock: () => <span data-testid="icon-clock" />,
   XCircle: () => <span data-testid="icon-x" />,
-  Send: () => <span data-testid="icon-send" />,
 }))
 
 describe('RegistrationManage', () => {
@@ -66,10 +54,6 @@ describe('RegistrationManage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockCancelRegistration.mockResolvedValue({ success: true })
-    mockCreateEarlyResult.mockResolvedValue({
-      success: true,
-      submissionToken: 'test-token-123',
-    })
   })
 
   describe('rendering', () => {
@@ -90,7 +74,7 @@ describe('RegistrationManage', () => {
       expect(screen.getByText('123 Main St')).toBeInTheDocument()
     })
 
-    it('shows only cancel button before event start', () => {
+    it('shows cancel button before event start', () => {
       render(
         <RegistrationManage
           token="test-token-123"
@@ -103,21 +87,6 @@ describe('RegistrationManage', () => {
 
       expect(screen.getByText('Cancel Registration', { selector: 'h3' })).toBeInTheDocument()
       expect(screen.queryByText('I rode')).not.toBeInTheDocument()
-    })
-
-    it('shows both cancel and submit buttons after event start', () => {
-      render(
-        <RegistrationManage
-          token="test-token-123"
-          registration={baseRegistration}
-          event={baseEvent}
-          rider={baseRider}
-          eventStarted={true}
-        />
-      )
-
-      expect(screen.getByText('I rode')).toBeInTheDocument()
-      expect(screen.getByText("I'm not riding")).toBeInTheDocument()
     })
   })
 
@@ -243,71 +212,6 @@ describe('RegistrationManage', () => {
       await waitFor(() => {
         expect(screen.getByText('Event is no longer open')).toBeInTheDocument()
       })
-    })
-  })
-
-  describe('submit results action', () => {
-    it('calls createEarlyResult and redirects on success', async () => {
-      const user = userEvent.setup()
-
-      render(
-        <RegistrationManage
-          token="test-token-123"
-          registration={baseRegistration}
-          event={baseEvent}
-          rider={baseRider}
-          eventStarted={true}
-        />
-      )
-
-      await user.click(screen.getByRole('button', { name: /submit results/i }))
-
-      await waitFor(() => {
-        expect(mockCreateEarlyResult).toHaveBeenCalledWith('test-token-123')
-        expect(mockPush).toHaveBeenCalledWith('/results/submit/test-token-123')
-      })
-    })
-
-    it('shows error on submit failure', async () => {
-      mockCreateEarlyResult.mockResolvedValue({
-        success: false,
-        error: 'Event has not started yet',
-      })
-      const user = userEvent.setup()
-
-      render(
-        <RegistrationManage
-          token="test-token-123"
-          registration={baseRegistration}
-          event={baseEvent}
-          rider={baseRider}
-          eventStarted={true}
-        />
-      )
-
-      await user.click(screen.getByRole('button', { name: /submit results/i }))
-
-      await waitFor(() => {
-        expect(screen.getByText('Event has not started yet')).toBeInTheDocument()
-      })
-    })
-  })
-
-  describe('completed event', () => {
-    it('shows submit results for completed event', () => {
-      render(
-        <RegistrationManage
-          token="test-token-123"
-          registration={baseRegistration}
-          event={{ ...baseEvent, status: 'completed' }}
-          rider={baseRider}
-          eventStarted={true}
-        />
-      )
-
-      expect(screen.getByText('I rode')).toBeInTheDocument()
-      // No cancel button for completed events
-      expect(screen.queryByText("I'm not riding")).not.toBeInTheDocument()
     })
   })
 })
