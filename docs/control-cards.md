@@ -277,6 +277,8 @@ Control points can be added in two ways:
 
 Route designers can validate a draft route by visiting `/control-cards?rwgps=true`. The picker is replaced with a RideWithGPS URL input; pasting any route URL (or bare ID) and clicking Load fetches the route's name, distance, and control points live from RideWithGPS — nothing is saved. All form fields remain editable, and the Generate button produces the same printable cards as the regular flow.
 
+Private routes work too — paste the share link URL (which includes `?privacy_code=...`) and the privacy code is forwarded to RWGPS automatically.
+
 ### Reversed permanents
 
 When a permanent is registered as reversed, the event name includes "(Reversed)". Controls are automatically reversed and distances recalculated. An info banner in the form tells you when this is happening. Example:

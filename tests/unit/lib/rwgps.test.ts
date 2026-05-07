@@ -4,7 +4,7 @@ import {
   extractControls,
   fetchRwgpsControls,
   fetchRwgpsRoute,
-  parseRwgpsRouteId,
+  parseRwgpsRouteRef,
 } from '@/lib/rwgps'
 
 // Fixture track points: 5 points spaced at lat 43.00, 43.05, 43.10, 43.15, 43.20
@@ -355,38 +355,78 @@ describe('fetchRwgpsControls', () => {
   })
 })
 
-describe('parseRwgpsRouteId', () => {
+describe('parseRwgpsRouteRef', () => {
   it('extracts the ID from a full RWGPS URL', () => {
-    expect(parseRwgpsRouteId('https://ridewithgps.com/routes/47170397')).toBe('47170397')
+    expect(parseRwgpsRouteRef('https://ridewithgps.com/routes/47170397')).toEqual({
+      id: '47170397',
+      privacyCode: null,
+    })
   })
 
   it('extracts the ID from a slugged URL', () => {
-    expect(parseRwgpsRouteId('https://ridewithgps.com/routes/47170397-toronto-loop')).toBe(
-      '47170397'
-    )
+    expect(parseRwgpsRouteRef('https://ridewithgps.com/routes/47170397-toronto-loop')).toEqual({
+      id: '47170397',
+      privacyCode: null,
+    })
   })
 
   it('extracts the ID from a host-less URL', () => {
-    expect(parseRwgpsRouteId('ridewithgps.com/routes/47170397')).toBe('47170397')
+    expect(parseRwgpsRouteRef('ridewithgps.com/routes/47170397')).toEqual({
+      id: '47170397',
+      privacyCode: null,
+    })
   })
 
   it('accepts a bare numeric ID', () => {
-    expect(parseRwgpsRouteId('47170397')).toBe('47170397')
+    expect(parseRwgpsRouteRef('47170397')).toEqual({ id: '47170397', privacyCode: null })
   })
 
   it('trims surrounding whitespace', () => {
-    expect(parseRwgpsRouteId('  47170397  ')).toBe('47170397')
-    expect(parseRwgpsRouteId('\nhttps://ridewithgps.com/routes/47170397\n')).toBe('47170397')
+    expect(parseRwgpsRouteRef('  47170397  ')).toEqual({ id: '47170397', privacyCode: null })
+    expect(parseRwgpsRouteRef('\nhttps://ridewithgps.com/routes/47170397\n')).toEqual({
+      id: '47170397',
+      privacyCode: null,
+    })
   })
 
   it('returns null for unrecognized input', () => {
-    expect(parseRwgpsRouteId('https://example.com/foo/123')).toBeNull()
-    expect(parseRwgpsRouteId('not a url')).toBeNull()
-    expect(parseRwgpsRouteId('')).toBeNull()
+    expect(parseRwgpsRouteRef('https://example.com/foo/123')).toBeNull()
+    expect(parseRwgpsRouteRef('not a url')).toBeNull()
+    expect(parseRwgpsRouteRef('')).toBeNull()
   })
 
   it('extracts the ID from an http URL', () => {
-    expect(parseRwgpsRouteId('http://ridewithgps.com/routes/123')).toBe('123')
+    expect(parseRwgpsRouteRef('http://ridewithgps.com/routes/123')).toEqual({
+      id: '123',
+      privacyCode: null,
+    })
+  })
+
+  it('extracts privacy_code from a share-link URL', () => {
+    expect(
+      parseRwgpsRouteRef(
+        'https://ridewithgps.com/routes/52452431?privacy_code=9BcqBTzVxzW0Z2W02VuSiHv6gii4pBtL'
+      )
+    ).toEqual({
+      id: '52452431',
+      privacyCode: '9BcqBTzVxzW0Z2W02VuSiHv6gii4pBtL',
+    })
+  })
+
+  it('extracts privacy_code when it is not the first query parameter', () => {
+    expect(
+      parseRwgpsRouteRef('https://ridewithgps.com/routes/52452431?foo=bar&privacy_code=ABC123')
+    ).toEqual({
+      id: '52452431',
+      privacyCode: 'ABC123',
+    })
+  })
+
+  it('returns privacyCode: null when other query params are present but no privacy_code', () => {
+    expect(parseRwgpsRouteRef('https://ridewithgps.com/routes/52452431?utm_source=email')).toEqual({
+      id: '52452431',
+      privacyCode: null,
+    })
   })
 })
 
@@ -488,5 +528,22 @@ describe('fetchRwgpsRoute', () => {
 
     const result = await fetchRwgpsRoute('1')
     expect(result.distanceKm).toBe(0)
+  })
+
+  it('appends privacy_code query param when provided', async () => {
+    const fetchMock = vi.mocked(global.fetch)
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        name: 'Private Draft',
+        distance: 50_000,
+        course_points: [{ n: 'CTL Finish', d: 50_000, t: 'Control' }],
+      }),
+    } as Response)
+
+    await fetchRwgpsRoute('1', 'ABC123')
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://ridewithgps.com/routes/1.json?privacy_code=ABC123'
+    )
   })
 })

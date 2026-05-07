@@ -18,7 +18,7 @@ import {
 } from '@/components/ui/command'
 import { Plus, Trash2, Printer, GripVertical, Download, Loader2, ChevronDown } from 'lucide-react'
 import type { ActiveRouteWithRwgps } from '@/lib/data/routes'
-import { fetchRwgpsControls, fetchRwgpsRoute, parseRwgpsRouteId } from '@/lib/rwgps'
+import { fetchRwgpsControls, fetchRwgpsRoute, parseRwgpsRouteRef } from '@/lib/rwgps'
 
 interface ControlInput {
   id: string
@@ -100,6 +100,7 @@ export function ControlCardForm({ routes, mode = 'picker' }: ControlCardFormProp
   const [manualRouteName, setManualRouteName] = useState('')
   const [manualDistanceKm, setManualDistanceKm] = useState('')
   const [rwgpsLoadedId, setRwgpsLoadedId] = useState<string | null>(null)
+  const [rwgpsLoadedPrivacyCode, setRwgpsLoadedPrivacyCode] = useState<string | null>(null)
 
   const pickedRoute = routes.find((r) => r.id === routeId)
 
@@ -216,8 +217,8 @@ export function ControlCardForm({ routes, mode = 'picker' }: ControlCardFormProp
 
   // RWGPS-mode load handler
   const loadFromRwgpsUrl = useCallback(async () => {
-    const id = parseRwgpsRouteId(rwgpsInput)
-    if (!id) {
+    const ref = parseRwgpsRouteRef(rwgpsInput)
+    if (!ref) {
       setRwgpsError(
         "Couldn't read a RideWithGPS route ID from that input. Try a URL like https://ridewithgps.com/routes/12345 or a bare ID."
       )
@@ -228,10 +229,11 @@ export function ControlCardForm({ routes, mode = 'picker' }: ControlCardFormProp
     setRwgpsError(null)
 
     try {
-      const result = await fetchRwgpsRoute(id)
+      const result = await fetchRwgpsRoute(ref.id, ref.privacyCode)
       setManualRouteName(result.name)
       setManualDistanceKm(result.distanceKm.toFixed(1))
-      setRwgpsLoadedId(id)
+      setRwgpsLoadedId(ref.id)
+      setRwgpsLoadedPrivacyCode(ref.privacyCode)
       setControls(
         result.controls.map((c) => ({
           id: crypto.randomUUID(),
@@ -360,7 +362,7 @@ export function ControlCardForm({ routes, mode = 'picker' }: ControlCardFormProp
                   <p className="text-xs text-muted-foreground">
                     Loaded from{' '}
                     <a
-                      href={`https://ridewithgps.com/routes/${rwgpsLoadedId}`}
+                      href={`https://ridewithgps.com/routes/${rwgpsLoadedId}${rwgpsLoadedPrivacyCode ? `?privacy_code=${encodeURIComponent(rwgpsLoadedPrivacyCode)}` : ''}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-primary hover:underline underline-offset-2"

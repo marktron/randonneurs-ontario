@@ -73,17 +73,25 @@ const CONTROL_NAME_PREFIXES = [
 ]
 
 /**
- * Extract a RideWithGPS route ID from a URL, slugged URL, or bare ID.
- * Returns null when no ID can be found.
+ * Parse a RideWithGPS route reference from a URL, share link, or bare ID.
+ * Returns the numeric route ID plus a privacy_code if present (RWGPS uses
+ * privacy_code on share links to grant view access to private routes).
  */
-export function parseRwgpsRouteId(input: string): string | null {
+export function parseRwgpsRouteRef(
+  input: string
+): { id: string; privacyCode: string | null } | null {
   const trimmed = input.trim()
   if (!trimmed) return null
+
   const fromUrl = trimmed.match(/\/routes\/(\d+)/)
-  if (fromUrl) return fromUrl[1]
-  const bare = trimmed.match(/^(\d+)$/)
-  if (bare) return bare[1]
-  return null
+  const fromBare = !fromUrl ? trimmed.match(/^(\d+)$/) : null
+  const id = fromUrl?.[1] ?? fromBare?.[1] ?? null
+  if (!id) return null
+
+  const privacyMatch = trimmed.match(/[?&]privacy_code=([^&\s#]+)/)
+  const privacyCode = privacyMatch ? decodeURIComponent(privacyMatch[1]) : null
+
+  return { id, privacyCode }
 }
 
 /**
@@ -290,9 +298,11 @@ export function extractControls(route: RwgpsRoute): ParsedControl[] {
  * user-facing message on any failure.
  */
 export async function fetchRwgpsRoute(
-  rwgpsId: string
+  rwgpsId: string,
+  privacyCode?: string | null
 ): Promise<{ name: string; distanceKm: number; controls: ParsedControl[] }> {
-  const url = `https://ridewithgps.com/routes/${rwgpsId}.json`
+  const base = `https://ridewithgps.com/routes/${rwgpsId}.json`
+  const url = privacyCode ? `${base}?privacy_code=${encodeURIComponent(privacyCode)}` : base
   const response = await fetch(url)
   if (!response.ok) {
     throw new Error(`Failed to fetch route: ${response.status} ${response.statusText}`)
