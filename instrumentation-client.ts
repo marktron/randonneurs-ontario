@@ -30,6 +30,7 @@ Sentry.init({
     /window\.webkit\.messageHandlers/,
     /Event `Event` \(type=error\) captured as exception/,
     /Non-Error promise rejection captured/,
+    /^Load failed$/,
   ],
 })
 
