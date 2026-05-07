@@ -49,8 +49,7 @@ The regular `/control-cards` page (without the query param) is unchanged.
   - `rwgpsInput: string` — the raw text in the URL input.
   - `manualRouteName: string` — the editable route name field.
   - `manualDistanceKm: string` — the editable distance field (string for input control parity with existing fields).
-  - `rwgpsLoadError: string | null`.
-  - Reuse the existing `isLoadingRwgps` state and `rwgpsError` slot for fetch-time errors.
+- Reuse the existing `isLoadingRwgps` and `rwgpsError` state for the load button's spinner and any fetch-time error message — same UX as the picker-mode "Import from RWGPS" button.
 - The `selectedRoute` derivation is replaced/augmented so that downstream code (`generatePrintUrl`, `isFormValid`, etc.) reads route name + distance from a single source. Cleanest shape: a memoized `effectiveRoute` that returns either the picked DB route (picker mode) or `{ name: manualRouteName, distanceKm: parseFloat(manualDistanceKm), chapterName: null, rwgpsId: <fetched id> }` (rwgps mode). All downstream code uses `effectiveRoute`.
 - `chapterName` falls through to the print page's existing default ("Randonneurs Ontario"), no change needed.
 - Auto-import of controls when route changes: in rwgps mode, controls are populated by the explicit "Load" button, not by an effect.
