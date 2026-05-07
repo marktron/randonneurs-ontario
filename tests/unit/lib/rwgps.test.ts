@@ -1,5 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { cleanControlName, extractControls, fetchRwgpsControls } from '@/lib/rwgps'
+import {
+  cleanControlName,
+  extractControls,
+  fetchRwgpsControls,
+  parseRwgpsRouteId,
+} from '@/lib/rwgps'
 
 // Fixture track points: 5 points spaced at lat 43.00, 43.05, 43.10, 43.15, 43.20
 // at lng -81.00, with cumulative distances 0, 5000, 10000, 15000, 20000 meters.
@@ -346,5 +351,40 @@ describe('fetchRwgpsControls', () => {
     await expect(fetchRwgpsControls('1')).rejects.toThrow(
       /No control points found.+course points.+waypoints/
     )
+  })
+})
+
+describe('parseRwgpsRouteId', () => {
+  it('extracts the ID from a full RWGPS URL', () => {
+    expect(parseRwgpsRouteId('https://ridewithgps.com/routes/47170397')).toBe('47170397')
+  })
+
+  it('extracts the ID from a slugged URL', () => {
+    expect(parseRwgpsRouteId('https://ridewithgps.com/routes/47170397-toronto-loop')).toBe(
+      '47170397'
+    )
+  })
+
+  it('extracts the ID from a host-less URL', () => {
+    expect(parseRwgpsRouteId('ridewithgps.com/routes/47170397')).toBe('47170397')
+  })
+
+  it('accepts a bare numeric ID', () => {
+    expect(parseRwgpsRouteId('47170397')).toBe('47170397')
+  })
+
+  it('trims surrounding whitespace', () => {
+    expect(parseRwgpsRouteId('  47170397  ')).toBe('47170397')
+    expect(parseRwgpsRouteId('\nhttps://ridewithgps.com/routes/47170397\n')).toBe('47170397')
+  })
+
+  it('returns null for unrecognized input', () => {
+    expect(parseRwgpsRouteId('https://example.com/foo/123')).toBeNull()
+    expect(parseRwgpsRouteId('not a url')).toBeNull()
+    expect(parseRwgpsRouteId('')).toBeNull()
+  })
+
+  it('extracts the ID from an http URL', () => {
+    expect(parseRwgpsRouteId('http://ridewithgps.com/routes/123')).toBe('123')
   })
 })

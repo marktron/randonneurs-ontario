@@ -71,6 +71,20 @@ const CONTROL_NAME_PREFIXES = [
 ]
 
 /**
+ * Extract a RideWithGPS route ID from a URL, slugged URL, or bare ID.
+ * Returns null when no ID can be found.
+ */
+export function parseRwgpsRouteId(input: string): string | null {
+  const trimmed = input.trim()
+  if (!trimmed) return null
+  const fromUrl = trimmed.match(/\/routes\/(\d+)/)
+  if (fromUrl) return fromUrl[1]
+  const bare = trimmed.match(/^(\d+)$/)
+  if (bare) return bare[1]
+  return null
+}
+
+/**
  * Strip common control-name prefixes ("CTL -", "CTRL ", "CONTROL-", etc.)
  * used by organizers when tagging RWGPS waypoints and course points.
  */
