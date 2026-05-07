@@ -273,6 +273,10 @@ Control points can be added in two ways:
 1. **Manual entry** — add controls one by one with name and distance (km).
 2. **Import from RWGPS** — if the event has a linked RideWithGPS route, click "Import from RWGPS" to pull in controls automatically. Controls must be marked with type "Control" as course points in the RWGPS route editor.
 
+### Validating draft routes from RideWithGPS
+
+Route designers can validate a draft route by visiting `/control-cards?rwgps=true`. The picker is replaced with a RideWithGPS URL input; pasting any route URL (or bare ID) and clicking Load fetches the route's name, distance, and control points live from RideWithGPS — nothing is saved. All form fields remain editable, and the Generate button produces the same printable cards as the regular flow.
+
 ### Reversed permanents
 
 When a permanent is registered as reversed, the event name includes "(Reversed)". Controls are automatically reversed and distances recalculated. An info banner in the form tells you when this is happening. Example:
