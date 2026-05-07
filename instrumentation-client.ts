@@ -28,6 +28,8 @@ Sentry.init({
     /Invalid call to runtime\.sendMessage/,
     /Java object is gone/,
     /window\.webkit\.messageHandlers/,
+    /Event `Event` \(type=error\) captured as exception/,
+    /Non-Error promise rejection captured/,
   ],
 })
 
