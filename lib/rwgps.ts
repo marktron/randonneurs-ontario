@@ -53,6 +53,8 @@ interface RwgpsTrackPoint {
 }
 
 interface RwgpsRoute {
+  name?: string
+  distance?: number // meters
   course_points?: RwgpsCoursePoint[]
   points_of_interest?: RwgpsPoi[]
   track_points?: RwgpsTrackPoint[]
@@ -279,6 +281,35 @@ export function extractControls(route: RwgpsRoute): ParsedControl[] {
     name: c.name,
     distance: c.distanceKm.toFixed(1),
   }))
+}
+
+/**
+ * Fetch an RWGPS route JSON and return its display name, total distance,
+ * and parsed controls — used by the control-cards rwgps validation mode
+ * for routes that aren't yet in the database. Throws Error with a
+ * user-facing message on any failure.
+ */
+export async function fetchRwgpsRoute(
+  rwgpsId: string
+): Promise<{ name: string; distanceKm: number; controls: ParsedControl[] }> {
+  const url = `https://ridewithgps.com/routes/${rwgpsId}.json`
+  const response = await fetch(url)
+  if (!response.ok) {
+    throw new Error(`Failed to fetch route: ${response.status} ${response.statusText}`)
+  }
+  const data: unknown = await response.json()
+  const route = (data as { route?: RwgpsRoute }).route ?? (data as RwgpsRoute)
+  const controls = extractControls(route)
+  if (controls.length === 0) {
+    throw new Error(
+      'No control points found in the RWGPS route. Add controls as course points (type "Control") or waypoints (comment "control") in the RideWithGPS route editor.'
+    )
+  }
+  return {
+    name: route.name?.trim() || 'Untitled Route',
+    distanceKm: typeof route.distance === 'number' ? route.distance / 1000 : 0,
+    controls,
+  }
 }
 
 /**

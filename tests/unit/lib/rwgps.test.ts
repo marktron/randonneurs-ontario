@@ -3,6 +3,7 @@ import {
   cleanControlName,
   extractControls,
   fetchRwgpsControls,
+  fetchRwgpsRoute,
   parseRwgpsRouteId,
 } from '@/lib/rwgps'
 
@@ -386,5 +387,106 @@ describe('parseRwgpsRouteId', () => {
 
   it('extracts the ID from an http URL', () => {
     expect(parseRwgpsRouteId('http://ridewithgps.com/routes/123')).toBe('123')
+  })
+})
+
+describe('fetchRwgpsRoute', () => {
+  beforeEach(() => {
+    vi.stubGlobal('fetch', vi.fn())
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('returns name, distanceKm, and controls from the RWGPS JSON', async () => {
+    const fetchMock = vi.mocked(global.fetch)
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        name: 'Toronto Loop 200',
+        distance: 203_500,
+        course_points: [
+          { n: 'CTL Start', d: 0, t: 'Control' },
+          { n: 'CTL Finish', d: 200_000, t: 'Control' },
+        ],
+      }),
+    } as Response)
+
+    const result = await fetchRwgpsRoute('47170397')
+    expect(fetchMock).toHaveBeenCalledWith('https://ridewithgps.com/routes/47170397.json')
+    expect(result.name).toBe('Toronto Loop 200')
+    expect(result.distanceKm).toBeCloseTo(203.5, 1)
+    expect(result.controls).toEqual([
+      { name: 'Start', distance: '0.0' },
+      { name: 'Finish', distance: '200.0' },
+    ])
+  })
+
+  it('unwraps the nested `route` key when present', async () => {
+    vi.mocked(global.fetch).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        route: {
+          name: 'Brevet Draft',
+          distance: 100_000,
+          course_points: [{ n: 'CTL Finish', d: 100_000, t: 'Control' }],
+        },
+      }),
+    } as Response)
+
+    const result = await fetchRwgpsRoute('1')
+    expect(result.name).toBe('Brevet Draft')
+    expect(result.distanceKm).toBeCloseTo(100, 1)
+    expect(result.controls).toEqual([{ name: 'Finish', distance: '100.0' }])
+  })
+
+  it('throws a user-facing error on non-OK response', async () => {
+    vi.mocked(global.fetch).mockResolvedValueOnce({
+      ok: false,
+      status: 404,
+      statusText: 'Not Found',
+    } as Response)
+
+    await expect(fetchRwgpsRoute('nope')).rejects.toThrow(/Failed to fetch route: 404 Not Found/)
+  })
+
+  it('throws when no controls are present', async () => {
+    vi.mocked(global.fetch).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        name: 'Empty Route',
+        distance: 50_000,
+        course_points: [{ n: 'Turn', d: 1000, t: 'Left' }],
+      }),
+    } as Response)
+
+    await expect(fetchRwgpsRoute('1')).rejects.toThrow(/No control points found/)
+  })
+
+  it('falls back to "Untitled Route" when name is missing', async () => {
+    vi.mocked(global.fetch).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        distance: 50_000,
+        course_points: [{ n: 'CTL Finish', d: 50_000, t: 'Control' }],
+      }),
+    } as Response)
+
+    const result = await fetchRwgpsRoute('1')
+    expect(result.name).toBe('Untitled Route')
+  })
+
+  it('returns 0 distanceKm when distance is missing', async () => {
+    vi.mocked(global.fetch).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        name: 'No Distance',
+        course_points: [{ n: 'CTL Finish', d: 50_000, t: 'Control' }],
+      }),
+    } as Response)
+
+    const result = await fetchRwgpsRoute('1')
+    expect(result.distanceKm).toBe(0)
   })
 })
