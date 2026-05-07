@@ -18,7 +18,7 @@ import {
 } from '@/components/ui/command'
 import { Plus, Trash2, Printer, GripVertical, Download, Loader2, ChevronDown } from 'lucide-react'
 import type { ActiveRouteWithRwgps } from '@/lib/data/routes'
-import { fetchRwgpsControls } from '@/lib/rwgps'
+import { fetchRwgpsControls, fetchRwgpsRoute, parseRwgpsRouteId } from '@/lib/rwgps'
 
 interface ControlInput {
   id: string
@@ -51,9 +51,10 @@ function getSavedRiderData(): { firstName: string; lastName: string } | null {
 
 interface ControlCardFormProps {
   routes: ActiveRouteWithRwgps[]
+  mode?: 'picker' | 'rwgps'
 }
 
-export function ControlCardForm({ routes }: ControlCardFormProps) {
+export function ControlCardForm({ routes, mode = 'picker' }: ControlCardFormProps) {
   // Route selection
   const [routeId, setRouteId] = useState<string>('')
   const [routePickerOpen, setRoutePickerOpen] = useState(false)
@@ -94,7 +95,35 @@ export function ControlCardForm({ routes }: ControlCardFormProps) {
   const [isLoadingRwgps, setIsLoadingRwgps] = useState(false)
   const [rwgpsError, setRwgpsError] = useState<string | null>(null)
 
-  const selectedRoute = routes.find((r) => r.id === routeId)
+  // RWGPS-mode state (only used when mode === 'rwgps')
+  const [rwgpsInput, setRwgpsInput] = useState('')
+  const [manualRouteName, setManualRouteName] = useState('')
+  const [manualDistanceKm, setManualDistanceKm] = useState('')
+  const [rwgpsLoadedId, setRwgpsLoadedId] = useState<string | null>(null)
+
+  const pickedRoute = routes.find((r) => r.id === routeId)
+
+  const effectiveRoute = useMemo(() => {
+    if (mode === 'rwgps') {
+      const distance = parseFloat(manualDistanceKm)
+      if (!manualRouteName || !rwgpsLoadedId || isNaN(distance) || distance <= 0) {
+        return null
+      }
+      return {
+        name: manualRouteName,
+        distanceKm: distance,
+        chapterName: null as string | null,
+        rwgpsId: rwgpsLoadedId,
+      }
+    }
+    if (!pickedRoute) return null
+    return {
+      name: pickedRoute.name,
+      distanceKm: pickedRoute.distanceKm ?? 0,
+      chapterName: pickedRoute.chapterName,
+      rwgpsId: pickedRoute.rwgpsId,
+    }
+  }, [mode, pickedRoute, manualRouteName, manualDistanceKm, rwgpsLoadedId])
 
   // Group routes by chapter
   const routesByChapter = useMemo(() => {
@@ -109,20 +138,21 @@ export function ControlCardForm({ routes }: ControlCardFormProps) {
     return Object.entries(grouped).sort(([a], [b]) => a.localeCompare(b))
   }, [routes])
 
-  // Reset controls when route changes
+  // Reset controls when picker-mode route changes
   useEffect(() => {
-    if (selectedRoute) {
+    if (mode !== 'picker') return
+    if (pickedRoute) {
       setControls([
         { id: crypto.randomUUID(), name: 'Start', distance: '0' },
         {
           id: crypto.randomUUID(),
           name: 'Finish',
-          distance: String(selectedRoute.distanceKm || ''),
+          distance: String(pickedRoute.distanceKm || ''),
         },
       ])
       setRwgpsError(null)
     }
-  }, [routeId]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [routeId, mode]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const addControl = useCallback(() => {
     const newControl = { id: crypto.randomUUID(), name: '', distance: '' }
@@ -152,16 +182,16 @@ export function ControlCardForm({ routes }: ControlCardFormProps) {
     [controls.length]
   )
 
-  const rwgpsId = selectedRoute?.rwgpsId
+  const pickerRwgpsId = pickedRoute?.rwgpsId
 
   const importFromRwgps = useCallback(async () => {
-    if (!rwgpsId) return
+    if (!pickerRwgpsId) return
 
     setIsLoadingRwgps(true)
     setRwgpsError(null)
 
     try {
-      const parsed = await fetchRwgpsControls(rwgpsId)
+      const parsed = await fetchRwgpsControls(pickerRwgpsId)
       setControls(
         parsed.map((c) => ({
           id: crypto.randomUUID(),
@@ -174,14 +204,47 @@ export function ControlCardForm({ routes }: ControlCardFormProps) {
     } finally {
       setIsLoadingRwgps(false)
     }
-  }, [rwgpsId])
+  }, [pickerRwgpsId])
 
-  // Auto-import controls from RWGPS when route changes
+  // Auto-import controls from RWGPS when picker-mode route changes
   useEffect(() => {
-    if (selectedRoute?.rwgpsId) {
+    if (mode !== 'picker') return
+    if (pickedRoute?.rwgpsId) {
       importFromRwgps()
     }
-  }, [routeId]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [routeId, mode]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // RWGPS-mode load handler
+  const loadFromRwgpsUrl = useCallback(async () => {
+    const id = parseRwgpsRouteId(rwgpsInput)
+    if (!id) {
+      setRwgpsError(
+        "Couldn't read a RideWithGPS route ID from that input. Try a URL like https://ridewithgps.com/routes/12345 or a bare ID."
+      )
+      return
+    }
+
+    setIsLoadingRwgps(true)
+    setRwgpsError(null)
+
+    try {
+      const result = await fetchRwgpsRoute(id)
+      setManualRouteName(result.name)
+      setManualDistanceKm(result.distanceKm.toFixed(1))
+      setRwgpsLoadedId(id)
+      setControls(
+        result.controls.map((c) => ({
+          id: crypto.randomUUID(),
+          name: c.name,
+          distance: c.distance,
+        }))
+      )
+    } catch (error) {
+      setRwgpsError(error instanceof Error ? error.message : 'Failed to fetch route data')
+    } finally {
+      setIsLoadingRwgps(false)
+    }
+  }, [rwgpsInput])
 
   const addRider = useCallback(() => {
     setRiders((prev) => [...prev, { id: crypto.randomUUID(), firstName: '', lastName: '' }])
@@ -196,12 +259,12 @@ export function ControlCardForm({ routes }: ControlCardFormProps) {
   }, [])
 
   const generatePrintUrl = useCallback(() => {
-    if (!selectedRoute || !eventDate) return '#'
+    if (!effectiveRoute || !eventDate) return '#'
 
     const params = new URLSearchParams()
-    params.set('routeName', selectedRoute.name)
-    params.set('distance', String(selectedRoute.distanceKm || 0))
-    params.set('chapter', selectedRoute.chapterName || 'Randonneurs Ontario')
+    params.set('routeName', effectiveRoute.name)
+    params.set('distance', String(effectiveRoute.distanceKm || 0))
+    params.set('chapter', effectiveRoute.chapterName || 'Randonneurs Ontario')
     params.set('eventDate', format(eventDate, 'yyyy-MM-dd'))
     params.set('startTime', startTime)
     params.set('organizerName', organizerName)
@@ -235,13 +298,13 @@ export function ControlCardForm({ routes }: ControlCardFormProps) {
       params.set('extraBlank', String(extraBlankCards))
     }
 
-    if (selectedRoute.rwgpsId) {
-      params.set('rwgpsUrl', `https://ridewithgps.com/routes/${selectedRoute.rwgpsId}`)
+    if (effectiveRoute.rwgpsId) {
+      params.set('rwgpsUrl', `https://ridewithgps.com/routes/${effectiveRoute.rwgpsId}`)
     }
 
     return `/control-cards/print?${params.toString()}`
   }, [
-    selectedRoute,
+    effectiveRoute,
     eventDate,
     startTime,
     organizerName,
@@ -253,7 +316,7 @@ export function ControlCardForm({ routes }: ControlCardFormProps) {
   ])
 
   const isFormValid =
-    selectedRoute && eventDate && controls.every((c) => c.name && c.distance !== '')
+    effectiveRoute && eventDate && controls.every((c) => c.name && c.distance !== '')
 
   return (
     <div className="space-y-6">
@@ -261,81 +324,150 @@ export function ControlCardForm({ routes }: ControlCardFormProps) {
       <Card>
         <CardHeader>
           <CardTitle>Route</CardTitle>
-          <CardDescription>Select a route and set the start date and time</CardDescription>
+          <CardDescription>
+            {mode === 'rwgps'
+              ? 'Paste a RideWithGPS route URL or ID, then set your start date and time'
+              : 'Select a route and set the start date and time'}
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {/* Route Picker */}
-          <div className="space-y-2">
-            <Label htmlFor="route">Route</Label>
-            <Popover open={routePickerOpen} onOpenChange={setRoutePickerOpen}>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  role="combobox"
-                  aria-expanded={routePickerOpen}
-                  className="w-full justify-between font-normal h-12 sm:h-9"
-                >
-                  {selectedRoute ? (
-                    <span className="truncate">
-                      {selectedRoute.name} ({selectedRoute.distanceKm} km)
-                    </span>
-                  ) : (
-                    'Search routes\u2026'
-                  )}
-                  <ChevronDown className="h-4 w-4 opacity-50" />
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
-                <Command>
-                  <CommandInput placeholder="Search by name, chapter, or distance\u2026" />
-                  <CommandList>
-                    <CommandEmpty>No routes found.</CommandEmpty>
-                    {routesByChapter.map(([chapter, chapterRoutes]) => (
-                      <CommandGroup key={chapter} heading={chapter}>
-                        {chapterRoutes.map((route) => (
-                          <CommandItem
-                            key={route.id}
-                            value={`${route.name} ${route.chapterName} ${route.distanceKm}`}
-                            onSelect={() => {
-                              setRouteId(route.id)
-                              setRoutePickerOpen(false)
-                            }}
-                            data-checked={routeId === route.id}
-                          >
-                            <div className="flex flex-col">
-                              <span>{route.name}</span>
-                              <span className="text-xs text-muted-foreground">
-                                {route.distanceKm} km
-                              </span>
-                            </div>
-                          </CommandItem>
-                        ))}
-                      </CommandGroup>
-                    ))}
-                  </CommandList>
-                </Command>
-              </PopoverContent>
-            </Popover>
-            {selectedRoute && (
-              <p className="text-xs text-muted-foreground">
-                {selectedRoute.chapterName} &middot; {selectedRoute.distanceKm} km
-                {selectedRoute.rwgpsId && (
-                  <>
-                    {' '}
-                    &middot;{' '}
+          {mode === 'rwgps' ? (
+            <>
+              <div className="space-y-2">
+                <Label htmlFor="rwgpsInput">RideWithGPS route URL or ID</Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="rwgpsInput"
+                    placeholder="https://ridewithgps.com/routes/12345"
+                    value={rwgpsInput}
+                    onChange={(e) => setRwgpsInput(e.target.value)}
+                    className="flex-1"
+                  />
+                  <Button
+                    type="button"
+                    onClick={loadFromRwgpsUrl}
+                    disabled={isLoadingRwgps || !rwgpsInput.trim()}
+                  >
+                    {isLoadingRwgps ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Download className="h-4 w-4" />
+                    )}
+                    Load
+                  </Button>
+                </div>
+                {rwgpsLoadedId && (
+                  <p className="text-xs text-muted-foreground">
+                    Loaded from{' '}
                     <a
-                      href={`https://ridewithgps.com/routes/${selectedRoute.rwgpsId}`}
+                      href={`https://ridewithgps.com/routes/${rwgpsLoadedId}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-primary hover:underline underline-offset-2"
                     >
-                      View on RWGPS
+                      ridewithgps.com/routes/{rwgpsLoadedId}
                     </a>
-                  </>
+                  </p>
                 )}
-              </p>
-            )}
-          </div>
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="manualRouteName">Route name</Label>
+                  <Input
+                    id="manualRouteName"
+                    placeholder="e.g. Toronto 200"
+                    value={manualRouteName}
+                    onChange={(e) => setManualRouteName(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="manualDistanceKm">Distance (km)</Label>
+                  <Input
+                    id="manualDistanceKm"
+                    type="number"
+                    min="0"
+                    step="0.1"
+                    placeholder="200"
+                    value={manualDistanceKm}
+                    onChange={(e) => setManualDistanceKm(e.target.value)}
+                  />
+                </div>
+              </div>
+            </>
+          ) : (
+            <div className="space-y-2">
+              <Label htmlFor="route">Route</Label>
+              <Popover open={routePickerOpen} onOpenChange={setRoutePickerOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={routePickerOpen}
+                    className="w-full justify-between font-normal h-12 sm:h-9"
+                  >
+                    {pickedRoute ? (
+                      <span className="truncate">
+                        {pickedRoute.name} ({pickedRoute.distanceKm} km)
+                      </span>
+                    ) : (
+                      'Search routes\u2026'
+                    )}
+                    <ChevronDown className="h-4 w-4 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                  <Command>
+                    <CommandInput placeholder="Search by name, chapter, or distance\u2026" />
+                    <CommandList>
+                      <CommandEmpty>No routes found.</CommandEmpty>
+                      {routesByChapter.map(([chapter, chapterRoutes]) => (
+                        <CommandGroup key={chapter} heading={chapter}>
+                          {chapterRoutes.map((route) => (
+                            <CommandItem
+                              key={route.id}
+                              value={`${route.name} ${route.chapterName} ${route.distanceKm}`}
+                              onSelect={() => {
+                                setRouteId(route.id)
+                                setRoutePickerOpen(false)
+                              }}
+                              data-checked={routeId === route.id}
+                            >
+                              <div className="flex flex-col">
+                                <span>{route.name}</span>
+                                <span className="text-xs text-muted-foreground">
+                                  {route.distanceKm} km
+                                </span>
+                              </div>
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      ))}
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+              {pickedRoute && (
+                <p className="text-xs text-muted-foreground">
+                  {pickedRoute.chapterName} &middot; {pickedRoute.distanceKm} km
+                  {pickedRoute.rwgpsId && (
+                    <>
+                      {' '}
+                      &middot;{' '}
+                      <a
+                        href={`https://ridewithgps.com/routes/${pickedRoute.rwgpsId}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-primary hover:underline underline-offset-2"
+                      >
+                        View on RWGPS
+                      </a>
+                    </>
+                  )}
+                </p>
+              )}
+            </div>
+          )}
 
           {/* Date and Time */}
           <div className="grid gap-4 md:grid-cols-2">
@@ -504,7 +636,7 @@ export function ControlCardForm({ routes }: ControlCardFormProps) {
               <Plus className="h-4 w-4 mr-1" />
               Add Control
             </Button>
-            {selectedRoute?.rwgpsId && (
+            {mode === 'picker' && pickedRoute?.rwgpsId && (
               <Button
                 type="button"
                 variant="outline"
@@ -522,7 +654,7 @@ export function ControlCardForm({ routes }: ControlCardFormProps) {
             )}
           </div>
           {rwgpsError && <p className="text-sm text-destructive">{rwgpsError}</p>}
-          {selectedRoute && !selectedRoute.rwgpsId && (
+          {mode === 'picker' && pickedRoute && !pickedRoute.rwgpsId && (
             <p className="text-sm text-muted-foreground">
               No RWGPS route linked. Add control points manually.
             </p>
@@ -604,7 +736,9 @@ export function ControlCardForm({ routes }: ControlCardFormProps) {
         </Button>
         {!isFormValid && (
           <p className="text-sm text-muted-foreground self-center">
-            Please select a route, date, and fill in control points.
+            {mode === 'rwgps'
+              ? 'Load a RideWithGPS route, set a date, and fill in control points.'
+              : 'Please select a route, date, and fill in control points.'}
           </p>
         )}
       </div>

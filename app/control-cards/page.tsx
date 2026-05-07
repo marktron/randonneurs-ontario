@@ -9,8 +9,14 @@ export const metadata = {
     'Generate and print BRM control cards for any active route. Control times are calculated automatically.',
 }
 
-export default async function ControlCardsPage() {
-  const routes = await getActiveRoutesWithRwgps()
+interface ControlCardsPageProps {
+  searchParams: Promise<{ rwgps?: string }>
+}
+
+export default async function ControlCardsPage({ searchParams }: ControlCardsPageProps) {
+  const { rwgps } = await searchParams
+  const isRwgpsMode = rwgps === 'true'
+  const routes = isRwgpsMode ? [] : await getActiveRoutesWithRwgps()
 
   return (
     <PageShell>
@@ -28,11 +34,18 @@ export default async function ControlCardsPage() {
             </div>
 
             <div className="prose prose-neutral dark:prose-invert max-w-none">
-              <p className="text-lg text-muted-foreground leading-relaxed">
-                Generate printable BRM control cards for any active route. Control opening and
-                closing times are calculated automatically from the route distance and your start
-                time.
-              </p>
+              {isRwgpsMode ? (
+                <p className="text-lg text-muted-foreground leading-relaxed">
+                  Validate a draft RideWithGPS route by pasting its URL. Control points, route name,
+                  and distance are read live from RideWithGPS — nothing is saved.
+                </p>
+              ) : (
+                <p className="text-lg text-muted-foreground leading-relaxed">
+                  Generate printable BRM control cards for any active route. Control opening and
+                  closing times are calculated automatically from the route distance and your start
+                  time.
+                </p>
+              )}
 
               <div className="mt-10 space-y-8">
                 <div>
@@ -42,7 +55,11 @@ export default async function ControlCardsPage() {
                       <span className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-medium flex items-center justify-center">
                         1
                       </span>
-                      <span>Select a route and set your start date and time</span>
+                      <span>
+                        {isRwgpsMode
+                          ? 'Paste a RideWithGPS route URL or ID and click Load'
+                          : 'Select a route and set your start date and time'}
+                      </span>
                     </li>
                     <li className="flex gap-3">
                       <span className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-medium flex items-center justify-center">
@@ -74,13 +91,15 @@ export default async function ControlCardsPage() {
                 <div>
                   <h2 className="font-serif text-xl tracking-tight mb-3">Notes</h2>
                   <ul className="space-y-2 text-sm text-muted-foreground">
-                    <li className="flex gap-2">
-                      <span className="text-primary">&bull;</span>
-                      <span>
-                        You normally won’t need to print the cards yourself. The ride organizer will
-                        distribute control cards at the event check-in.
-                      </span>
-                    </li>
+                    {!isRwgpsMode && (
+                      <li className="flex gap-2">
+                        <span className="text-primary">&bull;</span>
+                        <span>
+                          You normally won’t need to print the cards yourself. The ride organizer
+                          will distribute control cards at the event check-in.
+                        </span>
+                      </li>
+                    )}
                     <li className="flex gap-2">
                       <span className="text-primary">&bull;</span>
                       <span>Cards are designed for double-sided printing on letter-size paper</span>
@@ -111,7 +130,7 @@ export default async function ControlCardsPage() {
 
           {/* Right Column - Form */}
           <div className="lg:w-[480px] lg:shrink-0">
-            <ControlCardForm routes={routes} />
+            <ControlCardForm routes={routes} mode={isRwgpsMode ? 'rwgps' : 'picker'} />
           </div>
         </div>
       </div>
