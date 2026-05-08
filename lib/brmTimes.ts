@@ -42,7 +42,7 @@ export type Options = {
   truncateKm?: boolean
 }
 
-const FINISH_LIMITS_MIN: Record<NominalDistance, number> = {
+export const FINISH_LIMITS_MIN: Record<NominalDistance, number> = {
   200: 13 * 60 + 30,
   300: 20 * 60,
   400: 27 * 60,

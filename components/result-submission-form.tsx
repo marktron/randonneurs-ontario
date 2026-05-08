@@ -36,7 +36,13 @@ import {
 } from 'lucide-react'
 import { format } from 'date-fns'
 import Link from 'next/link'
-import { formatEventTime } from '@/lib/events/format'
+import {
+  calculateElapsedMinutes,
+  formatElapsedForDisplay,
+  formatElapsedForSubmission,
+  getAcpTimeLimitMinutes,
+  getFinishDayOptions,
+} from '@/lib/events/finish-time'
 
 interface ResultSubmissionFormProps {
   token: string
@@ -58,10 +64,23 @@ export function ResultSubmissionForm({ token, initialData }: ResultSubmissionFor
   const [status, setStatus] = useState<string>(
     initialData.currentStatus === 'pending' ? 'finished' : initialData.currentStatus
   )
-  // Parse initial finish time (format "HH:MM" or "H:MM") into hours and minutes
-  const [initialHours, initialMinutes] = (initialData.finishTime || '').split(':')
-  const [finishHours, setFinishHours] = useState(initialHours || '')
-  const [finishMinutes, setFinishMinutes] = useState(initialMinutes || '')
+  const dayOptions = getFinishDayOptions(
+    initialData.eventDate,
+    initialData.eventStartTime,
+    initialData.eventDistance
+  )
+  const useClockTimeInput = dayOptions.length > 0 && initialData.eventStartTime !== null
+  const initialFinish = decodeInitialFinish(
+    initialData.finishTime,
+    initialData.eventStartTime,
+    dayOptions.length
+  )
+  // Clock-time + day mode (used when we know the event's start time)
+  const [finishClockTime, setFinishClockTime] = useState(initialFinish.clockTime)
+  const [finishDayOffset, setFinishDayOffset] = useState(initialFinish.dayOffset)
+  // Elapsed fallback (used when start_time is missing on the event)
+  const [finishHours, setFinishHours] = useState(initialFinish.elapsedHours)
+  const [finishMinutes, setFinishMinutes] = useState(initialFinish.elapsedMinutes)
   const [gpxUrl, setGpxUrl] = useState(initialData.gpxUrl || '')
   const [riderNotes, setRiderNotes] = useState(initialData.riderNotes || '')
   const [error, setError] = useState<string | null>(null)
@@ -228,14 +247,26 @@ export function ResultSubmissionForm({ token, initialData }: ResultSubmissionFor
       return
     }
 
-    startTransition(async () => {
-      // Combine hours and minutes into HH:MM format
-      const finishTime =
-        status === 'finished' && finishHours && finishMinutes
-          ? `${finishHours}:${finishMinutes.padStart(2, '0')}`
-          : null
+    let finishTime: string | null = null
+    if (status === 'finished') {
+      if (useClockTimeInput && initialData.eventStartTime) {
+        const elapsed = calculateElapsedMinutes(
+          initialData.eventStartTime,
+          finishClockTime,
+          finishDayOffset
+        )
+        if (elapsed === null) {
+          setError('Finish time must be after the event start time.')
+          return
+        }
+        finishTime = formatElapsedForSubmission(elapsed)
+      } else if (finishHours && finishMinutes) {
+        finishTime = `${finishHours}:${finishMinutes.padStart(2, '0')}`
+      }
+    }
 
-      const result = await submitRiderResult({
+    startTransition(async () => {
+      const submission = await submitRiderResult({
         token,
         status: status as 'finished' | 'dnf' | 'dns',
         finishTime,
@@ -243,7 +274,7 @@ export function ResultSubmissionForm({ token, initialData }: ResultSubmissionFor
         riderNotes: riderNotes || null,
       })
 
-      if (result.success) {
+      if (submission.success) {
         setSuccess(true)
         router.refresh()
 
@@ -270,7 +301,7 @@ export function ResultSubmissionForm({ token, initialData }: ResultSubmissionFor
           setLoadingEvents(false)
         }
       } else {
-        setError(result.error || 'Submission failed')
+        setError(submission.error || 'Submission failed')
       }
     })
   }
@@ -424,13 +455,25 @@ export function ResultSubmissionForm({ token, initialData }: ResultSubmissionFor
         </div>
 
         {/* Finish Time - only show if finished */}
-        {status === 'finished' && (
+        {status === 'finished' && useClockTimeInput && initialData.eventStartTime && (
+          <FinishClockTimeFields
+            startTime={initialData.eventStartTime}
+            distanceKm={initialData.eventDistance}
+            dayOptions={dayOptions}
+            clockTime={finishClockTime}
+            onClockTimeChange={setFinishClockTime}
+            dayOffset={finishDayOffset}
+            onDayOffsetChange={setFinishDayOffset}
+            disabled={isPending}
+          />
+        )}
+
+        {status === 'finished' && !useClockTimeInput && (
           <div className="space-y-2">
             <Label>Elapsed Time</Label>
             <p className="text-xs text-muted-foreground">
-              Elapsed Time is calculated from the time the event starts (
-              {formatEventTime(initialData.eventStartTime)}) until you check in at the finish
-              control. This is not the same as the “Moving Time” on Strava.
+              This event doesn’t have a recorded start time, so please enter how long your ride took
+              (start to finish control).
             </p>
             <div className="flex items-center gap-2">
               <div className="flex-1">
@@ -613,6 +656,97 @@ export function ResultSubmissionForm({ token, initialData }: ResultSubmissionFor
   )
 }
 
+interface FinishClockTimeFieldsProps {
+  startTime: string
+  distanceKm: number
+  dayOptions: ReturnType<typeof getFinishDayOptions>
+  clockTime: string
+  onClockTimeChange: (value: string) => void
+  dayOffset: number
+  onDayOffsetChange: (value: number) => void
+  disabled: boolean
+}
+
+function FinishClockTimeFields({
+  startTime,
+  distanceKm,
+  dayOptions,
+  clockTime,
+  onClockTimeChange,
+  dayOffset,
+  onDayOffsetChange,
+  disabled,
+}: FinishClockTimeFieldsProps) {
+  const elapsedMinutes = clockTime ? calculateElapsedMinutes(startTime, clockTime, dayOffset) : null
+  const limitMinutes = getAcpTimeLimitMinutes(distanceKm)
+  const isOverLimit = elapsedMinutes !== null && elapsedMinutes > limitMinutes
+  const showDaySelector = dayOptions.length > 1
+
+  return (
+    <div className="space-y-2">
+      <Label htmlFor="finishClockTime">Finish Time</Label>
+      <p className="text-xs text-muted-foreground">
+        Enter the time of your last control card stamp at the finish.
+      </p>
+      {showDaySelector && (
+        <div
+          role="radiogroup"
+          aria-label="Finish day"
+          className="grid grid-cols-2 sm:grid-cols-3 gap-2"
+        >
+          {dayOptions.map((opt) => {
+            const selected = opt.offset === dayOffset
+            return (
+              <button
+                key={opt.offset}
+                type="button"
+                role="radio"
+                aria-checked={selected}
+                disabled={disabled}
+                onClick={() => onDayOffsetChange(opt.offset)}
+                className={
+                  'rounded-md border px-3 py-2 text-sm transition-colors ' +
+                  (selected
+                    ? 'border-primary bg-primary/10 text-foreground'
+                    : 'border-border bg-background text-muted-foreground hover:bg-muted')
+                }
+              >
+                {opt.label}
+              </button>
+            )
+          })}
+        </div>
+      )}
+      <Input
+        id="finishClockTime"
+        type="time"
+        value={clockTime}
+        onChange={(e) => onClockTimeChange(e.target.value)}
+        disabled={disabled}
+        required
+        className="tabular-nums"
+      />
+      {elapsedMinutes !== null && (
+        <p
+          className={
+            'text-xs ' +
+            (isOverLimit ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground')
+          }
+        >
+          Elapsed: {formatElapsedForDisplay(elapsedMinutes)}
+          {isOverLimit && (
+            <>
+              {' '}
+              · past the ACP cutoff of {formatElapsedForDisplay(limitMinutes)}. Your chapter VP will
+              follow up about how to record this ride.
+            </>
+          )}
+        </p>
+      )}
+    </div>
+  )
+}
+
 interface FileUploadFieldProps {
   inputRef: React.RefObject<HTMLInputElement | null>
   state: FileUploadState
@@ -710,6 +844,46 @@ function FileUploadField({
 interface UpcomingEventCardProps {
   event: UpcomingEvent
   isRegistered: boolean
+}
+
+interface DecodedInitialFinish {
+  clockTime: string
+  dayOffset: number
+  elapsedHours: string
+  elapsedMinutes: string
+}
+
+function decodeInitialFinish(
+  finishTime: string | null,
+  startTime: string | null,
+  dayOptionCount: number
+): DecodedInitialFinish {
+  if (!finishTime) {
+    return { clockTime: '', dayOffset: 0, elapsedHours: '', elapsedMinutes: '' }
+  }
+  const [rawHours, rawMinutes] = finishTime.split(':')
+  const elapsedHours = rawHours || ''
+  const elapsedMinutes = rawMinutes || ''
+
+  if (!startTime) {
+    return { clockTime: '', dayOffset: 0, elapsedHours, elapsedMinutes }
+  }
+  const [sh, sm] = startTime.split(':').map(Number)
+  const eh = parseInt(rawHours || '0', 10)
+  const em = parseInt(rawMinutes || '0', 10)
+  if ([sh, sm, eh, em].some((n) => Number.isNaN(n))) {
+    return { clockTime: '', dayOffset: 0, elapsedHours, elapsedMinutes }
+  }
+  const totalFinishMin = sh * 60 + sm + eh * 60 + em
+  const dayOffset = Math.min(
+    Math.max(0, dayOptionCount - 1),
+    Math.floor(totalFinishMin / (24 * 60))
+  )
+  const minOnDay = totalFinishMin - dayOffset * 24 * 60
+  const ch = Math.floor(minOnDay / 60)
+  const cm = minOnDay % 60
+  const clockTime = `${String(ch).padStart(2, '0')}:${String(cm).padStart(2, '0')}`
+  return { clockTime, dayOffset, elapsedHours, elapsedMinutes }
 }
 
 function UpcomingEventCard({ event, isRegistered }: UpcomingEventCardProps) {

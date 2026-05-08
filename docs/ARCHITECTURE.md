@@ -180,9 +180,11 @@ Send email with unique submission link
        ↓
 Rider visits /results/submit/[token]
        ↓
-Rider submits: status, finish time, Strava link, GPX, control card photos
+Rider submits: status, finish clock time + day, Strava link, GPX, control card photos
        ↓
-Server Action (submitRiderResult) validates & saves
+Form computes elapsed time from event start, warns if past the ACP cutoff
+       ↓
+Server Action (submitRiderResult) validates & saves elapsed time as INTERVAL
        ↓
 Admin reviews in /admin/events/[id]
        ↓

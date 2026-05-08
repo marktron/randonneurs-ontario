@@ -146,17 +146,11 @@ describe('ResultSubmissionForm', () => {
     it('pre-selects finished status by default', () => {
       render(<ResultSubmissionForm {...defaultProps} />)
 
-      // The "Finished" status is pre-selected, so time inputs should be visible
-      expect(screen.getByText('Elapsed Time')).toBeInTheDocument()
+      // The "Finished" status is pre-selected, so the finish-time input is visible
+      expect(screen.getByLabelText('Finish Time')).toBeInTheDocument()
     })
 
-    it('shows the event start time in the elapsed time helper text', () => {
-      render(<ResultSubmissionForm {...defaultProps} />)
-
-      expect(screen.getByText(/the time the event starts \(8:00 AM\)/i)).toBeInTheDocument()
-    })
-
-    it('falls back to TBD when the event has no start time', () => {
+    it('falls back to elapsed-time inputs when the event has no start time', () => {
       render(
         <ResultSubmissionForm
           token="test-token-123"
@@ -164,7 +158,53 @@ describe('ResultSubmissionForm', () => {
         />
       )
 
-      expect(screen.getByText(/the time the event starts \(TBD\)/i)).toBeInTheDocument()
+      // No start time → form falls back to the original elapsed hours/minutes inputs
+      expect(screen.getByText('Elapsed Time')).toBeInTheDocument()
+      expect(screen.getByText(/this event doesn’t have a recorded start time/i)).toBeInTheDocument()
+    })
+
+    it('hides the day selector for an early-morning 200 km that fits in a single day', () => {
+      render(<ResultSubmissionForm {...defaultProps} />)
+
+      // 06:00 + 13:30 is still same-day, so we should not render the day radiogroup
+      expect(screen.queryByRole('radiogroup', { name: /finish day/i })).not.toBeInTheDocument()
+    })
+
+    it('shows a day selector when the event window crosses midnight', () => {
+      render(
+        <ResultSubmissionForm
+          token="test-token-123"
+          initialData={{
+            ...mockInitialData,
+            eventStartTime: '14:00',
+            eventDistance: 200,
+          }}
+        />
+      )
+
+      // 14:00 + 13:30 = 03:30 next day, so a 2-button day selector should render
+      const group = screen.getByRole('radiogroup', { name: /finish day/i })
+      expect(group).toBeInTheDocument()
+      expect(screen.getAllByRole('radio')).toHaveLength(2)
+    })
+
+    it('shows an OTL warning when the typed finish time exceeds the ACP cutoff', async () => {
+      const user = userEvent.setup()
+      render(
+        <ResultSubmissionForm
+          token="test-token-123"
+          initialData={{
+            ...mockInitialData,
+            eventStartTime: '06:00',
+            eventDistance: 200,
+          }}
+        />
+      )
+
+      // 06:00 + 14:00 = 20:00, 30 min past the 200 km / 13:30 cutoff
+      await user.type(screen.getByLabelText('Finish Time'), '20:00')
+
+      expect(await screen.findByText(/past the ACP cutoff of 13h 30m/i)).toBeInTheDocument()
     })
 
     // Note: Status selection and time validation with Radix UI Select
@@ -212,8 +252,8 @@ describe('ResultSubmissionForm', () => {
         />
       )
 
-      // "Finished" is pre-selected, so ride evidence should show, but not control cards
-      expect(screen.getByText('Elapsed Time')).toBeInTheDocument()
+      // "Finished" is pre-selected, so the finish-time field shows, but not control cards
+      expect(screen.getByLabelText('Finish Time')).toBeInTheDocument()
       expect(screen.queryByText('Control Card Photos')).not.toBeInTheDocument()
     })
 

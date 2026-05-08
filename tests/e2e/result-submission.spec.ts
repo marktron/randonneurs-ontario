@@ -82,7 +82,7 @@ test.describe('Result Submission Flow', () => {
     await expect(page.getByRole('option').first()).toBeVisible()
   })
 
-  test('shows finish time inputs when status is finished', async ({ page }) => {
+  test('shows finish time input when status is finished', async ({ page }) => {
     const token = getSubmissionToken()
     if (!token) {
       console.warn('[e2e] No submission token — globalSetup may have failed')
@@ -98,9 +98,8 @@ test.describe('Result Submission Flow', () => {
     await statusSelect.click()
     await page.getByRole('option', { name: /finished/i }).click()
 
-    // Should show time inputs
-    await expect(page.locator('#finishHours')).toBeVisible()
-    await expect(page.locator('#finishMinutes')).toBeVisible()
+    // Should show the clock-time input
+    await expect(page.locator('#finishClockTime')).toBeVisible()
   })
 
   test('allows entering finish time', async ({ page }) => {
@@ -119,17 +118,16 @@ test.describe('Result Submission Flow', () => {
     await statusSelect.click()
     await page.getByRole('option', { name: /finished/i }).click()
 
-    // Find and fill time inputs - wait for them to be visible after status change
-    const hourInput = page.locator('#finishHours')
-    await expect(hourInput).toBeVisible({ timeout: 5000 })
-    const minuteInput = page.locator('#finishMinutes')
-    await expect(minuteInput).toBeVisible()
+    // Seeded event is a 200 km starting at 07:00, so a 13:30 elapsed time
+    // corresponds to a 20:30 finish on the same day (no day selector shown).
+    const clockInput = page.locator('#finishClockTime')
+    await expect(clockInput).toBeVisible({ timeout: 5000 })
 
-    await hourInput.fill('13')
-    await minuteInput.fill('30')
+    await clockInput.fill('20:30')
+    expect(await clockInput.inputValue()).toBe('20:30')
 
-    expect(await hourInput.inputValue()).toBe('13')
-    expect(await minuteInput.inputValue()).toBe('30')
+    // Form should compute and surface the elapsed time inline
+    await expect(page.getByText(/elapsed: 13h 30m/i)).toBeVisible()
   })
 
   test('allows selecting DNF status without time', async ({ page }) => {
@@ -259,9 +257,8 @@ test.describe('Result Submission Flow', () => {
     await expect(submitButton).toBeVisible()
     await submitButton.click()
 
-    // HTML5 required validation should prevent submission — check for :invalid inputs
-    const invalidInputs = page.locator('#finishHours:invalid, #finishMinutes:invalid')
-    await expect(invalidInputs.first()).toBeAttached()
+    // HTML5 required validation should prevent submission — check for :invalid input
+    await expect(page.locator('#finishClockTime:invalid')).toBeAttached()
   })
 
   test('disables form when results already submitted', async ({ page }) => {
