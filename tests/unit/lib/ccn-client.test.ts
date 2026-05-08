@@ -50,6 +50,74 @@ describe('searchCCNMembership', () => {
     )
   })
 
+  it('prefers non-Trial when CCN returns both Trial and a real membership', async () => {
+    // Rider registered as Trial early in the season, then upgraded to
+    // Individual. CCN returns both rows; we must pick the upgrade.
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        count: 2,
+        results: [
+          {
+            id: 1001,
+            full_name: 'Rider Upgrade',
+            registration_category: 'Trial Member',
+            city: 'Toronto',
+            country: 'Canada',
+          },
+          {
+            id: 1002,
+            full_name: 'Rider Upgrade',
+            registration_category: 'Individual Membership',
+            city: 'Toronto',
+            country: 'Canada',
+          },
+        ],
+      }),
+    })
+
+    const { searchCCNMembership } = await import('@/lib/ccn/client')
+    const result = await searchCCNMembership('Rider', 'Upgrade')
+
+    expect(result).toEqual({
+      found: true,
+      membershipId: 1002,
+      type: 'Individual Membership',
+      city: 'Toronto',
+      country: 'Canada',
+    })
+  })
+
+  it('falls back to first result when all matches are Trial', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        count: 2,
+        results: [
+          {
+            id: 1,
+            full_name: 'Trial One',
+            registration_category: 'Trial Member',
+            city: 'Toronto',
+            country: 'Canada',
+          },
+          {
+            id: 2,
+            full_name: 'Trial One',
+            registration_category: 'Trial Member',
+            city: 'Toronto',
+            country: 'Canada',
+          },
+        ],
+      }),
+    })
+
+    const { searchCCNMembership } = await import('@/lib/ccn/client')
+    const result = await searchCCNMembership('Trial', 'One')
+
+    expect(result).toMatchObject({ found: true, membershipId: 1, type: 'Trial Member' })
+  })
+
   it('returns not found when no results', async () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,

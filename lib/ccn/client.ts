@@ -77,13 +77,18 @@ export async function searchCCNMembership(
     return { found: false }
   }
 
+  // CCN can return multiple rows for the same rider in a season — e.g. a Trial
+  // registration plus a later Individual upgrade. Prefer any non-Trial match so
+  // the upgrade overrides the Trial, otherwise fall back to the first row.
+  const member =
+    data.results.find((r) => r.registration_category !== 'Trial Member') ?? data.results[0]
+
   if (data.results.length > 1) {
     console.warn(
-      `CCN returned ${data.results.length} results for "${fullName}" — using first match (ID: ${data.results[0].id})`
+      `CCN returned ${data.results.length} results for "${fullName}" — using match ID ${member.id} (${member.registration_category})`
     )
   }
 
-  const member = data.results[0]
   return {
     found: true,
     membershipId: member.id,

@@ -135,7 +135,6 @@ cf-ray: 9c74628a5bf5dda9-YYZ
 
 ## Future improvements
 
-- **Multiple CCN matches:** The CCN API can return multiple results for a name search. We have not yet tested this case. When it occurs, document the behavior and consider adding logic to disambiguate (e.g. by email if available, or prompt the user).
 - **CCN polling for new members:** The `ccn_id` column on `rider_memberships` enables detecting new registrations by polling the CCN API and comparing against the highest known `ccn_id`. See `docs/ccn-api-investigation.md` for the polling approach.
 
 ## Implementation Notes
@@ -148,6 +147,8 @@ Membership verification now reads and writes the `rider_memberships` table (not 
 2. If found and NOT Trial Member — use cached data, skip API call
 3. If found and Trial Member — re-check CCN API to detect upgrades (trial → full membership)
 4. If not found — query CCN API, upsert result into `rider_memberships` with `ccn_id`, `membership_type`, `city`, `country`, and `chapter_id`
+
+When CCN returns multiple results for a single rider (e.g. a Trial registration plus a later Individual upgrade in the same season), the client prefers any non-Trial match so the upgrade overrides the cached Trial row. To re-check existing Trial rows after deploying a fix or for routine cleanup, run `npx tsx scripts/recheck-trial-memberships.ts` (defaults to dry-run; pass `--apply` to write).
 
 The `ccn_id` column stores the CCN registration ID (per-season, e.g. `11671361`). This is different from `riders.ccn_id` which is the person-level CCN identity ID.
 
