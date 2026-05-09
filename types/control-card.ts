@@ -19,6 +19,8 @@ export interface CardRider {
   firstName: string
   lastName: string
   submissionUrl?: string
+  /** True when this is the rider's first event (no prior non-DNS results). */
+  isFirstTimeRider?: boolean
 }
 
 /**

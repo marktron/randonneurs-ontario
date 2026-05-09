@@ -1,0 +1,363 @@
+/* Static stylesheet for the control-card print surface.
+   Extracted from a <style jsx global> block in control-cards-print.tsx because
+   Safari's print pipeline did not honour the styled-jsx-injected styles
+   reliably (printed blank pages even when the snapshot showed a perfect
+   in-flow layout). Loading the same rules via a normal <link> in the print
+   layout puts them in <head> at parse time and removes any runtime injection
+   from the print path. */
+
+@page {
+  size: letter portrait;
+  margin: 0;
+}
+
+/* Strip admin chrome whenever the print content is on the page (whether
+   visited directly, via the autoprint popup, or in print media). The print
+   page has no reason to show the sidebar or other layout chrome. */
+body:has(.control-cards-print) > *:not(:has(.control-cards-print)):not(.control-cards-print) {
+  display: none !important;
+}
+body:has(.control-cards-print) [data-sidebar],
+body:has(.control-cards-print) [data-slot='sidebar'],
+body:has(.control-cards-print) aside,
+body:has(.control-cards-print) nav,
+body:has(.control-cards-print) header {
+  display: none !important;
+  width: 0 !important;
+}
+/* Reset all ancestor containers of the print content. Includes
+   display/position/height resets so flex/grid layouts and svh-based
+   min-heights don't trap or collapse the cards (Safari is strict about
+   this in print media). */
+body :has(.control-cards-print) {
+  display: block !important;
+  position: static !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  overflow: visible !important;
+  transform: none !important;
+  float: none !important;
+  inset: auto !important;
+}
+
+@media print {
+  html,
+  body {
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 8.5in !important;
+    max-width: 8.5in !important;
+    min-width: 0 !important;
+    overflow: visible !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .no-print {
+    display: none !important;
+  }
+  .page-break {
+    page-break-after: always;
+  }
+  .control-cards-print {
+    position: static !important;
+    width: 8.5in !important;
+    height: auto !important;
+    overflow: visible !important;
+    background: transparent !important;
+  }
+  /* Don't add a trailing empty page after the last back page */
+  .control-cards-print > div:last-child > .page-break {
+    page-break-after: auto;
+  }
+}
+
+.control-cards-print {
+  font-family: var(--font-sans), 'Noto Sans', sans-serif;
+  font-stretch: 50%;
+  font-size: 7.5pt;
+  line-height: 1.3;
+  color: #000;
+  /* Render at print-page width even on screen so the screen-mode and
+     print-mode layouts are identical. */
+  width: 8.5in;
+  margin: 0 auto;
+  background: white;
+}
+
+/* On screen, give the body a soft gray background so the centered cards
+   read as a print preview. */
+body:has(.control-cards-print) {
+  background: #f5f5f5;
+}
+
+.card-page {
+  width: 8.5in;
+  height: 11in;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  background: white;
+  padding: 0.1in;
+}
+
+.card-half {
+  width: 100%;
+  height: 5.5in;
+  box-sizing: border-box;
+  border-bottom: 1px solid #d9d9d9;
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-rows: 1fr;
+  overflow: hidden;
+  position: relative;
+}
+
+.rider-name-vertical {
+  position: absolute;
+  top: 0.25in;
+  right: 0.25in;
+  writing-mode: vertical-rl;
+  font-family: var(--font-sans), 'Noto Sans', sans-serif;
+  font-size: 12pt;
+  font-weight: 500;
+  color: #808080;
+  white-space: nowrap;
+}
+
+.card-half:last-child {
+  border-bottom: none;
+}
+
+.card-column {
+  padding: 0.2in;
+  border-right: 1px solid #d9d9d9;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.card-column:last-child {
+  border-right: none;
+}
+
+/* Front card styles */
+.front-left {
+  font-size: 7.5pt;
+  line-height: 1.25;
+  color: #404040;
+}
+
+.front-left p {
+  margin: 0 0 0.8em 0;
+}
+
+.front-left strong {
+  color: #000;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.front-left .bold-warning {
+  font-weight: 700;
+  color: #000;
+}
+
+.front-middle {
+  display: flex;
+  flex-direction: column;
+  gap: 0.12in;
+}
+
+.field-row {
+  display: flex;
+  gap: 0.1in;
+}
+
+.field-label {
+  font-size: 7.5pt;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #525252;
+  white-space: nowrap;
+}
+
+.field-box {
+  border-bottom: 1px solid #000;
+  flex: 1;
+  min-height: 0.22in;
+}
+
+.checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 0.1in;
+}
+
+.checkbox {
+  width: 0.14in;
+  height: 0.14in;
+  border: 1px solid #000;
+}
+
+.front-right {
+  display: flex;
+  flex-direction: column;
+}
+
+.logo-section {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 0.15in;
+}
+
+.card-title {
+  font-size: 8pt;
+  font-weight: 500;
+  text-transform: uppercase;
+  color: #525252;
+  margin-top: 0.1in;
+}
+
+.route-name {
+  font-family: var(--font-serif), 'Noto Serif', serif;
+  font-stretch: 75%;
+  font-size: 21pt;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  margin: 0.02in 0 0.04in 0;
+  color: #000;
+}
+
+.distance-date {
+  font-size: 10pt;
+  font-weight: 500;
+  color: #000;
+  font-variant-numeric: tabular-nums;
+}
+
+.rider-info {
+  margin-top: 0.2in;
+  font-size: 7pt;
+}
+
+.rider-label,
+.organizer-label {
+  font-size: 7.5pt;
+  text-transform: uppercase;
+  color: #525252;
+  margin-bottom: 0.02in;
+}
+
+.rider-name {
+  font-family: var(--font-serif), 'Noto Serif', serif;
+  font-stretch: 75%;
+  font-size: 11pt;
+  font-weight: 500;
+  margin-top: 0.02in;
+}
+
+.event-info {
+  margin-top: auto;
+  font-size: 9pt;
+  line-height: 1.4;
+  color: #404040;
+}
+
+.preamble-text {
+  margin: 0.12in 0;
+}
+
+.organizer-section {
+  margin-top: 0.12in;
+  padding-top: 0.12in;
+  border-top: 1px solid #d9d9d9;
+}
+
+/* Back card styles */
+.back-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 10pt;
+  margin-bottom: 0;
+  padding-bottom: 0.08in;
+  border-bottom: 1.5px solid #000;
+}
+
+.back-header-left {
+  font-weight: 500;
+}
+
+.control-header {
+  display: grid;
+  grid-template-columns: 1fr 0.6in 0.85fr;
+  align-items: stretch;
+  font-size: 8pt;
+  text-transform: uppercase;
+  color: #525252;
+  border-bottom: 1px solid #000;
+  margin-bottom: 0;
+  text-align: center;
+}
+
+.control-header > div {
+  padding: 0.075in 0;
+  align-self: stretch;
+}
+
+.control-header > div:nth-child(2),
+.control-header > div:nth-child(3) {
+  border-left: 1px solid #d9d9d9;
+}
+
+.control-row {
+  display: grid;
+  grid-template-columns: 1fr 0.6in 0.85fr;
+  min-height: 1in;
+  border-bottom: 1px solid #d9d9d9;
+}
+
+.control-info {
+  font-size: 8pt;
+  padding: 0.04in 0;
+}
+
+.control-name {
+  font-weight: 600;
+  font-size: 10pt;
+  line-height: 1.1;
+}
+
+.control-distance {
+  font-size: 9pt;
+  font-variant-numeric: tabular-nums;
+  margin-top: 0.025in;
+  margin-bottom: 0.025in;
+}
+
+.control-times {
+  font-size: 9pt;
+  color: #525252;
+  font-variant-numeric: tabular-nums;
+}
+
+.time-cell {
+  border-left: 1px solid #d9d9d9;
+  padding: 0.04in 0 0.04in 0.06in;
+}
+
+.signature-cell {
+  border-left: 1px solid #d9d9d9;
+  padding: 0.04in 0 0.04in 0.06in;
+}
+
+.back-column {
+  display: flex;
+  flex-direction: column;
+}

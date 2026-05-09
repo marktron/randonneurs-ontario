@@ -1,5 +1,6 @@
 import { requireAdmin } from '@/lib/auth/get-admin'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
+import { getFirstTimeRiderIds } from '@/lib/data/first-time-riders'
 import { notFound } from 'next/navigation'
 import { ControlCardsPrint } from '@/components/admin/control-cards-print'
 import {
@@ -152,6 +153,8 @@ export default async function PrintPage({ params, searchParams }: PrintPageProps
   // Format riders - if no registrations, create two blank entries
   // Also add any extra blank cards requested
   const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://randonneursontario.ca'
+  const registeredRiderIds = registrations.filter((r) => r.riders).map((r) => r.riders!.id)
+  const firstTimeRiderIdSet = new Set(await getFirstTimeRiderIds(id, registeredRiderIds))
   const registeredRiders: CardRider[] = registrations
     .filter((r) => r.riders)
     .map((r) => ({
@@ -161,6 +164,7 @@ export default async function PrintPage({ params, searchParams }: PrintPageProps
       submissionUrl: r.management_token
         ? `${baseUrl}/registration/manage/${r.management_token}`
         : undefined,
+      isFirstTimeRider: firstTimeRiderIdSet.has(r.riders!.id),
     }))
 
   // Create extra blank cards

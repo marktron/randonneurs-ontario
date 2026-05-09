@@ -1,4 +1,3 @@
-import '@/app/globals.css'
 // Static print stylesheet — injected into <head> at parse time so Safari's
 // print pipeline sees it immediately (vs styled-jsx which injects styles at
 // React commit time and was not being honoured reliably for print).
@@ -10,7 +9,7 @@ export const metadata = {
 }
 
 export default function PrintLayout({ children }: { children: React.ReactNode }) {
-  // Minimal layout for printing - no sidebars or navigation. Fonts come from
-  // next/font/google (loaded at the root layout via --font-sans / --font-serif).
+  // Fonts come from next/font/google (loaded at the root layout via
+  // --font-sans / --font-serif).
   return <>{children}</>
 }

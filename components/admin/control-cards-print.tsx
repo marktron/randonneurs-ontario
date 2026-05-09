@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect } from 'react'
 import type { ControlPoint, CardRider, OrganizerInfo, CardEvent } from '@/types/control-card'
 import { REGULATIONS_TEXT, EVENT_INFO_TEXT } from '@/types/control-card'
 import { QRCodeSVG } from 'qrcode.react'
@@ -30,7 +31,50 @@ interface ControlCardsPrintProps {
   rwgpsUrl?: string
 }
 
-export function ControlCardsPrint({
+export function ControlCardsPrint(props: ControlCardsPrintProps) {
+  useAutoPrintIfRequested()
+  return <ControlCardsPrintContent {...props} />
+}
+
+// When the page is loaded with ?autoprint=1 (from the iframe-style print
+// workaround), trigger window.print() once fonts and layout have settled,
+// then close the window after the print dialog dismisses. This is how the
+// "Print Control Cards" button works in Safari, where direct window.print()
+// on the main window has a WebKit bug that blanks the document.
+function useAutoPrintIfRequested() {
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('autoprint') !== '1') return
+
+    let cancelled = false
+
+    const fontsReady = (document as Document & { fonts?: { ready: Promise<unknown> } }).fonts?.ready
+    Promise.resolve(fontsReady)
+      .then(() => {
+        if (cancelled) return
+        // Small delay to let final layout/paint settle.
+        setTimeout(() => {
+          if (cancelled) return
+          window.addEventListener(
+            'afterprint',
+            () => {
+              window.close()
+            },
+            { once: true }
+          )
+          window.print()
+        }, 200)
+      })
+      .catch(() => {})
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
+}
+
+function ControlCardsPrintContent({
   event,
   organizer,
   controls,
@@ -52,343 +96,6 @@ export function ControlCardsPrint({
 
   return (
     <div className="control-cards-print">
-      {/* eslint-disable-next-line @next/next/no-page-custom-font -- Print-only component requires custom fonts inline */}
-      <link
-        rel="stylesheet"
-        href="https://fonts.googleapis.com/css2?family=Noto+Sans:wdth,wght@62.5..100,100..900&family=Noto+Serif:wdth,wght@62.5..100,100..900&display=swap"
-      />
-      <style jsx global>{`
-        @page {
-          size: letter portrait;
-          margin: 0;
-        }
-
-        @media print {
-          html,
-          body {
-            margin: 0 !important;
-            padding: 0 !important;
-            -webkit-print-color-adjust: exact;
-            print-color-adjust: exact;
-          }
-          .no-print {
-            display: none !important;
-          }
-          .page-break {
-            page-break-after: always;
-          }
-          /* Hide admin sidebar, header, and nav when printing */
-          [data-sidebar],
-          aside,
-          nav,
-          header,
-          [data-slot='sidebar'] {
-            display: none !important;
-            width: 0 !important;
-          }
-          /* Reset all ancestor containers of the print content */
-          body :has(.control-cards-print) {
-            margin: 0 !important;
-            padding: 0 !important;
-            width: 100% !important;
-            max-width: 100% !important;
-            transform: none !important;
-          }
-          /* Don't add a trailing empty page after the last back page */
-          .control-cards-print > div:last-child > .page-break {
-            page-break-after: auto;
-          }
-        }
-
-        .control-cards-print {
-          font-family: 'Noto Sans', sans-serif;
-          font-stretch: 50%;
-          font-size: 7.5pt;
-          line-height: 1.3;
-          color: #000;
-        }
-
-        /* On screen: make print page full width overlay */
-        @media screen {
-          .control-cards-print {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            z-index: 50;
-            background: #f5f5f5;
-            overflow: auto;
-          }
-        }
-
-        .card-page {
-          width: 8.5in;
-          height: 11in;
-          box-sizing: border-box;
-          display: flex;
-          flex-direction: column;
-          background: white;
-          padding: 0.1in;
-        }
-
-        .card-half {
-          width: 100%;
-          height: 5.5in;
-          box-sizing: border-box;
-          border-bottom: 1px solid #d9d9d9;
-          display: grid;
-          grid-template-columns: 1fr 1fr 1fr;
-          grid-template-rows: 1fr;
-          overflow: hidden;
-          position: relative;
-        }
-
-        .rider-name-vertical {
-          position: absolute;
-          top: 0.25in;
-          right: 0.25in;
-          writing-mode: vertical-rl;
-          font-family: 'Noto Sans', sans-serif;
-          font-size: 12pt;
-          font-weight: 500;
-          color: #808080;
-          white-space: nowrap;
-        }
-
-        .card-half:last-child {
-          border-bottom: none;
-        }
-
-        .card-column {
-          padding: 0.2in;
-          border-right: 1px solid #d9d9d9;
-          box-sizing: border-box;
-          overflow: hidden;
-        }
-
-        .card-column:last-child {
-          border-right: none;
-        }
-
-        /* Front card styles */
-        .front-left {
-          font-size: 7.5pt;
-          line-height: 1.25;
-          color: #404040;
-        }
-
-        .front-left p {
-          margin: 0 0 0.8em 0;
-        }
-
-        .front-left strong {
-          color: #000;
-          font-weight: 600;
-          letter-spacing: 0.02em;
-        }
-
-        .front-left .bold-warning {
-          font-weight: 700;
-          color: #000;
-        }
-
-        .front-middle {
-          display: flex;
-          flex-direction: column;
-          gap: 0.12in;
-        }
-
-        .field-row {
-          display: flex;
-          gap: 0.1in;
-        }
-
-        .field-label {
-          font-size: 7.5pt;
-          text-transform: uppercase;
-          letter-spacing: 0.05em;
-          color: #525252;
-          white-space: nowrap;
-        }
-
-        .field-box {
-          border-bottom: 1px solid #000;
-          flex: 1;
-          min-height: 0.22in;
-        }
-
-        .checkbox-row {
-          display: flex;
-          align-items: center;
-          gap: 0.1in;
-        }
-
-        .checkbox {
-          width: 0.14in;
-          height: 0.14in;
-          border: 1px solid #000;
-        }
-
-        .front-right {
-          display: flex;
-          flex-direction: column;
-        }
-
-        .logo-section {
-          display: flex;
-          justify-content: center;
-          margin-bottom: 0.15in;
-        }
-
-        .card-title {
-          font-size: 8pt;
-          font-weight: 500;
-          text-transform: uppercase;
-          color: #525252;
-          margin-top: 0.1in;
-        }
-
-        .route-name {
-          font-family: 'Noto Serif', serif;
-          font-stretch: 75%;
-          font-size: 21pt;
-          font-weight: 700;
-          letter-spacing: -0.02em;
-          line-height: 1.1;
-          margin: 0.02in 0 0.04in 0;
-          color: #000;
-        }
-
-        .distance-date {
-          font-size: 10pt;
-          font-weight: 500;
-          color: #000;
-          font-variant-numeric: tabular-nums;
-        }
-
-        .rider-info {
-          margin-top: 0.2in;
-          font-size: 7pt;
-        }
-
-        .rider-label,
-        .organizer-label {
-          font-size: 7.5pt;
-          text-transform: uppercase;
-          color: #525252;
-          margin-bottom: 0.02in;
-        }
-
-        .rider-name {
-          font-family: 'Noto Serif', serif;
-          font-stretch: 75%;
-          font-size: 11pt;
-          font-weight: 500;
-          margin-top: 0.02in;
-        }
-
-        .event-info {
-          margin-top: auto;
-          font-size: 9pt;
-          line-height: 1.4;
-          color: #404040;
-        }
-
-        .preamble-text {
-          margin: 0.12in 0;
-        }
-
-        .organizer-section {
-          margin-top: 0.12in;
-          padding-top: 0.12in;
-          border-top: 1px solid #d9d9d9;
-        }
-
-        /* Back card styles */
-        .back-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: baseline;
-          font-size: 10pt;
-          margin-bottom: 0;
-          padding-bottom: 0.08in;
-          border-bottom: 1.5px solid #000;
-        }
-
-        .back-header-left {
-          font-weight: 500;
-        }
-
-        .control-header {
-          display: grid;
-          grid-template-columns: 1fr 0.6in 0.85fr;
-          align-items: stretch;
-          font-size: 8pt;
-          text-transform: uppercase;
-          color: #525252;
-          border-bottom: 1px solid #000;
-          margin-bottom: 0;
-          text-align: center;
-        }
-
-        .control-header > div {
-          padding: 0.075in 0;
-          align-self: stretch;
-        }
-
-        .control-header > div:nth-child(2),
-        .control-header > div:nth-child(3) {
-          border-left: 1px solid #d9d9d9;
-        }
-
-        .control-row {
-          display: grid;
-          grid-template-columns: 1fr 0.6in 0.85fr;
-          min-height: 1in;
-          border-bottom: 1px solid #d9d9d9;
-        }
-
-        .control-info {
-          font-size: 8pt;
-          padding: 0.04in 0;
-        }
-
-        .control-name {
-          font-weight: 600;
-          font-size: 10pt;
-          line-height: 1.1;
-        }
-
-        .control-distance {
-          font-size: 9pt;
-          font-variant-numeric: tabular-nums;
-          margin-top: 0.025in;
-          margin-bottom: 0.025in;
-        }
-
-        .control-times {
-          font-size: 9pt;
-          color: #525252;
-          font-variant-numeric: tabular-nums;
-        }
-
-        .time-cell {
-          border-left: 1px solid #d9d9d9;
-          padding: 0.04in 0 0.04in 0.06in;
-        }
-
-        .signature-cell {
-          border-left: 1px solid #d9d9d9;
-          padding: 0.04in 0 0.04in 0.06in;
-        }
-
-        .back-column {
-          display: flex;
-          flex-direction: column;
-        }
-      `}</style>
-
       {/* Print button - hidden when printing */}
       <div
         className="no-print"
@@ -396,7 +103,17 @@ export function ControlCardsPrint({
       >
         <button
           type="button"
-          onClick={() => window.print()}
+          onClick={() => {
+            // Safari has a WebKit print bug on this page where direct
+            // window.print() blanks the document and prints empty pages.
+            // Workaround: open the same URL in a fresh window with
+            // ?autoprint=1, which triggers print() in a clean document
+            // context. Falls back to direct print if popup is blocked.
+            const url = new URL(window.location.href)
+            url.searchParams.set('autoprint', '1')
+            const w = window.open(url.toString(), '_blank', 'width=900,height=1200')
+            if (!w) window.print()
+          }}
           style={{
             padding: '0.5rem 1rem',
             background: '#000',
@@ -469,10 +186,12 @@ function CardFront({
     rider?.lastName || rider?.firstName
       ? `${rider.lastName}, ${rider.firstName}`.trim().replace(/^,\s*|,\s*$/g, '')
       : ''
+  const verticalNameDisplay =
+    verticalName && rider?.isFirstTimeRider ? `★ ${verticalName}` : verticalName
 
   return (
     <div className="card-half">
-      {verticalName && <div className="rider-name-vertical">{verticalName}</div>}
+      {verticalName && <div className="rider-name-vertical">{verticalNameDisplay}</div>}
       {/* Left column - Regulations */}
       <div className="card-column front-left">
         <p>

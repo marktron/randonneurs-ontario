@@ -154,9 +154,15 @@ By default `computeControlTimes` truncates distances to whole km before computin
 - **Letter portrait**, 2 cards per sheet (front on page 1, back on page 2 — designed for double-sided printing).
 - Front: regulations (left), time/signature fields (middle), event + rider + organizer + QR codes (right).
 - Back: up to 12 controls arranged in 3 columns of 4, with open/close times and signature cells.
-- Print styles live in a `<style jsx global>` block inside the component. `@page { size: letter portrait; margin: 0 }` plus aggressive overrides to hide any ancestor `nav`, `aside`, `header`, or sidebar (important for the admin flow, where the print page still inherits the admin chrome in the component tree).
-- Fonts (`Noto Sans` + `Noto Serif`) are loaded inline via a `<link rel="stylesheet">` in the component. The ESLint rule `@next/next/no-page-custom-font` is suppressed here because this is a print-only surface outside normal layout rules.
-- The "Print Control Cards" button calls `window.print()`. Everything in `.no-print` is hidden during print.
+- Print styles live in a static stylesheet at `components/admin/control-cards-print.css`, imported by both print layouts so they end up in `<head>` at parse time. `@page { size: letter portrait; margin: 0 }` plus aggressive overrides to hide any ancestor `nav`, `aside`, `header`, or sidebar (important for the admin flow, where the print page still inherits the admin chrome in the component tree). The chrome-hiding rules are also applied in screen media so the print page reads as a clean preview whether visited directly or via the autoprint popup.
+- Fonts (`Noto Sans` + `Noto Serif`) come from `next/font/google` at the root layout, exposed as `var(--font-sans)` and `var(--font-serif)`. The print stylesheet references those CSS variables.
+- Everything in `.no-print` is hidden during print.
+
+### Safari print workaround (`autoprint=1`)
+
+Calling `window.print()` directly on this page in Safari triggers a WebKit bug: the document is replaced by an empty "Untitled" state and the printer receives blank pages. Chrome and other browsers are unaffected. This was investigated thoroughly — the page's print snapshot has provably-correct layout, the issue lives below React's awareness (no events fire, document is replaced), and it reproduces in Safari Private mode (rules out extensions) and production builds (rules out HMR / dev runtime).
+
+To work around it, the **Print Control Cards** button in `ControlCardsPrint` (`components/admin/control-cards-print.tsx`) opens the same URL in a fresh `window.open()` with `?autoprint=1` appended. The component's `useAutoPrintIfRequested` hook detects that flag, awaits `document.fonts.ready`, calls `window.print()` from the new window's clean document context, and closes the window on `afterprint`. If `window.open` returns `null` (popup blocked) the handler falls back to direct `window.print()`.
 
 ### QR codes
 
@@ -223,6 +229,12 @@ Manual entry is always available regardless of RWGPS import.
 - **Public flow**: riders are entered by name in the form. Blank-card default is **1** if no riders or extras.
 
 The print renderer pairs riders 2-per-sheet (`riderPairs`). A `null` is inserted for an unpaired final rider so the layout stays consistent.
+
+### First-time rider indicator
+
+In the **admin flow**, the print page calls `getFirstTimeRiderIds()` (`lib/data/first-time-riders.ts`) for the registered rider IDs and sets `isFirstTimeRider` on each `CardRider`. When set, `<ControlCardsPrint>` prepends `★ ` to the vertical rider name on the front of the card so organizers can spot newcomers at a glance. The same helper backs the "First event" badge on the admin event detail page, so both surfaces agree.
+
+The public flow does **not** show the indicator: rider entries on `/control-cards/print` are freeform names with no rider ID, so there's no reliable way to look up history.
 
 ## Types (`types/control-card.ts`)
 

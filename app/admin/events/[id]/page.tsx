@@ -1,5 +1,6 @@
 import { requireAdmin } from '@/lib/auth/get-admin'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
+import { getFirstTimeRiderIds } from '@/lib/data/first-time-riders'
 import { parseLocalDate } from '@/lib/utils'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
@@ -109,24 +110,6 @@ async function getResults(eventId: string): Promise<ResultWithRiderForAdmin[]> {
     .order('finish_time', { ascending: true, nullsFirst: false })
 
   return (data as ResultWithRiderForAdmin[]) ?? []
-}
-
-// A rider is "first-time" if they have no result from any other event
-// with a status other than DNS — i.e. they have never shown up to an
-// event before. DNF, OTL, DQ, finished and pending all count as having
-// shown up.
-async function getFirstTimeRiderIds(eventId: string, riderIds: string[]): Promise<string[]> {
-  if (riderIds.length === 0) return []
-
-  const { data } = await getSupabaseAdmin()
-    .from('results')
-    .select('rider_id')
-    .in('rider_id', riderIds)
-    .neq('event_id', eventId)
-    .neq('status', 'dns')
-
-  const experienced = new Set((data ?? []).map((r) => r.rider_id))
-  return riderIds.filter((id) => !experienced.has(id))
 }
 
 interface EventPageProps {
