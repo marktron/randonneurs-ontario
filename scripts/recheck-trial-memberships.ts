@@ -7,15 +7,23 @@
  * applies that re-check to existing rows that were saved before the fix.
  *
  * Usage:
- *   npx tsx scripts/recheck-trial-memberships.ts            # dry-run (default)
+ *   npx tsx scripts/recheck-trial-memberships.ts            # dry-run, local env
  *   npx tsx scripts/recheck-trial-memberships.ts --apply    # write updates
  *   npx tsx scripts/recheck-trial-memberships.ts --season=2026 --apply
  *
- * Point at prod by sourcing the right env file, e.g.:
- *   dotenv -e .env.production.local -- npx tsx scripts/recheck-trial-memberships.ts --apply
+ * Point at a different environment with --env-file:
+ *   npx tsx scripts/recheck-trial-memberships.ts --env-file=.env.production.local
+ *   npx tsx scripts/recheck-trial-memberships.ts --env-file=.env.production.local --apply
  */
 import { config } from 'dotenv'
 import { join } from 'path'
+
+const argsRaw = process.argv.slice(2)
+const envFileArg = argsRaw.find((a) => a.startsWith('--env-file='))
+if (envFileArg) {
+  // Load the explicit env file first; dotenv won't override anything already set.
+  config({ path: join(process.cwd(), envFileArg.split('=')[1]) })
+}
 config({ path: join(process.cwd(), '.env.development.local') })
 config({ path: join(process.cwd(), '.env.local') })
 
