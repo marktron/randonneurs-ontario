@@ -6,6 +6,7 @@ import { applyRiderSearchFilter } from '@/lib/utils/rider-search'
 import { logAuditEvent } from '@/lib/audit-log'
 import { handleActionError, handleSupabaseError, handleDataError } from '@/lib/errors'
 import { createSlug } from '@/lib/utils'
+import { emailIlikePattern } from '@/lib/utils/validation'
 import type { ActionResult } from '@/types/actions'
 import type {
   RiderInsert,
@@ -58,20 +59,22 @@ export async function createRider(data: CreateRiderData): Promise<CreateRiderRes
   const admin = await requireAdmin()
 
   const { firstName, lastName, email } = data
+  const normalizedEmail = email?.trim().toLowerCase() || null
 
   if (!firstName || !lastName) {
     return { success: false, error: 'First name and last name are required' }
   }
 
-  // Check if rider with same email already exists (if email provided)
-  if (email) {
+  // Check if rider with same email already exists (case-insensitive — legacy
+  // rows may have mixed-case emails)
+  if (normalizedEmail) {
     const { data: existing } = await getSupabaseAdmin()
       .from('riders')
       .select('id')
-      .eq('email', email)
-      .single()
+      .ilike('email', emailIlikePattern(normalizedEmail))
+      .limit(1)
 
-    if (existing) {
+    if (existing && existing.length > 0) {
       return { success: false, error: 'A rider with this email already exists' }
     }
   }
@@ -91,7 +94,7 @@ export async function createRider(data: CreateRiderData): Promise<CreateRiderRes
     const insertData: RiderInsert = {
       first_name: firstName,
       last_name: lastName,
-      email: email || null,
+      email: normalizedEmail,
       slug,
     }
 
@@ -164,15 +167,16 @@ export async function updateRider(riderId: string, data: UpdateRiderData): Promi
   }
 
   // If email is being set, check it's not already used by another rider
+  // (case-insensitive — legacy rows may have mixed-case emails)
   if (normalizedEmail) {
     const { data: existing } = await getSupabaseAdmin()
       .from('riders')
       .select('id')
-      .eq('email', normalizedEmail)
+      .ilike('email', emailIlikePattern(normalizedEmail))
       .neq('id', riderId)
-      .single()
+      .limit(1)
 
-    if (existing) {
+    if (existing && existing.length > 0) {
       return { success: false, error: 'Another rider already has this email address' }
     }
   }
@@ -380,7 +384,7 @@ export async function mergeRiders(data: MergeRidersData): Promise<MergeRidersRes
     const riderUpdateData: RiderUpdate = {
       first_name: riderData.firstName.trim(),
       last_name: riderData.lastName.trim(),
-      email: riderData.email || null,
+      email: riderData.email?.trim().toLowerCase() || null,
       gender: parsedGender,
     }
 

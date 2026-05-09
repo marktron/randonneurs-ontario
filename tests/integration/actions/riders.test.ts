@@ -211,7 +211,8 @@ describe('createRider', () => {
 
   describe('duplicate email check', () => {
     it('returns error when email already exists', async () => {
-      mockModule.__mockRiderFound({ id: 'existing-rider' })
+      // createRider now uses .ilike(...).limit(1), which resolves to a list
+      mockModule.__mockRidersFound([{ id: 'existing-rider' }])
 
       const result = await createRider({
         firstName: 'John',
@@ -274,9 +275,8 @@ describe('createRider', () => {
     })
 
     it('creates rider successfully with email', async () => {
-      // First check: email doesn't exist
-      mockModule.__mockRiderNotFound()
-      // Second: insert succeeds
+      // Email lookup returns no matches (default empty list)
+      // Insert succeeds
       mockModule.__mockInsertSuccess({ id: 'new-rider-id' })
 
       const result = await createRider({
@@ -383,7 +383,8 @@ describe('updateRider', () => {
 
   describe('duplicate email check', () => {
     it('returns error when email is used by another rider', async () => {
-      mockModule.__mockRiderFound({ id: 'other-rider' })
+      // updateRider now uses .ilike(...).neq(...).limit(1) which resolves to a list
+      mockModule.__mockRidersFound([{ id: 'other-rider' }])
 
       const result = await updateRider('rider-1', {
         firstName: 'John',

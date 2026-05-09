@@ -15,6 +15,18 @@ export function validateEmail(email: string): { valid: boolean; normalized: stri
 }
 
 /**
+ * Build a PostgREST `ilike` pattern for an exact case-insensitive email match.
+ * Escapes `_`, `%`, and `\` since they are wildcards in SQL LIKE/ILIKE but are
+ * valid characters in email local-parts.
+ *
+ * Use with `.ilike('email', emailIlikePattern(value))` to match rows whose
+ * stored email equals `value` regardless of case.
+ */
+export function emailIlikePattern(email: string): string {
+  return email.replace(/[\\_%]/g, (c) => `\\${c}`)
+}
+
+/**
  * Normalize a phone number into a consistent format.
  *
  * - Strips all non-digit characters (except leading +)

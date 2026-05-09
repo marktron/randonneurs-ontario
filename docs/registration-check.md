@@ -46,7 +46,7 @@ The current schema only allows `registered` and `cancelled`. Add a migration to 
 ### Registration flow (step-by-step)
 
 1. Validate input.
-2. Find or create rider. If the rider is found by email, their name is never overwritten (only gender and emergency contact are updated). A `rider_merges` audit entry is created when the submitted name differs so admins can spot mismatches.
+2. Find or create rider. The email lookup is case-insensitive — `rider@Example.com` and `rider@example.com` resolve to the same rider. If the rider is found by email, their name is never overwritten (only gender and emergency contact are updated). A `rider_merges` audit entry is created when the submitted name differs so admins can spot mismatches.
 3. If rider match needed (fuzzy name match), return match candidates and stop.
 4. Check `rider_memberships` for `(rider_id, current_season)`. If found and NOT Trial Member, skip to step 7. If Trial Member, proceed to step 5 to check for upgrade. If not found, proceed to step 5.
 5. Call CCN API with registrant's full name. If CCN returns a result: upsert into `rider_memberships` (with `ccn_id`, `membership_type`, `city`, `country`, `chapter_id`), then continue. If Trial Member and CCN returns a full membership type, the row is updated (upgrade).

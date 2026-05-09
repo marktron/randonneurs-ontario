@@ -2,6 +2,7 @@
 
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { handleSupabaseError } from '@/lib/errors'
+import { emailIlikePattern } from '@/lib/utils/validation'
 import type { ActionResult } from '@/types/actions'
 
 export interface MyUpcomingRide {
@@ -26,12 +27,12 @@ export async function getMyUpcomingRides(email: string): Promise<ActionResult<My
 
   const supabase = getSupabaseAdmin()
 
-  // Find rider by email
+  // Find rider by email (case-insensitive — legacy rows may have mixed-case emails)
   const { data: rider, error: riderError } = await supabase
     .from('riders')
     .select('id')
-    .eq('email', normalizedEmail)
-    .single()
+    .ilike('email', emailIlikePattern(normalizedEmail))
+    .maybeSingle()
 
   if (riderError || !rider) {
     // Unknown email — return empty array (no enumeration)

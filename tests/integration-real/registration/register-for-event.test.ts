@@ -476,6 +476,82 @@ describe('registerForEvent (real DB)', () => {
     expect(reg?.rider_id).toBe(IDS.rider)
   })
 
+  it('matches existing rider when stored email has mixed case', async () => {
+    // Reproduces a bug where a rider stored with mixed-case domain (e.g.
+    // `rider@Example.com`) would not be found when registering with the
+    // lowercased version, causing a duplicate rider to be created.
+    const mixedCaseRiderId = '00000000-1a20-4000-a000-000000000099'
+    const storedEmail = 'casetest@MixedCase.com'
+    const submittedEmail = 'casetest@mixedcase.com'
+
+    // Clean up before, in case a prior run left state behind
+    await supabase.from('rider_merges').delete().eq('rider_id', mixedCaseRiderId)
+    await supabase
+      .from('registrations')
+      .delete()
+      .eq('event_id', IDS.scheduledEvent)
+      .eq('rider_id', mixedCaseRiderId)
+    await supabase.from('riders').delete().eq('id', mixedCaseRiderId)
+    await supabase.from('riders').delete().ilike('email', submittedEmail)
+
+    await checked(
+      supabase.from('riders').insert({
+        id: mixedCaseRiderId,
+        slug: 'inttest-case-rider',
+        first_name: 'Case',
+        last_name: 'Test',
+        email: storedEmail, // stored with mixed case in domain
+      }),
+      'insert mixed-case rider'
+    )
+
+    searchCCNMembership.mockResolvedValue({
+      found: true,
+      membershipId: 42,
+      type: 'Individual Membership',
+      city: 'Toronto',
+      country: 'Canada',
+    })
+
+    const { registerForEvent } = await import('@/lib/actions/register')
+    const result = await registerForEvent(
+      buildRegistrationData({
+        eventId: IDS.scheduledEvent,
+        email: submittedEmail, // user submits lowercase
+        firstName: 'Case',
+        lastName: 'Test',
+      })
+    )
+
+    expect(result.success).toBe(true)
+
+    // The existing rider should be reused — no duplicate created
+    const { data: matches } = await supabase
+      .from('riders')
+      .select('id')
+      .ilike('email', submittedEmail)
+    expect(matches).toHaveLength(1)
+    expect(matches![0].id).toBe(mixedCaseRiderId)
+
+    // Registration should be linked to the pre-existing rider
+    const { data: reg } = await supabase
+      .from('registrations')
+      .select('rider_id')
+      .eq('event_id', IDS.scheduledEvent)
+      .eq('rider_id', mixedCaseRiderId)
+      .single()
+    expect(reg?.rider_id).toBe(mixedCaseRiderId)
+
+    // Cleanup
+    await supabase.from('rider_merges').delete().eq('rider_id', mixedCaseRiderId)
+    await supabase
+      .from('registrations')
+      .delete()
+      .eq('event_id', IDS.scheduledEvent)
+      .eq('rider_id', mixedCaseRiderId)
+    await supabase.from('riders').delete().eq('id', mixedCaseRiderId)
+  })
+
   it('re-registration after cancellation revives the row and preserves management token', async () => {
     searchCCNMembership.mockResolvedValue({
       found: true,

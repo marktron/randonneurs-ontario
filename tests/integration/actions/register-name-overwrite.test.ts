@@ -76,6 +76,17 @@ vi.mock('@/lib/supabase-server', () => {
           }
           return fallback
         }),
+        ilike: vi.fn((col: string): unknown => {
+          // Rider email lookup is now case-insensitive — returns an array
+          if (currentTable === 'riders' && col === 'email') {
+            return {
+              then: vi.fn((resolve: (v: unknown) => void) =>
+                resolve({ data: [EXISTING_RIDER], error: null })
+              ),
+            }
+          }
+          return fallback
+        }),
       }
 
       return {

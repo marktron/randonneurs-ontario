@@ -15,13 +15,13 @@ vi.mock('@/lib/supabase-server', () => ({
 import { getMyUpcomingRides } from '@/lib/actions/my-rides'
 
 function setupRiderLookup(rider: { id: string } | null) {
-  // First .from('riders') call chain: .select().eq().single()
+  // First .from('riders') call chain: .select().ilike().maybeSingle()
   const riderChain = {
     select: vi.fn().mockReturnThis(),
-    eq: vi.fn().mockReturnThis(),
-    single: vi.fn().mockResolvedValue({
+    ilike: vi.fn().mockReturnThis(),
+    maybeSingle: vi.fn().mockResolvedValue({
       data: rider,
-      error: rider ? null : { code: 'PGRST116' },
+      error: null,
     }),
   }
   return riderChain
@@ -82,7 +82,7 @@ describe('getMyUpcomingRides', () => {
 
     await getMyUpcomingRides('  John@Example.COM  ')
 
-    expect(riderChain.eq).toHaveBeenCalledWith('email', 'john@example.com')
+    expect(riderChain.ilike).toHaveBeenCalledWith('email', 'john@example.com')
   })
 
   it('returns upcoming events for a known rider', async () => {

@@ -37,7 +37,7 @@ import { fuzzyNameScore } from '@/lib/utils/fuzzy-match'
 import { getMembershipForRider, isTrialUsed } from '@/lib/memberships/service'
 import { isRateLimited } from '@/lib/rate-limit'
 import { createTorontoDate } from '@/lib/brmTimes'
-import { validateEmail, normalizePhone } from '@/lib/utils/validation'
+import { validateEmail, normalizePhone, emailIlikePattern } from '@/lib/utils/validation'
 
 /** Chapter slugs that represent real geographic chapters (not pseudo-chapters like 'permanent' or 'other') */
 const REAL_CHAPTER_SLUGS = ['huron', 'ottawa', 'simcoe', 'toronto']
@@ -200,11 +200,12 @@ async function findOrCreateRider(
   const normalizedEmail = email.toLowerCase().trim()
   const parsedGender = gender === 'M' || gender === 'F' || gender === 'X' ? gender : null
 
-  // Find existing rider(s) by email — multiple riders can share an email (family members)
+  // Find existing rider(s) by email — multiple riders can share an email (family members).
+  // Match case-insensitively because legacy rows may have mixed-case emails.
   const { data: emailRiders } = await getSupabaseAdmin()
     .from('riders')
     .select('id, first_name, last_name')
-    .eq('email', normalizedEmail)
+    .ilike('email', emailIlikePattern(normalizedEmail))
 
   if (emailRiders && emailRiders.length > 0) {
     // Score each email-matched rider against the submitted name and pick the best
