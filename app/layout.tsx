@@ -5,8 +5,20 @@ import { AuthRedirectHandler } from '@/components/auth-redirect-handler'
 import { OrganizationJsonLd } from '@/components/structured-data'
 import './globals.css'
 
-const notoSans = Noto_Sans({ variable: '--font-sans' })
-const notoSerif = Noto_Serif({ variable: '--font-serif', subsets: ['latin'] })
+// `axes: ['wdth']` opts into the variable font's width axis so that
+// `font-stretch: 50%` / `75%` (used by the printed control cards) actually
+// maps to a real font-variation-setting. Without it, next/font only loads
+// the `wght` axis and font-stretch is silently ignored.
+const notoSans = Noto_Sans({
+  variable: '--font-sans',
+  subsets: ['latin'],
+  axes: ['wdth'],
+})
+const notoSerif = Noto_Serif({
+  variable: '--font-serif',
+  subsets: ['latin'],
+  axes: ['wdth'],
+})
 
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000'),
