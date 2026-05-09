@@ -151,3 +151,40 @@ describe('EventResultsManager — first event badge', () => {
     expect(within(row).getByText('First event')).toBeTruthy()
   })
 })
+
+describe('EventResultsManager — membership badges', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('shows "Trial used" badge for incomplete: membership riders with a Trial Member entry for the season', () => {
+    const reg = makeRegistration({
+      riderId: 'rider-trial',
+      firstName: 'Tara',
+      lastName: 'Trial',
+      status: 'incomplete: membership',
+    })
+    reg.riders!.rider_memberships = [{ membership_type: 'Trial Member', season: 2026 }]
+
+    render(<EventResultsManager {...baseProps} registrations={[reg]} firstTimeRiderIds={[]} />)
+
+    const row = screen.getByText('Tara Trial').closest('tr')!
+    expect(within(row).getByText('Trial used')).toBeTruthy()
+    expect(within(row).queryByText('Missing membership')).toBeNull()
+  })
+
+  it('shows "Missing membership" badge for incomplete: membership riders with no current-season membership', () => {
+    const reg = makeRegistration({
+      riderId: 'rider-nomemb',
+      firstName: 'Nina',
+      lastName: 'Nomemb',
+      status: 'incomplete: membership',
+    })
+
+    render(<EventResultsManager {...baseProps} registrations={[reg]} firstTimeRiderIds={[]} />)
+
+    const row = screen.getByText('Nina Nomemb').closest('tr')!
+    expect(within(row).getByText('Missing membership')).toBeTruthy()
+    expect(within(row).queryByText('Trial used')).toBeNull()
+  })
+})

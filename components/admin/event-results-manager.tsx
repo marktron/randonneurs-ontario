@@ -433,6 +433,8 @@ function RiderRow({
                     const res = await revalidateMembership(registrationId)
                     if (!res.success) {
                       toast.error(res.error || 'Failed to check membership')
+                    } else if (res.data?.trialUsed) {
+                      toast.info('Trial membership still already used')
                     } else if (res.data?.membershipFound) {
                       toast.success('Membership found — registration updated')
                     } else {
@@ -442,12 +444,16 @@ function RiderRow({
                 }}
               >
                 <RefreshCw className={`h-3 w-3 mr-1 ${isPending ? 'animate-spin' : ''}`} />
-                Missing membership
+                {participant.membershipType === 'Trial Member'
+                  ? 'Trial used'
+                  : 'Missing membership'}
               </Badge>
             )}
             {participant.registrationStatus === 'incomplete: membership' && !registrationId && (
               <Badge variant="destructive" className="ml-1">
-                Missing membership
+                {participant.membershipType === 'Trial Member'
+                  ? 'Trial used'
+                  : 'Missing membership'}
               </Badge>
             )}
             {participant.hasRegistration &&

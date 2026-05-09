@@ -7,7 +7,7 @@ import { getUrlSlugFromDbSlug } from '@/lib/chapter-config'
 import { logAuditEvent } from '@/lib/audit-log'
 import { handleSupabaseError, createActionResult } from '@/lib/errors'
 import type { ActionResult } from '@/types/actions'
-import { getMembershipForRider } from '@/lib/memberships/service'
+import { getMembershipForRider, isTrialUsed } from '@/lib/memberships/service'
 import type {
   RegistrationInsert,
   ResultInsert,
@@ -466,7 +466,7 @@ export async function createBulkResults(
 
 export async function revalidateMembership(
   registrationId: string
-): Promise<ActionResult<{ membershipFound: boolean }>> {
+): Promise<ActionResult<{ membershipFound: boolean; trialUsed?: boolean }>> {
   await requireAdmin()
 
   const supabase = getSupabaseAdmin()
@@ -502,22 +502,25 @@ export async function revalidateMembership(
     return { success: false, error: 'Rider not found' }
   }
 
-  let membershipFound: boolean
+  let membership: Awaited<ReturnType<typeof getMembershipForRider>>
   try {
-    const membership = await getMembershipForRider(
+    membership = await getMembershipForRider(
       reg.rider_id,
       reg.riders.first_name,
       reg.riders.last_name,
       reg.events?.chapter_id ?? undefined
     )
-    membershipFound = membership.found
   } catch (error) {
     const message = error instanceof Error ? error.message : 'CCN API error'
     return { success: false, error: message }
   }
 
-  if (!membershipFound) {
+  if (!membership.found) {
     return { success: true, data: { membershipFound: false } }
+  }
+
+  if (membership.type === 'Trial Member' && (await isTrialUsed(reg.rider_id))) {
+    return { success: true, data: { membershipFound: true, trialUsed: true } }
   }
 
   const { error: updateError } = await supabase

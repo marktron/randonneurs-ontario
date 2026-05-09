@@ -123,6 +123,7 @@ vi.mock('@/lib/chapter-config', () => ({
 
 vi.mock('@/lib/memberships/service', () => ({
   getMembershipForRider: vi.fn(),
+  isTrialUsed: vi.fn(),
 }))
 
 // Import after mocks
@@ -134,7 +135,7 @@ import {
   addRegistration,
   revalidateMembership,
 } from '@/lib/actions/results'
-import { getMembershipForRider } from '@/lib/memberships/service'
+import { getMembershipForRider, isTrialUsed } from '@/lib/memberships/service'
 
 const mockModule = await vi.importMock<{
   __calls: Array<{ table: string; method: string; args?: unknown[] }>
@@ -588,6 +589,7 @@ describe('createBulkResults', () => {
 
 describe('revalidateMembership', () => {
   const mockGetMembership = vi.mocked(getMembershipForRider)
+  const mockIsTrialUsed = vi.mocked(isTrialUsed)
 
   beforeEach(() => {
     mockModule.__reset()
@@ -656,6 +658,94 @@ describe('revalidateMembership', () => {
 
     expect(result.success).toBe(true)
     expect(result.data?.membershipFound).toBe(true)
+
+    const updateCalls = mockModule.__calls.filter(
+      (c) => c.table === 'registrations' && c.method === 'update'
+    )
+    expect(updateCalls).toHaveLength(1)
+    expect(updateCalls[0].args![0]).toMatchObject({ status: 'registered' })
+  })
+
+  it('keeps registration incomplete and reports trialUsed when rider is still Trial Member with used trial', async () => {
+    mockModule.__mockResultFound({
+      id: 'reg-1',
+      status: 'incomplete: membership',
+      rider_id: 'rider-1',
+      event_id: 'event-1',
+      riders: { first_name: 'Tara', last_name: 'Trial' },
+      events: { chapter_id: 'ch-1' },
+    })
+    mockGetMembership.mockResolvedValueOnce({
+      found: true,
+      membershipId: 999,
+      type: 'Trial Member',
+    })
+    mockIsTrialUsed.mockResolvedValueOnce(true)
+
+    const result = await revalidateMembership('reg-1')
+
+    expect(result.success).toBe(true)
+    expect(result.data?.membershipFound).toBe(true)
+    expect(result.data?.trialUsed).toBe(true)
+
+    const updateCalls = mockModule.__calls.filter(
+      (c) => c.table === 'registrations' && c.method === 'update'
+    )
+    expect(updateCalls).toHaveLength(0)
+  })
+
+  it('promotes registration to registered when rider upgraded from Trial to non-Trial type', async () => {
+    mockModule.__mockResultFound({
+      id: 'reg-1',
+      status: 'incomplete: membership',
+      rider_id: 'rider-1',
+      event_id: 'event-1',
+      riders: { first_name: 'Uri', last_name: 'Upgrade' },
+      events: { chapter_id: 'ch-1' },
+    })
+    mockGetMembership.mockResolvedValueOnce({
+      found: true,
+      membershipId: 12345,
+      type: 'Individual Membership',
+    })
+    mockModule.__mockUpdateSuccess()
+
+    const result = await revalidateMembership('reg-1')
+
+    expect(result.success).toBe(true)
+    expect(result.data?.membershipFound).toBe(true)
+    expect(result.data?.trialUsed).toBeFalsy()
+    expect(mockIsTrialUsed).not.toHaveBeenCalled()
+
+    const updateCalls = mockModule.__calls.filter(
+      (c) => c.table === 'registrations' && c.method === 'update'
+    )
+    expect(updateCalls).toHaveLength(1)
+    expect(updateCalls[0].args![0]).toMatchObject({ status: 'registered' })
+  })
+
+  it('promotes registration to registered when rider is still Trial Member but trial is no longer used', async () => {
+    mockModule.__mockResultFound({
+      id: 'reg-1',
+      status: 'incomplete: membership',
+      rider_id: 'rider-1',
+      event_id: 'event-1',
+      riders: { first_name: 'Tara', last_name: 'Trial' },
+      events: { chapter_id: 'ch-1' },
+    })
+    mockGetMembership.mockResolvedValueOnce({
+      found: true,
+      membershipId: 999,
+      type: 'Trial Member',
+    })
+    mockIsTrialUsed.mockResolvedValueOnce(false)
+    mockModule.__mockUpdateSuccess()
+
+    const result = await revalidateMembership('reg-1')
+
+    expect(result.success).toBe(true)
+    expect(result.data?.membershipFound).toBe(true)
+    expect(result.data?.trialUsed).toBeFalsy()
 
     const updateCalls = mockModule.__calls.filter(
       (c) => c.table === 'registrations' && c.method === 'update'
