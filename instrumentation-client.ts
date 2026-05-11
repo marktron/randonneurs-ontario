@@ -31,6 +31,7 @@ Sentry.init({
     /Event `Event` \(type=error\) captured as exception/,
     /Non-Error promise rejection captured/,
     /^Load failed$/,
+    /^network error$/,
   ],
 })
 
