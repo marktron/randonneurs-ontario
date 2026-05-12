@@ -40,8 +40,19 @@ vi.mock('@/lib/email/send-registration-email', () => ({
   sendRegistrationConfirmationEmail: vi.fn().mockResolvedValue({ success: true }),
 }))
 
+// Mock Sentry so we can assert silent-guard telemetry
+vi.mock('@sentry/nextjs', () => ({
+  captureMessage: vi.fn(),
+  captureException: vi.fn(),
+}))
+
 // Import after mocks are set up
-import { registerForEvent, registerForPermanent } from '@/lib/actions/register'
+import * as Sentry from '@sentry/nextjs'
+import {
+  registerForEvent,
+  registerForPermanent,
+  completeRegistrationWithRider,
+} from '@/lib/actions/register'
 
 describe('registerForEvent', () => {
   describe('validation', () => {
@@ -233,6 +244,7 @@ describe('spam guards', () => {
     mockGetSupabaseAdmin.mockClear()
     mockCheckBotId.mockReset()
     mockCheckBotId.mockResolvedValue({ isBot: false })
+    vi.mocked(Sentry.captureMessage).mockClear()
   })
 
   describe('honeypot', () => {
@@ -308,6 +320,88 @@ describe('spam guards', () => {
       expect(result.success).toBe(false)
       expect(mockCheckBotId).toHaveBeenCalled()
     })
+
+    it('logs a Sentry warning tagged honeypot when registerForEvent silently drops', async () => {
+      await registerForEvent({
+        eventId: 'event-honeypot-evt',
+        firstName: 'Test',
+        lastName: 'User',
+        email: 'rider@example.com',
+        shareRegistration: false,
+        emergencyContactName: 'EC',
+        emergencyContactPhone: '555-1234',
+        homepageUrl: 'https://spam.example/',
+      })
+
+      expect(Sentry.captureMessage).toHaveBeenCalledWith(
+        expect.stringContaining('silently dropped'),
+        expect.objectContaining({
+          level: 'warning',
+          tags: expect.objectContaining({
+            guard: 'honeypot',
+            action: 'registerForEvent',
+          }),
+          extra: expect.objectContaining({
+            eventId: 'event-honeypot-evt',
+          }),
+        })
+      )
+    })
+
+    it('does not include the raw email in the Sentry payload', async () => {
+      await registerForEvent({
+        eventId: 'event-hash-evt',
+        firstName: 'Test',
+        lastName: 'User',
+        email: 'rider+tag@example.com',
+        shareRegistration: false,
+        emergencyContactName: 'EC',
+        emergencyContactPhone: '555-1234',
+        homepageUrl: 'x',
+      })
+
+      const calls = vi.mocked(Sentry.captureMessage).mock.calls
+      expect(calls.length).toBeGreaterThan(0)
+      const payload = JSON.stringify(calls[0])
+      expect(payload).not.toContain('rider+tag@example.com')
+      // Some short hash should be present in the extras
+      const extra = (calls[0][1] as { extra?: { emailHash?: string } } | undefined)?.extra
+      expect(extra?.emailHash).toMatch(/^[a-f0-9]{8,}$/)
+    })
+
+    it('logs a Sentry warning tagged honeypot when registerForPermanent silently drops', async () => {
+      vi.useFakeTimers()
+      vi.setSystemTime(new Date('2025-01-01T12:00:00'))
+
+      await registerForPermanent({
+        routeId: 'route-honeypot-perm',
+        eventDate: '2025-01-20',
+        startTime: '08:00',
+        direction: 'as_posted',
+        firstName: 'Test',
+        lastName: 'User',
+        email: 'rider@example.com',
+        shareRegistration: false,
+        emergencyContactName: 'EC',
+        emergencyContactPhone: '555-1234',
+        homepageUrl: 'x',
+      })
+
+      expect(Sentry.captureMessage).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          tags: expect.objectContaining({
+            guard: 'honeypot',
+            action: 'registerForPermanent',
+          }),
+          extra: expect.objectContaining({
+            routeId: 'route-honeypot-perm',
+          }),
+        })
+      )
+
+      vi.useRealTimers()
+    })
   })
 
   describe('BotID', () => {
@@ -349,6 +443,122 @@ describe('spam guards', () => {
       expect(result).toEqual({ success: true })
       expect(mockGetSupabaseAdmin).not.toHaveBeenCalled()
       vi.useRealTimers()
+    })
+
+    it('logs a Sentry warning tagged botid when registerForEvent silently drops', async () => {
+      mockCheckBotId.mockResolvedValue({ isBot: true })
+
+      await registerForEvent({
+        eventId: 'event-botid-evt',
+        firstName: 'Test',
+        lastName: 'User',
+        email: 'rider@example.com',
+        shareRegistration: false,
+        emergencyContactName: 'EC',
+        emergencyContactPhone: '555-1234',
+      })
+
+      expect(Sentry.captureMessage).toHaveBeenCalledWith(
+        expect.stringContaining('silently dropped'),
+        expect.objectContaining({
+          level: 'warning',
+          tags: expect.objectContaining({
+            guard: 'botid',
+            action: 'registerForEvent',
+          }),
+          extra: expect.objectContaining({
+            eventId: 'event-botid-evt',
+          }),
+        })
+      )
+    })
+
+    it('logs a Sentry warning tagged botid when registerForPermanent silently drops', async () => {
+      mockCheckBotId.mockResolvedValue({ isBot: true })
+      vi.useFakeTimers()
+      vi.setSystemTime(new Date('2025-01-01T12:00:00'))
+
+      await registerForPermanent({
+        routeId: 'route-botid-perm',
+        eventDate: '2025-01-20',
+        startTime: '08:00',
+        direction: 'as_posted',
+        firstName: 'Test',
+        lastName: 'User',
+        email: 'rider@example.com',
+        shareRegistration: false,
+        emergencyContactName: 'EC',
+        emergencyContactPhone: '555-1234',
+      })
+
+      expect(Sentry.captureMessage).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          tags: expect.objectContaining({
+            guard: 'botid',
+            action: 'registerForPermanent',
+          }),
+          extra: expect.objectContaining({
+            routeId: 'route-botid-perm',
+          }),
+        })
+      )
+
+      vi.useRealTimers()
+    })
+  })
+
+  describe('completeRegistrationWithRider', () => {
+    it('logs a Sentry warning tagged honeypot when silently dropping', async () => {
+      await completeRegistrationWithRider({
+        eventId: 'event-complete-honeypot',
+        selectedRiderId: 'rider-1',
+        firstName: 'Test',
+        lastName: 'User',
+        email: 'rider@example.com',
+        shareRegistration: false,
+        emergencyContactName: 'EC',
+        emergencyContactPhone: '555-1234',
+        homepageUrl: 'x',
+      })
+
+      expect(Sentry.captureMessage).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          tags: expect.objectContaining({
+            guard: 'honeypot',
+            action: 'completeRegistrationWithRider',
+          }),
+          extra: expect.objectContaining({
+            eventId: 'event-complete-honeypot',
+          }),
+        })
+      )
+    })
+
+    it('logs a Sentry warning tagged botid when silently dropping', async () => {
+      mockCheckBotId.mockResolvedValue({ isBot: true })
+
+      await completeRegistrationWithRider({
+        eventId: 'event-complete-botid',
+        selectedRiderId: 'rider-1',
+        firstName: 'Test',
+        lastName: 'User',
+        email: 'rider@example.com',
+        shareRegistration: false,
+        emergencyContactName: 'EC',
+        emergencyContactPhone: '555-1234',
+      })
+
+      expect(Sentry.captureMessage).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          tags: expect.objectContaining({
+            guard: 'botid',
+            action: 'completeRegistrationWithRider',
+          }),
+        })
+      )
     })
   })
 })

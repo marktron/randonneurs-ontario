@@ -26,6 +26,8 @@
  */
 'use server'
 
+import { createHash } from 'node:crypto'
+import * as Sentry from '@sentry/nextjs'
 import { checkBotId } from 'botid/server'
 import { revalidatePath, revalidateTag } from 'next/cache'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
@@ -86,6 +88,33 @@ export interface RegistrationResult {
 // ============================================================================
 // HELPER FUNCTIONS
 // ============================================================================
+
+/**
+ * Truncated SHA-256 of an email, for forensic correlation in telemetry
+ * without leaking PII. 12 hex chars is enough to disambiguate users in
+ * practice but too short for offline lookup.
+ */
+function emailFingerprint(email: string): string {
+  return createHash('sha256').update(email.trim().toLowerCase()).digest('hex').slice(0, 12)
+}
+
+/**
+ * Emit a Sentry warning when a silent spam guard drops a submission. The
+ * response to the client is still { success: true } so bots can't probe the
+ * boundary — this is server-only telemetry to correlate real-user reports
+ * ("I see the success screen but no row exists") with the guard that fired.
+ */
+function logSilentDrop(
+  guard: 'honeypot' | 'botid',
+  action: 'registerForEvent' | 'registerForPermanent' | 'completeRegistrationWithRider',
+  extra: Record<string, unknown>
+): void {
+  Sentry.captureMessage('Registration silently dropped by spam guard', {
+    level: 'warning',
+    tags: { guard, action },
+    extra,
+  })
+}
 
 /**
  * Insert a new rider with a `firstName-lastName` slug, retrying with `-2`,
@@ -385,12 +414,22 @@ async function createRegistrationRecord(
  */
 export async function registerForEvent(data: RegistrationData): Promise<RegistrationResult> {
   // Silent spam guards — honeypot and BotID. Bots see a success response; no
-  // DB write happens and no email is sent.
+  // DB write happens and no email is sent. Server-side telemetry distinguishes
+  // which guard fired so real-user reports can be correlated.
   if (data.homepageUrl && data.homepageUrl.trim() !== '') {
+    logSilentDrop('honeypot', 'registerForEvent', {
+      eventId: data.eventId,
+      emailHash: emailFingerprint(data.email),
+    })
     return { success: true }
   }
   const verification = await checkBotId()
   if (verification.isBot) {
+    logSilentDrop('botid', 'registerForEvent', {
+      eventId: data.eventId,
+      emailHash: emailFingerprint(data.email),
+      isVerifiedBot: verification.isVerifiedBot,
+    })
     return { success: true }
   }
 
@@ -707,10 +746,21 @@ export async function registerForPermanent(
   data: PermanentRegistrationData
 ): Promise<RegistrationResult> {
   if (data.homepageUrl && data.homepageUrl.trim() !== '') {
+    logSilentDrop('honeypot', 'registerForPermanent', {
+      routeId: data.routeId,
+      eventDate: data.eventDate,
+      emailHash: emailFingerprint(data.email),
+    })
     return { success: true }
   }
   const verification = await checkBotId()
   if (verification.isBot) {
+    logSilentDrop('botid', 'registerForPermanent', {
+      routeId: data.routeId,
+      eventDate: data.eventDate,
+      emailHash: emailFingerprint(data.email),
+      isVerifiedBot: verification.isVerifiedBot,
+    })
     return { success: true }
   }
 
@@ -1089,10 +1139,19 @@ export async function completeRegistrationWithRider(
   data: CompleteRegistrationData
 ): Promise<RegistrationResult> {
   if (data.homepageUrl && data.homepageUrl.trim() !== '') {
+    logSilentDrop('honeypot', 'completeRegistrationWithRider', {
+      eventId: data.eventId,
+      emailHash: emailFingerprint(data.email),
+    })
     return { success: true }
   }
   const verification = await checkBotId()
   if (verification.isBot) {
+    logSilentDrop('botid', 'completeRegistrationWithRider', {
+      eventId: data.eventId,
+      emailHash: emailFingerprint(data.email),
+      isVerifiedBot: verification.isVerifiedBot,
+    })
     return { success: true }
   }
 

@@ -1,11 +1,17 @@
 'use client'
 
-interface HoneypotFieldProps {
+// Field name/id deliberately avoid 'url', 'website', 'homepage', 'email',
+// 'name' and other tokens that password managers treat as fillable. The
+// data-*-ignore attributes are the documented opt-outs for 1Password,
+// LastPass, and Bitwarden — without them, managers will fill this hidden
+// input on submit and silently drop a legitimate registration.
+export function HoneypotField({
+  value,
+  onChange,
+}: {
   value: string
   onChange: (value: string) => void
-}
-
-export function HoneypotField({ value, onChange }: HoneypotFieldProps) {
+}) {
   return (
     <div
       aria-hidden="true"
@@ -18,13 +24,17 @@ export function HoneypotField({ value, onChange }: HoneypotFieldProps) {
         overflow: 'hidden',
       }}
     >
-      <label htmlFor="homepage_url">Leave this field blank</label>
+      <label htmlFor="ro_check">Leave this field blank</label>
       <input
-        id="homepage_url"
-        name="homepage_url"
+        id="ro_check"
+        name="ro_check"
         type="text"
         tabIndex={-1}
         autoComplete="off"
+        data-1p-ignore="true"
+        data-lpignore="true"
+        data-bwignore="true"
+        data-form-type="other"
         value={value}
         onChange={(e) => onChange(e.target.value)}
       />
