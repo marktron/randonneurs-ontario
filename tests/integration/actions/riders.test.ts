@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { revalidateTag } from 'next/cache'
 
 /**
  * Integration tests for rider actions.
@@ -111,6 +112,7 @@ vi.mock('@/lib/audit-log', () => ({
 
 vi.mock('next/cache', () => ({
   revalidatePath: vi.fn(),
+  revalidateTag: vi.fn(),
 }))
 
 vi.mock('@/lib/utils/rider-search', () => ({
@@ -435,6 +437,18 @@ describe('updateRider', () => {
       const updateData = updateCalls[0].args![0] as Record<string, unknown>
       expect(updateData.email).toBe('john@example.com')
     })
+
+    it('revalidates riders and results caches after a successful update', async () => {
+      const result = await updateRider('rider-1', {
+        firstName: 'John',
+        lastName: 'Doe',
+        email: null,
+      })
+
+      expect(result.success).toBe(true)
+      expect(revalidateTag).toHaveBeenCalledWith('riders', { expire: 0 })
+      expect(revalidateTag).toHaveBeenCalledWith('results', { expire: 0 })
+    })
   })
 })
 
@@ -517,6 +531,24 @@ describe('mergeRiders', () => {
         (c) => c.table === 'riders' && c.method === 'update'
       )
       expect(riderUpdates).toHaveLength(1)
+    })
+
+    it('revalidates riders, results, and registrations caches after a successful merge', async () => {
+      const result = await mergeRiders({
+        targetRiderId: 'rider-1',
+        sourceRiderIds: ['rider-1', 'rider-2'],
+        riderData: {
+          firstName: 'Test',
+          lastName: 'User',
+          email: 'test@example.com',
+          gender: 'M',
+        },
+      })
+
+      expect(result.success).toBe(true)
+      expect(revalidateTag).toHaveBeenCalledWith('riders', { expire: 0 })
+      expect(revalidateTag).toHaveBeenCalledWith('results', { expire: 0 })
+      expect(revalidateTag).toHaveBeenCalledWith('registrations', { expire: 0 })
     })
 
     it('accepts valid merge with 3 riders', async () => {

@@ -1,5 +1,6 @@
 'use server'
 
+import { revalidateTag } from 'next/cache'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { requireAdmin } from '@/lib/auth/get-admin'
 import { applyRiderSearchFilter } from '@/lib/utils/rider-search'
@@ -200,6 +201,9 @@ export async function updateRider(riderId: string, data: UpdateRiderData): Promi
     entityId: riderId,
     description: `Updated rider: ${trimmedFirst} ${trimmedLast}`,
   })
+
+  revalidateTag('riders', { expire: 0 })
+  revalidateTag('results', { expire: 0 })
 
   return { success: true }
 }
@@ -405,6 +409,10 @@ export async function mergeRiders(data: MergeRidersData): Promise<MergeRidersRes
       entityId: targetRiderId,
       description: `Merged ${sourceRiderIds.length} riders into: ${riderData.firstName} ${riderData.lastName}`,
     })
+
+    revalidateTag('riders', { expire: 0 })
+    revalidateTag('results', { expire: 0 })
+    revalidateTag('registrations', { expire: 0 })
 
     return {
       success: true,
