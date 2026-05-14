@@ -28,7 +28,6 @@
 
 import { createHash } from 'node:crypto'
 import * as Sentry from '@sentry/nextjs'
-import { checkBotId } from 'botid/server'
 import { revalidatePath, revalidateTag } from 'next/cache'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { sendRegistrationConfirmationEmail } from '@/lib/email/send-registration-email'
@@ -105,7 +104,7 @@ function emailFingerprint(email: string): string {
  * ("I see the success screen but no row exists") with the guard that fired.
  */
 function logSilentDrop(
-  guard: 'honeypot' | 'botid',
+  guard: 'honeypot',
   action: 'registerForEvent' | 'registerForPermanent' | 'completeRegistrationWithRider',
   extra: Record<string, unknown>
 ): void {
@@ -413,22 +412,12 @@ async function createRegistrationRecord(
  * @returns Success/error result
  */
 export async function registerForEvent(data: RegistrationData): Promise<RegistrationResult> {
-  // Silent spam guards — honeypot and BotID. Bots see a success response; no
-  // DB write happens and no email is sent. Server-side telemetry distinguishes
-  // which guard fired so real-user reports can be correlated.
+  // Silent honeypot guard. Bots that fill the hidden field see a success
+  // response; no DB write happens and no email is sent.
   if (data.homepageUrl && data.homepageUrl.trim() !== '') {
     logSilentDrop('honeypot', 'registerForEvent', {
       eventId: data.eventId,
       emailHash: emailFingerprint(data.email),
-    })
-    return { success: true }
-  }
-  const verification = await checkBotId({ advancedOptions: { checkLevel: 'deepAnalysis' } })
-  if (verification.isBot) {
-    logSilentDrop('botid', 'registerForEvent', {
-      eventId: data.eventId,
-      emailHash: emailFingerprint(data.email),
-      isVerifiedBot: verification.isVerifiedBot,
     })
     return { success: true }
   }
@@ -750,16 +739,6 @@ export async function registerForPermanent(
       routeId: data.routeId,
       eventDate: data.eventDate,
       emailHash: emailFingerprint(data.email),
-    })
-    return { success: true }
-  }
-  const verification = await checkBotId({ advancedOptions: { checkLevel: 'deepAnalysis' } })
-  if (verification.isBot) {
-    logSilentDrop('botid', 'registerForPermanent', {
-      routeId: data.routeId,
-      eventDate: data.eventDate,
-      emailHash: emailFingerprint(data.email),
-      isVerifiedBot: verification.isVerifiedBot,
     })
     return { success: true }
   }
@@ -1142,15 +1121,6 @@ export async function completeRegistrationWithRider(
     logSilentDrop('honeypot', 'completeRegistrationWithRider', {
       eventId: data.eventId,
       emailHash: emailFingerprint(data.email),
-    })
-    return { success: true }
-  }
-  const verification = await checkBotId({ advancedOptions: { checkLevel: 'deepAnalysis' } })
-  if (verification.isBot) {
-    logSilentDrop('botid', 'completeRegistrationWithRider', {
-      eventId: data.eventId,
-      emailHash: emailFingerprint(data.email),
-      isVerifiedBot: verification.isVerifiedBot,
     })
     return { success: true }
   }

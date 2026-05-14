@@ -34,14 +34,15 @@ The following headers are set on all responses via `next.config.ts`:
 
 ## Anti-Spam on Public Forms
 
-Event registration (`/register/[slug]`, `/register/permanent`) is publicly accessible and has two layers of bot protection. Both guards return a silent `{ success: true }` so that bots can't infer which check tripped:
+Event registration (`/register/[slug]`, `/register/permanent`) is publicly accessible. The honeypot guard returns a silent `{ success: true }` so bots can't infer that it tripped:
 
-1. **Honeypot field** — `HoneypotField` renders a hidden `ro_check` input in each registration form. The field name avoids tokens password managers recognize (`url`, `website`, `homepage`, `email`, `name`) and carries `data-1p-ignore`, `data-lpignore`, `data-bwignore`, and `data-form-type="other"` so 1Password, LastPass, and Bitwarden skip it. Real users can't see or tab to it; bots that fill every field trip the guard. Checked at the top of `registerForEvent`, `registerForPermanent`, and `completeRegistrationWithRider`.
-2. **Vercel BotID** — invisible challenge run by `initBotId` (in `instrumentation-client.ts`) and verified server-side via `checkBotId({ advancedOptions: { checkLevel: 'deepAnalysis' } })`. Deep analysis runs an active challenge instead of relying on passive signals only; basic mode produced false positives on real riders scoring in the 0.4–0.6 confidence band. Protected paths are declared as `POST /register/*`. In local dev `checkBotId()` always returns `{ isBot: false }`; to simulate a bot verdict use `developmentOptions: { bypass: 'BAD-BOT' }`.
+- **Honeypot field** — `HoneypotField` renders a hidden `ro_check` input in each registration form. The field name avoids tokens password managers recognize (`url`, `website`, `homepage`, `email`, `name`) and carries `data-1p-ignore`, `data-lpignore`, `data-bwignore`, and `data-form-type="other"` so 1Password, LastPass, and Bitwarden skip it. Real users can't see or tab to it; bots that fill every field trip the guard. Checked at the top of `registerForEvent`, `registerForPermanent`, and `completeRegistrationWithRider`.
 
-Rate limiting by email (`isRateLimited`) still applies as a third layer.
+Rate limiting by email (`isRateLimited`) applies as a second layer.
 
-When either guard fires, `logSilentDrop()` emits a Sentry `warning` tagged `guard: 'honeypot' | 'botid'` and `action: 'registerForEvent' | 'registerForPermanent' | 'completeRegistrationWithRider'`, with `eventId`/`routeId` and a truncated SHA-256 of the email (`emailHash`) in `extra`. This lets real-user reports ("the success screen showed but no row was created") be correlated to a guard without leaking PII or signalling anything back to the client.
+`initBotId` (in `instrumentation-client.ts`) still runs client-side on `POST /register/*` so signals stream into the Vercel BotID dashboard for observability. The server-side `checkBotId()` check was removed: in basic mode (the only mode available on the Hobby plan) it produced false positives on confirmed real users, silently dropping their registrations. Deep analysis would likely fix that but is Pro/Enterprise-only — revisit if the honeypot stops being sufficient.
+
+When the honeypot fires, `logSilentDrop()` emits a Sentry `warning` tagged `guard: 'honeypot'` and `action: 'registerForEvent' | 'registerForPermanent' | 'completeRegistrationWithRider'`, with `eventId`/`routeId` and a truncated SHA-256 of the email (`emailHash`) in `extra`. This lets real-user reports ("the success screen showed but no row was created") be correlated to a guard without leaking PII or signalling anything back to the client.
 
 ## Input Validation
 

@@ -23,13 +23,6 @@ vi.mock('@/lib/supabase-server', () => ({
   getSupabaseAdmin: () => mockGetSupabaseAdmin(),
 }))
 
-// Mock BotID — default to human (not-bot), individual tests can override
-const mockCheckBotId = vi.fn(async () => ({ isBot: false }))
-
-vi.mock('botid/server', () => ({
-  checkBotId: () => mockCheckBotId(),
-}))
-
 // Mock Next.js cache
 vi.mock('next/cache', () => ({
   revalidatePath: vi.fn(),
@@ -242,8 +235,6 @@ describe('registerForPermanent', () => {
 describe('spam guards', () => {
   beforeEach(() => {
     mockGetSupabaseAdmin.mockClear()
-    mockCheckBotId.mockReset()
-    mockCheckBotId.mockResolvedValue({ isBot: false })
     vi.mocked(Sentry.captureMessage).mockClear()
   })
 
@@ -262,7 +253,6 @@ describe('spam guards', () => {
 
       expect(result).toEqual({ success: true })
       expect(mockGetSupabaseAdmin).not.toHaveBeenCalled()
-      expect(mockCheckBotId).not.toHaveBeenCalled()
     })
 
     it('registerForPermanent returns silent success when honeypot is filled', async () => {
@@ -302,7 +292,6 @@ describe('spam guards', () => {
 
       // Proceeds to normal flow (which hits the mocked event-not-found path)
       expect(result.success).toBe(false)
-      expect(mockCheckBotId).toHaveBeenCalled()
     })
 
     it('whitespace-only honeypot does not trigger the guard', async () => {
@@ -318,7 +307,6 @@ describe('spam guards', () => {
       })
 
       expect(result.success).toBe(false)
-      expect(mockCheckBotId).toHaveBeenCalled()
     })
 
     it('logs a Sentry warning tagged honeypot when registerForEvent silently drops', async () => {
@@ -404,110 +392,6 @@ describe('spam guards', () => {
     })
   })
 
-  describe('BotID', () => {
-    it('registerForEvent returns silent success when BotID flags request as bot', async () => {
-      mockCheckBotId.mockResolvedValue({ isBot: true })
-
-      const result = await registerForEvent({
-        eventId: 'event-123',
-        firstName: 'Stealth',
-        lastName: 'Bot',
-        email: 'stealth@example.com',
-        shareRegistration: false,
-        emergencyContactName: 'Emergency Contact',
-        emergencyContactPhone: '555-1234',
-      })
-
-      expect(result).toEqual({ success: true })
-      expect(mockGetSupabaseAdmin).not.toHaveBeenCalled()
-    })
-
-    it('registerForPermanent returns silent success when BotID flags request as bot', async () => {
-      mockCheckBotId.mockResolvedValue({ isBot: true })
-      vi.useFakeTimers()
-      vi.setSystemTime(new Date('2025-01-01T12:00:00'))
-
-      const result = await registerForPermanent({
-        routeId: 'route-123',
-        eventDate: '2025-01-20',
-        startTime: '08:00',
-        direction: 'as_posted',
-        firstName: 'Stealth',
-        lastName: 'Bot',
-        email: 'stealth@example.com',
-        shareRegistration: false,
-        emergencyContactName: 'Emergency Contact',
-        emergencyContactPhone: '555-1234',
-      })
-
-      expect(result).toEqual({ success: true })
-      expect(mockGetSupabaseAdmin).not.toHaveBeenCalled()
-      vi.useRealTimers()
-    })
-
-    it('logs a Sentry warning tagged botid when registerForEvent silently drops', async () => {
-      mockCheckBotId.mockResolvedValue({ isBot: true })
-
-      await registerForEvent({
-        eventId: 'event-botid-evt',
-        firstName: 'Test',
-        lastName: 'User',
-        email: 'rider@example.com',
-        shareRegistration: false,
-        emergencyContactName: 'EC',
-        emergencyContactPhone: '555-1234',
-      })
-
-      expect(Sentry.captureMessage).toHaveBeenCalledWith(
-        expect.stringContaining('silently dropped'),
-        expect.objectContaining({
-          level: 'warning',
-          tags: expect.objectContaining({
-            guard: 'botid',
-            action: 'registerForEvent',
-          }),
-          extra: expect.objectContaining({
-            eventId: 'event-botid-evt',
-          }),
-        })
-      )
-    })
-
-    it('logs a Sentry warning tagged botid when registerForPermanent silently drops', async () => {
-      mockCheckBotId.mockResolvedValue({ isBot: true })
-      vi.useFakeTimers()
-      vi.setSystemTime(new Date('2025-01-01T12:00:00'))
-
-      await registerForPermanent({
-        routeId: 'route-botid-perm',
-        eventDate: '2025-01-20',
-        startTime: '08:00',
-        direction: 'as_posted',
-        firstName: 'Test',
-        lastName: 'User',
-        email: 'rider@example.com',
-        shareRegistration: false,
-        emergencyContactName: 'EC',
-        emergencyContactPhone: '555-1234',
-      })
-
-      expect(Sentry.captureMessage).toHaveBeenCalledWith(
-        expect.any(String),
-        expect.objectContaining({
-          tags: expect.objectContaining({
-            guard: 'botid',
-            action: 'registerForPermanent',
-          }),
-          extra: expect.objectContaining({
-            routeId: 'route-botid-perm',
-          }),
-        })
-      )
-
-      vi.useRealTimers()
-    })
-  })
-
   describe('completeRegistrationWithRider', () => {
     it('logs a Sentry warning tagged honeypot when silently dropping', async () => {
       await completeRegistrationWithRider({
@@ -531,31 +415,6 @@ describe('spam guards', () => {
           }),
           extra: expect.objectContaining({
             eventId: 'event-complete-honeypot',
-          }),
-        })
-      )
-    })
-
-    it('logs a Sentry warning tagged botid when silently dropping', async () => {
-      mockCheckBotId.mockResolvedValue({ isBot: true })
-
-      await completeRegistrationWithRider({
-        eventId: 'event-complete-botid',
-        selectedRiderId: 'rider-1',
-        firstName: 'Test',
-        lastName: 'User',
-        email: 'rider@example.com',
-        shareRegistration: false,
-        emergencyContactName: 'EC',
-        emergencyContactPhone: '555-1234',
-      })
-
-      expect(Sentry.captureMessage).toHaveBeenCalledWith(
-        expect.any(String),
-        expect.objectContaining({
-          tags: expect.objectContaining({
-            guard: 'botid',
-            action: 'completeRegistrationWithRider',
           }),
         })
       )
