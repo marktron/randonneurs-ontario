@@ -423,7 +423,7 @@ export async function registerForEvent(data: RegistrationData): Promise<Registra
     })
     return { success: true }
   }
-  const verification = await checkBotId()
+  const verification = await checkBotId({ advancedOptions: { checkLevel: 'deepAnalysis' } })
   if (verification.isBot) {
     logSilentDrop('botid', 'registerForEvent', {
       eventId: data.eventId,
@@ -753,7 +753,7 @@ export async function registerForPermanent(
     })
     return { success: true }
   }
-  const verification = await checkBotId()
+  const verification = await checkBotId({ advancedOptions: { checkLevel: 'deepAnalysis' } })
   if (verification.isBot) {
     logSilentDrop('botid', 'registerForPermanent', {
       routeId: data.routeId,
@@ -1145,7 +1145,7 @@ export async function completeRegistrationWithRider(
     })
     return { success: true }
   }
-  const verification = await checkBotId()
+  const verification = await checkBotId({ advancedOptions: { checkLevel: 'deepAnalysis' } })
   if (verification.isBot) {
     logSilentDrop('botid', 'completeRegistrationWithRider', {
       eventId: data.eventId,
