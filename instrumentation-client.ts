@@ -36,6 +36,10 @@ Sentry.init({
     // out from under React; benign and unactionable.
     /removeChild.*not a child of this node/,
     /insertBefore.*not a child of this node/,
+    // Stale tabs across deploys: server action IDs change per build, so a
+    // pre-deploy tab POSTs an ID the new build doesn't know. Next.js
+    // self-recovers with a reload.
+    /Server Action .* was not found on the server/,
   ],
 })
 
