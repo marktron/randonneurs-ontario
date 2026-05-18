@@ -32,6 +32,10 @@ Sentry.init({
     /Non-Error promise rejection captured/,
     /^Load failed$/,
     /^network error$/,
+    // Browser translation extensions (Chrome Translate, etc.) mutate the DOM
+    // out from under React; benign and unactionable.
+    /removeChild.*not a child of this node/,
+    /insertBefore.*not a child of this node/,
   ],
 })
 
