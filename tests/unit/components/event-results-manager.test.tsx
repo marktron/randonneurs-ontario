@@ -3,8 +3,9 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, within } from '@testing-library/react'
+import { render, screen, within, fireEvent, waitFor } from '@testing-library/react'
 import { EventResultsManager } from '@/components/admin/event-results-manager'
+import { updateResult } from '@/lib/actions/results'
 
 // Mock server actions used by the rider rows so the component renders cleanly
 vi.mock('@/lib/actions/results', () => ({
@@ -186,5 +187,67 @@ describe('EventResultsManager — membership badges', () => {
     const row = screen.getByText('Nina Nomemb').closest('tr')!
     expect(within(row).getByText('Missing membership')).toBeTruthy()
     expect(within(row).queryByText('Trial used')).toBeNull()
+  })
+})
+
+describe('EventResultsManager — flèche distance flooring', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('floors decimal distances before sending to updateResult so Postgres INT does not reject them', async () => {
+    vi.mocked(updateResult).mockResolvedValue({ success: true })
+
+    const result: Result = {
+      id: 'result-fleche-1',
+      rider_id: 'rider-fleche',
+      finish_time: '24:00:00',
+      status: 'finished',
+      team_name: 'Team Alpha',
+      distance_km: 360,
+      note: null,
+      gpx_url: null,
+      gpx_file_path: null,
+      control_card_front_path: null,
+      control_card_back_path: null,
+      rider_notes: null,
+      submitted_at: null,
+      submission_token: null,
+      riders: {
+        id: 'rider-fleche',
+        first_name: 'Fiona',
+        last_name: 'Fleche',
+        email: 'fiona@example.com',
+      },
+    }
+
+    render(
+      <EventResultsManager
+        {...baseProps}
+        eventType="fleche"
+        registrations={[
+          makeRegistration({
+            riderId: 'rider-fleche',
+            firstName: 'Fiona',
+            lastName: 'Fleche',
+          }),
+        ]}
+        results={[result]}
+        firstTimeRiderIds={[]}
+      />
+    )
+
+    const row = screen.getByText('Fiona Fleche').closest('tr')!
+    const distanceInput = within(row).getByPlaceholderText('km') as HTMLInputElement
+
+    fireEvent.change(distanceInput, { target: { value: '380.95' } })
+    fireEvent.blur(distanceInput)
+
+    await waitFor(() => {
+      expect(vi.mocked(updateResult)).toHaveBeenCalled()
+    })
+
+    const [, payload] = vi.mocked(updateResult).mock.calls[0]
+    expect(payload.distanceKm).toBe(380)
   })
 })

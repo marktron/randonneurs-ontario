@@ -322,7 +322,9 @@ function RiderRow({
           note: null,
           season: season ?? new Date().getFullYear(),
           distanceKm:
-            isFleche && localDistance ? parseFloat(localDistance) || distanceKm : distanceKm,
+            isFleche && localDistance
+              ? Math.floor(parseFloat(localDistance)) || distanceKm
+              : distanceKm,
         })
         if (res.success) {
           flashSaved()
@@ -396,8 +398,10 @@ function RiderRow({
 
   const handleDistanceBlur = () => {
     if (!result) return
-    const newDistance = parseFloat(localDistance)
-    if (isNaN(newDistance) || newDistance === result.distance_km) return
+    const parsed = parseFloat(localDistance)
+    if (isNaN(parsed)) return
+    const newDistance = Math.floor(parsed)
+    if (newDistance === result.distance_km) return
 
     startTransition(async () => {
       const res = await updateResult(result.id, {
