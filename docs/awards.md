@@ -178,7 +178,7 @@ The `/records` page functions handle both award scopes:
 
 - **`get_award_recipients(slug)`** — UNION query across `rider_awards` (season) and `result_awards` (result), branching on `awards.award_type`
 - **`get_award_recipients_with_distance(slug)`** — Same dual-source pattern as above, but also returns each recipient's total season distance via `results.distance_km`
-- **`get_rider_award_counts(slug, limit)`** — Same dual-source pattern, counting distinct seasons
+- **`get_rider_award_counts(slug, limit)`** — Same dual-source pattern, counting award rows (a rider can earn the same season award multiple times in one season)
 - **`get_rider_sr_streaks(season, limit)`** — Queries `rider_awards` directly for SR streak calculations
 
 ## Adding New Awards
