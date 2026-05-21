@@ -119,7 +119,8 @@ describe('searchCCNMembership', () => {
   })
 
   it('returns not found when no results', async () => {
-    mockFetch.mockResolvedValueOnce({
+    // Full-name miss → surname-fallback also empty → not found.
+    mockFetch.mockResolvedValue({
       ok: true,
       json: async () => ({ count: 0, results: [] }),
     })
@@ -147,5 +148,211 @@ describe('searchCCNMembership', () => {
     await expect(searchCCNMembership('Test', 'User')).rejects.toThrow(
       'CCN_ENDPOINT environment variable not set'
     )
+  })
+
+  describe('surname fallback (name mismatch between RO registration and CCN)', () => {
+    // CCN's API doesn't expose email, so when the names diverge between what a
+    // rider entered on RO and what's on file at CCN (e.g. Ludovic vs Ludo),
+    // the full-name search returns nothing. Fall back to a surname-only search
+    // and fuzzy-match the candidates by first name.
+
+    it('finds Ludo Magne when registrant entered "Ludovic Magne"', async () => {
+      // Full-name search returns nothing.
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ count: 0, results: [] }),
+      })
+      // Surname-only search returns the actual member under a different first name.
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          count: 1,
+          results: [
+            {
+              id: 11753016,
+              full_name: 'Ludo Magne',
+              registration_category: 'Trial Member',
+              city: 'Toronto',
+              country: 'Canada',
+            },
+          ],
+        }),
+      })
+
+      const { searchCCNMembership } = await import('@/lib/ccn/client')
+      const result = await searchCCNMembership('Ludovic', 'Magne')
+
+      expect(result).toEqual({
+        found: true,
+        membershipId: 11753016,
+        type: 'Trial Member',
+        city: 'Toronto',
+        country: 'Canada',
+      })
+      expect(mockFetch).toHaveBeenCalledTimes(2)
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        2,
+        expect.stringContaining('search=Magne'),
+        expect.objectContaining({ signal: expect.any(AbortSignal) })
+      )
+    })
+
+    it('does not fall back when full-name search returns results', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          count: 1,
+          results: [
+            {
+              id: 1,
+              full_name: 'Mark Allen',
+              registration_category: 'Individual Membership',
+              city: 'Toronto',
+              country: 'Canada',
+            },
+          ],
+        }),
+      })
+
+      const { searchCCNMembership } = await import('@/lib/ccn/client')
+      await searchCCNMembership('Mark', 'Allen')
+
+      expect(mockFetch).toHaveBeenCalledTimes(1)
+    })
+
+    it('returns not found when surname fallback yields no fuzzy match above threshold', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ count: 0, results: [] }),
+      })
+      // Surname returns an unrelated person — fuzzy score on first name too low.
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          count: 1,
+          results: [
+            {
+              id: 999,
+              full_name: 'Beatrice Magne',
+              registration_category: 'Individual Membership',
+              city: 'Toronto',
+              country: 'Canada',
+            },
+          ],
+        }),
+      })
+
+      const { searchCCNMembership } = await import('@/lib/ccn/client')
+      const result = await searchCCNMembership('Ludovic', 'Magne')
+
+      expect(result).toEqual({ found: false })
+    })
+
+    it('returns not found when the surname search itself returns nothing', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ count: 0, results: [] }),
+      })
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ count: 0, results: [] }),
+      })
+
+      const { searchCCNMembership } = await import('@/lib/ccn/client')
+      const result = await searchCCNMembership('Ludovic', 'Magne')
+
+      expect(result).toEqual({ found: false })
+      expect(mockFetch).toHaveBeenCalledTimes(2)
+    })
+
+    it('returns not found when surname has multiple strong matches (ambiguity guard)', async () => {
+      // Two family members with the same surname both fuzzy-match the
+      // registrant's first name almost identically — refuse to guess between
+      // mother/daughter "Ann Wong" vs "Anne Wong" when registering "Anna Wong".
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ count: 0, results: [] }),
+      })
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          count: 2,
+          results: [
+            {
+              id: 1,
+              full_name: 'Ann Wong',
+              registration_category: 'Individual Membership',
+              city: 'Toronto',
+              country: 'Canada',
+            },
+            {
+              id: 2,
+              full_name: 'Anne Wong',
+              registration_category: 'Individual Membership',
+              city: 'Toronto',
+              country: 'Canada',
+            },
+          ],
+        }),
+      })
+
+      const { searchCCNMembership } = await import('@/lib/ccn/client')
+      const result = await searchCCNMembership('Anna', 'Wong')
+
+      expect(result).toEqual({ found: false })
+    })
+
+    it('picks the non-Trial row when surname fuzzy match returns same person twice', async () => {
+      // CCN sometimes has Trial + upgrade rows for the same person under one
+      // name — Trial-preference dedup should still apply after fuzzy ranking.
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ count: 0, results: [] }),
+      })
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          count: 2,
+          results: [
+            {
+              id: 1,
+              full_name: 'Ludo Magne',
+              registration_category: 'Trial Member',
+              city: 'Toronto',
+              country: 'Canada',
+            },
+            {
+              id: 2,
+              full_name: 'Ludo Magne',
+              registration_category: 'Individual Membership',
+              city: 'Toronto',
+              country: 'Canada',
+            },
+          ],
+        }),
+      })
+
+      const { searchCCNMembership } = await import('@/lib/ccn/client')
+      const result = await searchCCNMembership('Ludovic', 'Magne')
+
+      expect(result).toMatchObject({
+        found: true,
+        membershipId: 2,
+        type: 'Individual Membership',
+      })
+    })
+
+    it('skips the surname fallback when no last name is provided', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ count: 0, results: [] }),
+      })
+
+      const { searchCCNMembership } = await import('@/lib/ccn/client')
+      const result = await searchCCNMembership('Ludovic', '')
+
+      expect(result).toEqual({ found: false })
+      expect(mockFetch).toHaveBeenCalledTimes(1)
+    })
   })
 })

@@ -133,6 +133,18 @@ cf-ray: 9c74628a5bf5dda9-YYZ
 {"count":0,"next":null,"previous":null,"results":[]}%
 ```
 
+## Name mismatches between RO and CCN
+
+CCN's `registration-search` endpoint searches by name only — it does not match against email, even though CCN stores it. When a rider's name on CCN differs from what they enter on RO (e.g. CCN has "Ludo Magne", RO registration is "Ludovic Magne"), the exact-name search returns nothing.
+
+After an exact-name miss, `searchCCNMembership` retries with a surname-only search and ranks the candidates by fuzzy first-name match using `lib/utils/fuzzy-match.ts`. The fuzzy ranker handles:
+
+- Hand-mapped nicknames (Bob/Robert, Mike/Michael — see `NICKNAME_MAP`)
+- Natural-truncation short forms not in the map (Ludo/Ludovic, Sam/Samuel, Tom/Thomas) via a prefix heuristic that requires the shorter name to be ≥3 chars and the longer to be ≥2 chars longer
+- Hyphenated first names, surname prefixes, and minor typos via Levenshtein distance
+
+A surname-fallback match is accepted only if the top candidate scores ≥ 0.85 **and** no other candidate scores within 0.15 of the leader. When two distinct family members both fuzzy-match closely (e.g. mother/daughter "Ann Wong" + "Anne Wong" against "Anna Wong"), the lookup returns `{ found: false }` rather than guess — the admin can resolve the ambiguity by correcting the rider's name to match CCN exactly and re-clicking the "Missing membership" badge.
+
 ## Future improvements
 
 - **CCN polling for new members:** The `ccn_id` column on `rider_memberships` enables detecting new registrations by polling the CCN API and comparing against the highest known `ccn_id`. See `docs/ccn-api-investigation.md` for the polling approach.

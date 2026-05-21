@@ -183,6 +183,38 @@ describe('fuzzyNameScore', () => {
     const score = fuzzyNameScore('Jean', 'Malherbe', 'Jean-Pierre', 'Malherbe')
     expect(score).toBe(1.0)
   })
+
+  describe('prefix-nickname boost (short form is a prefix of the canonical name)', () => {
+    // Many natural short-form nicknames are simply truncations of the canonical
+    // name: Ludo→Ludovic, Sam→Samuel, Tom→Thomas, Dan→Daniel, Toby→Tobias.
+    // When the surname matches and one first name is a clean prefix of the
+    // other, treat as a strong match without requiring an entry in the
+    // hand-maintained NICKNAME_MAP.
+
+    it('treats Ludo as a prefix-nickname of Ludovic when surname matches', () => {
+      const score = fuzzyNameScore('Ludovic', 'Magne', 'Ludo', 'Magne')
+      expect(score).toBe(1.0)
+    })
+
+    it('treats Ludo→Ludovic symmetrically (search Ludo, candidate Ludovic)', () => {
+      const score = fuzzyNameScore('Ludo', 'Magne', 'Ludovic', 'Magne')
+      expect(score).toBe(1.0)
+    })
+
+    it('does not boost when surname differs', () => {
+      // Surname mismatch should keep score modest even if first-name prefix matches.
+      const score = fuzzyNameScore('Ludovic', 'Smith', 'Ludo', 'Jones')
+      expect(score).toBeLessThan(0.8)
+    })
+
+    it('requires a minimum prefix length to avoid spurious matches', () => {
+      // A 2-letter shared prefix is too thin — "Al" prefixing "Alexander" must
+      // not auto-boost via this heuristic. (NICKNAME_MAP handles known cases
+      // like Al→Alexander explicitly.)
+      const score = fuzzyNameScore('Albert', 'Wong', 'Al', 'Wong')
+      expect(score).toBeLessThan(1.0)
+    })
+  })
 })
 
 describe('findFuzzyNameMatches', () => {

@@ -192,6 +192,20 @@ export function getNameVariants(name: string): string[] {
 }
 
 /**
+ * Check whether the shorter of two strings is a clean prefix of the longer.
+ * Used as a heuristic for natural-truncation nicknames (Ludo→Ludovic,
+ * Sam→Samuel, Tom→Thomas). Requires the shorter to be at least 3 chars and
+ * the longer to be at least 2 chars longer, so common-letter coincidences
+ * (Ben/Bent) and very short prefixes (Al/Albert) don't trigger.
+ */
+function isShortFormPrefix(a: string, b: string): boolean {
+  const [shorter, longer] = a.length <= b.length ? [a, b] : [b, a]
+  if (shorter.length < 3) return false
+  if (longer.length - shorter.length < 2) return false
+  return longer.startsWith(shorter)
+}
+
+/**
  * Check if two names are nickname equivalents.
  * Returns true if they're the same name or known nicknames of each other.
  */
@@ -215,6 +229,9 @@ function areNicknameEquivalent(name1: string, name2: string): boolean {
   if (n1Canonical.includes(n2)) return true
   // n2 is a nickname, n1 is the canonical
   if (n2Canonical.includes(n1)) return true
+
+  // Natural-truncation nicknames not in the hand-maintained map.
+  if (isShortFormPrefix(n1, n2)) return true
 
   return false
 }
