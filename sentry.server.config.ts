@@ -19,4 +19,11 @@ Sentry.init({
   // Disable sending user PII (Personally Identifiable Information) to minimize data exposure
   // https://docs.sentry.io/platforms/javascript/guides/nextjs/configuration/options/#sendDefaultPii
   sendDefaultPii: false,
+
+  ignoreErrors: [
+    // Bots/fuzzers requesting URLs with control chars (e.g. /%0A) crash inside
+    // Next.js when it tries to write the slug into the x-next-cache-tags
+    // response header. Framework bug, no user impact.
+    /Invalid character in header content/,
+  ],
 })
