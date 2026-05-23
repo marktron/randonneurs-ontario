@@ -486,6 +486,7 @@ export type EventForCalendar = Pick<
   | 'distance_km'
   | 'event_type'
   | 'description'
+  | 'status'
 >
 
 /**

@@ -126,10 +126,10 @@ export async function GET(request: Request, { params }: RouteParams) {
       const { data: events, error: eventsError } = await getSupabase()
         .from('events')
         .select(
-          'id, slug, name, event_date, start_time, start_location, distance_km, event_type, description'
+          'id, slug, name, event_date, start_time, start_location, distance_km, event_type, description, status'
         )
         .eq('chapter_id', chapterId)
-        .in('status', ['scheduled', 'completed', 'submitted'])
+        .in('status', ['scheduled', 'completed', 'submitted', 'cancelled'])
         .neq('event_type', 'permanent')
         .gte('event_date', today)
         .order('event_date', { ascending: true })
@@ -206,7 +206,9 @@ export async function GET(request: Request, { params }: RouteParams) {
       description: descriptionParts.join('\n'),
       url: `${siteUrl}/event/${event.slug}`,
       categories: [eventType, 'Cycling', 'Randonneuring'],
-      status: 'CONFIRMED' as const,
+      status: (event.status === 'cancelled' ? 'CANCELLED' : 'CONFIRMED') as
+        | 'CANCELLED'
+        | 'CONFIRMED',
       busyStatus: 'BUSY' as const,
       organizer: {
         name: `Randonneurs Ontario - ${chapterInfo.name}`,

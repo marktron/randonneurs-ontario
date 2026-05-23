@@ -121,9 +121,19 @@ vi.mock('ics', () => ({
       // Empty events still produces valid calendar
       return { error: null, value: 'BEGIN:VCALENDAR\nVERSION:2.0\nEND:VCALENDAR' }
     }
+    // Build VEVENT blocks that reflect event attributes (uid, status) so tests can assert on them
+    const vevents = events
+      .map((e: { uid?: string; status?: string }) => {
+        const lines = ['BEGIN:VEVENT']
+        if (e.uid) lines.push(`UID:${e.uid}`)
+        if (e.status) lines.push(`STATUS:${e.status}`)
+        lines.push('END:VEVENT')
+        return lines.join('\r\n')
+      })
+      .join('\r\n')
     return {
       error: null,
-      value: 'BEGIN:VCALENDAR\nVERSION:2.0\nBEGIN:VEVENT\nEND:VEVENT\nEND:VCALENDAR',
+      value: `BEGIN:VCALENDAR\r\nVERSION:2.0\r\n${vevents}\r\nEND:VCALENDAR`,
     }
   }),
 }))
@@ -243,6 +253,34 @@ describe('Calendar API Route', () => {
       const response = await GET(request, { params })
 
       expect(response.status).toBe(200)
+    })
+
+    it('emits STATUS:CANCELLED for cancelled events', async () => {
+      mockModule.__reset()
+      mockModule.__mockChapterFound({ id: 'chapter-1', name: 'Toronto' })
+      mockModule.__mockEventsFound([
+        {
+          id: 'event-cancelled-1',
+          slug: 'spring-200',
+          name: 'Spring 200',
+          event_date: '2030-06-15',
+          start_time: '08:00',
+          start_location: 'City Hall',
+          distance_km: 200,
+          event_type: 'brevet',
+          description: 'Cancelled due to weather.',
+          status: 'cancelled',
+        },
+      ])
+
+      const request = new Request('http://localhost/api/calendar/toronto')
+      const params = Promise.resolve({ chapter: 'toronto' })
+
+      const response = await GET(request, { params })
+
+      const body = await response.text()
+      expect(body).toContain('STATUS:CANCELLED')
+      expect(body).not.toContain('STATUS:CONFIRMED')
     })
   })
 })
