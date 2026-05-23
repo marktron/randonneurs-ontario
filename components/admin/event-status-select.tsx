@@ -87,7 +87,7 @@ export function EventStatusSelect({
 
   const handleConfirmCancel = () => {
     setShowCancelDialog(false)
-    runUpdate('cancelled', { description: draftDescription })
+    runUpdate('cancelled', { description: draftDescription || null })
   }
 
   if (status === 'submitted') {

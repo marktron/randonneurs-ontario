@@ -124,6 +124,31 @@ describe('EventStatusSelect cancel flow', () => {
     })
   })
 
+  it('passes description as null when textarea is cleared', async () => {
+    render(
+      <EventStatusSelect
+        eventId="event-1"
+        initialStatus="scheduled"
+        resultsCount={0}
+        initialDescription="Original description."
+      />
+    )
+
+    const user = await selectCancelled()
+
+    const textarea = await screen.findByRole('textbox')
+    await user.clear(textarea)
+
+    const confirmButton = await screen.findByRole('button', { name: /cancel event/i })
+    await user.click(confirmButton)
+
+    await waitFor(() => {
+      expect(mockUpdateEventStatus).toHaveBeenCalledWith('event-1', 'cancelled', {
+        description: null,
+      })
+    })
+  })
+
   it('does not open the modal when admin selects Completed', async () => {
     render(
       <EventStatusSelect
