@@ -150,6 +150,7 @@ vi.mock('@/lib/errors', () => ({
 // Import after mocks
 import {
   getEventsByChapter,
+  getAllUpcomingEvents,
   getPermanentEvents,
   getEventBySlug,
   getRegisteredRiders,
@@ -308,6 +309,22 @@ describe('getEventsByChapter', () => {
   })
 })
 
+describe('getAllUpcomingEvents', () => {
+  beforeEach(() => {
+    mockModule.__reset()
+    vi.clearAllMocks()
+  })
+
+  it('filters for scheduled and cancelled events', async () => {
+    mockModule.__mockEventsEmpty()
+
+    await getAllUpcomingEvents()
+
+    // Verify query filters include both scheduled and cancelled
+    expect(mockModule.__queryBuilder.in).toHaveBeenCalledWith('status', ['scheduled', 'cancelled'])
+  })
+})
+
 describe('getPermanentEvents', () => {
   beforeEach(() => {
     mockModule.__reset()
@@ -351,6 +368,15 @@ describe('getPermanentEvents', () => {
     await getPermanentEvents()
 
     expect(mockModule.__queryBuilder.eq).toHaveBeenCalledWith('event_type', 'permanent')
+  })
+
+  it('filters for scheduled and cancelled events', async () => {
+    mockModule.__mockEventsEmpty()
+
+    await getPermanentEvents()
+
+    // Verify query filters include both scheduled and cancelled
+    expect(mockModule.__queryBuilder.in).toHaveBeenCalledWith('status', ['scheduled', 'cancelled'])
   })
 })
 

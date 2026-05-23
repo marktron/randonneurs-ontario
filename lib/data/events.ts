@@ -259,7 +259,7 @@ export interface EventDetails {
   description: string | null // Optional markdown event description
   imageUrl: string | null // Optional event image URL
   erwCanonicalUrl: string | null // Epic Ride Weather event page URL
-  status: 'scheduled' | 'cancelled'
+  status: 'scheduled' | 'cancelled' // For cancelled-event UI on /register/[slug]
 }
 
 /**
