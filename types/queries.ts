@@ -312,6 +312,7 @@ export type EventDetailForAdmin = Pick<
   | 'season'
   | 'erw_event_id'
   | 'erw_canonical_url'
+  | 'description'
 > & {
   chapters: Pick<Chapter, 'id' | 'name'> | null
 }

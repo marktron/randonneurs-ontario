@@ -32,6 +32,7 @@ async function getEventDetails(eventId: string): Promise<EventDetailForAdmin | n
       season,
       erw_event_id,
       erw_canonical_url,
+      description,
       chapters (id, name)
     `
     )
@@ -181,6 +182,7 @@ export default async function EventDetailPage({ params, searchParams }: EventPag
             eventId={event.id}
             initialStatus={event.status as EventStatus}
             resultsCount={results.length}
+            initialDescription={event.description ?? null}
           />
           <EventDeleteButton
             eventId={event.id}
