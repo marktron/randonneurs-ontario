@@ -54,13 +54,14 @@ export function EventCard({
   showBorder?: boolean
 }) {
   const { dayOfWeek, shortDayOfWeek, month, monthShort, day } = formatDate(event.date)
+  const isCancelled = event.status === 'cancelled'
 
   return (
     <article
       {...devData('events', event.id)}
       className={`group relative sm:grid sm:grid-cols-[6rem_1fr] sm:gap-10 ${showDate ? 'pt-6 sm:pt-8' : 'pt-8 sm:pt-4'} ${showBorder ? 'border-b border-border/60 pb-6 sm:pb-8' : ''}`}
     >
-      {/* Date block - visible on sm+ */}
+      {/* Date block - visible on sm+ (stays full color even when cancelled) */}
       <div className="hidden sm:block text-center">
         {showDate ? (
           <>
@@ -82,7 +83,7 @@ export function EventCard({
       </div>
 
       {/* Event details */}
-      <div className="min-w-0 flex flex-col justify-center">
+      <div className={`min-w-0 flex flex-col justify-center ${isCancelled ? 'opacity-60' : ''}`}>
         {/* Inline date - mobile only */}
         {showDate && (
           <div className="sm:hidden text-xs font-medium tracking-wide text-muted-foreground mb-2">
@@ -96,17 +97,26 @@ export function EventCard({
         )}
         <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
           <h3 className="font-serif text-xl leading-tight sm:text-2xl">
-            <Link
-              href={`/register/${event.slug}`}
-              className="hover:text-primary transition-colors border-b border-transparent group-hover:border-current/50"
-            >
-              {event.name}
-            </Link>
+            {isCancelled ? (
+              event.name
+            ) : (
+              <Link
+                href={`/register/${event.slug}`}
+                className="hover:text-primary transition-colors border-b border-transparent group-hover:border-current/50"
+              >
+                {event.name}
+              </Link>
+            )}
           </h3>
           <span className="text-sm tabular-nums text-muted-foreground">{event.distance} km</span>
           {event.type === 'Populaire' && (
             <Badge variant="outline" className="text-[10px] tracking-wider font-medium">
               Populaire
+            </Badge>
+          )}
+          {isCancelled && (
+            <Badge variant="destructive" className="text-[10px] tracking-wider font-medium">
+              Cancelled
             </Badge>
           )}
         </div>
@@ -141,9 +151,11 @@ export function EventCard({
               </a>
             </Button>
           )}
-          <Button variant="outline" size="sm" className="text-red-600 hover:text-red-600" asChild>
-            <Link href={`/register/${event.slug}`}>Register</Link>
-          </Button>
+          {!isCancelled && (
+            <Button variant="outline" size="sm" className="text-red-600 hover:text-red-600" asChild>
+              <Link href={`/register/${event.slug}`}>Register</Link>
+            </Button>
+          )}
         </div>
       </div>
     </article>
