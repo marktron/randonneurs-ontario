@@ -57,14 +57,14 @@ export function EventStatusSelect({
   }, [initialStatus])
 
   useEffect(() => {
-    setDraftDescription(initialDescription ?? '')
-  }, [initialDescription])
+    if (!showCancelDialog) {
+      setDraftDescription(initialDescription ?? '')
+    }
+  }, [initialDescription, showCancelDialog])
 
   const runUpdate = (newStatus: EventStatus, options?: { description?: string | null }) => {
     startTransition(async () => {
-      const result = options
-        ? await updateEventStatus(eventId, newStatus, options)
-        : await updateEventStatus(eventId, newStatus)
+      const result = await updateEventStatus(eventId, newStatus, options)
       if (result.success) {
         setStatus(newStatus)
         setShowSaved(true)

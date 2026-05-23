@@ -140,7 +140,7 @@ describe('EventStatusSelect cancel flow', () => {
 
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     await waitFor(() => {
-      expect(mockUpdateEventStatus).toHaveBeenCalledWith('event-1', 'completed')
+      expect(mockUpdateEventStatus).toHaveBeenCalledWith('event-1', 'completed', undefined)
     })
   })
 })
