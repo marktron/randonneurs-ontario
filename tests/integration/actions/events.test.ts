@@ -1045,6 +1045,55 @@ describe('updateEventStatus', () => {
     expect(updateWithDescription).toBeDefined()
   })
 
+  it('does not write description when options omitted', async () => {
+    mockModule.__mockEventFound({
+      id: 'event-1',
+      name: 'Test Event',
+      event_date: '2030-06-15',
+      distance_km: 200,
+      chapter_id: 'chapter-1',
+      event_type: 'brevet',
+      status: 'scheduled',
+      chapters: { name: 'Toronto' },
+    })
+    mockModule.__mockUpdateSuccess() // status update
+    mockModule.__mockEventFound({ slug: 'toronto' }) // revalidation
+
+    const result = await updateEventStatus('event-1', 'scheduled')
+
+    expect(result.success).toBe(true)
+    const eventsUpdateCalls = mockModule.__calls.filter(
+      (c) => c.table === 'events' && c.method === 'update'
+    )
+    expect(eventsUpdateCalls.length).toBeGreaterThan(0)
+    const payload = eventsUpdateCalls[0].args?.[0] as Record<string, unknown>
+    expect('description' in payload).toBe(false)
+  })
+
+  it('writes description as null when explicitly provided', async () => {
+    mockModule.__mockEventFound({
+      id: 'event-1',
+      name: 'Test Event',
+      event_date: '2030-06-15',
+      distance_km: 200,
+      chapter_id: 'chapter-1',
+      event_type: 'brevet',
+      status: 'scheduled',
+      chapters: { name: 'Toronto' },
+    })
+    mockModule.__mockUpdateSuccess()
+    mockModule.__mockEventFound({ slug: 'toronto' })
+
+    const result = await updateEventStatus('event-1', 'scheduled', { description: null })
+
+    expect(result.success).toBe(true)
+    const eventsUpdateCalls = mockModule.__calls.filter(
+      (c) => c.table === 'events' && c.method === 'update'
+    )
+    const payload = eventsUpdateCalls[0].args?.[0] as Record<string, unknown>
+    expect(payload.description).toBeNull()
+  })
+
   it('returns error when result deletion fails during cancellation', async () => {
     // Mock delete to return an error (the first .then() call is the delete operation)
     mockModule.__queryBuilder.then.mockImplementationOnce((resolve) => {
