@@ -155,24 +155,49 @@ export function CalendarGridView({ events }: { events: Event[] }) {
                               >
                                 {date.getDate()}
                               </div>
-                              {dayEvents?.map((event, ei) => (
-                                <Link
-                                  key={ei}
-                                  href={`/register/${event.slug}`}
-                                  aria-label={eventLinkLabel(event, date)}
-                                  className="block mb-1 last:mb-0"
-                                >
-                                  <div className="rounded px-1.5 py-1 text-[11px] leading-tight bg-muted/70 hover:bg-muted transition-colors border border-border/40">
+                              {dayEvents?.map((event, ei) => {
+                                const isCancelled = event.status === 'cancelled'
+                                const chipContent = (
+                                  <div
+                                    className={`rounded px-1.5 py-1 text-[11px] leading-tight border border-border/40 ${
+                                      isCancelled
+                                        ? 'bg-muted/40 opacity-60'
+                                        : 'bg-muted/70 hover:bg-muted transition-colors'
+                                    }`}
+                                  >
                                     <div className="font-medium truncate">
                                       {event.distance} km — {event.name}
+                                      {isCancelled && (
+                                        <span className="ml-1 font-normal text-muted-foreground">
+                                          (cancelled)
+                                        </span>
+                                      )}
                                     </div>
                                     <div className="text-muted-foreground mt-0.5 truncate">
                                       {formatTime(event.startTime)}
                                       {event.chapterName && ` · ${event.chapterName}`}
                                     </div>
                                   </div>
-                                </Link>
-                              ))}
+                                )
+                                return isCancelled ? (
+                                  <div
+                                    key={ei}
+                                    className="block mb-1 last:mb-0"
+                                    aria-label={eventLinkLabel(event, date)}
+                                  >
+                                    {chipContent}
+                                  </div>
+                                ) : (
+                                  <Link
+                                    key={ei}
+                                    href={`/register/${event.slug}`}
+                                    aria-label={eventLinkLabel(event, date)}
+                                    className="block mb-1 last:mb-0"
+                                  >
+                                    {chipContent}
+                                  </Link>
+                                )
+                              })}
                             </>
                           )}
                         </td>
@@ -256,23 +281,44 @@ export function CalendarGridView({ events }: { events: Event[] }) {
                           const dayAbbr = date.toLocaleDateString('en-US', {
                             weekday: 'short',
                           })
-                          return (
-                            <Link
-                              key={`${toDateKey(date)}-${ei}`}
-                              href={`/register/${event.slug}`}
-                              aria-label={eventLinkLabel(event, date)}
-                              className="flex items-center gap-2 text-sm py-1.5 active:bg-muted/50 -mx-1 px-1 rounded"
-                            >
+                          const isCancelled = event.status === 'cancelled'
+                          const rowContent = (
+                            <>
                               <span className="text-xs text-muted-foreground tabular-nums shrink-0 w-10 text-center">
                                 {dayAbbr} {date.getDate()}
                               </span>
-                              <span className="font-medium truncate min-w-0">{event.name}</span>
+                              <span className="font-medium truncate min-w-0">
+                                {event.name}
+                                {isCancelled && (
+                                  <span className="ml-1 font-normal text-muted-foreground">
+                                    (cancelled)
+                                  </span>
+                                )}
+                              </span>
                               <Badge
                                 variant="outline"
                                 className="text-[10px] tracking-wider shrink-0 ml-auto"
                               >
                                 {event.distance} km
                               </Badge>
+                            </>
+                          )
+                          return isCancelled ? (
+                            <div
+                              key={`${toDateKey(date)}-${ei}`}
+                              aria-label={eventLinkLabel(event, date)}
+                              className="flex items-center gap-2 text-sm py-1.5 -mx-1 px-1 rounded opacity-60"
+                            >
+                              {rowContent}
+                            </div>
+                          ) : (
+                            <Link
+                              key={`${toDateKey(date)}-${ei}`}
+                              href={`/register/${event.slug}`}
+                              aria-label={eventLinkLabel(event, date)}
+                              className="flex items-center gap-2 text-sm py-1.5 active:bg-muted/50 -mx-1 px-1 rounded"
+                            >
+                              {rowContent}
                             </Link>
                           )
                         })

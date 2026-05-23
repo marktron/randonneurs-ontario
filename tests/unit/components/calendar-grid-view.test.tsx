@@ -93,3 +93,29 @@ describe('CalendarGridView', () => {
     expect(screen.getAllByText('Sun').length).toBeGreaterThan(0)
   })
 })
+
+describe('cancelled events', () => {
+  it('shows "(cancelled)" suffix on cancelled chips and no link', () => {
+    const events: Event[] = [
+      {
+        slug: 'cancelled-200',
+        date: '2026-04-15',
+        name: 'Cancelled Ride',
+        type: 'Brevet',
+        distance: '200',
+        startLocation: 'City Hall',
+        startTime: '08:00',
+        status: 'cancelled',
+        chapterName: 'Toronto',
+      },
+    ]
+    render(<CalendarGridView events={events} />)
+
+    expect(screen.getAllByText(/cancelled/i).length).toBeGreaterThan(0)
+    // The cancelled chip should not be a registration link
+    const registerLinks = screen
+      .queryAllByRole('link')
+      .filter((el) => el.getAttribute('href')?.includes('/register/cancelled-200'))
+    expect(registerLinks).toHaveLength(0)
+  })
+})
