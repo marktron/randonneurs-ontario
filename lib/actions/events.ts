@@ -385,7 +385,8 @@ export async function deleteEvent(eventId: string): Promise<ActionResult> {
 
 export async function updateEventStatus(
   eventId: string,
-  status: EventStatus
+  status: EventStatus,
+  options?: { description?: string | null }
 ): Promise<ActionResult> {
   try {
     const admin = await requireAdmin()
@@ -420,6 +421,9 @@ export async function updateEventStatus(
     const typedEvent = event as EventWithChapterName & { erw_event_id: string | null }
 
     const updateData: EventUpdate = { status }
+    if (options?.description !== undefined) {
+      updateData.description = options.description
+    }
     const { error } = await getSupabaseAdmin().from('events').update(updateData).eq('id', eventId)
 
     if (error) {

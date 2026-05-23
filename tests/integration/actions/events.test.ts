@@ -1013,6 +1013,38 @@ describe('updateEventStatus', () => {
     expect(mockDeleteErw).toHaveBeenCalledWith('erw-cancel-123')
   })
 
+  it('writes description alongside status when description option is provided', async () => {
+    mockModule.__mockEventFound({
+      id: 'event-1',
+      name: 'Test Event',
+      event_date: '2030-06-15',
+      distance_km: 200,
+      chapter_id: 'chapter-1',
+      event_type: 'brevet',
+      status: 'scheduled',
+      chapters: { name: 'Toronto' },
+    })
+    mockModule.__mockUpdateSuccess() // For deleting results
+    mockModule.__mockUpdateSuccess() // For status update
+    mockModule.__mockEventFound({ slug: 'toronto' }) // For revalidation
+
+    const result = await updateEventStatus('event-1', 'cancelled', {
+      description: 'CANCELLED: weather. Original description follows.\n\nA brevet through Toronto.',
+    })
+
+    expect(result.success).toBe(true)
+
+    // The events update call should have included a description field
+    const eventsUpdateCalls = mockModule.__calls.filter(
+      (c) => c.table === 'events' && c.method === 'update'
+    )
+    const updateWithDescription = eventsUpdateCalls.find((call) => {
+      const payload = call.args?.[0] as { description?: string } | undefined
+      return payload?.description?.startsWith('CANCELLED: weather.')
+    })
+    expect(updateWithDescription).toBeDefined()
+  })
+
   it('returns error when result deletion fails during cancellation', async () => {
     // Mock delete to return an error (the first .then() call is the delete operation)
     mockModule.__queryBuilder.then.mockImplementationOnce((resolve) => {
