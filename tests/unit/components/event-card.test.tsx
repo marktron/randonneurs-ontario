@@ -53,22 +53,11 @@ describe('EventCard', () => {
       expect(screen.getByRole('link', { name: /route/i })).toBeInTheDocument()
     })
 
-    it('applies muted styling to the title', () => {
+    it('applies muted styling to the details column', () => {
       render(<EventCard event={cancelledEvent} />)
       const heading = screen.getByRole('heading', { name: /spring 200/i })
-      // The title sits inside an outer element that carries the opacity utility.
-      // Walk up looking for the muting class — the test should pass for either
-      // direct or ancestor application.
-      let el: HTMLElement | null = heading
-      let foundMuted = false
-      while (el) {
-        if (el.className.includes('opacity-') || el.className.includes('text-muted-foreground')) {
-          foundMuted = true
-          break
-        }
-        el = el.parentElement
-      }
-      expect(foundMuted).toBe(true)
+      const detailsColumn = heading.closest('div.flex.flex-col')
+      expect(detailsColumn?.className).toContain('opacity-60')
     })
 
     it('still shows the rider count as "12 riders"', () => {

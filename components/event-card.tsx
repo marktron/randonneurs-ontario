@@ -139,7 +139,13 @@ export function EventCard({
           )}
         </div>
 
-        <div className="mt-3 md:mt-0 md:absolute md:right-0 md:opacity-0 md:group-hover:opacity-100 md:transition-opacity flex items-center gap-2">
+        <div
+          className={`mt-3 md:mt-0 md:absolute md:right-0 ${
+            isCancelled
+              ? 'md:opacity-100'
+              : 'md:opacity-0 md:group-hover:opacity-100 md:transition-opacity'
+          } flex items-center gap-2`}
+        >
           {event.rwgpsId && (
             <Button variant="outline" size="sm" asChild>
               <a
