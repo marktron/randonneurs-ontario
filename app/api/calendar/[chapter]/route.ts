@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { unstable_cache } from 'next/cache'
-import { createEvents, type EventAttributes } from 'ics'
+import { createEvents, type EventAttributes, type EventStatus } from 'ics'
 import { getSupabase } from '@/lib/supabase'
 import { getDbSlug, getChapterInfo, getAllChapterSlugs } from '@/lib/chapter-config'
 import { formatEventType } from '@/lib/utils'
@@ -206,9 +206,7 @@ export async function GET(request: Request, { params }: RouteParams) {
       description: descriptionParts.join('\n'),
       url: `${siteUrl}/event/${event.slug}`,
       categories: [eventType, 'Cycling', 'Randonneuring'],
-      status: (event.status === 'cancelled' ? 'CANCELLED' : 'CONFIRMED') as
-        | 'CANCELLED'
-        | 'CONFIRMED',
+      status: (event.status === 'cancelled' ? 'CANCELLED' : 'CONFIRMED') satisfies EventStatus,
       busyStatus: 'BUSY' as const,
       organizer: {
         name: `Randonneurs Ontario - ${chapterInfo.name}`,

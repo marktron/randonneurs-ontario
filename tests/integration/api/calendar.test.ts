@@ -194,6 +194,8 @@ describe('Calendar API Route', () => {
 
       expect(response.status).toBe(200)
       expect(response.headers.get('content-type')).toContain('text/calendar')
+      const body = await response.text()
+      expect(body).toContain('STATUS:CONFIRMED')
     })
 
     it('returns empty calendar when no events', async () => {
@@ -256,7 +258,6 @@ describe('Calendar API Route', () => {
     })
 
     it('emits STATUS:CANCELLED for cancelled events', async () => {
-      mockModule.__reset()
       mockModule.__mockChapterFound({ id: 'chapter-1', name: 'Toronto' })
       mockModule.__mockEventsFound([
         {
