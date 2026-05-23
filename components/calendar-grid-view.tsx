@@ -180,11 +180,7 @@ export function CalendarGridView({ events }: { events: Event[] }) {
                                   </div>
                                 )
                                 return isCancelled ? (
-                                  <div
-                                    key={ei}
-                                    className="block mb-1 last:mb-0"
-                                    aria-label={eventLinkLabel(event, date)}
-                                  >
+                                  <div key={ei} className="block mb-1 last:mb-0">
                                     {chipContent}
                                   </div>
                                 ) : (
@@ -258,8 +254,15 @@ export function CalendarGridView({ events }: { events: Event[] }) {
                               {hasEvents && (
                                 <>
                                   <div className="flex gap-0.5" aria-hidden="true">
-                                    {dayEvents.map((_, ei) => (
-                                      <span key={ei} className="w-1 h-1 rounded-full bg-primary" />
+                                    {dayEvents.map((event, ei) => (
+                                      <span
+                                        key={ei}
+                                        className={`w-1 h-1 rounded-full ${
+                                          event.status === 'cancelled'
+                                            ? 'bg-muted-foreground opacity-60'
+                                            : 'bg-primary'
+                                        }`}
+                                      />
                                     ))}
                                   </div>
                                   <span className="sr-only">
@@ -306,7 +309,6 @@ export function CalendarGridView({ events }: { events: Event[] }) {
                           return isCancelled ? (
                             <div
                               key={`${toDateKey(date)}-${ei}`}
-                              aria-label={eventLinkLabel(event, date)}
                               className="flex items-center gap-2 text-sm py-1.5 -mx-1 px-1 rounded opacity-60"
                             >
                               {rowContent}
