@@ -13,6 +13,7 @@ import {
   type RegisteredRider,
 } from '@/lib/data/events'
 import { MapPinIcon, CalendarIcon, CloudSun } from 'lucide-react'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { EventJsonLd } from '@/components/structured-data'
 import { formatRideName } from '@/lib/events/format'
@@ -85,6 +86,7 @@ export default async function RegisterPage({ params }: PageProps) {
     notFound()
   }
 
+  const isCancelled = event.status === 'cancelled'
   const isFleche = event.type === 'Fleche'
   const flecheDisplayName = isFleche
     ? `${new Date(event.date + 'T00:00:00').getFullYear()} Flèche${event.startLocation ? ` – ${event.startLocation}` : ''}`
@@ -106,6 +108,7 @@ export default async function RegisterPage({ params }: PageProps) {
         description={event.description}
         url={`${baseUrl}/register/${slug}`}
         imageUrl={event.imageUrl}
+        status={event.status}
       />
       {/* Hero Section */}
       {event.imageUrl ? (
@@ -205,14 +208,28 @@ export default async function RegisterPage({ params }: PageProps) {
             )}
           </div>
 
+          {isCancelled && (
+            <Alert variant="destructive" className="mt-6">
+              <AlertDescription>
+                This event has been cancelled. See the description below for details.
+              </AlertDescription>
+            </Alert>
+          )}
+
           {/* Mobile Register CTA */}
           <div className="lg:hidden mt-6">
-            <RegisterCTA
-              eventId={event.id}
-              isPermanent={event.type === 'Permanent'}
-              isFleche={isFleche}
-              existingTeams={flecheTeams}
-            />
+            {isCancelled ? (
+              <div className="rounded border border-border/60 bg-muted/30 p-4 text-sm text-muted-foreground">
+                Registration is closed for this event.
+              </div>
+            ) : (
+              <RegisterCTA
+                eventId={event.id}
+                isPermanent={event.type === 'Permanent'}
+                isFleche={isFleche}
+                existingTeams={flecheTeams}
+              />
+            )}
           </div>
         </div>
       </header>
@@ -307,12 +324,18 @@ export default async function RegisterPage({ params }: PageProps) {
 
           {/* Right Column - Registration Form (desktop only) */}
           <div className="hidden lg:block lg:w-[400px] lg:shrink-0">
-            <RegisterCTA
-              eventId={event.id}
-              isPermanent={event.type === 'Permanent'}
-              isFleche={isFleche}
-              existingTeams={flecheTeams}
-            />
+            {isCancelled ? (
+              <div className="rounded border border-border/60 bg-muted/30 p-4 text-sm text-muted-foreground">
+                Registration is closed for this event.
+              </div>
+            ) : (
+              <RegisterCTA
+                eventId={event.id}
+                isPermanent={event.type === 'Permanent'}
+                isFleche={isFleche}
+                existingTeams={flecheTeams}
+              />
+            )}
           </div>
         </div>
       </div>

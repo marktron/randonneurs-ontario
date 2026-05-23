@@ -41,6 +41,7 @@ interface EventJsonLdProps {
   description?: string | null
   url: string
   imageUrl?: string | null
+  status?: 'scheduled' | 'cancelled'
 }
 
 export function EventJsonLd({
@@ -51,6 +52,7 @@ export function EventJsonLd({
   description,
   url,
   imageUrl,
+  status = 'scheduled',
 }: EventJsonLdProps) {
   const data: Record<string, unknown> = {
     '@context': 'https://schema.org',
@@ -65,7 +67,10 @@ export function EventJsonLd({
       url: process.env.NEXT_PUBLIC_SITE_URL ?? 'https://randonneursontario.ca',
     },
     eventAttendanceMode: 'https://schema.org/OfflineEventAttendanceMode',
-    eventStatus: 'https://schema.org/EventScheduled',
+    eventStatus:
+      status === 'cancelled'
+        ? 'https://schema.org/EventCancelled'
+        : 'https://schema.org/EventScheduled',
   }
 
   if (location) {
