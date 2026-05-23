@@ -78,6 +78,14 @@ function createGoogleMapsUrl(location: string): string {
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(location)}`
 }
 
+function RegistrationClosed() {
+  return (
+    <div className="rounded border border-border/60 bg-muted/30 p-4 text-sm text-muted-foreground">
+      Registration is closed for this event.
+    </div>
+  )
+}
+
 export default async function RegisterPage({ params }: PageProps) {
   const { slug } = await params
   const event = await getEventBySlug(slug)
@@ -211,7 +219,8 @@ export default async function RegisterPage({ params }: PageProps) {
           {isCancelled && (
             <Alert variant="destructive" className="mt-6">
               <AlertDescription>
-                This event has been cancelled. See the description below for details.
+                This event has been cancelled.
+                {event.description ? ' See the description below for details.' : ''}
               </AlertDescription>
             </Alert>
           )}
@@ -219,9 +228,7 @@ export default async function RegisterPage({ params }: PageProps) {
           {/* Mobile Register CTA */}
           <div className="lg:hidden mt-6">
             {isCancelled ? (
-              <div className="rounded border border-border/60 bg-muted/30 p-4 text-sm text-muted-foreground">
-                Registration is closed for this event.
-              </div>
+              <RegistrationClosed />
             ) : (
               <RegisterCTA
                 eventId={event.id}
@@ -325,9 +332,7 @@ export default async function RegisterPage({ params }: PageProps) {
           {/* Right Column - Registration Form (desktop only) */}
           <div className="hidden lg:block lg:w-[400px] lg:shrink-0">
             {isCancelled ? (
-              <div className="rounded border border-border/60 bg-muted/30 p-4 text-sm text-muted-foreground">
-                Registration is closed for this event.
-              </div>
+              <RegistrationClosed />
             ) : (
               <RegisterCTA
                 eventId={event.id}
