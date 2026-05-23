@@ -12,6 +12,7 @@ export interface Event {
   distance: string
   startLocation: string
   startTime: string // HH:MM format
+  status: 'scheduled' | 'cancelled' // Drives cancelled-event rendering
   registeredCount?: number // Number of registered riders
   chapterName?: string // Chapter name for all-chapters view
   rwgpsId?: string | null // RideWithGPS route ID for route link

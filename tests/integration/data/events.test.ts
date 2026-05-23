@@ -249,13 +249,13 @@ describe('getEventsByChapter', () => {
     expect(result).toEqual([])
   })
 
-  it('filters for scheduled events only', async () => {
+  it('filters for scheduled and cancelled events', async () => {
     mockModule.__mockEventsEmpty()
 
     await getEventsByChapter('toronto')
 
-    // Verify query filters
-    expect(mockModule.__queryBuilder.eq).toHaveBeenCalledWith('status', 'scheduled')
+    // Verify query filters include both scheduled and cancelled
+    expect(mockModule.__queryBuilder.in).toHaveBeenCalledWith('status', ['scheduled', 'cancelled'])
   })
 
   it('excludes permanent events', async () => {

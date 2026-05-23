@@ -78,7 +78,7 @@ const getEventsByChapterInner = cache(async (urlSlug: string): Promise<Event[]> 
       .select('*, public_registrations(count), chapters!inner(slug), routes(rwgps_id)')
       .eq('chapters.slug', dbSlug)
       .eq('public_registrations.status', 'registered')
-      .eq('status', 'scheduled')
+      .in('status', ['scheduled', 'cancelled'])
       .neq('event_type', 'permanent')
       .neq('event_type', 'fleche')
       .gte('event_date', today)
@@ -88,7 +88,7 @@ const getEventsByChapterInner = cache(async (urlSlug: string): Promise<Event[]> 
       .from('events')
       .select('*, public_registrations(count), routes(rwgps_id)')
       .eq('public_registrations.status', 'registered')
-      .eq('status', 'scheduled')
+      .in('status', ['scheduled', 'cancelled'])
       .eq('event_type', 'fleche')
       .gte('event_date', today),
   ])
@@ -110,6 +110,7 @@ const getEventsByChapterInner = cache(async (urlSlug: string): Promise<Event[]> 
     distance: event.distance_km.toString(),
     startLocation: event.start_location || '',
     startTime: event.start_time || '08:00',
+    status: event.status as 'scheduled' | 'cancelled',
     registeredCount: event.public_registrations?.[0]?.count ?? 0,
     rwgpsId: event.routes?.rwgps_id ?? null,
   })
@@ -156,7 +157,7 @@ const getAllUpcomingEventsInner = cache(async (): Promise<Event[]> => {
     .from('events')
     .select('*, public_registrations(count), chapters!inner(slug, name), routes(rwgps_id)')
     .eq('public_registrations.status', 'registered')
-    .eq('status', 'scheduled')
+    .in('status', ['scheduled', 'cancelled'])
     .neq('event_type', 'permanent')
     .gte('event_date', today)
     .order('event_date', { ascending: true })
@@ -175,6 +176,7 @@ const getAllUpcomingEventsInner = cache(async (): Promise<Event[]> => {
     distance: event.distance_km.toString(),
     startLocation: event.start_location || '',
     startTime: event.start_time || '08:00',
+    status: event.status as 'scheduled' | 'cancelled',
     registeredCount: event.public_registrations?.[0]?.count ?? 0,
     chapterName: event.chapters?.name || '',
     rwgpsId: event.routes?.rwgps_id ?? null,
@@ -201,7 +203,7 @@ const getPermanentEventsInner = cache(async (): Promise<Event[]> => {
     .select('*, public_registrations(count), routes(rwgps_id)')
     .eq('public_registrations.status', 'registered')
     .eq('event_type', 'permanent')
-    .eq('status', 'scheduled')
+    .in('status', ['scheduled', 'cancelled'])
     .gte('event_date', today)
     .order('event_date', { ascending: true })
     .order('distance_km', { ascending: false })
@@ -220,6 +222,7 @@ const getPermanentEventsInner = cache(async (): Promise<Event[]> => {
     distance: event.distance_km.toString(),
     startLocation: event.start_location || '',
     startTime: event.start_time || '08:00',
+    status: event.status as 'scheduled' | 'cancelled',
     registeredCount: event.public_registrations?.[0]?.count ?? 0,
     rwgpsId: event.routes?.rwgps_id ?? null,
   }))
@@ -256,6 +259,7 @@ export interface EventDetails {
   description: string | null // Optional markdown event description
   imageUrl: string | null // Optional event image URL
   erwCanonicalUrl: string | null // Epic Ride Weather event page URL
+  status: 'scheduled' | 'cancelled'
 }
 
 /**
@@ -477,6 +481,7 @@ const getEventBySlugInner = cache(async (slug: string): Promise<EventDetails | n
       description,
       image_url,
       erw_canonical_url,
+      status,
       chapters (name, slug),
       routes (slug, rwgps_id, cue_sheet_url)
     `
@@ -512,6 +517,9 @@ const getEventBySlugInner = cache(async (slug: string): Promise<EventDetails | n
     description: typedEvent.description || null,
     imageUrl: typedEvent.image_url || null,
     erwCanonicalUrl: typedEvent.erw_canonical_url || null,
+    status: (typedEvent.status === 'cancelled' ? 'cancelled' : 'scheduled') as
+      | 'scheduled'
+      | 'cancelled',
   }
 })
 

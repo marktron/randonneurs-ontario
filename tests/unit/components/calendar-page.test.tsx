@@ -51,6 +51,7 @@ const sampleEvents: Event[] = [
     distance: '100',
     startLocation: 'City Hall',
     startTime: '08:00',
+    status: 'scheduled',
     chapterName: 'Toronto',
   },
   {
@@ -61,6 +62,7 @@ const sampleEvents: Event[] = [
     distance: '200',
     startLocation: 'Park',
     startTime: '07:00',
+    status: 'scheduled',
     chapterName: 'Ottawa',
   },
   {
@@ -71,6 +73,7 @@ const sampleEvents: Event[] = [
     distance: '300',
     startLocation: 'Library',
     startTime: '06:00',
+    status: 'scheduled',
     chapterName: 'Huron',
   },
   {
@@ -81,6 +84,7 @@ const sampleEvents: Event[] = [
     distance: '600',
     startLocation: 'Arena',
     startTime: '05:00',
+    status: 'scheduled',
     chapterName: 'Toronto',
   },
 ]

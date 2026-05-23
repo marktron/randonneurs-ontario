@@ -11,6 +11,7 @@ function makeEvent(date: string, name: string): Event {
     distance: '200',
     startLocation: '',
     startTime: '08:00',
+    status: 'scheduled',
   }
 }
 
