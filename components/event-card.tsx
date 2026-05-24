@@ -97,16 +97,12 @@ export function EventCard({
         )}
         <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
           <h3 className="font-serif text-xl leading-tight sm:text-2xl">
-            {isCancelled ? (
-              event.name
-            ) : (
-              <Link
-                href={`/register/${event.slug}`}
-                className="hover:text-primary transition-colors border-b border-transparent group-hover:border-current/50"
-              >
-                {event.name}
-              </Link>
-            )}
+            <Link
+              href={`/register/${event.slug}`}
+              className="hover:text-primary transition-colors border-b border-transparent group-hover:border-current/50"
+            >
+              {event.name}
+            </Link>
           </h3>
           <span className="text-sm tabular-nums text-muted-foreground">{event.distance} km</span>
           {event.type === 'Populaire' && (

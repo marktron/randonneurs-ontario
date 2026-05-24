@@ -64,5 +64,11 @@ describe('EventCard', () => {
       render(<EventCard event={cancelledEvent} />)
       expect(screen.getByText(/12 riders/)).toBeInTheDocument()
     })
+
+    it('title links to the event page on cancelled events so visitors can read the announcement', () => {
+      render(<EventCard event={cancelledEvent} />)
+      const titleLink = screen.getByRole('link', { name: /spring 200/i })
+      expect(titleLink).toHaveAttribute('href', '/register/spring-200')
+    })
   })
 })

@@ -95,7 +95,7 @@ describe('CalendarGridView', () => {
 })
 
 describe('cancelled events', () => {
-  it('shows "(cancelled)" suffix on cancelled chips and no link', () => {
+  it('renders a navigation link for cancelled events so visitors can read the announcement', () => {
     const events: Event[] = [
       {
         slug: 'spring-200-cancelled-fixture',
@@ -112,10 +112,9 @@ describe('cancelled events', () => {
     render(<CalendarGridView events={events} />)
 
     expect(screen.getAllByText('(cancelled)').length).toBeGreaterThan(0)
-    // The cancelled chip should not be a registration link
-    const registerLinks = screen
+    const navLinks = screen
       .queryAllByRole('link')
       .filter((el) => el.getAttribute('href')?.includes('/register/spring-200-cancelled-fixture'))
-    expect(registerLinks).toHaveLength(0)
+    expect(navLinks.length).toBeGreaterThan(0)
   })
 })
