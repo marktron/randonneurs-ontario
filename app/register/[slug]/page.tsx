@@ -12,8 +12,8 @@ import {
   getRegisteredRidersWithTeams,
   type RegisteredRider,
 } from '@/lib/data/events'
-import { MapPinIcon, CalendarIcon, CloudSun } from 'lucide-react'
-import { Alert, AlertDescription } from '@/components/ui/alert'
+import { MapPinIcon, CalendarIcon, CloudSun, AlertTriangle } from 'lucide-react'
+import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { EventJsonLd } from '@/components/structured-data'
 import { formatRideName } from '@/lib/events/format'
@@ -217,11 +217,17 @@ export default async function RegisterPage({ params }: PageProps) {
           </div>
 
           {isCancelled && (
-            <Alert variant="destructive" className="mt-6">
-              <AlertDescription>
-                This event has been cancelled.
-                {event.description ? ' See the description below for details.' : ''}
-              </AlertDescription>
+            <Alert
+              variant="destructive"
+              className="mt-6 border-destructive/40 bg-destructive/10 py-4"
+            >
+              <AlertTriangle className="size-5" />
+              <AlertTitle className="text-base font-semibold">
+                This event has been cancelled
+              </AlertTitle>
+              {event.description && (
+                <AlertDescription>See the description below for details.</AlertDescription>
+              )}
             </Alert>
           )}
 

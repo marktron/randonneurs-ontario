@@ -94,6 +94,8 @@ describe('RegisterPage /register/[slug] — cancelled event', () => {
     render(Page)
 
     expect(screen.getByText(/this event has been cancelled/i)).toBeInTheDocument()
+    // The destructive alert role makes the banner discoverable
+    expect(screen.getByRole('alert')).toBeInTheDocument()
     expect(screen.queryByTestId('register-cta')).not.toBeInTheDocument()
     expect(screen.getByTestId('markdown-content')).toHaveTextContent(/CANCELLED: weather forecast/)
   })
