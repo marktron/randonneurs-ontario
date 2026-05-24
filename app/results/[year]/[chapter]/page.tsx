@@ -1,11 +1,11 @@
-import { notFound } from "next/navigation"
-import { ResultsPage } from "@/components/results-page"
+import { notFound } from 'next/navigation'
+import { ResultsPage } from '@/components/results-page'
 import {
   getChapterResults,
   getChapterMeta,
   getAvailableYears,
   getAllChaptersWithYears,
-} from "@/lib/data/results"
+} from '@/lib/data/results'
 
 // Revalidate every hour - results don't change frequently
 export const revalidate = 3600
@@ -35,7 +35,7 @@ export async function generateMetadata({ params }: ResultsPageParams) {
   const meta = getChapterMeta(chapter)
 
   if (!meta) {
-    return { title: "Results" }
+    return { title: 'Results' }
   }
 
   return {
@@ -46,6 +46,9 @@ export async function generateMetadata({ params }: ResultsPageParams) {
 
 export default async function ChapterResultsPage({ params }: ResultsPageParams) {
   const { year, chapter } = await params
+  if (!/^\d{4}$/.test(year)) {
+    notFound()
+  }
   const yearNum = parseInt(year, 10)
 
   const meta = getChapterMeta(chapter)

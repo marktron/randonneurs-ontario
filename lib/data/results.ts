@@ -153,6 +153,7 @@ export async function getAvailableYears(urlSlug: string): Promise<number[]> {
 const getChapterResultsInner = cache(
   async (urlSlug: string, year: number): Promise<EventResult[]> => {
     if (!getResultsChapterInfo(urlSlug)) return []
+    if (!Number.isInteger(year)) return []
     const dbSlug = getDbSlug(urlSlug)
 
     let events: EventWithPublicResults[] | null = null

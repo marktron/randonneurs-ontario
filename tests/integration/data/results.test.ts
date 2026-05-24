@@ -230,6 +230,17 @@ describe('getChapterResults', () => {
     expect(result).toEqual([])
   })
 
+  it('returns empty array for non-finite year without querying the database', async () => {
+    // Regression: Sentry JAVASCRIPT-NEXTJS-25 — a bot hit /results/[year]/fleche,
+    // parseInt("[year]") returned NaN, and `${NaN}-01-01` reached Postgres as an
+    // invalid date literal. Guard at the data layer so callers can't trip the SQL.
+    const result = await getChapterResults('fleche', Number.NaN)
+
+    expect(result).toEqual([])
+    expect(mockModule.__queryBuilder.gte).not.toHaveBeenCalled()
+    expect(mockModule.__queryBuilder.lte).not.toHaveBeenCalled()
+  })
+
   // Note: Full result transformation test requires multiple query mocking (events + awards).
   // This is complex to set up reliably. Full transformation is covered by E2E tests.
 
