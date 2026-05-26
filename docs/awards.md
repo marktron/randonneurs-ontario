@@ -199,3 +199,43 @@ To assign an existing award to a rider:
     exist; if it doesn't, create it from the event admin page first.
   - **Season-scoped**: pick a rider, the season (year), and an optional note.
 - The page is assign-only. Mistakes are corrected directly in the database.
+
+## Automatically Assigned Awards
+
+### First Brevet
+
+First Brevet is assigned automatically by a database trigger. There is no admin
+action required — it follows the rider's results.
+
+**Rule.** A rider gets First Brevet on their **earliest finished `brevet` result**.
+Populaires, flèches, and permanents never trigger the award.
+
+**Mechanics.** `trg_results_first_brevet` (defined in
+`supabase/migrations/20260526120000_auto_assign_first_brevet.sql`) fires on every
+INSERT, DELETE, and status/event_id/rider_id UPDATE on `results`. It calls
+`reconcile_first_brevet_for_rider(rider_id)`, which:
+
+1. Finds the rider's earliest finished `brevet` result (ties broken by `results.id`).
+2. Deletes any First Brevet rows on the wrong result for that rider.
+3. Inserts a First Brevet row on the correct result.
+4. If the rider has no qualifying result, removes any stale First Brevet rows.
+
+A second trigger (`trg_result_awards_unique_first_brevet`, BEFORE INSERT on
+`result_awards`) rejects manual duplicates — a rider can only ever hold one
+First Brevet row.
+
+**Out-of-order data.** If a rider's 2025 brevet is entered first and then their
+2020 brevet is added later, the award automatically moves to the 2020 result.
+
+**Status changes.** Flipping the awarded result from `finished` to `dnf` moves the
+award to the next-earliest finished brevet, if any.
+
+**Rider merges.** When two riders are merged via `mergeRiders`, the source
+rider's results have their `rider_id` updated to the target. The trigger
+reconciles both riders — the source ends up with no award, and the target keeps
+exactly one award, on whichever finished brevet (across both riders' history)
+is earliest.
+
+**Manual overrides.** The admin assign form at `/admin/awards` still accepts First
+Brevet, but the trigger will reconcile any out-of-spec assignments the next time
+that rider's results change.
