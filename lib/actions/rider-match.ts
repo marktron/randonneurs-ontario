@@ -11,7 +11,7 @@
 
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { findFuzzyNameMatches, getNameVariants } from '@/lib/utils/fuzzy-match'
-import { logError } from '@/lib/errors'
+import { handleDataError } from '@/lib/errors'
 
 export interface RiderMatchCandidate {
   id: string
@@ -100,8 +100,9 @@ export async function searchRiderCandidates(
     .limit(100)
 
   if (error) {
-    logError(error, { operation: 'searchRiderCandidates' })
-    return { candidates: [] }
+    // Graceful degradation: a search failure should never block registration,
+    // so we log to Sentry and fall back to "no matches".
+    return handleDataError(error, { operation: 'searchRiderCandidates' }, { candidates: [] })
   }
 
   if (!riders || riders.length === 0) {

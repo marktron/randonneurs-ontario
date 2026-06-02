@@ -408,22 +408,36 @@ describe('completeRegistrationWithRider (real DB)', () => {
     assertEmailPayload(sendEmail, { membershipStatus: 'trial-used' })
   })
 
-  it('CCN error — throws unhandled rejection', async () => {
+  it('CCN API throws — returns Registration failed, no registration created', async () => {
     searchCCNMembership.mockRejectedValue(new Error('CCN API error: 500'))
 
     const { completeRegistrationWithRider } = await import('@/lib/actions/register')
 
-    await expect(
-      completeRegistrationWithRider(
-        buildCompleteRegistrationData({
-          eventId: IDS.scheduledEvent,
-          selectedRiderId: IDS.rider,
-          email: 'completer@example.com',
-          firstName: 'Existing',
-          lastName: 'Rider',
-        })
-      )
-    ).rejects.toThrow('CCN API error')
+    const result = await completeRegistrationWithRider(
+      buildCompleteRegistrationData({
+        eventId: IDS.scheduledEvent,
+        selectedRiderId: IDS.rider,
+        email: 'completer@example.com',
+        firstName: 'Existing',
+        lastName: 'Rider',
+      })
+    )
+
+    // The boundary catches the helper/membership throw and returns an
+    // ActionResult instead of leaking an unhandled rejection to the client.
+    expect(result.success).toBe(false)
+    expect(result.error).toBe('Registration failed')
+
+    // No registration should exist
+    const { data: regs } = await supabase
+      .from('registrations')
+      .select('id')
+      .eq('event_id', IDS.scheduledEvent)
+      .eq('rider_id', IDS.rider)
+    expect(regs).toEqual([])
+
+    // No email sent
+    expect(sendEmail).not.toHaveBeenCalled()
   })
 
   // --- Validation ---

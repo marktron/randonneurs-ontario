@@ -4,8 +4,9 @@ import { revalidatePath, revalidateTag } from 'next/cache'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { createTorontoDate } from '@/lib/brmTimes'
 import { sendCancellationConfirmationEmail } from '@/lib/email/send-registration-email'
-import { logError } from '@/lib/errors'
+import { createActionResult, handleActionError, handleSupabaseError, logError } from '@/lib/errors'
 import { parseISO } from 'date-fns'
+import type { ActionResult } from '@/types/actions'
 import type { ResultInsert } from '@/types/queries'
 
 // ============================================================================
@@ -139,105 +140,115 @@ export async function getRegistrationByToken(
 // Cancel Registration
 // ============================================================================
 
-export async function cancelRegistration(
-  token: string
-): Promise<{ success: boolean; error?: string }> {
-  const supabase = getSupabaseAdmin()
+export async function cancelRegistration(token: string): Promise<ActionResult> {
+  try {
+    const supabase = getSupabaseAdmin()
 
-  // Fetch registration with event status
-  const { data: registration, error: fetchError } = await supabase
-    .from('registrations')
-    .select(
+    // Fetch registration with event status
+    const { data: registration, error: fetchError } = await supabase
+      .from('registrations')
+      .select(
+        `
+        id, status, rider_id, event_id,
+        events!inner (id, slug, status, name, event_date, start_time, distance_km, event_type,
+          chapters (name, slug)),
+        riders!inner (first_name, last_name, email)
       `
-      id, status, rider_id, event_id,
-      events!inner (id, slug, status, name, event_date, start_time, distance_km, event_type,
-        chapters (name, slug)),
-      riders!inner (first_name, last_name, email)
-    `
-    )
-    .eq('management_token', token)
-    .single()
+      )
+      .eq('management_token', token)
+      .single()
 
-  if (fetchError || !registration) {
-    return { success: false, error: 'Registration not found' }
-  }
+    // Expected "not found" for an invalid/expired token — not logged to Sentry.
+    if (fetchError || !registration) {
+      return { success: false, error: 'Registration not found' }
+    }
 
-  const reg = registration as {
-    id: string
-    status: string | null
-    rider_id: string
-    event_id: string
-    events: {
+    const reg = registration as {
       id: string
-      slug: string
       status: string | null
-      name: string
-      event_date: string
-      start_time: string | null
-      distance_km: number
-      event_type: string | null
-      chapters: { name: string; slug: string } | null
+      rider_id: string
+      event_id: string
+      events: {
+        id: string
+        slug: string
+        status: string | null
+        name: string
+        event_date: string
+        start_time: string | null
+        distance_km: number
+        event_type: string | null
+        chapters: { name: string; slug: string } | null
+      }
+      riders: {
+        first_name: string
+        last_name: string
+        email: string | null
+      }
     }
-    riders: {
-      first_name: string
-      last_name: string
-      email: string | null
+
+    // Verify registration can be cancelled
+    if (reg.status !== 'registered' && reg.status !== 'incomplete: membership') {
+      return { success: false, error: 'This registration has already been cancelled' }
     }
-  }
 
-  // Verify registration can be cancelled
-  if (reg.status !== 'registered' && reg.status !== 'incomplete: membership') {
-    return { success: false, error: 'This registration has already been cancelled' }
-  }
+    // Verify event is still scheduled
+    if (reg.events.status !== 'scheduled') {
+      return { success: false, error: 'This event is no longer open for changes' }
+    }
 
-  // Verify event is still scheduled
-  if (reg.events.status !== 'scheduled') {
-    return { success: false, error: 'This event is no longer open for changes' }
-  }
-
-  // Update registration status (preserve management_token so manage page stays accessible)
-  const { error: updateError } = await supabase
-    .from('registrations')
-    .update({
-      status: 'cancelled',
-      cancelled_at: new Date().toISOString(),
-    })
-    .eq('id', reg.id)
-
-  if (updateError) {
-    logError(updateError, { operation: 'cancelRegistration' })
-    return { success: false, error: 'Failed to cancel registration' }
-  }
-
-  // Send cancellation email (fire-and-forget)
-  if (reg.riders.email) {
-    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://randonneursontario.ca'
-    const riderName = `${reg.riders.first_name} ${reg.riders.last_name}`
-    sendCancellationConfirmationEmail({
-      registrantName: riderName,
-      registrantEmail: reg.riders.email,
-      eventName: reg.events.name,
-      eventDate: reg.events.event_date,
-      eventDistance: reg.events.distance_km,
-      eventType: reg.events.event_type || 'brevet',
-      chapterName: reg.events.chapters?.name || '',
-      chapterSlug: reg.events.chapters?.slug || '',
-      registerUrl: `${baseUrl}/register/${reg.events.slug}`,
-    }).catch((error) => {
-      logError(error, {
-        operation: 'cancelRegistration.sendEmail',
-        context: { registrationId: reg.id },
+    // Update registration status (preserve management_token so manage page stays accessible)
+    const { error: updateError } = await supabase
+      .from('registrations')
+      .update({
+        status: 'cancelled',
+        cancelled_at: new Date().toISOString(),
       })
-    })
+      .eq('id', reg.id)
+
+    if (updateError) {
+      return handleSupabaseError(
+        updateError,
+        { operation: 'cancelRegistration', context: { registrationId: reg.id } },
+        'Failed to cancel registration'
+      )
+    }
+
+    // Send cancellation email (fire-and-forget)
+    if (reg.riders.email) {
+      const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://randonneursontario.ca'
+      const riderName = `${reg.riders.first_name} ${reg.riders.last_name}`
+      sendCancellationConfirmationEmail({
+        registrantName: riderName,
+        registrantEmail: reg.riders.email,
+        eventName: reg.events.name,
+        eventDate: reg.events.event_date,
+        eventDistance: reg.events.distance_km,
+        eventType: reg.events.event_type || 'brevet',
+        chapterName: reg.events.chapters?.name || '',
+        chapterSlug: reg.events.chapters?.slug || '',
+        registerUrl: `${baseUrl}/register/${reg.events.slug}`,
+      }).catch((error) => {
+        logError(error, {
+          operation: 'cancelRegistration.sendEmail',
+          context: { registrationId: reg.id },
+        })
+      })
+    }
+
+    // Revalidate caches
+    revalidateTag('registrations', { expire: 0 })
+    revalidateTag('events', { expire: 0 })
+    revalidateTag(`event-${reg.events.slug}`, { expire: 0 })
+    revalidatePath(`/register/${reg.events.slug}`)
+
+    return createActionResult()
+  } catch (error) {
+    return handleActionError(
+      error,
+      { operation: 'cancelRegistration' },
+      'Failed to cancel registration'
+    )
   }
-
-  // Revalidate caches
-  revalidateTag('registrations', { expire: 0 })
-  revalidateTag('events', { expire: 0 })
-  revalidateTag(`event-${reg.events.slug}`, { expire: 0 })
-  revalidatePath(`/register/${reg.events.slug}`)
-
-  return { success: true }
 }
 
 // ============================================================================
@@ -246,92 +257,100 @@ export async function cancelRegistration(
 
 export async function createEarlyResult(
   token: string
-): Promise<{ success: boolean; error?: string; submissionToken?: string }> {
-  const supabase = getSupabaseAdmin()
+): Promise<ActionResult & { submissionToken?: string }> {
+  try {
+    const supabase = getSupabaseAdmin()
 
-  // Look up registration by management_token
-  const { data: registration, error: fetchError } = await supabase
-    .from('registrations')
-    .select(
+    // Look up registration by management_token
+    const { data: registration, error: fetchError } = await supabase
+      .from('registrations')
+      .select(
+        `
+        id, status, rider_id, event_id, management_token,
+        events!inner (id, event_date, start_time, distance_km, status)
       `
-      id, status, rider_id, event_id, management_token,
-      events!inner (id, event_date, start_time, distance_km, status)
-    `
-    )
-    .eq('management_token', token)
-    .single()
+      )
+      .eq('management_token', token)
+      .single()
 
-  if (fetchError || !registration) {
-    return { success: false, error: 'Registration not found' }
-  }
-
-  const reg = registration as {
-    id: string
-    status: string | null
-    rider_id: string
-    event_id: string
-    management_token: string
-    events: {
-      id: string
-      event_date: string
-      start_time: string | null
-      distance_km: number
-      status: string | null
+    // Expected "not found" for an invalid/expired token — not logged to Sentry.
+    if (fetchError || !registration) {
+      return { success: false, error: 'Registration not found' }
     }
+
+    const reg = registration as {
+      id: string
+      status: string | null
+      rider_id: string
+      event_id: string
+      management_token: string
+      events: {
+        id: string
+        event_date: string
+        start_time: string | null
+        distance_km: number
+        status: string | null
+      }
+    }
+
+    // Check for existing result — idempotent
+    const { data: existingResult } = await supabase
+      .from('results')
+      .select('submission_token')
+      .eq('event_id', reg.event_id)
+      .eq('rider_id', reg.rider_id)
+      .single()
+
+    if (existingResult) {
+      const typed = existingResult as { submission_token: string | null }
+      return { ...createActionResult(), submissionToken: typed.submission_token || undefined }
+    }
+
+    // Verify event start time has passed
+    const eventDate = parseISO(reg.events.event_date)
+    const [hours, minutes] = (reg.events.start_time || '0:00').split(':').map(Number)
+    const eventStart = createTorontoDate(
+      eventDate.getFullYear(),
+      eventDate.getMonth(),
+      eventDate.getDate(),
+      hours,
+      minutes
+    )
+
+    if (new Date() < eventStart) {
+      return { success: false, error: 'Results can only be submitted after the event has started' }
+    }
+
+    // Verify registration is valid
+    if (reg.status !== 'registered') {
+      return { success: false, error: 'Only active registrations can submit results' }
+    }
+
+    // Calculate season from event date
+    const eventYear = parseInt(reg.events.event_date.split('-')[0])
+
+    // Create pending result with submission_token = management_token (shared value)
+    const insertData: ResultInsert = {
+      event_id: reg.event_id,
+      rider_id: reg.rider_id,
+      status: 'pending',
+      season: eventYear,
+      distance_km: reg.events.distance_km,
+      submission_token: reg.management_token,
+    }
+
+    const { error: createError } = await supabase.from('results').insert(insertData)
+
+    if (createError) {
+      return handleSupabaseError(
+        createError,
+        { operation: 'createEarlyResult', context: { registrationId: reg.id } },
+        'Failed to create result'
+      )
+    }
+
+    return { ...createActionResult(), submissionToken: reg.management_token }
+  } catch (error) {
+    return handleActionError(error, { operation: 'createEarlyResult' }, 'Failed to create result')
   }
-
-  // Check for existing result — idempotent
-  const { data: existingResult } = await supabase
-    .from('results')
-    .select('submission_token')
-    .eq('event_id', reg.event_id)
-    .eq('rider_id', reg.rider_id)
-    .single()
-
-  if (existingResult) {
-    const typed = existingResult as { submission_token: string | null }
-    return { success: true, submissionToken: typed.submission_token || undefined }
-  }
-
-  // Verify event start time has passed
-  const eventDate = parseISO(reg.events.event_date)
-  const [hours, minutes] = (reg.events.start_time || '0:00').split(':').map(Number)
-  const eventStart = createTorontoDate(
-    eventDate.getFullYear(),
-    eventDate.getMonth(),
-    eventDate.getDate(),
-    hours,
-    minutes
-  )
-
-  if (new Date() < eventStart) {
-    return { success: false, error: 'Results can only be submitted after the event has started' }
-  }
-
-  // Verify registration is valid
-  if (reg.status !== 'registered') {
-    return { success: false, error: 'Only active registrations can submit results' }
-  }
-
-  // Calculate season from event date
-  const eventYear = parseInt(reg.events.event_date.split('-')[0])
-
-  // Create pending result with submission_token = management_token (shared value)
-  const insertData: ResultInsert = {
-    event_id: reg.event_id,
-    rider_id: reg.rider_id,
-    status: 'pending',
-    season: eventYear,
-    distance_km: reg.events.distance_km,
-    submission_token: reg.management_token,
-  }
-
-  const { error: createError } = await supabase.from('results').insert(insertData)
-
-  if (createError) {
-    logError(createError, { operation: 'createEarlyResult' })
-    return { success: false, error: 'Failed to create result' }
-  }
-
-  return { success: true, submissionToken: reg.management_token }
 }
