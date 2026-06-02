@@ -145,10 +145,20 @@ async function insertNewRider(
       continue
     }
 
-    throw new Error(error?.message || 'Failed to create rider profile')
+    // Log the full Supabase error (code/details) to Sentry before throwing a
+    // clean Error; the server-action boundary converts the throw to ActionResult.
+    logError(error, {
+      operation: 'insertNewRider',
+      context: { slug, supabaseCode: error?.code },
+    })
+    throw new Error('Failed to create rider profile')
   }
 
-  throw new Error(lastError?.message || 'Failed to create rider profile after 5 attempts')
+  logError(lastError, {
+    operation: 'insertNewRider',
+    context: { baseSlug, attempts: 5 },
+  })
+  throw new Error('Failed to create rider profile after 5 attempts')
 }
 
 /**
@@ -297,21 +307,18 @@ async function findOrCreateRider(
     }
   }
 
-  // No matches found - create new rider
-  try {
-    const newRider = await insertNewRider({
-      first_name: trimmedFirstName,
-      last_name: trimmedLastName,
-      email: normalizedEmail,
-      gender: parsedGender,
-      emergency_contact_name: emergencyContactName || null,
-      emergency_contact_phone: emergencyContactPhone || null,
-    })
-    return { success: true, riderId: newRider.id }
-  } catch (error) {
-    console.error('🚨 Error creating rider:', error)
-    throw new Error('Failed to create rider profile')
-  }
+  // No matches found - create new rider. insertNewRider logs and throws on
+  // failure; the throw propagates to the server-action boundary, which
+  // converts it to an ActionResult via handleActionError.
+  const newRider = await insertNewRider({
+    first_name: trimmedFirstName,
+    last_name: trimmedLastName,
+    email: normalizedEmail,
+    gender: parsedGender,
+    emergency_contact_name: emergencyContactName || null,
+    emergency_contact_phone: emergencyContactPhone || null,
+  })
+  return { success: true, riderId: newRider.id }
 }
 
 /**
@@ -357,7 +364,10 @@ async function createRegistrationRecord(
 
   // If the error is NOT a unique violation, it's a real failure
   if (insertError.code !== '23505') {
-    console.error('🚨 Error creating registration:', insertError)
+    logError(insertError, {
+      operation: 'createRegistrationRecord.insert',
+      context: { eventId, riderId, supabaseCode: insertError.code },
+    })
     throw new Error('Failed to complete registration')
   }
 
@@ -382,7 +392,10 @@ async function createRegistrationRecord(
       .maybeSingle()
 
     if (updateError) {
-      console.error('🚨 Error updating registration:', updateError)
+      logError(updateError, {
+        operation: 'createRegistrationRecord.update',
+        context: { eventId, riderId, revivableStatus, supabaseCode: updateError.code },
+      })
       throw new Error('Failed to complete registration')
     }
 
@@ -882,8 +895,11 @@ export async function registerForPermanent(
       .single()
 
     if (eventError || !newEvent) {
-      console.error('Error creating permanent event:', eventError)
-      return { success: false, error: 'Failed to create permanent ride event' }
+      return handleSupabaseError(
+        eventError,
+        { operation: 'registerForPermanent.createEvent', context: { routeId, eventSlug } },
+        'Failed to create permanent ride event'
+      )
     }
 
     const typedNewEvent = newEvent as EventIdOnly
@@ -1172,160 +1188,119 @@ export async function completeRegistrationWithRider(
   }
   const normalizedPhone = phoneResult.formatted
 
-  // Check if event exists and is scheduled
-  const { data: eventData, error: eventError } = await getSupabaseAdmin()
-    .from('events')
-    .select(
+  // All DB work is wrapped so any helper throw (insertNewRider,
+  // createRegistrationRecord) becomes a clean ActionResult with Sentry logging,
+  // matching registerForEvent / registerForPermanent.
+  try {
+    // Check if event exists and is scheduled
+    const { data: eventData, error: eventError } = await getSupabaseAdmin()
+      .from('events')
+      .select(
+        `
+        id, slug, status, name, event_date, start_time,
+        start_location, distance_km, event_type, chapter_id,
+        chapters (slug, name),
+        routes (slug, rwgps_id)
       `
-      id, slug, status, name, event_date, start_time,
-      start_location, distance_km, event_type, chapter_id,
-      chapters (slug, name),
-      routes (slug, rwgps_id)
-    `
-    )
-    .eq('id', eventId)
-    .single()
-
-  if (eventError || !eventData) {
-    return { success: false, error: 'Event not found' }
-  }
-
-  const event = eventData as EventWithRelations
-
-  if (event.status !== 'scheduled') {
-    return { success: false, error: 'Registration is not open for this event' }
-  }
-
-  let riderId: string
-
-  if (selectedRiderId) {
-    // User selected an existing rider - update their email and create audit log
-    riderId = selectedRiderId
-
-    // Fetch current rider data for audit log
-    const { data: currentRider, error: fetchError } = await getSupabaseAdmin()
-      .from('riders')
-      .select('first_name, last_name, email')
-      .eq('id', selectedRiderId)
+      )
+      .eq('id', eventId)
       .single()
 
-    if (fetchError || !currentRider) {
-      return { success: false, error: 'Selected rider not found' }
+    if (eventError || !eventData) {
+      return { success: false, error: 'Event not found' }
     }
 
-    const rider = currentRider as { first_name: string; last_name: string; email: string | null }
+    const event = eventData as EventWithRelations
 
-    // Verify the submitted name matches the selected rider to prevent
-    // someone from claiming another rider's profile via the match picker
-    const nameScore = fuzzyNameScore(
-      trimmedFirstName,
-      trimmedLastName,
-      rider.first_name,
-      rider.last_name
-    )
-    if (nameScore < 0.7) {
-      return { success: false, error: 'Selected rider does not match the submitted name' }
+    if (event.status !== 'scheduled') {
+      return { success: false, error: 'Registration is not open for this event' }
     }
 
-    // Create audit log entry in rider_merges table
-    const mergeInsert: RiderMergeInsert = {
-      rider_id: selectedRiderId,
-      submitted_first_name: trimmedFirstName,
-      submitted_last_name: trimmedLastName,
-      submitted_email: normalizedEmail,
-      previous_first_name: rider.first_name,
-      previous_last_name: rider.last_name,
-      previous_email: rider.email,
-      merge_source: 'registration',
-    }
-    await getSupabaseAdmin().from('rider_merges').insert(mergeInsert)
+    let riderId: string
 
-    // Update rider with new email and info
-    const updateData: RiderUpdate = {
-      first_name: trimmedFirstName,
-      last_name: trimmedLastName,
-      email: normalizedEmail,
-      gender: parsedGender,
-      emergency_contact_name: emergencyContactName?.trim() || null,
-      emergency_contact_phone: normalizedPhone || null,
-    }
-    await getSupabaseAdmin().from('riders').update(updateData).eq('id', selectedRiderId)
-  } else {
-    // User confirmed they're a new rider - create new rider record
-    try {
-      const newRider = await insertNewRider({
+    if (selectedRiderId) {
+      // User selected an existing rider - update their email and create audit log
+      riderId = selectedRiderId
+
+      // Fetch current rider data for audit log
+      const { data: currentRider, error: fetchError } = await getSupabaseAdmin()
+        .from('riders')
+        .select('first_name, last_name, email')
+        .eq('id', selectedRiderId)
+        .single()
+
+      if (fetchError || !currentRider) {
+        return { success: false, error: 'Selected rider not found' }
+      }
+
+      const rider = currentRider as { first_name: string; last_name: string; email: string | null }
+
+      // Verify the submitted name matches the selected rider to prevent
+      // someone from claiming another rider's profile via the match picker
+      const nameScore = fuzzyNameScore(
+        trimmedFirstName,
+        trimmedLastName,
+        rider.first_name,
+        rider.last_name
+      )
+      if (nameScore < 0.7) {
+        return { success: false, error: 'Selected rider does not match the submitted name' }
+      }
+
+      // Create audit log entry in rider_merges table
+      const mergeInsert: RiderMergeInsert = {
+        rider_id: selectedRiderId,
+        submitted_first_name: trimmedFirstName,
+        submitted_last_name: trimmedLastName,
+        submitted_email: normalizedEmail,
+        previous_first_name: rider.first_name,
+        previous_last_name: rider.last_name,
+        previous_email: rider.email,
+        merge_source: 'registration',
+      }
+      await getSupabaseAdmin().from('rider_merges').insert(mergeInsert)
+
+      // Update rider with new email and info
+      const updateData: RiderUpdate = {
         first_name: trimmedFirstName,
         last_name: trimmedLastName,
         email: normalizedEmail,
         gender: parsedGender,
         emergency_contact_name: emergencyContactName?.trim() || null,
         emergency_contact_phone: normalizedPhone || null,
-      })
-      riderId = newRider.id
-    } catch (error) {
-      console.error('Error creating rider:', error)
-      return { success: false, error: 'Failed to create rider profile' }
+      }
+      await getSupabaseAdmin().from('riders').update(updateData).eq('id', selectedRiderId)
+    } else {
+      // User confirmed they're a new rider - create new rider record.
+      // insertNewRider logs to Sentry and throws on failure; surface a friendly message.
+      try {
+        const newRider = await insertNewRider({
+          first_name: trimmedFirstName,
+          last_name: trimmedLastName,
+          email: normalizedEmail,
+          gender: parsedGender,
+          emergency_contact_name: emergencyContactName?.trim() || null,
+          emergency_contact_phone: normalizedPhone || null,
+        })
+        riderId = newRider.id
+      } catch {
+        return { success: false, error: 'Failed to create rider profile' }
+      }
     }
-  }
 
-  // Verify membership (same as registerForEvent / registerForPermanent)
-  const completeChapterSlug = event.chapters?.slug
-  const completeRealChapterId = isRealChapterDbSlug(completeChapterSlug)
-    ? (event.chapter_id ?? undefined)
-    : undefined
-  const membershipResult = await getMembershipForRider(
-    riderId,
-    trimmedFirstName,
-    trimmedLastName,
-    completeRealChapterId
-  )
-
-  if (!membershipResult.found) {
-    const mgmtToken = await createRegistrationRecord(
-      eventId,
+    // Verify membership (same as registerForEvent / registerForPermanent)
+    const completeChapterSlug = event.chapters?.slug
+    const completeRealChapterId = isRealChapterDbSlug(completeChapterSlug)
+      ? (event.chapter_id ?? undefined)
+      : undefined
+    const membershipResult = await getMembershipForRider(
       riderId,
-      shareRegistration,
-      notes,
-      'incomplete: membership',
-      trimmedTeamName,
-      isTeamCaptain
+      trimmedFirstName,
+      trimmedLastName,
+      completeRealChapterId
     )
-    if (mgmtToken === 'duplicate') {
-      return { success: false, error: 'You are already registered for this event' }
-    }
-    const chapter = event.chapters
-    const fullName = `${trimmedFirstName} ${trimmedLastName}`
-    sendRegistrationConfirmationEmail({
-      registrantName: fullName,
-      registrantEmail: normalizedEmail,
-      eventName: event.name,
-      eventDate: formatEventDate(event.event_date),
-      eventTime: formatEventTime(event.start_time),
-      eventLocation: event.start_location || 'TBD',
-      eventDistance: event.distance_km,
-      eventType: formatEventType(event.event_type),
-      chapterName: chapter?.name || '',
-      chapterSlug: chapter?.slug || '',
-      routeUrl: buildRouteUrl(event.routes?.rwgps_id),
-      notes: notes || undefined,
-      membershipStatus: 'none',
-      managementUrl: buildManagementUrl(mgmtToken),
-    }).catch((error) => {
-      logError(error, {
-        operation: 'completeRegistrationWithRider.sendEmail',
-        context: { eventId, email: normalizedEmail },
-      })
-    })
-    return {
-      success: false,
-      membershipError: 'no-membership',
-      error: 'Membership verification failed',
-    }
-  }
 
-  if (membershipResult.type === 'Trial Member') {
-    const trialUsed = await isTrialUsed(riderId)
-    if (trialUsed) {
+    if (!membershipResult.found) {
       const mgmtToken = await createRegistrationRecord(
         eventId,
         riderId,
@@ -1353,7 +1328,7 @@ export async function completeRegistrationWithRider(
         chapterSlug: chapter?.slug || '',
         routeUrl: buildRouteUrl(event.routes?.rwgps_id),
         notes: notes || undefined,
-        membershipStatus: 'trial-used',
+        membershipStatus: 'none',
         managementUrl: buildManagementUrl(mgmtToken),
       }).catch((error) => {
         logError(error, {
@@ -1363,16 +1338,59 @@ export async function completeRegistrationWithRider(
       })
       return {
         success: false,
-        membershipError: 'trial-used',
-        error: 'Trial membership already used',
+        membershipError: 'no-membership',
+        error: 'Membership verification failed',
       }
     }
-  }
 
-  // Create registration (atomically checks for duplicates)
-  let mgmtToken: string | 'duplicate'
-  try {
-    mgmtToken = await createRegistrationRecord(
+    if (membershipResult.type === 'Trial Member') {
+      const trialUsed = await isTrialUsed(riderId)
+      if (trialUsed) {
+        const mgmtToken = await createRegistrationRecord(
+          eventId,
+          riderId,
+          shareRegistration,
+          notes,
+          'incomplete: membership',
+          trimmedTeamName,
+          isTeamCaptain
+        )
+        if (mgmtToken === 'duplicate') {
+          return { success: false, error: 'You are already registered for this event' }
+        }
+        const chapter = event.chapters
+        const fullName = `${trimmedFirstName} ${trimmedLastName}`
+        sendRegistrationConfirmationEmail({
+          registrantName: fullName,
+          registrantEmail: normalizedEmail,
+          eventName: event.name,
+          eventDate: formatEventDate(event.event_date),
+          eventTime: formatEventTime(event.start_time),
+          eventLocation: event.start_location || 'TBD',
+          eventDistance: event.distance_km,
+          eventType: formatEventType(event.event_type),
+          chapterName: chapter?.name || '',
+          chapterSlug: chapter?.slug || '',
+          routeUrl: buildRouteUrl(event.routes?.rwgps_id),
+          notes: notes || undefined,
+          membershipStatus: 'trial-used',
+          managementUrl: buildManagementUrl(mgmtToken),
+        }).catch((error) => {
+          logError(error, {
+            operation: 'completeRegistrationWithRider.sendEmail',
+            context: { eventId, email: normalizedEmail },
+          })
+        })
+        return {
+          success: false,
+          membershipError: 'trial-used',
+          error: 'Trial membership already used',
+        }
+      }
+    }
+
+    // Create registration (atomically checks for duplicates)
+    const mgmtToken = await createRegistrationRecord(
       eventId,
       riderId,
       shareRegistration,
@@ -1381,47 +1399,50 @@ export async function completeRegistrationWithRider(
       trimmedTeamName,
       isTeamCaptain
     )
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : 'Failed to complete registration'
-    return { success: false, error: errorMessage }
-  }
 
-  if (mgmtToken === 'duplicate') {
-    return { success: false, error: 'You are already registered for this event' }
-  }
+    if (mgmtToken === 'duplicate') {
+      return { success: false, error: 'You are already registered for this event' }
+    }
 
-  // Send confirmation email (fire-and-forget)
-  const chapter = event.chapters
-  const fullName = `${trimmedFirstName} ${trimmedLastName}`
-  sendRegistrationConfirmationEmail({
-    registrantName: fullName,
-    registrantEmail: normalizedEmail,
-    eventName: event.name,
-    eventDate: formatEventDate(event.event_date),
-    eventTime: formatEventTime(event.start_time),
-    eventLocation: event.start_location || 'TBD',
-    eventDistance: event.distance_km,
-    eventType: formatEventType(event.event_type),
-    chapterName: chapter?.name || '',
-    chapterSlug: chapter?.slug || '',
-    routeUrl: buildRouteUrl(event.routes?.rwgps_id),
-    notes: notes || undefined,
-    membershipType: membershipResult.type,
-    membershipStatus: 'valid',
-    managementUrl: buildManagementUrl(mgmtToken),
-  }).catch((error) => {
-    logError(error, {
-      operation: 'completeRegistrationWithRider.sendEmail',
-      context: { eventId, email: normalizedEmail },
+    // Send confirmation email (fire-and-forget)
+    const chapter = event.chapters
+    const fullName = `${trimmedFirstName} ${trimmedLastName}`
+    sendRegistrationConfirmationEmail({
+      registrantName: fullName,
+      registrantEmail: normalizedEmail,
+      eventName: event.name,
+      eventDate: formatEventDate(event.event_date),
+      eventTime: formatEventTime(event.start_time),
+      eventLocation: event.start_location || 'TBD',
+      eventDistance: event.distance_km,
+      eventType: formatEventType(event.event_type),
+      chapterName: chapter?.name || '',
+      chapterSlug: chapter?.slug || '',
+      routeUrl: buildRouteUrl(event.routes?.rwgps_id),
+      notes: notes || undefined,
+      membershipType: membershipResult.type,
+      membershipStatus: 'valid',
+      managementUrl: buildManagementUrl(mgmtToken),
+    }).catch((error) => {
+      logError(error, {
+        operation: 'completeRegistrationWithRider.sendEmail',
+        context: { eventId, email: normalizedEmail },
+      })
     })
-  })
 
-  // Revalidate cache tags for registration data
-  revalidateTag('registrations', { expire: 0 })
-  revalidateTag('events', { expire: 0 }) // Revalidate chapter calendar caches (registration counts)
-  revalidateTag(`event-${event.slug}`, { expire: 0 })
-  // Also revalidate the path for immediate UI update
-  revalidatePath(`/register/${event.slug}`)
+    // Revalidate cache tags for registration data
+    revalidateTag('registrations', { expire: 0 })
+    revalidateTag('events', { expire: 0 }) // Revalidate chapter calendar caches (registration counts)
+    revalidateTag(`event-${event.slug}`, { expire: 0 })
+    // Also revalidate the path for immediate UI update
+    revalidatePath(`/register/${event.slug}`)
 
-  return { success: true }
+    return createActionResult()
+  } catch (error) {
+    return handleActionError(
+      error,
+      { operation: 'completeRegistrationWithRider' },
+      'Registration failed'
+    )
+  }
 }
