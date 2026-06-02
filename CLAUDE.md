@@ -43,6 +43,16 @@
 - When manual testing reveals a bug, write a failing test first, then fix the bug and confirm the test passes (red/green TDD).
 - For bug fixes generally, prefer red/green TDD: write a failing test that reproduces the issue, confirm it fails, then implement the fix.
 
+## Testing Pitfalls
+
+These rules exist because each was violated and shipped silently (see `docs/TESTING.md` → "Avoiding Test Rot"):
+
+- **No suite may be excluded from CI.** If `vitest.config.mts` excludes a path from the default run (e.g. `tests/integration-real`), `.github/workflows/ci.yml` must run it in a dedicated job. An excluded suite that gates nowhere will rot unnoticed.
+- **Run the real-DB suite when behavior changes.** Changes to registration, memberships, rate limiting, slug generation, or anything touching the DB schema/triggers/RLS require `npm run test:integration-real` locally. The mock-based suite cannot catch this drift — it ignores tables, columns, and filters.
+- **Never hardcode absolute dates in fixtures.** Compute them relative to today (e.g. an `isoDaysFromNow(n)` helper). Fixed future dates silently expire and turn "upcoming" into "past."
+- **Real-DB tests must be idempotent and order-independent.** Clean up by _every_ shared natural key, not just `id` (e.g. also by `email` — duplicates break lookups). Reset module-level/in-memory state (rate limiters, caches) between tests. Confirm by running the suite twice.
+- **A test must fail when the behavior it names breaks.** Assert the specific outcome; avoid assertions that pass for incidental reasons (a perpetually-skipped branch, a count that matches by coincidence).
+
 ## Verification Commands
 
 - Type safety: `npm run typecheck` (or `tsc --noEmit`).

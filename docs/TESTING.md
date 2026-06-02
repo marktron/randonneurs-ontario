@@ -43,12 +43,21 @@ npm test
 # Unit tests only
 npm run test:unit
 
-# Integration tests only
+# Integration tests only (mocked Supabase)
 npm run test:integration
+
+# Real-database integration tests (requires local Supabase running)
+npm run test:integration-real
 
 # E2E tests only
 npm run test:e2e
 ```
+
+> **Note:** `npm test` / `npm run test:run` deliberately **exclude** the
+> `integration-real` suite (see `vitest.config.mts`) because it needs a running
+> local Postgres. Run it explicitly with `npm run test:integration-real` after
+> `npx supabase start`. It is gated in CI by its own job (see
+> [CI/CD Integration](#cicd-integration)).
 
 ### Run with Coverage
 
@@ -617,13 +626,121 @@ E2E tests require a running development server and test data:
 
 Note: E2E tests will skip if required test data is not available.
 
+## Avoiding Test Rot
+
+A test that never runs, or that passes for the wrong reason, is worse than no
+test — it manufactures false confidence. Every rule below traces to a real
+incident in this repo where a test silently stopped protecting us. (See the
+"Phase 5 / issue #80" notes in `docs/test-suite-audit.md` for the full
+post-mortem.)
+
+### 1. Never exclude a suite from CI without gating it elsewhere
+
+`vitest.config.mts` excludes `tests/integration-real` from the default run
+because it needs a live database. For months nothing in CI ran it, so three
+deliberate behaviour changes (a new rate limiter, a fuzzy name-match gate, and a
+distinct slug for reversed permanents) broke the real tests and no one noticed —
+the mock suite stayed green the whole time.
+
+**Rule:** if you exclude a path in `vitest.config.mts`, add a job to
+`.github/workflows/ci.yml` that runs it. An excluded suite that gates nowhere
+will drift out of sync with the code.
+
+### 2. Run the real-DB suite when you change behaviour
+
+The mock-based `integration/` suite mocks Supabase so aggressively that it
+ignores tables, columns, and filters — it validates input and call shapes, not
+behaviour. It will happily stay green through a renamed column, a changed slug
+format, or a new business rule.
+
+**Rule:** when changing registration, memberships, rate limiting, slug
+generation, or anything touching the DB schema, triggers, or RLS, run
+`npm run test:integration-real` locally before pushing. CI will catch it too,
+but local feedback is faster.
+
+### 3. No hardcoded absolute dates in fixtures
+
+`my-rides.test.ts` once used `event_date: '2026-07-15'` to represent an
+"upcoming" ride. Once the calendar passed that date, the action correctly
+filtered it out as past, and the test broke through no code change at all.
+
+**Rule:** compute fixture dates relative to "today" so they keep their intended
+meaning. Match the production basis — the action uses UTC
+(`new Date().toISOString().split('T')[0]`), so the fixture helper does too:
+
+```typescript
+function isoDaysFromNow(days: number): string {
+  return new Date(Date.now() + days * 86_400_000).toISOString().split('T')[0]
+}
+// event_date: isoDaysFromNow(30)  // always 30 days out, never expires
+```
+
+### 4. Real-DB tests must be idempotent and order-independent
+
+Real-DB tests share a persistent database, so leftover or duplicated rows leak
+between cases. One registration test only "passed" because a prior run had left
+an orphaned rider with the test email in the dev DB; on a clean database it
+failed. The rate limiter's module-level state similarly accumulated across tests
+that reused one email and tripped the limiter mid-suite.
+
+**Rules:**
+
+- Clean up by **every** shared natural key, not just `id`. Riders are matched by
+  `email`, so a stray row with the same email breaks lookups even when the `id`
+  differs — delete by email too.
+- Reset module-level / in-memory singletons (rate limiters, caches) between
+  tests. `lib/rate-limit.ts` exposes `resetRateLimitStores()` for exactly this;
+  the integration-real setup calls it in `beforeEach`.
+- Prove it: run the suite **twice** in a row. If the second run fails, cleanup is
+  incomplete.
+
+### 5. A test must fail when the behaviour it names breaks
+
+After reversed permanents got a distinct `-reverse` slug, a test named "reversed
+reuses event created by as_posted" kept passing — but only because it counted
+events at the _other_ slug. It no longer verified the reuse it claimed.
+
+**Rule:** assert the specific outcome the test name promises. Be suspicious of a
+test that passes against a behaviour change you expected it to catch — it may be
+asserting something incidental (a perpetually-skipped branch, a count that
+matches by coincidence).
+
 ## CI/CD Integration
 
-Tests run automatically in CI/CD pipelines. Coverage reports are generated and can be uploaded to services like:
+CI is defined in `.github/workflows/ci.yml` and runs on every pull request and
+on pushes to `main`. It has two jobs that both must pass:
 
-- Codecov
-- Coveralls
-- GitHub Actions (with coverage comments)
+### `verify` job
+
+Runs the fast, dependency-free checks:
+
+- `npm run typecheck`
+- `npm run lint`
+- `npm run test:run` — unit + mock-based integration tests
+
+### `integration-real` job
+
+Runs the real-database suite against an actual local Postgres so that schema and
+behaviour drift (renamed columns, dropped foreign keys, changed triggers/RLS,
+changed business logic) is caught — things the mock-based suite cannot see. It:
+
+1. Installs the Supabase CLI (`supabase/setup-cli`).
+2. Runs `supabase start`, which boots the local stack via Docker and applies all
+   migrations plus `supabase/seed.sql` (chapters, awards, routes, etc. that the
+   tests depend on).
+3. Maps the stack's generated keys (`supabase status -o env`) to the
+   `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, and
+   `SUPABASE_SERVICE_ROLE_KEY` env vars the tests read.
+4. Runs `npm run test:integration-real`.
+
+Playwright E2E tests do not yet run in CI; running them there is tracked as a
+follow-up.
+
+> **Why both?** The mock suite asserts input validation and call shapes; it
+> mocks Supabase so aggressively it ignores tables, columns, and filters. The
+> `integration-real` job is what proves the app actually works against the
+> schema. Keep it green — a renamed column or changed action that compiles will
+> only fail here.
 
 ## Related Documentation
 

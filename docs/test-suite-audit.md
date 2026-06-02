@@ -461,6 +461,33 @@ Add a GitHub Actions job that:
 3. Seeds minimal test data
 4. Runs integration-real tests
 
+**Completed 2026-06-02 (issue #80).** Added an `integration-real` job to
+`.github/workflows/ci.yml` that installs the Supabase CLI, runs `supabase start`
+(migrations + `seed.sql`), maps the generated keys into the env vars the tests
+read, and runs `npm run test:integration-real`. It gates every PR alongside the
+existing `verify` job. The mock-void `tests/unit/lib/membership-service.test.ts`
+tautology was deleted (superseded by the 15 real-DB membership tests).
+
+Wiring the suite into CI immediately surfaced behaviour drift that the
+mock-based suite had never caught — three changes landed between 03-16 and 03-18
+(just after the Phase 3 green baseline) and silently broke the real tests, which
+CI never ran:
+
+1. **Rate-limiter state leaked across tests** (`lib/rate-limit.ts`, added
+   2026-03-18). The module-level store accumulated per-email attempts across
+   registration tests that reuse one email, tripping the limiter. Fixed by a
+   test-only `resetRateLimitStores()` called in the integration-real
+   `beforeEach`.
+2. **Fuzzy name-match gate** (`findOrCreateRider`, 2026-03-16) means an email
+   match now only reuses a rider when the name scores ≥ 0.8. The "reuses rider"
+   test submitted a wholly different name, so on a clean DB it created a new
+   rider and logged no merge. Updated to a near-match name ("Test Ryder").
+3. **Reversed permanent rides get a distinct `-reverse` slug** (2026-03-18). Two
+   tests still assumed the old shared-slug behaviour. Updated to assert the
+   separate-event behaviour.
+
+Playwright E2E in CI remains a follow-up.
+
 ---
 
 ## Priority Order
@@ -476,7 +503,7 @@ Add a GitHub Actions job that:
 | 6        | 4.1-4.3      | Yes        | Strengthen existing assertions                        | Quick wins across the board                                                   |
 | 7        | 3.3          | Yes        | Event status transition tests                         | Complex cascade logic with high risk                                          |
 | 8        | 3.4          |            | Authorization tests                                   | Security boundary                                                             |
-| 9        | 5            |            | Real database integration tests                       | Eliminates mock void permanently                                              |
+| 9        | 5            | Yes        | Real database integration tests + CI gate (issue #80) | Eliminates mock void permanently                                              |
 
 ---
 

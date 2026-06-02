@@ -61,6 +61,18 @@ export function isRateLimited(
   return false
 }
 
+/**
+ * Test-only: clear all rate-limit state.
+ *
+ * The store is module-level and persists for the life of the process. Tests
+ * that exercise rate-limited actions repeatedly (e.g. integration-real
+ * registration tests reusing the same email) must reset it between cases,
+ * otherwise leaked attempt counts trip the limiter and cascade failures.
+ */
+export function resetRateLimitStores(): void {
+  stores.clear()
+}
+
 // Periodically clean up stale entries to prevent memory leaks (every 5 minutes)
 if (typeof setInterval !== 'undefined') {
   setInterval(

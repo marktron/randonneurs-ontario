@@ -30,3 +30,49 @@ jobs:
       - run: npm run lint
 
       - run: npm run test:run
+
+  # Runs the integration-real suite against a real local Postgres. These tests
+  # exercise the actual schema (columns, constraints, triggers, RLS) instead of
+  # mocked Supabase, so they catch schema/behaviour drift that the mock-based
+  # suite in `verify` cannot. See docs/TESTING.md → "CI/CD Integration".
+  integration-real:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - run: npm ci
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      # Boots the local stack (Docker) and applies migrations + seed.sql, which
+      # the integration-real tests depend on (chapters, awards, routes, etc.).
+      - name: Start Supabase
+        run: supabase start
+
+      # Map the local stack's generated keys to the env var names the tests
+      # read (see tests/integration-real/helpers/supabase.ts).
+      - name: Export Supabase env
+        run: |
+          supabase status -o env > supabase.env
+          # shellcheck disable=SC1091
+          source supabase.env
+          {
+            echo "NEXT_PUBLIC_SUPABASE_URL=$API_URL"
+            echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=$ANON_KEY"
+            echo "SUPABASE_SERVICE_ROLE_KEY=$SERVICE_ROLE_KEY"
+            echo "NEXT_PUBLIC_CURRENT_SEASON=2026"
+          } >> "$GITHUB_ENV"
+          rm -f supabase.env
+
+      - run: npm run test:integration-real
+
+      - name: Stop Supabase
+        if: always()
+        run: supabase stop

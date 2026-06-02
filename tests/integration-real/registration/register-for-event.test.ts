@@ -61,6 +61,10 @@ describe('registerForEvent (real DB)', () => {
     await supabase.from('events').delete().in('id', [IDS.scheduledEvent, IDS.completedEvent])
     await supabase.from('routes').delete().eq('id', IDS.route)
     await supabase.from('riders').delete().eq('id', IDS.rider)
+    // Remove any stray riders sharing the seeded email left behind by an
+    // interrupted run. Duplicates make the email lookup in findOrCreateRider
+    // ambiguous and silently break the "reuse rider" path.
+    await supabase.from('riders').delete().ilike('email', 'test-rider@example.com')
 
     // Seed
     await checked(
@@ -444,10 +448,14 @@ describe('registerForEvent (real DB)', () => {
     const result = await registerForEvent(
       buildRegistrationData({
         eventId: IDS.scheduledEvent,
-        // Same email as seeded rider but different name
+        // Same email as the seeded rider, with a slight name variation. The
+        // fuzzy score must clear the 0.8 reuse threshold (Test Ryder vs Test
+        // Rider ≈ 0.9) so the existing rider is reused and the name difference
+        // is recorded in rider_merges — rather than a brand-new rider being
+        // created (which is what happens when the name is too dissimilar).
         email: 'test-rider@example.com',
-        firstName: 'Different',
-        lastName: 'Name',
+        firstName: 'Test',
+        lastName: 'Ryder',
       })
     )
 
@@ -461,8 +469,8 @@ describe('registerForEvent (real DB)', () => {
 
     expect(merges).toHaveLength(1)
     expect(merges![0]).toMatchObject({
-      submitted_first_name: 'Different',
-      submitted_last_name: 'Name',
+      submitted_first_name: 'Test',
+      submitted_last_name: 'Ryder',
       previous_first_name: 'Test',
       previous_last_name: 'Rider',
     })

@@ -1,7 +1,8 @@
-import { vi } from 'vitest'
+import { vi, beforeEach } from 'vitest'
 import { config } from 'dotenv'
 import path from 'path'
 import WebSocket from 'ws'
+import { resetRateLimitStores } from '@/lib/rate-limit'
 
 // Load real env vars from .env.development.local and .env.local
 // Uses dotenv directly because @next/env's loadEnvConfig is CJS-only
@@ -29,4 +30,12 @@ vi.mock('react', async () => {
     ...actual,
     cache: (fn: unknown) => fn,
   }
+})
+
+// The rate limiter (lib/rate-limit.ts) keeps module-level in-memory state that
+// persists across tests in a worker. Registration tests reuse the same email,
+// so without a reset the per-email attempt count accumulates and trips the
+// limiter ("Too many registration attempts"), cascading into later tests.
+beforeEach(() => {
+  resetRateLimitStores()
 })

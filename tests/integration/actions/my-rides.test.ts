@@ -14,6 +14,16 @@ vi.mock('@/lib/supabase-server', () => ({
 
 import { getMyUpcomingRides } from '@/lib/actions/my-rides'
 
+/**
+ * ISO date string (YYYY-MM-DD) `days` from today, in UTC. The action computes
+ * "today" as `new Date().toISOString().split('T')[0]` (UTC), so fixtures must
+ * use the same basis. Dates are relative — not hardcoded — so "upcoming"
+ * fixtures don't silently become "past" as the calendar advances.
+ */
+function isoDaysFromNow(days: number): string {
+  return new Date(Date.now() + days * 86_400_000).toISOString().split('T')[0]
+}
+
 function setupRiderLookup(rider: { id: string } | null) {
   // First .from('riders') call chain: .select().ilike().maybeSingle()
   const riderChain = {
@@ -86,13 +96,16 @@ describe('getMyUpcomingRides', () => {
   })
 
   it('returns upcoming events for a known rider', async () => {
+    const firstDate = isoDaysFromNow(43)
+    const secondDate = isoDaysFromNow(60)
+    const firstSlug = `test-ride-200km-${firstDate}`
     const riderChain = setupRiderLookup({ id: 'rider-1' })
     const regChain = setupRegistrationsQuery([
       {
         events: {
-          slug: 'test-ride-200km-2026-07-15',
+          slug: firstSlug,
           name: 'Test Ride',
-          event_date: '2026-07-15',
+          event_date: firstDate,
           distance_km: 200,
           start_time: '07:00',
           start_location: 'City Hall',
@@ -102,9 +115,9 @@ describe('getMyUpcomingRides', () => {
       },
       {
         events: {
-          slug: 'spring-ride-100km-2026-08-01',
+          slug: `spring-ride-100km-${secondDate}`,
           name: 'Spring Ride',
-          event_date: '2026-08-01',
+          event_date: secondDate,
           distance_km: 100,
           start_time: '08:00',
           start_location: 'Park',
@@ -126,9 +139,9 @@ describe('getMyUpcomingRides', () => {
     expect(result.success).toBe(true)
     expect(result.data).toHaveLength(2)
     expect(result.data![0]).toEqual({
-      slug: 'test-ride-200km-2026-07-15',
+      slug: firstSlug,
       name: 'Test Ride',
-      date: '2026-07-15',
+      date: firstDate,
       distance: 200,
       startTime: '07:00',
       startLocation: 'City Hall',
@@ -172,9 +185,11 @@ describe('getMyUpcomingRides', () => {
     const regChain = setupRegistrationsQuery([
       {
         events: {
-          slug: 'cancelled-ride-200km-2026-06-01',
+          // Future date, so the event is excluded purely because it is
+          // cancelled — not because it has fallen into the past.
+          slug: 'cancelled-ride-200km',
           name: 'Cancelled Ride',
-          event_date: '2026-06-01',
+          event_date: isoDaysFromNow(30),
           distance_km: 200,
           start_time: '07:00',
           start_location: 'City Hall',
@@ -204,7 +219,7 @@ describe('getMyUpcomingRides', () => {
         events: {
           slug: 'later-ride',
           name: 'Later Ride',
-          event_date: '2026-08-01',
+          event_date: isoDaysFromNow(60),
           distance_km: 300,
           start_time: '06:00',
           start_location: 'Start',
@@ -216,7 +231,7 @@ describe('getMyUpcomingRides', () => {
         events: {
           slug: 'earlier-ride',
           name: 'Earlier Ride',
-          event_date: '2026-06-01',
+          event_date: isoDaysFromNow(30),
           distance_km: 200,
           start_time: '07:00',
           start_location: 'Start',
@@ -248,7 +263,7 @@ describe('getMyUpcomingRides', () => {
         events: {
           slug: 'minimal-ride',
           name: 'Minimal Ride',
-          event_date: '2026-06-01',
+          event_date: isoDaysFromNow(30),
           distance_km: 200,
           start_time: null,
           start_location: null,

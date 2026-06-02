@@ -308,7 +308,9 @@ describe('registerForPermanent (real DB)', () => {
 
     expect(result.success).toBe(true)
 
-    const expectedSlug = `permanent-inttest-perm-route-${eventDate}`
+    // Reversed rides get a distinct slug (suffixed with -reverse) so they are
+    // tracked as a separate event from the as-posted direction.
+    const expectedSlug = `permanent-inttest-perm-route-${eventDate}-reverse`
     const { data: event } = await supabase
       .from('events')
       .select('name')
@@ -318,7 +320,7 @@ describe('registerForPermanent (real DB)', () => {
     expect(event!.name).toBe('IntTest Perm Route (Reversed)')
   })
 
-  it('reversed registration reuses event created by as_posted (same slug)', async () => {
+  it('reversed registration creates a distinct event from as_posted (separate slugs)', async () => {
     searchCCNMembership.mockResolvedValue({
       found: true,
       membershipId: 42,
@@ -347,9 +349,26 @@ describe('registerForPermanent (real DB)', () => {
     )
     expect(result2.success).toBe(true)
 
-    const expectedSlug = `permanent-inttest-perm-route-${eventDate}`
-    const { data: events } = await supabase.from('events').select('id').eq('slug', expectedSlug)
-    expect(events).toHaveLength(1)
+    // Same route + date, but the two directions are tracked as separate events:
+    // as_posted keeps the plain slug, reversed gets a -reverse suffix.
+    const asPostedSlug = `permanent-inttest-perm-route-${eventDate}`
+    const reversedSlug = `permanent-inttest-perm-route-${eventDate}-reverse`
+
+    const { data: asPosted } = await supabase
+      .from('events')
+      .select('id, name')
+      .eq('slug', asPostedSlug)
+      .single()
+    expect(asPosted!.name).toBe('IntTest Perm Route')
+
+    const { data: reversed } = await supabase
+      .from('events')
+      .select('id, name')
+      .eq('slug', reversedSlug)
+      .single()
+    expect(reversed!.name).toBe('IntTest Perm Route (Reversed)')
+
+    expect(reversed!.id).not.toBe(asPosted!.id)
   })
 
   // --- Membership flows ---

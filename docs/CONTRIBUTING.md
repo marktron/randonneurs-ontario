@@ -15,6 +15,7 @@ git checkout -b feature/your-feature-name
 ```
 
 Branch naming conventions:
+
 - `feature/` - New features
 - `fix/` - Bug fixes
 - `docs/` - Documentation changes
@@ -35,6 +36,7 @@ npm run dev
 ```
 
 Test your changes in the browser. Check:
+
 - Desktop and mobile views
 - Form submissions
 - Error states
@@ -49,6 +51,7 @@ git commit -m "Add registration confirmation email template"
 ```
 
 Good commit messages:
+
 - Start with a verb (Add, Fix, Update, Remove)
 - Be specific about what changed
 - Keep the first line under 72 characters
@@ -60,6 +63,7 @@ git push -u origin feature/your-feature-name
 ```
 
 Create a pull request on GitHub with:
+
 - Clear description of changes
 - Screenshots for UI changes
 - Testing notes
@@ -111,12 +115,12 @@ lib/
 
 ### Naming Conventions
 
-| Type | Convention | Example |
-|------|------------|---------|
-| Components | PascalCase | `EventCard.tsx` |
-| Utilities | camelCase | `formatDate.ts` |
-| Types | PascalCase | `EventDetails` |
-| Files | kebab-case | `event-card.tsx` |
+| Type        | Convention         | Example             |
+| ----------- | ------------------ | ------------------- |
+| Components  | PascalCase         | `EventCard.tsx`     |
+| Utilities   | camelCase          | `formatDate.ts`     |
+| Types       | PascalCase         | `EventDetails`      |
+| Files       | kebab-case         | `event-card.tsx`    |
 | CSS classes | Tailwind utilities | `text-lg font-bold` |
 
 ### Component Structure
@@ -163,22 +167,23 @@ export function EventCard({ event, onRegister }: EventCardProps) {
 ```tsx
 // Server Component (default) - no directive needed
 export default async function EventsPage() {
-  const events = await getEvents()  // Can fetch data directly
+  const events = await getEvents() // Can fetch data directly
   return <EventList events={events} />
 }
 
 // Client Component - add directive at top
-'use client'
+;('use client')
 
 import { useState } from 'react'
 
 export function InteractiveForm() {
-  const [value, setValue] = useState('')  // Can use hooks
-  return <input value={value} onChange={e => setValue(e.target.value)} />
+  const [value, setValue] = useState('') // Can use hooks
+  return <input value={value} onChange={(e) => setValue(e.target.value)} />
 }
 ```
 
 **When to use Client Components:**
+
 - Interactive elements (forms, buttons with state)
 - Browser APIs (localStorage, window)
 - React hooks (useState, useEffect)
@@ -202,16 +207,10 @@ export async function createSomething(data: FormData): Promise<ActionResult> {
   }
 
   // 2. Perform database operation
-  const { error } = await getSupabaseAdmin()
-    .from('things')
-    .insert({ name })
+  const { error } = await getSupabaseAdmin().from('things').insert({ name })
 
   if (error) {
-    return handleSupabaseError(
-      error,
-      { operation: 'createThing' },
-      'Failed to create thing'
-    )
+    return handleSupabaseError(error, { operation: 'createThing' }, 'Failed to create thing')
   }
 
   // 3. Revalidate cache
@@ -239,6 +238,7 @@ Use Tailwind utility classes. Follow the design system in `docs/style_guide.md`.
 ```
 
 Use semantic color tokens from the theme:
+
 - `bg-background` / `text-foreground` - Main content
 - `bg-card` - Card backgrounds
 - `bg-muted` / `text-muted-foreground` - Secondary content
@@ -256,9 +256,7 @@ import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { handleDataError } from '@/lib/errors'
 
 async function getEvents() {
-  const { data, error } = await getSupabase()
-    .from('events')
-    .select('*')
+  const { data, error } = await getSupabase().from('events').select('*')
 
   if (error) {
     return handleDataError(error, { operation: 'getEvents' }, [])
@@ -269,11 +267,7 @@ async function getEvents() {
 
 // For writes - use admin client
 async function createEvent(event: EventInsert) {
-  const { data, error } = await getSupabaseAdmin()
-    .from('events')
-    .insert(event)
-    .select()
-    .single()
+  const { data, error } = await getSupabaseAdmin().from('events').insert(event).select().single()
 
   if (error) throw error
   return data
@@ -317,12 +311,7 @@ npx shadcn@latest add dialog
 Then use it:
 
 ```tsx
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 ```
 
 ### Adding a Database Migration
@@ -362,12 +351,20 @@ npx supabase gen types typescript --local > types/supabase.ts
 Before submitting a PR:
 
 - [ ] `npm run lint` passes
+- [ ] `npm run typecheck` passes
 - [ ] `npm run build` succeeds
+- [ ] `npm run test:run` passes (unit + mock integration tests)
+- [ ] `npm run test:integration-real` passes if the change touches the DB schema, server actions, or business logic (registration, memberships, rate limiting, slug generation) — the mock suite cannot catch behaviour drift there
+- [ ] No hardcoded absolute dates in test fixtures — compute them relative to today so they don't silently expire
+- [ ] New/changed real-DB tests pass when the suite is run **twice** in a row (idempotent, order-independent)
 - [ ] Tested on desktop viewport
 - [ ] Tested on mobile viewport
 - [ ] Tested form validation/error states
 - [ ] Checked browser console for errors
 - [ ] Updated types if schema changed
+
+> See [TESTING.md → Avoiding Test Rot](./TESTING.md#avoiding-test-rot) for the
+> reasoning behind the test-related items above.
 
 ## Code Review Guidelines
 
@@ -391,12 +388,12 @@ When reviewing PRs, check for:
 
 This project uses documentation to help developers understand the codebase:
 
-| Document | Purpose |
-|----------|---------|
-| [ARCHITECTURE.md](./ARCHITECTURE.md) | System overview |
-| [GETTING_STARTED.md](./GETTING_STARTED.md) | Setup guide |
-| [DATA_LAYER.md](./DATA_LAYER.md) | Database patterns |
-| [ERROR_HANDLING.md](./ERROR_HANDLING.md) | Error handling patterns |
-| [database-schema-plan.md](./database-schema-plan.md) | Schema design |
-| [database-setup.md](./database-setup.md) | Database setup |
-| [style_guide.md](./style_guide.md) | UI/UX guidelines |
+| Document                                             | Purpose                 |
+| ---------------------------------------------------- | ----------------------- |
+| [ARCHITECTURE.md](./ARCHITECTURE.md)                 | System overview         |
+| [GETTING_STARTED.md](./GETTING_STARTED.md)           | Setup guide             |
+| [DATA_LAYER.md](./DATA_LAYER.md)                     | Database patterns       |
+| [ERROR_HANDLING.md](./ERROR_HANDLING.md)             | Error handling patterns |
+| [database-schema-plan.md](./database-schema-plan.md) | Schema design           |
+| [database-setup.md](./database-setup.md)             | Database setup          |
+| [style_guide.md](./style_guide.md)                   | UI/UX guidelines        |
