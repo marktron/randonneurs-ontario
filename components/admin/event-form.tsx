@@ -41,6 +41,7 @@ import { AlertCircle, Loader2, CalendarIcon, ChevronDownIcon } from 'lucide-reac
 import { createEvent, updateEvent, type EventType } from '@/lib/actions/events'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
+import { getCurrentSeasonLabel } from '@/lib/season'
 import type { ChapterOption } from '@/types/ui'
 import type { ActiveRoute } from '@/lib/data/routes'
 import { ImageUpload } from '@/components/admin/image-upload'
@@ -91,7 +92,7 @@ export function EventForm({
   const [error, setError] = useState<string | null>(null)
   const [showBrevetRestrictionModal, setShowBrevetRestrictionModal] = useState(false)
 
-  const currentSeason = process.env.NEXT_PUBLIC_CURRENT_SEASON || '2026'
+  const currentSeason = getCurrentSeasonLabel()
 
   // Initialize state from event data in edit mode, or defaults in create mode
   const [chapterId, setChapterId] = useState(event?.chapterId || defaultChapterId || '')

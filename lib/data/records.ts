@@ -16,6 +16,7 @@ import { unstable_cache } from 'next/cache'
 import { getSupabase } from '@/lib/supabase'
 import { handleDataError } from '@/lib/errors'
 import { formatFinishTime } from '@/lib/utils'
+import { getCurrentSeason } from '@/lib/season'
 import type {
   LifetimeRecords,
   SeasonRecords,
@@ -152,7 +153,7 @@ function toStreakRecords(
 
 const getLifetimeRecordsInner = cache(async (): Promise<LifetimeRecords> => {
   const supabase = getSupabase()
-  const currentSeason = parseInt(process.env.NEXT_PUBLIC_CURRENT_SEASON || '2026', 10)
+  const currentSeason = getCurrentSeason()
 
   // Fetch all lifetime records in parallel using database functions
   const [
@@ -273,7 +274,7 @@ export async function getSeasonRecords(): Promise<SeasonRecords> {
 // ============================================================================
 
 const getCurrentSeasonDistanceInner = cache(async (): Promise<RiderRecord[]> => {
-  const currentSeason = parseInt(process.env.NEXT_PUBLIC_CURRENT_SEASON || '2026', 10)
+  const currentSeason = getCurrentSeason()
   const supabase = getSupabase()
 
   const { data, error } = await supabase.rpc('get_current_season_distances', {

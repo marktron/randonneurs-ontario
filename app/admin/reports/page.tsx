@@ -1,6 +1,7 @@
 import { requireAdmin } from '@/lib/auth/get-admin'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { getChapters } from '@/lib/actions/admin-users'
+import { getCurrentSeasonLabel } from '@/lib/season'
 import Link from 'next/link'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import {
@@ -57,7 +58,7 @@ interface NonRenewedRiderRow {
   last_name: string
 }
 
-const currentSeason = process.env.NEXT_PUBLIC_CURRENT_SEASON || '2026'
+const currentSeason = getCurrentSeasonLabel()
 
 async function getAvailableSeasons(): Promise<string[]> {
   const { data } = await getSupabaseAdmin().rpc('get_distinct_event_seasons')

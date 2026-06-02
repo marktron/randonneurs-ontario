@@ -25,6 +25,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { InputGroup, InputGroupAddon, InputGroupInput } from '@/components/ui/input-group'
 import { ChevronLeft, ChevronRight, Eye, GitMerge, Search, X } from 'lucide-react'
 import { MergeRidersDialog, type RiderForMerge } from './merge-riders-dialog'
+import { getCurrentSeason } from '@/lib/season'
 
 interface RiderWithStats {
   id: string
@@ -310,10 +311,7 @@ export function RidersTable({
                     </TableCell>
                     <TableCell className="hidden lg:table-cell">
                       {(() => {
-                        const currentSeason = parseInt(
-                          process.env.NEXT_PUBLIC_CURRENT_SEASON || '2026',
-                          10
-                        )
+                        const currentSeason = getCurrentSeason()
                         const currentMembership = rider.rider_memberships?.find(
                           (m) => m.season === currentSeason
                         )

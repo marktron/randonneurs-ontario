@@ -7,9 +7,8 @@
  */
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { searchCCNMembership } from '@/lib/ccn/client'
+import { getCurrentSeason } from '@/lib/season'
 import type { MembershipType } from '@/types/queries'
-
-const getCurrentSeason = () => parseInt(process.env.NEXT_PUBLIC_CURRENT_SEASON || '2026', 10)
 
 export type MembershipResult =
   | {

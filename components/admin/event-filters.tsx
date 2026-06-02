@@ -12,6 +12,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { getCurrentSeasonLabel } from '@/lib/season'
 
 interface Chapter {
   id: string
@@ -31,7 +32,7 @@ interface EventFiltersProps {
 // Match the order used in the main site navbar
 const CHAPTER_ORDER = ['Huron', 'Ottawa', 'Simcoe-Muskoka', 'Toronto']
 
-const currentSeason = process.env.NEXT_PUBLIC_CURRENT_SEASON || '2026'
+const currentSeason = getCurrentSeasonLabel()
 
 function buildFilterUrl(
   season: string,

@@ -11,6 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { getCurrentSeasonLabel } from '@/lib/season'
 
 interface Chapter {
   id: string
@@ -25,7 +26,7 @@ interface ReportFiltersProps {
 }
 
 const CHAPTER_ORDER = ['Huron', 'Ottawa', 'Simcoe-Muskoka', 'Toronto']
-const currentSeason = process.env.NEXT_PUBLIC_CURRENT_SEASON || '2026'
+const currentSeason = getCurrentSeasonLabel()
 
 function buildFilterUrl(season: string, chapterId: string | null, explicitAll: boolean = false) {
   const params = new URLSearchParams()

@@ -29,13 +29,12 @@ config({ path: join(process.cwd(), '.env.local') })
 
 import { createClient } from '@supabase/supabase-js'
 import { searchCCNMembership } from '../lib/ccn/client'
+import { getCurrentSeason } from '../lib/season'
 
 const args = process.argv.slice(2)
 const apply = args.includes('--apply')
 const seasonArg = args.find((a) => a.startsWith('--season='))
-const season = seasonArg
-  ? parseInt(seasonArg.split('=')[1], 10)
-  : parseInt(process.env.NEXT_PUBLIC_CURRENT_SEASON || '2026', 10)
+const season = seasonArg ? parseInt(seasonArg.split('=')[1], 10) : getCurrentSeason()
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY

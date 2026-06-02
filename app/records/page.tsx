@@ -17,10 +17,11 @@ import {
   getPbpRecords,
   getGraniteAnvilRecords,
 } from '@/lib/data/records'
+import { getCurrentSeason } from '@/lib/season'
 
 export const revalidate = 3600 // Revalidate every hour (driven by current season data)
 
-const currentSeason = process.env.NEXT_PUBLIC_CURRENT_SEASON || '2026'
+const currentSeason = getCurrentSeason()
 
 export const metadata = {
   title: 'Records',
@@ -97,14 +98,14 @@ export default async function RecordsPage() {
           <StreakRecordTable
             title="Longest Active Streak"
             records={lifetime.longestStreaks}
-            currentSeason={parseInt(currentSeason, 10)}
+            currentSeason={currentSeason}
             valueLabel="Seasons"
             description="2020 is treated as a gap year and does not break a streak"
           />
           <StreakRecordTable
             title="Longest Super Randonneur Streak"
             records={lifetime.srStreaks}
-            currentSeason={parseInt(currentSeason, 10)}
+            currentSeason={currentSeason}
             valueLabel="Seasons"
             description="2020 is treated as a gap year and does not break a streak"
           />

@@ -17,9 +17,10 @@ import { EventFilters, type DateFilter } from '@/components/admin/event-filters'
 import { AdminPagination } from '@/components/admin/admin-pagination'
 import { Plus } from 'lucide-react'
 import Link from 'next/link'
+import { getCurrentSeasonLabel } from '@/lib/season'
 import type { EventForAdminList } from '@/types/queries'
 
-const currentSeason = process.env.NEXT_PUBLIC_CURRENT_SEASON || '2026'
+const currentSeason = getCurrentSeasonLabel()
 const PAGE_SIZE = 50
 
 function buildEventDetailUrl(
