@@ -39,9 +39,7 @@ import { getMembershipForRider, isTrialUsed } from '@/lib/memberships/service'
 import { isRateLimited } from '@/lib/rate-limit'
 import { createTorontoDate } from '@/lib/brmTimes'
 import { validateEmail, normalizePhone, emailIlikePattern } from '@/lib/utils/validation'
-
-/** Chapter slugs that represent real geographic chapters (not pseudo-chapters like 'permanent' or 'other') */
-const REAL_CHAPTER_SLUGS = ['huron', 'ottawa', 'simcoe', 'toronto']
+import { isRealChapterDbSlug } from '@/lib/chapter-config'
 import { handleActionError, handleSupabaseError, createActionResult, logError } from '@/lib/errors'
 import type {
   RiderInsert,
@@ -550,10 +548,9 @@ export async function registerForEvent(data: RegistrationData): Promise<Registra
     // Step: Verify membership
     // Only pass chapter_id for real geographic chapters
     const chapterSlug = event.chapters?.slug
-    const realChapterId =
-      chapterSlug && REAL_CHAPTER_SLUGS.includes(chapterSlug)
-        ? (event.chapter_id ?? undefined)
-        : undefined
+    const realChapterId = isRealChapterDbSlug(chapterSlug)
+      ? (event.chapter_id ?? undefined)
+      : undefined
     const membershipResult = await getMembershipForRider(
       riderId,
       trimmedFirstName,
@@ -930,8 +927,7 @@ export async function registerForPermanent(
     // Step: Verify membership
     // Permanent rides use the route's chapter — only pass if it's a real chapter
     const permChapterSlug = route.chapters?.slug
-    const permRealChapterId =
-      permChapterSlug && REAL_CHAPTER_SLUGS.includes(permChapterSlug) ? route.chapter_id : undefined
+    const permRealChapterId = isRealChapterDbSlug(permChapterSlug) ? route.chapter_id : undefined
     const membershipResult = await getMembershipForRider(
       riderId,
       trimmedFirstName,
@@ -1274,10 +1270,9 @@ export async function completeRegistrationWithRider(
 
   // Verify membership (same as registerForEvent / registerForPermanent)
   const completeChapterSlug = event.chapters?.slug
-  const completeRealChapterId =
-    completeChapterSlug && REAL_CHAPTER_SLUGS.includes(completeChapterSlug)
-      ? (event.chapter_id ?? undefined)
-      : undefined
+  const completeRealChapterId = isRealChapterDbSlug(completeChapterSlug)
+    ? (event.chapter_id ?? undefined)
+    : undefined
   const membershipResult = await getMembershipForRider(
     riderId,
     trimmedFirstName,

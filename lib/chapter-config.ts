@@ -110,6 +110,24 @@ export function getAllChapterSlugs(): string[] {
 }
 
 /**
+ * Get the database slugs of the real geographic chapters (calendar/routes).
+ * Excludes pseudo-chapters like 'permanent', 'other', or 'fleche'.
+ * Note: these are db slugs, so Simcoe-Muskoka appears as 'simcoe'.
+ */
+export function getRealChapterDbSlugs(): string[] {
+  return Object.values(coreChapters)
+    .map((c) => c.dbSlug)
+    .filter((dbSlug): dbSlug is string => dbSlug !== null)
+}
+
+/**
+ * Check whether a database slug belongs to a real geographic chapter.
+ */
+export function isRealChapterDbSlug(dbSlug: string | null | undefined): boolean {
+  return dbSlug != null && getRealChapterDbSlugs().includes(dbSlug)
+}
+
+/**
  * Get chapter info for results pages (includes special collections)
  */
 export function getResultsChapterInfo(urlSlug: string): ChapterInfo | null {

@@ -7,6 +7,8 @@ import {
   getDbSlug,
   getUrlSlugFromDbSlug,
   getResultsDescription,
+  getRealChapterDbSlugs,
+  isRealChapterDbSlug,
 } from '@/lib/chapter-config'
 
 describe('getChapterInfo', () => {
@@ -155,6 +157,51 @@ describe('getUrlSlugFromDbSlug', () => {
 
   it('returns input for unknown db slugs', () => {
     expect(getUrlSlugFromDbSlug('unknown')).toBe('unknown')
+  })
+})
+
+describe('getRealChapterDbSlugs', () => {
+  it('returns the db slugs of the real geographic chapters', () => {
+    const slugs = getRealChapterDbSlugs()
+    expect(slugs).toContain('toronto')
+    expect(slugs).toContain('ottawa')
+    expect(slugs).toContain('huron')
+    expect(slugs).toContain('simcoe') // db slug, not simcoe-muskoka
+  })
+
+  it('returns exactly the 4 real chapters', () => {
+    expect(getRealChapterDbSlugs()).toHaveLength(4)
+  })
+
+  it('does not include pseudo-chapters', () => {
+    const slugs = getRealChapterDbSlugs()
+    expect(slugs).not.toContain('permanent')
+    expect(slugs).not.toContain('other')
+    expect(slugs).not.toContain('niagara')
+    expect(slugs).not.toContain('fleche')
+    expect(slugs).not.toContain('simcoe-muskoka') // url slug, not db slug
+  })
+})
+
+describe('isRealChapterDbSlug', () => {
+  it('returns true for real chapter db slugs', () => {
+    expect(isRealChapterDbSlug('toronto')).toBe(true)
+    expect(isRealChapterDbSlug('ottawa')).toBe(true)
+    expect(isRealChapterDbSlug('huron')).toBe(true)
+    expect(isRealChapterDbSlug('simcoe')).toBe(true)
+  })
+
+  it('returns false for pseudo-chapters and unknown slugs', () => {
+    expect(isRealChapterDbSlug('permanent')).toBe(false)
+    expect(isRealChapterDbSlug('other')).toBe(false)
+    expect(isRealChapterDbSlug('simcoe-muskoka')).toBe(false)
+    expect(isRealChapterDbSlug('invalid')).toBe(false)
+    expect(isRealChapterDbSlug('')).toBe(false)
+  })
+
+  it('returns false for null or undefined', () => {
+    expect(isRealChapterDbSlug(null)).toBe(false)
+    expect(isRealChapterDbSlug(undefined)).toBe(false)
   })
 })
 

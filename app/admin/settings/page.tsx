@@ -3,15 +3,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { ChangePasswordForm } from '@/components/admin/change-password-form'
 import { EditProfileForm } from '@/components/admin/edit-profile-form'
 import { getChapters } from '@/lib/actions/admin-users'
-
-const ALLOWED_CHAPTER_SLUGS = ['huron', 'ottawa', 'simcoe', 'toronto']
+import { isRealChapterDbSlug } from '@/lib/chapter-config'
 
 export default async function AdminSettingsPage() {
   const [admin, allChapters] = await Promise.all([requireAdmin(), getChapters()])
 
   type Chapter = Awaited<ReturnType<typeof getChapters>>[number]
   const chapters = (allChapters as Chapter[])
-    .filter((c) => ALLOWED_CHAPTER_SLUGS.includes(c.slug))
+    .filter((c) => isRealChapterDbSlug(c.slug))
     .sort((a, b) => a.name.localeCompare(b.name))
 
   return (
