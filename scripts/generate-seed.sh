@@ -137,9 +137,18 @@ cat > "$SEED_FILE" << 'EOF'
 -- Run seed-memberships.sql after seeding to restore PII + memberships.
 -- To regenerate: ./scripts/generate-seed.sh (generates both files)
 
+-- Restore the dump verbatim: disable triggers during the bulk load so that
+-- AFTER-INSERT triggers (e.g. the First Brevet award reconciler from migration
+-- 20260526120000) don't pre-create rows the dump then re-inserts, which crashes
+-- a fresh seed with duplicate-key errors on result_awards.
+SET session_replication_role = replica;
+
 EOF
 
 cat "$SEED_FILE.tmp2" >> "$SEED_FILE"
+
+# Re-enable triggers for normal operation after the bulk load.
+printf '\n-- Re-enable triggers for normal operation after the bulk load.\nSET session_replication_role = DEFAULT;\n' >> "$SEED_FILE"
 
 # Clean up temp files
 rm -f "$SEED_FILE.tmp" "$SEED_FILE.tmp2"

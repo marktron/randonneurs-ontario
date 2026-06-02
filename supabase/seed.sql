@@ -23,6 +23,12 @@
 -- Run seed-memberships.sql after seeding to restore PII + memberships.
 -- To regenerate: ./scripts/generate-seed.sh (generates both files)
 
+-- Restore the dump verbatim: disable triggers during the bulk load so that
+-- AFTER-INSERT triggers (e.g. the First Brevet award reconciler from migration
+-- 20260526120000) don't pre-create rows the dump then re-inserts, which crashes
+-- a fresh seed with duplicate-key errors on result_awards.
+SET session_replication_role = replica;
+
 INSERT INTO public.awards (id, slug, title, description, award_type, created_at, updated_at) VALUES ('e81592f6-8b0e-585e-8f06-8c53704548bb', 'super-randonneur', 'Super Randonneur', 'Completed a 200, 300, 400, and 600 km brevet in the same season.', 'season', '2026-01-07 06:05:14.466123+00', '2026-03-12 17:07:26.831771+00');
 INSERT INTO public.awards (id, slug, title, description, award_type, created_at, updated_at) VALUES ('cfa2e476-ec58-52c5-bc33-b7b870cc92e0', 'first-brevet', 'First Brevet', 'Rode their first brevet with Randonneurs Ontario', 'result', '2026-01-07 06:05:14.456082+00', '2026-03-12 17:07:26.831771+00');
 INSERT INTO public.awards (id, slug, title, description, award_type, created_at, updated_at) VALUES ('52213f79-64db-5275-97f1-e2db51e52d56', 'completed-devil-week', 'Completed Devil Week', 'Rode a 200, 300, 400, and 600 km brevet during the club''s Devil Week.', 'result', '2026-01-07 06:05:14.4624+00', '2026-03-12 17:07:26.831771+00');
@@ -15456,3 +15462,6 @@ INSERT INTO public.registrations (id, event_id, rider_id, registered_at, notes, 
 INSERT INTO public.registrations (id, event_id, rider_id, registered_at, notes, status, share_registration, team_name, is_team_captain, management_token, cancelled_at) VALUES ('9ba4ada8-bc4b-4327-a17b-79f802a9a40b', 'ec382c0f-940d-4c65-a5b1-3d7d3da7f8c2', '3fa20c6a-470d-5495-b0b9-745d7a16b71d', '2026-03-21 20:23:36.806492+00', NULL, 'registered', true, NULL, false, 'b5738394-78ba-499f-b6fa-ee37c307f75d', NULL);
 INSERT INTO public.registrations (id, event_id, rider_id, registered_at, notes, status, share_registration, team_name, is_team_captain, management_token, cancelled_at) VALUES ('348d16dd-a4b1-4601-b728-00844ce1803e', 'fcec54de-d27b-4696-a298-3a8be10f2fe0', '3fa20c6a-470d-5495-b0b9-745d7a16b71d', '2026-03-21 20:22:35.029673+00', NULL, 'registered', true, NULL, false, 'a15cd14c-159a-4cea-bb3f-e9b4d003128e', NULL);
 INSERT INTO public.registrations (id, event_id, rider_id, registered_at, notes, status, share_registration, team_name, is_team_captain, management_token, cancelled_at) VALUES ('0ea9c0c8-78f7-4de8-b84f-c6bb0b877752', 'bbe08f0b-5b83-44f4-8504-b2ca343ffd1f', '3fa20c6a-470d-5495-b0b9-745d7a16b71d', '2026-03-21 15:56:52.895858+00', NULL, 'registered', true, NULL, false, '487e234d-4262-42f7-ac19-a2d1185f9627', NULL);
+
+-- Re-enable triggers for normal operation after the bulk load.
+SET session_replication_role = DEFAULT;
