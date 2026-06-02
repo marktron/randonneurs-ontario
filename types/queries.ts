@@ -18,7 +18,6 @@ export type Result = Omit<Database['public']['Tables']['results']['Row'], 'finis
   finish_time: string | null
 }
 export type Registration = Database['public']['Tables']['registrations']['Row']
-export type RiderAward = Database['public']['Tables']['rider_awards']['Row']
 // Membership type enum for type safety
 export type MembershipType =
   | 'Individual Membership'
@@ -109,15 +108,6 @@ export type EventWithPublicResults = EventWithRouteSlug & {
 }
 
 /**
- * Event with public results for route results (simpler structure)
- */
-export type EventWithPublicResultsForRoute = Pick<Event, 'name' | 'event_date'> & {
-  public_results: Array<
-    Pick<PublicResult, 'finish_time' | 'status' | 'rider_slug' | 'first_name' | 'last_name'>
-  > | null
-}
-
-/**
  * Route with basic fields for chapter listings
  */
 export type RouteBasic = Pick<Route, 'slug' | 'name' | 'distance_km' | 'rwgps_id' | 'cue_sheet_url'>
@@ -172,16 +162,6 @@ export type RouteUpdate = Database['public']['Tables']['routes']['Update']
 export type ChapterId = Pick<Chapter, 'id'>
 
 /**
- * Route with just ID (for lookups)
- */
-export type RouteId = Pick<Route, 'id'>
-
-/**
- * Rider with just ID (for lookups)
- */
-export type RiderId = Pick<Rider, 'id'>
-
-/**
  * Event with just slug (for static generation)
  */
 export type EventSlug = Pick<Event, 'slug'>
@@ -225,12 +205,6 @@ export type RiderMergeInsert = Database['public']['Tables']['rider_merges']['Ins
  */
 export type RiderIdOnly = Pick<Rider, 'id'>
 export type EventIdOnly = Pick<Event, 'id'>
-export type RouteIdOnly = Pick<Route, 'id'>
-
-/**
- * Event with minimal fields for status updates
- */
-export type EventForStatusUpdate = Pick<Event, 'chapter_id' | 'event_type'>
 
 /**
  * Event with chapter name for admin display
@@ -600,13 +574,3 @@ export type ChapterSlugOnly = Pick<Chapter, 'slug'>
  * News item for admin list
  */
 export type NewsItem = Database['public']['Tables']['news']['Row']
-
-/**
- * News item insert type
- */
-export type NewsInsert = Database['public']['Tables']['news']['Insert']
-
-/**
- * News item update type
- */
-export type NewsUpdate = Database['public']['Tables']['news']['Update']

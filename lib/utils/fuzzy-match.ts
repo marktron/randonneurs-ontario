@@ -281,7 +281,7 @@ export function levenshteinDistance(a: string, b: string): number {
  * Calculate a similarity score between 0 and 1.
  * 1 = exact match, 0 = completely different.
  */
-export function similarityScore(a: string, b: string): number {
+function similarityScore(a: string, b: string): number {
   const maxLen = Math.max(a.length, b.length)
   if (maxLen === 0) return 1 // Both empty strings are identical
   const distance = levenshteinDistance(a, b)

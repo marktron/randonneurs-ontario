@@ -48,34 +48,6 @@ export interface CardEvent {
 }
 
 /**
- * Complete data for generating control cards
- */
-export interface ControlCardData {
-  event: CardEvent
-  organizer: OrganizerInfo
-  controls: ControlPoint[]
-  riders: CardRider[]
-  totalAllowableTime: {
-    hours: number
-    minutes: number
-  }
-}
-
-/**
- * Input data for generating control cards (from the form)
- */
-export interface ControlCardInput {
-  eventId: string
-  organizerName: string
-  organizerPhone: string
-  organizerEmail: string
-  controls: {
-    name: string
-    distance: number
-  }[]
-}
-
-/**
  * Regulations text for the front of the control card
  */
 export const REGULATIONS_TEXT = {

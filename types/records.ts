@@ -144,16 +144,3 @@ export interface AwardRecipientWithDistance {
   awardYear: number
   seasonDistance: number
 }
-
-/**
- * All records data combined
- */
-export interface AllRecords {
-  lifetime: LifetimeRecords
-  season: SeasonRecords
-  currentSeasonDistance: RiderRecord[]
-  club: ClubAchievements
-  routes: RouteRecords
-  pbp: PbpRecords
-  graniteAnvil: GraniteAnvilRecords
-}

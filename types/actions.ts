@@ -8,10 +8,6 @@ export interface ActionResult<T = void> {
   data?: T
 }
 
-export interface ActionResultWithCount extends ActionResult {
-  count?: number
-}
-
 export interface MergeResult extends ActionResult {
   updatedEventsCount?: number
   deletedRoutesCount?: number
