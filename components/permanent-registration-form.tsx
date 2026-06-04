@@ -32,6 +32,7 @@ import { MembershipErrorModal } from '@/components/membership-error-modal'
 import type { RiderMatchCandidate } from '@/lib/actions/rider-match'
 import type { ActiveRoute } from '@/lib/data/routes'
 import { HoneypotField } from '@/components/honeypot-field'
+import { EmailTypoSuggestion } from '@/components/email-typo-suggestion'
 
 const STORAGE_KEY = 'ro-registration'
 
@@ -107,6 +108,7 @@ export function PermanentRegistrationForm({ routes }: PermanentRegistrationFormP
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
   const [email, setEmail] = useState('')
+  const [blurredEmail, setBlurredEmail] = useState('')
   const [shareRegistration, setShareRegistration] = useState(true)
   const [gender, setGender] = useState<string>('')
   const [emergencyContactName, setEmergencyContactName] = useState('')
@@ -530,7 +532,18 @@ export function PermanentRegistrationForm({ routes }: PermanentRegistrationFormP
               autoComplete="email"
               disabled={isPending}
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={(e) => {
+                setEmail(e.target.value)
+                setBlurredEmail('')
+              }}
+              onBlur={(e) => setBlurredEmail(e.target.value)}
+            />
+            <EmailTypoSuggestion
+              email={blurredEmail}
+              onAccept={(corrected) => {
+                setEmail(corrected)
+                setBlurredEmail('')
+              }}
             />
           </div>
 
