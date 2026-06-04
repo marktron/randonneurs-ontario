@@ -50,7 +50,6 @@ const DOMAIN_TYPOS: Record<string, string> = {
   'icoud.com': 'icloud.com',
   // canadian providers seen in registrations
   'rogers.con': 'rogers.com',
-  'sympatico.ca.': 'sympatico.ca',
 }
 
 export function suggestEmailCorrection(email: string): string | null {
