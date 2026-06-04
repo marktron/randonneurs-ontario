@@ -333,6 +333,66 @@ describe('RegistrationForm', () => {
     })
   })
 
+  describe('email typo-guard', () => {
+    it("shows a suggestion after blurring a typo'd email", async () => {
+      const user = userEvent.setup()
+      render(<RegistrationForm {...defaultProps} />)
+
+      const emailInput = screen.getByLabelText(/email/i) as HTMLInputElement
+      await user.clear(emailInput)
+      await user.type(emailInput, 'rider@gmail.co')
+      await user.tab()
+
+      expect(screen.getByText(/did you mean/i)).toBeInTheDocument()
+      expect(
+        screen.getByRole('button', { name: /use suggested email rider@gmail\.com/i })
+      ).toBeInTheDocument()
+    })
+
+    it('does not show a suggestion while typing (before blur)', async () => {
+      const user = userEvent.setup()
+      render(<RegistrationForm {...defaultProps} />)
+
+      const emailInput = screen.getByLabelText(/email/i) as HTMLInputElement
+      await user.clear(emailInput)
+      await user.type(emailInput, 'rider@gmail.co')
+
+      expect(screen.queryByText(/did you mean/i)).toBeNull()
+    })
+
+    it('does not show a suggestion for a valid domain', async () => {
+      const user = userEvent.setup()
+      render(<RegistrationForm {...defaultProps} />)
+
+      const emailInput = screen.getByLabelText(/email/i) as HTMLInputElement
+      await user.clear(emailInput)
+      await user.type(emailInput, 'rider@gmail.com')
+      await user.tab()
+
+      expect(screen.queryByText(/did you mean/i)).toBeNull()
+    })
+
+    it('accepting the suggestion rewrites the field and hides the hint', async () => {
+      const user = userEvent.setup()
+      render(<RegistrationForm {...defaultProps} />)
+
+      const emailInput = screen.getByLabelText(/email/i) as HTMLInputElement
+      await user.clear(emailInput)
+      await user.type(emailInput, 'rider@gmail.co')
+      await user.tab()
+
+      const suggestionButton = screen.getByRole('button', {
+        name: /use suggested email rider@gmail\.com/i,
+      })
+      await user.click(suggestionButton)
+
+      await waitFor(() => {
+        expect((screen.getByLabelText(/email/i) as HTMLInputElement).value).toBe('rider@gmail.com')
+        expect(screen.queryByText(/did you mean/i)).toBeNull()
+      })
+    })
+  })
+
   describe('loading states', () => {
     it('disables submit button while pending', async () => {
       mockRegisterForEvent.mockImplementation(
