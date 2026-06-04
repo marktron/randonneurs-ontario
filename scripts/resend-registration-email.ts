@@ -26,17 +26,9 @@
  *   npx tsx scripts/resend-registration-email.ts \
  *     --registration-id=<uuid> --env-file=.env.production.local --send
  */
-import { config } from 'dotenv'
-import { join } from 'path'
-
-const argsRaw = process.argv.slice(2)
-const envFileArg = argsRaw.find((a) => a.startsWith('--env-file='))
-if (envFileArg) {
-  // Load the explicit env file first; dotenv won't override anything already set.
-  config({ path: join(process.cwd(), envFileArg.split('=')[1]) })
-}
-config({ path: join(process.cwd(), '.env.development.local') })
-config({ path: join(process.cwd(), '.env.local') })
+// MUST be first: loads env (honoring --env-file) before any module that reads
+// env at import time, e.g. lib/email/ses.ts which freezes the SES from-address.
+import './load-env'
 
 import WebSocket from 'ws'
 import { createClient } from '@supabase/supabase-js'
@@ -58,6 +50,7 @@ import {
 import { buildRegistrationConfirmationEmail } from '../lib/email/templates'
 import type { RegistrationEmailData } from '../lib/email/templates'
 import { getVpEmail } from '../lib/email/vp-emails'
+import { fromEmail } from '../lib/email/ses'
 import { sendRegistrationConfirmationEmail } from '../lib/email/send-registration-email'
 
 const args = process.argv.slice(2)
@@ -187,6 +180,7 @@ async function main() {
   const vpEmail = getVpEmail(emailData.chapterSlug)
 
   console.log('---')
+  console.log(`From:      ${fromEmail}`)
   console.log(`To:        ${emailData.registrantEmail}`)
   console.log(`Cc:        ${vpEmail || '(none)'}`)
   console.log(`Reply-To:  ${vpEmail || '(none)'}`)
@@ -194,6 +188,12 @@ async function main() {
   console.log(
     `Status:    registration.status=${registration.status} → membershipStatus=${membershipStatus}${membershipType ? ` (${membershipType})` : ''}`
   )
+  const override = process.env.SES_OVERRIDE_RECIPIENT
+  if (override) {
+    console.log(
+      `\n⚠  SES_OVERRIDE_RECIPIENT is set: the actual send will go to ${override} (NOT ${emailData.registrantEmail}), and the Cc to the VP will be dropped.`
+    )
+  }
   console.log('--- text body preview ---')
   console.log(text)
   console.log('---\n')
