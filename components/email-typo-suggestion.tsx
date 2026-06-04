@@ -20,6 +20,7 @@ export function EmailTypoSuggestion({ email, onAccept }: EmailTypoSuggestionProp
       <button
         type="button"
         onClick={() => onAccept(suggestion)}
+        aria-label={`Use suggested email ${suggestion}`}
         className="text-primary font-medium hover:underline underline-offset-2"
       >
         {suggestion}
