@@ -36,6 +36,53 @@ function formatDate(dateString: string): {
   return { dayOfWeek, shortDayOfWeek, month, monthShort, day, year }
 }
 
+/**
+ * Tailwind text-colour class for a brevet distance, matching its ACP medal.
+ * Populaires and any non-standard distance return null so the caller keeps
+ * its existing (muted) styling.
+ */
+export function distanceMedalColorClass(distance: string): string | null {
+  const km = parseInt(distance, 10)
+  if (Number.isNaN(km)) return null
+  if (km >= 1000) return 'text-neutral-900 dark:text-neutral-100'
+  switch (km) {
+    case 200:
+      return 'text-yellow-600 dark:text-yellow-400'
+    case 300:
+      return 'text-lime-600 dark:text-lime-400'
+    case 400:
+      return 'text-purple-600 dark:text-purple-400'
+    case 600:
+      return 'text-orange-600 dark:text-orange-400'
+    default:
+      return null
+  }
+}
+
+/**
+ * Tailwind background + text classes for a solid ACP-medal-coloured chip
+ * (used by the grid view, where the whole event cell is filled with the medal
+ * colour and rendered with light text). Populaires and any non-standard
+ * distance return null so the caller keeps its default muted styling.
+ */
+export function distanceMedalCellClass(distance: string): string | null {
+  const km = parseInt(distance, 10)
+  if (Number.isNaN(km)) return null
+  if (km >= 1000) return 'bg-neutral-900 text-white'
+  switch (km) {
+    case 200:
+      return 'bg-yellow-600 text-white'
+    case 300:
+      return 'bg-lime-600 text-white'
+    case 400:
+      return 'bg-purple-600 text-white'
+    case 600:
+      return 'bg-orange-600 text-white'
+    default:
+      return null
+  }
+}
+
 function formatTime(time: string): string {
   const [hours, minutes] = time.split(':')
   const hour = parseInt(hours, 10)
@@ -104,7 +151,11 @@ export function EventCard({
               {event.name}
             </Link>
           </h3>
-          <span className="text-sm tabular-nums text-muted-foreground">{event.distance} km</span>
+          <span
+            className={`text-sm tabular-nums ${distanceMedalColorClass(event.distance) ?? 'text-muted-foreground'}`}
+          >
+            {event.distance} km
+          </span>
           {event.type === 'Populaire' && (
             <Badge variant="outline" className="text-[10px] tracking-wider font-medium">
               Populaire

@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import Link from 'next/link'
 import { Badge } from '@/components/ui/badge'
-import type { Event } from '@/components/event-card'
+import { distanceMedalCellClass, type Event } from '@/components/event-card'
 
 const DAYS_OF_WEEK = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
@@ -157,6 +157,9 @@ export function CalendarGridView({ events }: { events: Event[] }) {
                               </div>
                               {dayEvents?.map((event, ei) => {
                                 const isCancelled = event.status === 'cancelled'
+                                const medalCell = isCancelled
+                                  ? null
+                                  : distanceMedalCellClass(event.distance)
                                 return (
                                   <Link
                                     key={ei}
@@ -165,10 +168,12 @@ export function CalendarGridView({ events }: { events: Event[] }) {
                                     className="block mb-1 last:mb-0"
                                   >
                                     <div
-                                      className={`rounded px-1.5 py-1 text-[11px] leading-tight border border-border/40 ${
+                                      className={`rounded px-1.5 py-1 text-[11px] leading-tight border ${
                                         isCancelled
-                                          ? 'bg-muted/40 opacity-60'
-                                          : 'bg-muted/70 hover:bg-muted transition-colors'
+                                          ? 'border-border/40 bg-muted/40 opacity-60'
+                                          : medalCell
+                                            ? `border-transparent ${medalCell} hover:opacity-90 transition-opacity`
+                                            : 'border-border/40 bg-muted/70 hover:bg-muted transition-colors'
                                       }`}
                                     >
                                       <div className="font-medium truncate">
@@ -179,7 +184,11 @@ export function CalendarGridView({ events }: { events: Event[] }) {
                                           </span>
                                         )}
                                       </div>
-                                      <div className="text-muted-foreground mt-0.5 truncate">
+                                      <div
+                                        className={`mt-0.5 truncate ${
+                                          medalCell ? 'text-white/80' : 'text-muted-foreground'
+                                        }`}
+                                      >
                                         {formatTime(event.startTime)}
                                         {event.chapterName && ` · ${event.chapterName}`}
                                       </div>
@@ -293,7 +302,9 @@ export function CalendarGridView({ events }: { events: Event[] }) {
                               </span>
                               <Badge
                                 variant="outline"
-                                className="text-[10px] tracking-wider shrink-0 ml-auto"
+                                className={`text-[10px] tracking-wider shrink-0 ml-auto ${
+                                  isCancelled ? '' : (distanceMedalCellClass(event.distance) ?? '')
+                                }`}
                               >
                                 {event.distance} km
                               </Badge>

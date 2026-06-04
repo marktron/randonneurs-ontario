@@ -77,6 +77,22 @@ describe('CalendarGridView', () => {
     expect(hrefs).toContain('/register/spring-300-2026-05-01')
   })
 
+  it('fills brevet cells with their ACP medal background colour', () => {
+    const { container } = render(<CalendarGridView events={sampleEvents} />)
+
+    // Spring 200 → yellow-600, Spring 300 → lime-600
+    expect(container.querySelector('.bg-yellow-600')).not.toBeNull()
+    expect(container.querySelector('.bg-lime-600')).not.toBeNull()
+  })
+
+  it('keeps populaire cells muted with no medal background', () => {
+    const populaireOnly: Event[] = [sampleEvents[0]] // Spring 100 (Populaire)
+    const { container } = render(<CalendarGridView events={populaireOnly} />)
+
+    expect(container.querySelector('.bg-yellow-600')).toBeNull()
+    expect(container.querySelector('[class*="bg-muted"]')).not.toBeNull()
+  })
+
   it('renders nothing for empty events', () => {
     const { container } = render(<CalendarGridView events={[]} />)
 
@@ -116,5 +132,25 @@ describe('cancelled events', () => {
       .queryAllByRole('link')
       .filter((el) => el.getAttribute('href')?.includes('/register/spring-200-cancelled-fixture'))
     expect(navLinks.length).toBeGreaterThan(0)
+  })
+
+  it('does not apply a medal background to cancelled events', () => {
+    const events: Event[] = [
+      {
+        slug: 'spring-200-cancelled-fixture',
+        date: '2026-04-15',
+        name: 'Spring 200',
+        type: 'Brevet',
+        distance: '200',
+        startLocation: 'City Hall',
+        startTime: '08:00',
+        status: 'cancelled',
+        chapterName: 'Toronto',
+      },
+    ]
+    const { container } = render(<CalendarGridView events={events} />)
+
+    // Cancelled 200 km event stays muted rather than yellow-600
+    expect(container.querySelector('.bg-yellow-600')).toBeNull()
   })
 })

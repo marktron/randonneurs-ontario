@@ -4,7 +4,12 @@
 
 import { describe, it, expect } from 'vitest'
 import { render, screen } from '@testing-library/react'
-import { EventCard, type Event } from '@/components/event-card'
+import {
+  EventCard,
+  distanceMedalColorClass,
+  distanceMedalCellClass,
+  type Event,
+} from '@/components/event-card'
 
 const baseEvent: Event = {
   id: 'evt-1',
@@ -20,7 +25,62 @@ const baseEvent: Event = {
   rwgpsId: '12345',
 }
 
+describe('distanceMedalColorClass', () => {
+  it('maps each ACP medal distance to its colour', () => {
+    expect(distanceMedalColorClass('200')).toContain('text-yellow-600')
+    expect(distanceMedalColorClass('300')).toContain('text-lime-600')
+    expect(distanceMedalColorClass('400')).toContain('text-purple-600')
+    expect(distanceMedalColorClass('600')).toContain('text-orange-600')
+  })
+
+  it('treats any distance of 1000 km or more as the 1000+ colour', () => {
+    expect(distanceMedalColorClass('1000')).toContain('text-neutral-900')
+    expect(distanceMedalColorClass('1200')).toContain('text-neutral-900')
+  })
+
+  it('returns null for populaires and non-standard distances', () => {
+    expect(distanceMedalColorClass('100')).toBeNull()
+    expect(distanceMedalColorClass('150')).toBeNull()
+    expect(distanceMedalColorClass('500')).toBeNull()
+    expect(distanceMedalColorClass('not-a-number')).toBeNull()
+  })
+})
+
+describe('distanceMedalCellClass', () => {
+  it('returns a solid medal background with light text for each medal distance', () => {
+    expect(distanceMedalCellClass('200')).toBe('bg-yellow-600 text-white')
+    expect(distanceMedalCellClass('300')).toBe('bg-lime-600 text-white')
+    expect(distanceMedalCellClass('400')).toBe('bg-purple-600 text-white')
+    expect(distanceMedalCellClass('600')).toBe('bg-orange-600 text-white')
+  })
+
+  it('treats any distance of 1000 km or more as the 1000+ background', () => {
+    expect(distanceMedalCellClass('1000')).toBe('bg-neutral-900 text-white')
+    expect(distanceMedalCellClass('1200')).toBe('bg-neutral-900 text-white')
+  })
+
+  it('returns null for populaires and non-standard distances', () => {
+    expect(distanceMedalCellClass('100')).toBeNull()
+    expect(distanceMedalCellClass('500')).toBeNull()
+    expect(distanceMedalCellClass('not-a-number')).toBeNull()
+  })
+})
+
 describe('EventCard', () => {
+  it('colour-codes the distance text to match the ACP medal (200 km → yellow-600)', () => {
+    render(<EventCard event={baseEvent} />)
+    const distance = screen.getByText(/^200 km$/)
+    expect(distance.className).toContain('text-yellow-600')
+  })
+
+  it('keeps the default muted colour for populaires', () => {
+    render(
+      <EventCard event={{ ...baseEvent, type: 'Populaire', distance: '100', name: 'Spring 100' }} />
+    )
+    const distance = screen.getByText(/^100 km$/)
+    expect(distance.className).toContain('text-muted-foreground')
+  })
+
   describe('scheduled event', () => {
     it('renders a Register link', () => {
       render(<EventCard event={baseEvent} />)
