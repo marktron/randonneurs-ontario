@@ -13,12 +13,8 @@ import {
 import { ClickableTableRow } from '@/components/admin/clickable-table-row'
 import { Calendar, Users, Route, Trophy, ArrowRight } from 'lucide-react'
 import Link from 'next/link'
-import type {
-  EventForDashboard,
-  UpcomingEventForDashboard,
-  RegistrationForCounting,
-  ResultForCounting,
-} from '@/types/queries'
+import { getEventRiderCounts } from '@/lib/data/event-rider-counts'
+import type { EventForDashboard, UpcomingEventForDashboard } from '@/types/queries'
 
 async function getStats() {
   const [eventsResult, ridersResult, routesResult, resultsResult] = await Promise.all([
@@ -64,45 +60,6 @@ async function getEventsNeedingResults(chapterId: string | null): Promise<EventF
   return (data as EventForDashboard[]) ?? []
 }
 
-async function getEventRiderCounts(eventIds: string[]): Promise<Record<string, number>> {
-  if (eventIds.length === 0) return {}
-
-  const [registrationsResult, resultsResult] = await Promise.all([
-    getSupabaseAdmin().from('registrations').select('event_id, rider_id').in('event_id', eventIds),
-    getSupabaseAdmin().from('results').select('event_id, rider_id').in('event_id', eventIds),
-  ])
-
-  const counts: Record<string, Set<string>> = {}
-
-  // Initialize sets for all events
-  for (const id of eventIds) {
-    counts[id] = new Set()
-  }
-
-  // Add riders from registrations
-  const typedRegs = (registrationsResult.data as RegistrationForCounting[]) ?? []
-  for (const reg of typedRegs) {
-    if (reg.event_id && reg.rider_id && counts[reg.event_id]) {
-      counts[reg.event_id].add(reg.rider_id)
-    }
-  }
-
-  // Add riders from results
-  const typedResults = (resultsResult.data as ResultForCounting[]) ?? []
-  for (const res of typedResults) {
-    if (res.event_id && res.rider_id && counts[res.event_id]) {
-      counts[res.event_id].add(res.rider_id)
-    }
-  }
-
-  // Convert sets to counts
-  const result: Record<string, number> = {}
-  for (const [id, set] of Object.entries(counts)) {
-    result[id] = set.size
-  }
-  return result
-}
-
 async function getUpcomingEvents(chapterId: string | null): Promise<UpcomingEventForDashboard[]> {
   const today = new Date().toISOString().split('T')[0]
 
@@ -116,8 +73,7 @@ async function getUpcomingEvents(chapterId: string | null): Promise<UpcomingEven
       start_time,
       distance_km,
       event_type,
-      chapters (name),
-      registrations (count)
+      chapters (name)
     `
     )
     .eq('status', 'scheduled')
@@ -143,8 +99,11 @@ export default async function AdminDashboardPage() {
     getUpcomingEvents(chapterId),
   ])
 
-  // Get rider counts for events needing results
-  const eventIds = eventsNeedingResults.map((e) => e.id)
+  // Active-rider counts (excludes cancelled, dedups registrations + results)
+  // for every event shown on the dashboard.
+  const eventIds = [
+    ...new Set([...eventsNeedingResults.map((e) => e.id), ...upcomingEvents.map((e) => e.id)]),
+  ]
   const riderCounts = await getEventRiderCounts(eventIds)
 
   return (
@@ -265,7 +224,7 @@ export default async function AdminDashboardPage() {
                         )}
                       </TableCell>
                       <TableCell className="hidden sm:table-cell tabular-nums">
-                        {event.registrations?.[0]?.count ?? 0}
+                        {riderCounts[event.id] ?? 0}
                       </TableCell>
                       <TableCell className="hidden sm:table-cell text-right">
                         {event.distance_km} km

@@ -245,18 +245,7 @@ export type UpcomingEventForDashboard = Pick<
   'id' | 'name' | 'event_date' | 'start_time' | 'distance_km' | 'event_type'
 > & {
   chapters: Pick<Chapter, 'name'> | null
-  registrations: Array<{ count: number }> | null
 }
-
-/**
- * Registration with event_id and rider_id for counting
- */
-export type RegistrationForCounting = Pick<Registration, 'event_id' | 'rider_id'>
-
-/**
- * Result with event_id and rider_id for counting
- */
-export type ResultForCounting = Pick<Result, 'event_id' | 'rider_id'>
 
 /**
  * Result with rider and event for admin results page

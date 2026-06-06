@@ -1,6 +1,7 @@
 import { requireAdmin } from '@/lib/auth/get-admin'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { getChapters } from '@/lib/actions/admin-users'
+import { getEventRiderCounts } from '@/lib/data/event-rider-counts'
 import { parseLocalDate } from '@/lib/utils'
 import { ClickableTableRow } from '@/components/admin/clickable-table-row'
 import {
@@ -126,22 +127,10 @@ async function getEvents(
 
   if (events.length === 0) return { events, totalCount }
 
-  // Get deduplicated rider counts across registrations and results
-  const eventIds = events.map((e) => e.id)
-  const { data: counts } = await getSupabaseAdmin().rpc('get_event_rider_counts', {
-    event_ids: eventIds,
-  })
-
-  if (counts) {
-    const countMap = new Map(
-      (counts as Array<{ event_id: string; rider_count: number }>).map((c) => [
-        c.event_id,
-        c.rider_count,
-      ])
-    )
-    for (const event of events) {
-      event.rider_count = countMap.get(event.id) ?? 0
-    }
+  // Active-rider counts (excludes cancelled, dedups registrations + results).
+  const riderCounts = await getEventRiderCounts(events.map((e) => e.id))
+  for (const event of events) {
+    event.rider_count = riderCounts[event.id] ?? 0
   }
 
   return { events, totalCount }

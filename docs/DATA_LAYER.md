@@ -162,6 +162,26 @@ export async function getAllRiders(): Promise<RiderListItem[]>
 - `getAllNews()` — All items for admin list (uses admin client)
 - `getNewsItem(id)` — Single item by ID for admin edit (uses admin client)
 
+### lib/data/event-rider-counts.ts
+
+```typescript
+// Active-rider count per event, keyed by event id
+export async function getEventRiderCounts(eventIds: string[]): Promise<Record<string, number>>
+```
+
+Single source of truth for the rider counts shown in the admin area
+(`/admin` dashboard and `/admin/events` list). Wraps the
+`get_event_rider_counts` RPC, which counts **active** riders only:
+
+- Registrations with status `registered` or `incomplete: membership` count.
+- `cancelled` registrations are **excluded**.
+- Registrations and results are merged with `COUNT(DISTINCT rider_id)`, so a
+  rider who both registered and has a result is counted once.
+
+Always use this helper for admin event rider counts. Do not re-derive counts
+with an embedded `registrations (count)` select — that ignores status and sums
+cancelled registrations into the total (the bug this helper consolidates away).
+
 ### Usage Pattern
 
 ```typescript
