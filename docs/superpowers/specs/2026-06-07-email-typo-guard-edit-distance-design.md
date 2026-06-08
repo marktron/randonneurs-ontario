@@ -78,13 +78,27 @@ outlook.com, live.com, live.ca, icloud.com, me.com, mac.com, ymail.com,
 aol.com, msn.com, rogers.com, sympatico.ca, bell.net
 ```
 
-### Curated map: trimmed, not deleted
+### Curated map: trimmed to an extension point
 
-The map stays as an explicit overrides layer (job: pin a specific answer for an
-ambiguous or distance-≥2 typo we observe in the wild, and document intent). It
-is trimmed to entries that the edit-distance engine does **not** already
-subsume — redundant distance-1 entries are removed so the file reads as
-"engine = edit distance, map = exceptions."
+The map stays as an explicit overrides layer (job: pin a specific answer for a
+distance-≥2 typo we observe in the wild that the engine can't reach, and
+document intent). Working through the current anchor list, **every** prior map
+entry is either:
+
+- subsumed by the engine (a clear distance-1 typo, e.g. `gmail.con`,
+  `gmial.com`, `yahoo.comc`), or
+- correctly resolved to a **silent tie** (`yahoo.co`/`yahoo.cm`,
+  `hotmail.co`, `live.co`/`live.cm` are each distance 1 from both the `.com`
+  and the `.ca` anchor → ambiguous → `null`).
+
+So the map is trimmed to **empty** for now — kept (with an explanatory comment
+and a commented-out example showing the format) as a documented extension point.
+The file then reads as "engine = edit distance; map = manual overrides, none
+currently needed."
+
+Note the asymmetry, which is intended: `gmail.co` still suggests `gmail.com`
+because there is no `gmail.ca` anchor, so it is unambiguous. The `.com`/`.ca`
+providers stay silent on their `.co`/`.cm` typos rather than guess.
 
 ### Accepted risks (consistent with the existing `.co` stance)
 
@@ -104,11 +118,19 @@ script afterward.
 
 ## Testing
 
-- Unit (`tests/unit/lib/email-typo.test.ts`): add `yahoo.comc → yahoo.com`;
-  distance-1 variants across providers (`gmail.con`, `yahoo.cm`, `rogers.con`,
-  trailing/extra/dropped/transposed char); anchor → `null`; valid unrelated
-  domain → `null`; a tie case → `null`; short-anchor nudge (`we.com → me.com`)
-  documents the accepted behavior. Existing assertions stay green.
+- Unit (`tests/unit/lib/email-typo.test.ts`):
+  - suggests on clear distance-1 typos: `yahoo.comc → yahoo.com`,
+    `gmail.con → gmail.com`, `gmail.cm → gmail.com`, `rogers.con → rogers.com`,
+    plus dropped/extra/transposed-char variants and `gmail.co → gmail.com`
+    (unambiguous, no `gmail.ca` anchor).
+  - returns `null` on the `.com`/`.ca` ties: `yahoo.co`, `yahoo.cm`,
+    `live.cm`, `hotmail.co` (ambiguous → stay silent).
+  - returns `null` when the domain already equals an anchor (`gmail.com`,
+    `yahoo.ca`).
+  - returns `null` for unrelated valid domains (`randonneursontario.ca`,
+    `domain.co.uk`) and for distance-≥2 noise.
+  - documents the accepted short-anchor nudge: `we.com → me.com`.
+  - existing assertions for the still-valid cases stay green.
 - Component/wiring tests in `tests/unit/components/registration-form.test.tsx`
   remain valid (UX unchanged) — no new test needed, but confirm they pass.
 
