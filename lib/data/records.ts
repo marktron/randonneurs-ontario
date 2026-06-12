@@ -170,10 +170,9 @@ const getLifetimeRecordsInner = cache(async (): Promise<LifetimeRecords> => {
     supabase.rpc('get_rider_distance_totals', { limit_count: RECORD_LIMIT }),
     supabase.rpc('get_rider_active_seasons', { limit_count: RECORD_LIMIT }),
     supabase.rpc('get_rider_permanent_counts', { limit_count: RECORD_LIMIT }),
-    supabase.rpc('get_rider_award_counts', {
-      p_award_slug: 'completed-devil-week',
-      limit_count: RECORD_LIMIT,
-    }),
+    // Devil week is result-scoped (4 tagged rides per series), so the generic
+    // row-counting award RPC would report rides; this one counts series.
+    supabase.rpc('get_rider_devil_week_counts', { limit_count: RECORD_LIMIT }),
     supabase.rpc('get_rider_award_counts', {
       p_award_slug: 'super-randonneur',
       limit_count: RECORD_LIMIT,

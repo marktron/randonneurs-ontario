@@ -95,6 +95,7 @@ const rpcResponses: Record<string, unknown[]> = {
   get_rider_active_seasons: mockRiderRecords,
   get_rider_permanent_counts: mockRiderRecords,
   get_rider_award_counts: mockRiderRecords,
+  get_rider_devil_week_counts: mockRiderRecords,
   get_best_season_event_counts: mockSeasonRiderRecords,
   get_best_season_distances: mockSeasonRiderRecords,
   get_current_season_distances: mockRiderRecords,
@@ -181,6 +182,7 @@ describe('Records Data Module', () => {
       expect(calledFunctions).toContain('get_rider_active_seasons')
       expect(calledFunctions).toContain('get_rider_permanent_counts')
       expect(calledFunctions).toContain('get_rider_award_counts')
+      expect(calledFunctions).toContain('get_rider_devil_week_counts')
       expect(calledFunctions).toContain('get_rider_longest_streaks')
       expect(calledFunctions).toContain('get_rider_sr_streaks')
     })
@@ -192,14 +194,20 @@ describe('Records Data Module', () => {
       expect(completionCall?.params).toEqual({ limit_count: 10 })
     })
 
-    it('passes correct award slug for Devil Week', async () => {
+    it('uses the series-counting RPC for Devil Week, not the generic award row count', async () => {
       await getLifetimeRecords()
 
-      const awardCalls = rpcCalls.filter((c) => c.functionName === 'get_rider_award_counts')
-      const devilWeekCall = awardCalls.find(
-        (c) => (c.params as { p_award_slug: string }).p_award_slug === 'completed-devil-week'
+      const devilWeekCall = rpcCalls.find((c) => c.functionName === 'get_rider_devil_week_counts')
+      expect(devilWeekCall?.params).toEqual({ limit_count: 10 })
+
+      // The generic award counter must no longer be asked for devil week —
+      // it counts result rows (rides), which inflated the leaderboard ~4x.
+      const genericDevilWeekCall = rpcCalls.find(
+        (c) =>
+          c.functionName === 'get_rider_award_counts' &&
+          (c.params as { p_award_slug?: string }).p_award_slug === 'completed-devil-week'
       )
-      expect(devilWeekCall).toBeDefined()
+      expect(genericDevilWeekCall).toBeUndefined()
     })
   })
 

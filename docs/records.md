@@ -102,9 +102,8 @@ Records are cached at two different intervals:
 - All completion counts use `status = 'finished'` filter
 - PBP events identified by `events.name = 'Paris-Brest-Paris'`
 - Granite Anvil events identified by `events.collection = 'granite-anvil'`
-- Award counts use `result_awards` junction table with award slugs:
-  - `completed-devil-week`
-  - `super-randonneur`
+- Super Randonneur counts use the `rider_awards` table (`super-randonneur` slug), counting award rows — a rider can earn it more than once per season
+- Devil Week counts use a dedicated RPC (`get_rider_devil_week_counts`): the `completed-devil-week` award is result-scoped (each of the four series rides carries a `result_awards` row), so the function counts distinct event years rather than rows — one Devil Week per calendar year means distinct years = completed series
 - Award recipient lists use `result_awards` with slugs:
   - `r-10000` (Randonneur 10000)
   - `r-5000` (Randonneur 5000)

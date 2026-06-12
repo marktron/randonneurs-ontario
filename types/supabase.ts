@@ -1120,6 +1120,15 @@ export type Database = {
           value: number
         }[]
       }
+      get_rider_devil_week_counts: {
+        Args: { limit_count?: number }
+        Returns: {
+          rank: number
+          rider_name: string
+          rider_slug: string
+          value: number
+        }[]
+      }
       get_rider_distance_totals: {
         Args: { limit_count?: number }
         Returns: {
