@@ -3,15 +3,15 @@
 import * as Sentry from '@sentry/nextjs'
 import NextError from 'next/error'
 import { useEffect } from 'react'
+import { normalizeGlobalError } from '@/lib/global-error'
 
 export default function GlobalError({ error }: { error: Error & { digest?: string } }) {
   useEffect(() => {
-    const normalized =
-      error instanceof Error
-        ? error
-        : new Error(
-            `Non-Error thrown: ${typeof error === 'object' ? JSON.stringify(error) : String(error)}`
-          )
+    // Benign browser noise (e.g. a <script> in <head> failing to load) arrives
+    // here as a DOM Event. Don't synthesize and report a fake exception for it.
+    const normalized = normalizeGlobalError(error)
+    if (!normalized) return
+
     Sentry.captureException(normalized, {
       extra: { original: error, digest: error?.digest },
     })

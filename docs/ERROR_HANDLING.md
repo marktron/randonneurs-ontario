@@ -5,6 +5,7 @@ This guide explains the standardized error handling patterns used throughout the
 ## Overview
 
 All error handling is centralized in `lib/errors.ts` to ensure:
+
 - **Consistency**: All errors follow the same patterns
 - **Observability**: All errors are logged to Sentry and console
 - **User Experience**: Appropriate error messages for different scenarios
@@ -75,10 +76,10 @@ Always provide context when handling errors:
 
 ```typescript
 handleActionError(error, {
-  operation: 'createEvent',           // Function/operation name
-  context: { eventId, chapterId },    // Additional debugging data
+  operation: 'createEvent', // Function/operation name
+  context: { eventId, chapterId }, // Additional debugging data
   userMessage: 'Custom user message', // Optional: override default message
-  skipSentry: false,                  // Optional: skip Sentry logging (rare)
+  skipSentry: false, // Optional: skip Sentry logging (rare)
 })
 ```
 
@@ -103,7 +104,7 @@ export async function getEventsByChapter(urlSlug: string): Promise<Event[]> {
         return handleDataError(
           error,
           { operation: 'getEventsByChapter', context: { urlSlug } },
-          []  // Fallback: empty array
+          [] // Fallback: empty array
         )
       }
 
@@ -180,8 +181,8 @@ if (!name.trim() || !chapterId) {
 const { data, error } = await supabase.from('events').select('*')
 
 if (error) {
-  console.error('Error:', error)  // No Sentry, inconsistent format
-  return { success: false, error: 'Failed' }  // Generic message
+  console.error('Error:', error) // No Sentry, inconsistent format
+  return { success: false, error: 'Failed' } // Generic message
 }
 ```
 
@@ -203,15 +204,28 @@ if (error) {
 ## Best Practices
 
 1. **Always provide operation name**: Makes debugging easier
+
    ```typescript
-   { operation: 'createEvent' }  // ✅ Good
-   { operation: 'unknown' }      // ❌ Bad
+   {
+     operation: 'createEvent'
+   } // ✅ Good
+   {
+     operation: 'unknown'
+   } // ❌ Bad
    ```
 
 2. **Include relevant context**: Helps with debugging
+
    ```typescript
-   { context: { eventId, chapterId, userId } }  // ✅ Good
-   { context: {} }                              // ❌ Less helpful
+   {
+     context: {
+       ;(eventId, chapterId, userId)
+     }
+   } // ✅ Good
+   {
+     context: {
+     }
+   } // ❌ Less helpful
    ```
 
 3. **Use appropriate error handler**:
@@ -220,6 +234,7 @@ if (error) {
    - `handleDataError()` for data fetching (graceful degradation)
 
 4. **Don't log validation errors to Sentry**:
+
    ```typescript
    // Validation errors are expected, don't log to Sentry
    if (!email || !password) {
@@ -229,7 +244,7 @@ if (error) {
 
 5. **Use 🚨 emoji in console.error**: Already handled by `logError()`, but if you need to log manually:
    ```typescript
-   console.error('🚨 Error:', error)  // Easy to search for
+   console.error('🚨 Error:', error) // Easy to search for
    ```
 
 ## Testing
@@ -246,15 +261,36 @@ jest.mock('@sentry/nextjs')
 it('should log errors to Sentry', async () => {
   const error = new Error('Test error')
   const result = handleActionError(error, { operation: 'test' })
-  
+
   expect(result.success).toBe(false)
   expect(Sentry.captureException).toHaveBeenCalled()
 })
 ```
 
+## Global Error Boundary & Browser Noise
+
+`app/global-error.tsx` is the App Router top-level error boundary. It reports
+caught errors to Sentry, normalizing non-`Error` throws via
+`normalizeGlobalError()` in `lib/global-error.ts`.
+
+Browsers can surface **benign resource-load failures** to this boundary as a
+DOM `Event` rather than a real `Error` — for example a `<script>` in `<head>`
+failing to load because of an ad blocker, browser extension, or a transient
+network blip. These carry no useful stack and impact no users.
+`normalizeGlobalError()` returns `null` for such DOM `Event` values so the
+boundary skips reporting them (previously they were wrapped into a synthetic
+`Error: Non-Error thrown: {"isTrusted":true}` and sent to Sentry as noise —
+Sentry issue `JAVASCRIPT-NEXTJS-26`).
+
+This complements the `ignoreErrors` list in `instrumentation-client.ts`, which
+filters by message string. The synthetic message bypassed that list, so the
+filtering is done at the source instead.
+
 ## Related Files
 
 - **`lib/errors.ts`**: Error handling utilities
+- **`lib/global-error.ts`**: Global error boundary normalization (`normalizeGlobalError`)
+- **`app/global-error.tsx`**: App Router top-level error boundary
 - **`types/actions.ts`**: `ActionResult<T>` type definition
 - **`sentry.server.config.ts`**: Sentry server configuration
 - **`sentry.edge.config.ts`**: Sentry edge configuration
