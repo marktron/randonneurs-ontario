@@ -49,7 +49,12 @@ jobs:
 
       - uses: supabase/setup-cli@v1
         with:
-          version: latest
+          # Pinned, not `latest`: CLI v2.106.0 (2026-06-11) regressed `supabase
+          # start` so the service_role/public-schema bootstrap grants are no
+          # longer applied, making every real-DB test fail with `42501
+          # permission denied`. v2.105.0 is the last known-good. Re-evaluate
+          # `latest` once a fixed release ships.
+          version: 2.105.0
 
       # Boots the local stack (Docker) and applies migrations + seed.sql, which
       # the integration-real tests depend on (chapters, awards, routes, etc.).
