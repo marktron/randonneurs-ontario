@@ -82,7 +82,7 @@ export async function createOgImageResponse(props: OgLayoutProps) {
 
 const textShadow = '0 2px 8px rgba(0,0,0,0.7), 0 1px 3px rgba(0,0,0,0.5)'
 
-function OgLayout({
+export function OgLayout({
   title,
   subtitle,
   badge,
@@ -116,6 +116,12 @@ function OgLayout({
         <img
           src={backgroundImageUrl}
           alt=""
+          // Explicit dimensions are required: when the background is a remote
+          // image whose intrinsic size satori cannot determine, @vercel/og
+          // otherwise throws "Image size cannot be determined" and the whole
+          // OG route fails to render (JAVASCRIPT-NEXTJS-27).
+          width={size.width}
+          height={size.height}
           style={{
             width: '100%',
             height: '100%',
