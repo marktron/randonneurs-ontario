@@ -9,6 +9,8 @@ import { Plus, Trash2, Printer, GripVertical, Download, Loader2, Info } from 'lu
 import type { CardRider } from '@/types/control-card'
 import { reverseControls, isReversedEvent } from '@/lib/controlPoints'
 import { fetchRwgpsControls } from '@/lib/rwgps'
+import { Checkbox } from '@/components/ui/checkbox'
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 
 interface ControlInput {
   id: string
@@ -65,6 +67,43 @@ export function ControlCardsForm({ event, riders, organizer }: ControlCardsFormP
 
   // Extra blank cards for day-of registrations
   const [extraBlankCards, setExtraBlankCards] = useState(0)
+
+  // Rider selection
+  const [selectionMode, setSelectionMode] = useState<'all' | 'individual'>('all')
+  const [selectedRiderIds, setSelectedRiderIds] = useState<Set<string>>(
+    () => new Set(riders.map((r) => r.id))
+  )
+
+  const allRidersSelected = riders.length > 0 && riders.every((r) => selectedRiderIds.has(r.id))
+
+  const toggleRider = useCallback((id: string) => {
+    setSelectedRiderIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) {
+        next.delete(id)
+      } else {
+        next.add(id)
+      }
+      return next
+    })
+  }, [])
+
+  const toggleSelectAll = useCallback(() => {
+    setSelectedRiderIds((prev) => {
+      const everyone = riders.every((r) => prev.has(r.id))
+      return everyone ? new Set() : new Set(riders.map((r) => r.id))
+    })
+  }, [riders])
+
+  const chosenRiderCount =
+    selectionMode === 'individual'
+      ? riders.filter((r) => selectedRiderIds.has(r.id)).length
+      : riders.length
+
+  // The print page falls back to 2 blank cards when nothing else would print.
+  const cardCount = chosenRiderCount + extraBlankCards > 0 ? chosenRiderCount + extraBlankCards : 2
+
+  const individualSelectionValid = selectionMode === 'all' || chosenRiderCount > 0
 
   const addControl = useCallback(() => {
     // Insert before the last control (finish)
@@ -159,14 +198,30 @@ export function ControlCardsForm({ event, riders, organizer }: ControlCardsFormP
       params.set('extraBlank', String(extraBlankCards))
     }
 
+    if (selectionMode === 'individual') {
+      const ids = riders.filter((r) => selectedRiderIds.has(r.id)).map((r) => r.id)
+      params.set('riderIds', ids.join(','))
+    }
+
     return `/admin/events/${event.id}/control-cards/print?${params.toString()}`
-  }, [event.id, organizerName, organizerPhone, organizerEmail, controls, extraBlankCards])
+  }, [
+    event.id,
+    organizerName,
+    organizerPhone,
+    organizerEmail,
+    controls,
+    extraBlankCards,
+    selectionMode,
+    selectedRiderIds,
+    riders,
+  ])
 
   const isFormValid =
     organizerName &&
     organizerPhone &&
     organizerEmail &&
-    controls.every((c) => c.name && c.distance !== '')
+    controls.every((c) => c.name && c.distance !== '') &&
+    individualSelectionValid
 
   return (
     <div className="space-y-6">
@@ -351,14 +406,73 @@ export function ControlCardsForm({ event, riders, organizer }: ControlCardsFormP
               Two blank control cards will be printed for manual entry.
             </p>
           ) : (
-            <div className="grid gap-1 md:grid-cols-3">
-              {riders.map((rider) => (
-                <div key={rider.id} className="text-sm">
-                  {rider.firstName} {rider.lastName}
+            <div className="space-y-4">
+              <RadioGroup
+                value={selectionMode}
+                onValueChange={(v) => setSelectionMode(v as 'all' | 'individual')}
+                className="space-y-2"
+              >
+                <div className="flex items-center gap-2">
+                  <RadioGroupItem value="all" id="mode-all" />
+                  <Label htmlFor="mode-all" className="font-normal">
+                    All registered riders
+                  </Label>
                 </div>
-              ))}
+                <div className="flex items-center gap-2">
+                  <RadioGroupItem value="individual" id="mode-individual" />
+                  <Label htmlFor="mode-individual" className="font-normal">
+                    Choose individually
+                  </Label>
+                </div>
+              </RadioGroup>
+
+              {selectionMode === 'all' ? (
+                <div className="grid gap-1 md:grid-cols-3">
+                  {riders.map((rider) => (
+                    <div key={rider.id} className="text-sm">
+                      {rider.firstName} {rider.lastName}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="space-y-2 border-t pt-3">
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      id="select-all"
+                      checked={allRidersSelected}
+                      onCheckedChange={toggleSelectAll}
+                    />
+                    <Label htmlFor="select-all" className="text-sm text-muted-foreground">
+                      Select all
+                    </Label>
+                  </div>
+                  <div className="grid gap-2 md:grid-cols-3">
+                    {riders.map((rider) => {
+                      const label = `${rider.firstName} ${rider.lastName}`
+                      return (
+                        <div key={rider.id} className="flex items-center gap-2">
+                          <Checkbox
+                            id={`rider-${rider.id}`}
+                            checked={selectedRiderIds.has(rider.id)}
+                            onCheckedChange={() => toggleRider(rider.id)}
+                          />
+                          <Label htmlFor={`rider-${rider.id}`} className="text-sm font-normal">
+                            {label}
+                          </Label>
+                        </div>
+                      )
+                    })}
+                  </div>
+                  {chosenRiderCount === 0 && (
+                    <p className="text-sm text-destructive">
+                      Select at least one rider, or switch to All registered riders.
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
           )}
+
           <div className="flex items-center gap-3 pt-2 border-t">
             <Label htmlFor="extraBlank" className="text-sm whitespace-nowrap">
               Extra blank cards:
@@ -387,7 +501,7 @@ export function ControlCardsForm({ event, riders, organizer }: ControlCardsFormP
             className={!isFormValid ? 'pointer-events-none opacity-50' : ''}
           >
             <Printer className="h-4 w-4 mr-2" />
-            Generate Control Cards
+            Generate {cardCount} Control Card{cardCount === 1 ? '' : 's'}
           </a>
         </Button>
         {!isFormValid && (
