@@ -65,7 +65,7 @@ describe('ControlCardsForm rider selection', () => {
   it('reveals checkboxes when Choose individually is selected, all pre-checked', async () => {
     const user = userEvent.setup()
     renderForm()
-    await user.click(screen.getByLabelText('Choose individually'))
+    await user.click(screen.getByRole('radio', { name: 'Choose' }))
     const checks = screen.getAllByRole('checkbox')
     // 3 rider checkboxes + 1 select-all checkbox
     expect(checks).toHaveLength(4)
@@ -76,7 +76,7 @@ describe('ControlCardsForm rider selection', () => {
   it('adds only the checked rider ids to the print URL in individual mode', async () => {
     const user = userEvent.setup()
     renderForm()
-    await user.click(screen.getByLabelText('Choose individually'))
+    await user.click(screen.getByRole('radio', { name: 'Choose' }))
     await user.click(screen.getByLabelText('Bob Brar')) // uncheck Bob
     const href = generateHref()
     expect(href).toContain('riderIds=rider-a,rider-c')
@@ -87,7 +87,7 @@ describe('ControlCardsForm rider selection', () => {
   it('disables Generate when individual mode has zero riders selected', async () => {
     const user = userEvent.setup()
     renderForm()
-    await user.click(screen.getByLabelText('Choose individually'))
+    await user.click(screen.getByRole('radio', { name: 'Choose' }))
     await user.click(screen.getByLabelText('Select all')) // toggles all off (all were on)
     const link = screen.getByRole('link', { name: /Generate/i })
     expect(link.className).toContain('pointer-events-none')
@@ -96,6 +96,6 @@ describe('ControlCardsForm rider selection', () => {
 
   it('hides the Choose individually option when there are no registered riders', () => {
     renderForm({ riders: [] })
-    expect(screen.queryByLabelText('Choose individually')).toBeNull()
+    expect(screen.queryByRole('radio', { name: 'Choose' })).toBeNull()
   })
 })

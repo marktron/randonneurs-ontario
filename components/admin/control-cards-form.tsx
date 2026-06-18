@@ -10,7 +10,7 @@ import type { CardRider } from '@/types/control-card'
 import { reverseControls, isReversedEvent } from '@/lib/controlPoints'
 import { fetchRwgpsControls } from '@/lib/rwgps'
 import { Checkbox } from '@/components/ui/checkbox'
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 
 interface ControlInput {
   id: string
@@ -393,12 +393,31 @@ export function ControlCardsForm({ event, riders, organizer }: ControlCardsFormP
       {/* Registered Riders */}
       <Card>
         <CardHeader>
-          <CardTitle>Registered Riders ({riders.length})</CardTitle>
-          <CardDescription>
-            {riders.length === 0
-              ? 'No riders registered. Two blank control cards will be generated.'
-              : 'Control cards will be generated for these riders'}
-          </CardDescription>
+          <div className="flex items-start justify-between gap-4">
+            <div className="space-y-1.5">
+              <CardTitle>Registered Riders ({riders.length})</CardTitle>
+              <CardDescription>
+                {riders.length === 0
+                  ? 'No riders registered. Two blank control cards will be generated.'
+                  : 'Control cards will be generated for these riders'}
+              </CardDescription>
+            </div>
+            {riders.length > 0 && (
+              <ToggleGroup
+                type="single"
+                value={selectionMode}
+                onValueChange={(v) => {
+                  if (v) setSelectionMode(v as 'all' | 'individual')
+                }}
+                variant="outline"
+                size="sm"
+                className="shrink-0"
+              >
+                <ToggleGroupItem value="all">Everyone</ToggleGroupItem>
+                <ToggleGroupItem value="individual">Choose</ToggleGroupItem>
+              </ToggleGroup>
+            )}
+          </div>
         </CardHeader>
         <CardContent className="space-y-4">
           {riders.length === 0 ? (
@@ -407,25 +426,6 @@ export function ControlCardsForm({ event, riders, organizer }: ControlCardsFormP
             </p>
           ) : (
             <div className="space-y-4">
-              <RadioGroup
-                value={selectionMode}
-                onValueChange={(v) => setSelectionMode(v as 'all' | 'individual')}
-                className="space-y-2"
-              >
-                <div className="flex items-center gap-2">
-                  <RadioGroupItem value="all" id="mode-all" />
-                  <Label htmlFor="mode-all" className="font-normal">
-                    All registered riders
-                  </Label>
-                </div>
-                <div className="flex items-center gap-2">
-                  <RadioGroupItem value="individual" id="mode-individual" />
-                  <Label htmlFor="mode-individual" className="font-normal">
-                    Choose individually
-                  </Label>
-                </div>
-              </RadioGroup>
-
               {selectionMode === 'all' ? (
                 <div className="grid gap-1 md:grid-cols-3">
                   {riders.map((rider) => (
