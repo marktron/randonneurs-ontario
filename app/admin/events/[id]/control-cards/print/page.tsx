@@ -3,6 +3,7 @@ import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { getFirstTimeRiderIds } from '@/lib/data/first-time-riders'
 import { notFound } from 'next/navigation'
 import { ControlCardsPrint } from '@/components/admin/control-cards-print'
+import { selectRegistrations } from '@/lib/control-cards-selection'
 import {
   computeControlTimes,
   getNominalDistance,
@@ -66,6 +67,7 @@ interface PrintPageProps {
     organizerEmail?: string
     controls?: string
     extraBlank?: string
+    riderIds?: string
   }>
 }
 
@@ -80,6 +82,8 @@ export default async function PrintPage({ params, searchParams }: PrintPageProps
   if (!event) {
     notFound()
   }
+
+  const selectedRegistrations = selectRegistrations(registrations, search.riderIds)
 
   // Parse organizer info from search params
   const organizer: OrganizerInfo = {
@@ -153,9 +157,9 @@ export default async function PrintPage({ params, searchParams }: PrintPageProps
   // Format riders - if no registrations, create two blank entries
   // Also add any extra blank cards requested
   const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://randonneursontario.ca'
-  const registeredRiderIds = registrations.filter((r) => r.riders).map((r) => r.riders!.id)
+  const registeredRiderIds = selectedRegistrations.filter((r) => r.riders).map((r) => r.riders!.id)
   const firstTimeRiderIdSet = new Set(await getFirstTimeRiderIds(id, registeredRiderIds))
-  const registeredRiders: CardRider[] = registrations
+  const registeredRiders: CardRider[] = selectedRegistrations
     .filter((r) => r.riders)
     .map((r) => ({
       id: r.riders!.id,
