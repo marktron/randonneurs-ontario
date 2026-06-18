@@ -40,7 +40,7 @@ New module: `lib/erw/client.ts`
 ### Functions
 
 - `createErwEvent(event, rwgpsId?)` — `POST /events`. Sets `brevet` tag, event name, date, distance, description. If `rwgpsId` is provided, includes `sourceRouteUrl` as `https://ridewithgps.com/routes/{rwgpsId}` for auto-import. Returns `{ erwEventId, canonicalUrl }`.
-- `updateErwEvent(erwEventId, event, rwgpsId?)` — `GET /events/{eventId}` to fetch the current `updated` timestamp, then `PUT /events/{eventId}` with that timestamp for optimistic locking. On 409 conflict, retry once with a fresh GET.
+- `updateErwEvent(erwEventId, event, rwgpsId?)` — `GET /events/{eventId}` to fetch the current `updated` timestamp, then `PUT /events/{eventId}` with that timestamp for optimistic locking. On 409 conflict, retry once with a fresh GET. The GET also returns the existing route's `routeId`, which is carried onto the outgoing route so ERW updates the route in place instead of deleting and re-importing it. **Deferred publish:** if the outgoing payload contains a route with a `sourceRouteUrl` but no carried `routeId` (e.g. the RWGPS route was assigned after the ERW event was created, or a prior import never completed), ERW will run a fresh async route import. A `published: true` payload would fail validation (`routes.0.path: "Route must have a GPX file or path for published events."`) while that import is in flight, so the PUT is sent as `published: false` and `publishErwEvent` is then called to flip it back to published once the import settles — the same workaround `createErwEvent` uses.
 - `deleteErwEvent(erwEventId)` — `DELETE /events/{eventId}`.
 
 ### Field Mapping (RO → ERW)

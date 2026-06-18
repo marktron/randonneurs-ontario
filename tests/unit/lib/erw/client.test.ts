@@ -360,11 +360,16 @@ describe('ERW API Client', () => {
           expires_in: 3600,
         }),
       })
-      // GET current event
+      // GET current event — already has a route with a routeId, so updating it in
+      // place needs no re-import and the PUT can stay published.
       mockFetch.mockResolvedValueOnce({
         ok: true,
         status: 200,
-        json: async () => ({ updated: '2026-06-01T10:00:00Z', published: true }),
+        json: async () => ({
+          updated: '2026-06-01T10:00:00Z',
+          published: true,
+          routes: [{ routeId: 'rt-abc', sourceRouteUrl: 'https://ridewithgps.com/routes/12345' }],
+        }),
       })
       // PUT update
       mockFetch.mockResolvedValueOnce({
@@ -379,6 +384,98 @@ describe('ERW API Client', () => {
       const putBody = JSON.parse(mockFetch.mock.calls[2][1].body)
       expect(putBody.published).toBe(true)
       expect(putBody.name).toBe('Gentle Start 200')
+    })
+
+    it('defers publishing when a route must be re-imported (no existing routeId to carry)', async () => {
+      // Token
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          access_token: 'test-jwt',
+          token_type: 'Bearer',
+          expires_in: 3600,
+        }),
+      })
+      // GET returns a published event that has NO route to carry a routeId from
+      // (e.g. the RWGPS route was assigned after the ERW event was created, or a
+      // prior import never completed). mergeRouteIds can't supply a routeId, so
+      // ERW would re-import the sourceRouteUrl — an async import that has no path
+      // yet, which fails validation on a published payload.
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          id: 'erw-123',
+          updated: '2026-06-01T10:00:00.000Z',
+          published: true,
+          routes: [],
+        }),
+      })
+      // PUT update
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ id: 'erw-123', canonicalUrl: 'https://erw.com/e/erw-123' }),
+      })
+
+      const { updateErwEvent } = await import('@/lib/erw/client')
+      const result = await updateErwEvent('erw-123', testEvent)
+
+      expect(result.success).toBe(true)
+      const putBody = JSON.parse(mockFetch.mock.calls[2][1].body)
+      // The route carries a sourceRouteUrl but no routeId, so the PUT must defer
+      // publishing to avoid the "Route must have a GPX file or path" 400.
+      expect(putBody.routes[0].routeId).toBeUndefined()
+      expect(putBody.routes[0].sourceRouteUrl).toBe('https://ridewithgps.com/routes/12345')
+      expect(putBody.published).toBe(false)
+    })
+
+    it('re-publishes the deferred draft once the route import completes', async () => {
+      const { updateErwEvent, PUBLISH_RETRY_DELAYS } = await import('@/lib/erw/client')
+      // Give publishErwEvent a single (immediate) retry attempt.
+      PUBLISH_RETRY_DELAYS.push(0)
+
+      // Token
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ access_token: 'test-jwt', token_type: 'Bearer', expires_in: 3600 }),
+      })
+      // GET (update): published event with no route to carry a routeId from
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ updated: '2026-06-01T10:00:00.000Z', published: true, routes: [] }),
+      })
+      // PUT (deferred draft) succeeds
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ id: 'erw-123', canonicalUrl: 'https://erw.com/e/erw-123' }),
+      })
+      // publishErwEvent GET: import finished, route now has a routeId + path
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          updated: '2026-06-01T10:01:00.000Z',
+          published: false,
+          routes: [{ routeId: 'rt-new', path: 'encoded-path' }],
+        }),
+      })
+      // publishErwEvent PUT: published:true succeeds now the route has a path
+      mockFetch.mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({}) })
+
+      const result = await updateErwEvent('erw-123', testEvent)
+
+      expect(result.success).toBe(true)
+      // Draft PUT first...
+      expect(JSON.parse(mockFetch.mock.calls[2][1].body).published).toBe(false)
+      // ...then a follow-up publish PUT flips it back to published.
+      const publishPut = mockFetch.mock.calls[4]
+      expect(publishPut[1].method).toBe('PUT')
+      expect(JSON.parse(publishPut[1].body).published).toBe(true)
     })
 
     it('carries the existing routeId into the PUT payload to update the route in place', async () => {

@@ -315,6 +315,20 @@ function buildUpdatePayload(
   return merged
 }
 
+// A route that carries a sourceRouteUrl but no routeId tells ERW to import a
+// fresh route from RWGPS. That import is async, so a `published: true` payload
+// fails validation ("Route must have a GPX file or path for published events.")
+// until it completes. When this is the case the caller must PUT as a draft and
+// publish afterwards — mirroring createErwEvent's published:false-then-publish.
+function routesNeedImport(routes: unknown): boolean {
+  if (!Array.isArray(routes)) return false
+  return routes.some((route) => {
+    if (typeof route !== 'object' || route === null) return false
+    const r = route as { sourceRouteUrl?: unknown; routeId?: unknown }
+    return Boolean(r.sourceRouteUrl) && !r.routeId
+  })
+}
+
 export async function updateErwEvent(
   erwEventId: string,
   event: ErwEventData
@@ -341,10 +355,14 @@ export async function updateErwEvent(
       return { success: false, error: 'ERW returned incomplete data' }
     }
 
+    const payload = buildUpdatePayload(event, getResultData)
+    // If a route will be re-imported, ERW can't publish it until the async
+    // import finishes — PUT as a draft, then publish once it settles.
+    const deferPublish = routesNeedImport(payload.routes)
     const putResult = await erwFetch<{ id: string; canonicalUrl: string }>({
       method: 'PUT',
       path: `/events/${erwEventId}`,
-      body: buildUpdatePayload(event, getResultData),
+      body: deferPublish ? { ...payload, published: false } : payload,
     })
 
     // On 409 conflict, retry once with a fresh GET
@@ -367,10 +385,12 @@ export async function updateErwEvent(
         return { success: false, error: 'ERW returned incomplete data' }
       }
 
+      const retryPayload = buildUpdatePayload(event, freshGetData)
+      const deferRetryPublish = routesNeedImport(retryPayload.routes)
       const retryPut = await erwFetch<{ id: string; canonicalUrl: string }>({
         method: 'PUT',
         path: `/events/${erwEventId}`,
-        body: buildUpdatePayload(event, freshGetData),
+        body: deferRetryPublish ? { ...retryPayload, published: false } : retryPayload,
       })
 
       if (!retryPut.ok) {
@@ -386,6 +406,8 @@ export async function updateErwEvent(
       if (!retryPutData?.id || !retryPutData?.canonicalUrl) {
         return { success: false, error: 'ERW returned incomplete data' }
       }
+
+      if (deferRetryPublish) await publishErwEvent(erwEventId)
 
       return {
         success: true,
@@ -409,6 +431,8 @@ export async function updateErwEvent(
     if (!putResultData?.id || !putResultData?.canonicalUrl) {
       return { success: false, error: 'ERW returned incomplete data' }
     }
+
+    if (deferPublish) await publishErwEvent(erwEventId)
 
     return {
       success: true,
