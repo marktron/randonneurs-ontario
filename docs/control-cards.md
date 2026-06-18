@@ -285,6 +285,10 @@ Control points can be added in two ways:
 1. **Manual entry** — add controls one by one with name and distance (km).
 2. **Import from RWGPS** — if the event has a linked RideWithGPS route, click "Import from RWGPS" to pull in controls automatically. Controls must be marked with type "Control" as course points in the RWGPS route editor.
 
+### Rider selection
+
+On the admin page, "Print cards for" offers two options: **All registered riders** (default) and **Choose individually**. Selecting "Choose individually" reveals a checklist of registered riders, all checked by default. Uncheck riders to exclude them, or use "Select all" to clear or restore all selections. The Generate button displays a live count of cards that will print (selected riders plus any extra blank cards). Behind the scenes, selected rider IDs are passed to the print page as a `riderIds` query parameter. With no explicit selection, every registered rider receives a card, so existing links remain unaffected.
+
 ### Validating draft routes from RideWithGPS
 
 Route designers can validate a draft route by visiting `/control-cards?rwgps=true`. The picker is replaced with a RideWithGPS URL input; pasting any route URL (or bare ID) and clicking Load fetches the route's name, distance, and control points live from RideWithGPS — nothing is saved. All form fields remain editable, and the Generate button produces the same printable cards as the regular flow.
