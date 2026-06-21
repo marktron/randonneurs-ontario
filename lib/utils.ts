@@ -136,3 +136,47 @@ export function buildParticipantMailtoUrl(
 
   return `mailto:?bcc=${bcc}&subject=${subject}`
 }
+
+export interface RiderInfoParticipant {
+  firstName: string
+  lastName: string
+  email: string | null
+  phone: string | null
+  emergencyContactName: string | null
+  emergencyContactPhone: string | null
+}
+
+/**
+ * Build the plain-text block copied by the admin "Copy rider info" button:
+ * an event header followed by each rider's name, email, cell phone, and
+ * emergency contact. Contact lines are omitted when the underlying value is
+ * absent.
+ */
+export function buildRiderInfoText(
+  participants: RiderInfoParticipant[],
+  eventName: string,
+  eventDate: string,
+  distanceKm: number,
+  eventType: string
+): string {
+  const lines: string[] = [
+    `${eventName}`,
+    `${eventDate} — ${distanceKm}km ${eventType}`,
+    '',
+    `Riders (${participants.length})`,
+    '—'.repeat(40),
+  ]
+
+  for (const p of participants) {
+    lines.push(`${p.firstName} ${p.lastName}`)
+    if (p.email) lines.push(p.email)
+    if (p.phone) lines.push(`Phone: ${p.phone}`)
+    if (p.emergencyContactName || p.emergencyContactPhone) {
+      const ice = [p.emergencyContactName, p.emergencyContactPhone].filter(Boolean).join(' ')
+      lines.push(`Emergency Contact: ${ice}`)
+    }
+    lines.push('')
+  }
+
+  return lines.join('\n')
+}

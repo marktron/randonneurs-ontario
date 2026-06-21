@@ -198,7 +198,7 @@ Click "Settings" in the sidebar footer to manage your own account:
 
 ### Brevet and populaire registration
 
-Riders register for scheduled events (brevets and populaires) through the public site at `/register/[event-slug]`. The form collects their name, email, cell phone, gender (optional), emergency contact, and any notes. The cell phone is required and is normalized the same way as the emergency contact phone (e.g. `4165551234` → `416-555-1234`); organizers can use it to reach a rider during a ride. It appears beside the rider on the admin event page as a clickable `tel:` link.
+Riders register for scheduled events (brevets and populaires) through the public site at `/register/[event-slug]`. The form collects their name, email, cell phone, gender (optional), emergency contact, and any notes. The cell phone is required and is normalized the same way as the emergency contact phone (e.g. `4165551234` → `416-555-1234`); organizers can use it to reach a rider during a ride. It appears beside the rider on the admin event page as a clickable `tel:` link, and is included in the page's "Copy rider info" output alongside each rider's email and emergency contact.
 
 When a rider submits the form, several things happen behind the scenes:
 

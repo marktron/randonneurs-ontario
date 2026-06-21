@@ -7,6 +7,7 @@ import {
   formatFinishTimeHm,
   parseFinishTimeToMinutes,
   buildParticipantMailtoUrl,
+  buildRiderInfoText,
 } from '@/lib/utils'
 
 describe('createSlug', () => {
@@ -317,5 +318,85 @@ describe('buildParticipantMailtoUrl', () => {
     )
     const bccPart = url!.split('bcc=')[1].split('&')[0]
     expect(bccPart).toBe('a@example.com,b@example.com,c@example.com')
+  })
+})
+
+describe('buildRiderInfoText', () => {
+  const event = { name: 'Spring 200', date: '2026-04-15', distanceKm: 200, eventType: 'brevet' }
+
+  it('includes a Phone line for a rider with a phone number', () => {
+    const text = buildRiderInfoText(
+      [
+        {
+          firstName: 'Alice',
+          lastName: 'Adams',
+          email: 'alice@example.com',
+          phone: '(416) 555-0123',
+          emergencyContactName: 'Bob Adams',
+          emergencyContactPhone: '416-555-9999',
+        },
+      ],
+      event.name,
+      event.date,
+      event.distanceKm,
+      event.eventType
+    )
+
+    expect(text).toContain('Alice Adams')
+    expect(text).toContain('alice@example.com')
+    expect(text).toContain('Phone: (416) 555-0123')
+    expect(text).toContain('Emergency Contact: Bob Adams 416-555-9999')
+    // Header line
+    expect(text).toContain('Spring 200')
+    expect(text).toContain('200km brevet')
+    expect(text).toContain('Riders (1)')
+  })
+
+  it('omits the Phone line when the rider has no phone number', () => {
+    const text = buildRiderInfoText(
+      [
+        {
+          firstName: 'Carol',
+          lastName: 'Carr',
+          email: 'carol@example.com',
+          phone: null,
+          emergencyContactName: null,
+          emergencyContactPhone: null,
+        },
+      ],
+      event.name,
+      event.date,
+      event.distanceKm,
+      event.eventType
+    )
+
+    expect(text).toContain('Carol Carr')
+    expect(text).not.toContain('Phone:')
+    expect(text).not.toContain('Emergency Contact:')
+  })
+
+  it('orders email, phone, then emergency contact for each rider', () => {
+    const text = buildRiderInfoText(
+      [
+        {
+          firstName: 'Dana',
+          lastName: 'Dale',
+          email: 'dana@example.com',
+          phone: '5551234567',
+          emergencyContactName: 'Eve',
+          emergencyContactPhone: '5559876543',
+        },
+      ],
+      event.name,
+      event.date,
+      event.distanceKm,
+      event.eventType
+    )
+
+    const emailIdx = text.indexOf('dana@example.com')
+    const phoneIdx = text.indexOf('Phone: 5551234567')
+    const iceIdx = text.indexOf('Emergency Contact:')
+    expect(emailIdx).toBeLessThan(phoneIdx)
+    expect(phoneIdx).toBeLessThan(iceIdx)
   })
 })

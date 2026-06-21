@@ -67,7 +67,7 @@ import {
   revalidateMembership,
   type ResultStatus,
 } from '@/lib/actions/results'
-import { formatFinishTime, buildParticipantMailtoUrl } from '@/lib/utils'
+import { formatFinishTime, buildParticipantMailtoUrl, buildRiderInfoText } from '@/lib/utils'
 import { SubmitResultsButton } from './submit-results-button'
 import { AddRiderDialog } from './add-rider-dialog'
 import { toast } from 'sonner'
@@ -870,26 +870,8 @@ export function EventResultsManager({
   const [copied, setCopied] = useState(false)
 
   const handleCopyRiderInfo = useCallback(async () => {
-    const lines: string[] = [
-      `${eventName}`,
-      `${eventDate} — ${distanceKm}km ${eventType}`,
-      '',
-      `Riders (${sortedParticipants.length})`,
-      '—'.repeat(40),
-    ]
-
-    for (const p of sortedParticipants) {
-      const name = `${p.firstName} ${p.lastName}`
-      lines.push(name)
-      if (p.email) lines.push(p.email)
-      if (p.emergencyContactName || p.emergencyContactPhone) {
-        const ice = [p.emergencyContactName, p.emergencyContactPhone].filter(Boolean).join(' ')
-        lines.push(`Emergency Contact: ${ice}`)
-      }
-      lines.push('')
-    }
-
-    await navigator.clipboard.writeText(lines.join('\n'))
+    const text = buildRiderInfoText(sortedParticipants, eventName, eventDate, distanceKm, eventType)
+    await navigator.clipboard.writeText(text)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }, [eventName, eventDate, distanceKm, eventType, sortedParticipants])
