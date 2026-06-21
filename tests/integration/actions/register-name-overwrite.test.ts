@@ -142,6 +142,7 @@ describe('rider name preservation on email match', () => {
       firstName: 'Peter',
       lastName: 'Agelakos',
       email: 'fchagnon@gmail.com',
+      phone: '416-555-0000',
       shareRegistration: false,
       emergencyContactName: 'Emergency Contact',
       emergencyContactPhone: '555-1234',
@@ -164,6 +165,7 @@ describe('rider name preservation on email match', () => {
       firstName: 'Fred',
       lastName: 'Chagnon',
       email: 'fchagnon@gmail.com',
+      phone: '647-555-0123',
       gender: 'M',
       shareRegistration: false,
       emergencyContactName: 'New Contact',
@@ -178,9 +180,10 @@ describe('rider name preservation on email match', () => {
     expect(riderUpdate!.data).not.toHaveProperty('first_name')
     expect(riderUpdate!.data).not.toHaveProperty('last_name')
 
-    // Should update supplementary fields (phone is normalized by server)
+    // Should update supplementary fields (phones are normalized by server)
     expect(riderUpdate!.data).toMatchObject({
       gender: 'M',
+      phone: '647-555-0123',
       emergency_contact_name: 'New Contact',
       emergency_contact_phone: '5559999',
     })

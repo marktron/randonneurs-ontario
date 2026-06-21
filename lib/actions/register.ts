@@ -70,6 +70,7 @@ export interface RegistrationData {
   firstName: string
   lastName: string
   email: string
+  phone: string
   gender?: string
   shareRegistration: boolean
   notes?: string
@@ -170,7 +171,13 @@ export async function registerForEvent(data: RegistrationData): Promise<Registra
   if (!validation.ok) {
     return { success: false, error: validation.error }
   }
-  const { trimmedFirstName, trimmedLastName, normalizedEmail, normalizedPhone } = validation.value
+  const {
+    trimmedFirstName,
+    trimmedLastName,
+    normalizedEmail,
+    normalizedPhone,
+    normalizedEmergencyPhone,
+  } = validation.value
   const trimmedTeamName = teamName?.trim() || undefined
 
   // Rate limit: 10 registration attempts per email per 15 minutes
@@ -225,8 +232,9 @@ export async function registerForEvent(data: RegistrationData): Promise<Registra
       trimmedFirstName,
       trimmedLastName,
       gender,
+      normalizedPhone,
       data.emergencyContactName.trim(),
-      normalizedPhone
+      normalizedEmergencyPhone
     )
 
     if (!riderResult.success) {
@@ -279,6 +287,7 @@ export interface PermanentRegistrationData {
   firstName: string
   lastName: string
   email: string
+  phone: string
   gender?: string
   shareRegistration: boolean
   notes?: string
@@ -320,7 +329,13 @@ export async function registerForPermanent(
   if (!validation.ok) {
     return { success: false, error: validation.error }
   }
-  const { trimmedFirstName, trimmedLastName, normalizedEmail, normalizedPhone } = validation.value
+  const {
+    trimmedFirstName,
+    trimmedLastName,
+    normalizedEmail,
+    normalizedPhone,
+    normalizedEmergencyPhone,
+  } = validation.value
 
   // Rate limit: 10 registration attempts per email per 15 minutes
   if (isRateLimited('registration', normalizedEmail, 10, 15 * 60 * 1000)) {
@@ -423,8 +438,9 @@ export async function registerForPermanent(
       trimmedFirstName,
       trimmedLastName,
       gender,
+      normalizedPhone,
       data.emergencyContactName.trim(),
-      normalizedPhone
+      normalizedEmergencyPhone
     )
 
     if (!riderResult.success) {
@@ -438,6 +454,7 @@ export async function registerForPermanent(
           firstName: trimmedFirstName,
           lastName: trimmedLastName,
           email: data.email,
+          phone: data.phone,
           gender,
           shareRegistration,
           notes,
@@ -498,6 +515,7 @@ export interface CompleteRegistrationData {
   firstName: string
   lastName: string
   email: string
+  phone: string
   gender?: string
   shareRegistration: boolean
   notes?: string
@@ -544,7 +562,13 @@ export async function completeRegistrationWithRider(
   if (!validation.ok) {
     return { success: false, error: validation.error }
   }
-  const { trimmedFirstName, trimmedLastName, normalizedEmail, normalizedPhone } = validation.value
+  const {
+    trimmedFirstName,
+    trimmedLastName,
+    normalizedEmail,
+    normalizedPhone,
+    normalizedEmergencyPhone,
+  } = validation.value
   const parsedGender = gender === 'M' || gender === 'F' || gender === 'X' ? gender : null
   const trimmedTeamName = teamName?.trim() || undefined
 
@@ -619,8 +643,9 @@ export async function completeRegistrationWithRider(
         last_name: trimmedLastName,
         email: normalizedEmail,
         gender: parsedGender,
+        phone: normalizedPhone || null,
         emergency_contact_name: data.emergencyContactName?.trim() || null,
-        emergency_contact_phone: normalizedPhone || null,
+        emergency_contact_phone: normalizedEmergencyPhone || null,
       }
       await getSupabaseAdmin().from('riders').update(updateData).eq('id', selectedRiderId)
     } else {
@@ -632,8 +657,9 @@ export async function completeRegistrationWithRider(
           last_name: trimmedLastName,
           email: normalizedEmail,
           gender: parsedGender,
+          phone: normalizedPhone || null,
           emergency_contact_name: data.emergencyContactName?.trim() || null,
-          emergency_contact_phone: normalizedPhone || null,
+          emergency_contact_phone: normalizedEmergencyPhone || null,
         })
         riderId = newRider.id
       } catch {

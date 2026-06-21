@@ -55,7 +55,7 @@ async function getRegistrations(eventId: string): Promise<RegistrationWithRiderF
       team_name,
       is_team_captain,
       share_registration,
-      riders (id, first_name, last_name, email, emergency_contact_name, emergency_contact_phone, rider_memberships (membership_type, season))
+      riders (id, first_name, last_name, email, phone, emergency_contact_name, emergency_contact_phone, rider_memberships (membership_type, season))
     `
     )
     .eq('event_id', eventId)

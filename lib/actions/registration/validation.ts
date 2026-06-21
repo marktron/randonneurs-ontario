@@ -12,6 +12,7 @@ export interface ContactValidationInput {
   firstName: string
   lastName: string
   email: string
+  phone: string
   notes?: string
   emergencyContactName: string
   emergencyContactPhone: string
@@ -21,7 +22,10 @@ export interface ValidatedContact {
   trimmedFirstName: string
   trimmedLastName: string
   normalizedEmail: string
+  /** The rider's own cell phone number, normalized. */
   normalizedPhone: string
+  /** The emergency contact's phone number, normalized. */
+  normalizedEmergencyPhone: string
 }
 
 export type ContactValidationResult =
@@ -38,10 +42,15 @@ export type ContactValidationResult =
  * which still surfaces the same message here when a name or email is blank).
  */
 export function validateContactFields(input: ContactValidationInput): ContactValidationResult {
-  const { firstName, lastName, email, notes, emergencyContactName, emergencyContactPhone } = input
+  const { firstName, lastName, email, phone, notes, emergencyContactName, emergencyContactPhone } =
+    input
 
   if (!firstName.trim() || !lastName.trim() || !email.trim()) {
     return { ok: false, error: 'Missing required fields' }
+  }
+
+  if (!phone?.trim()) {
+    return { ok: false, error: 'Phone number is required' }
   }
 
   if (!emergencyContactName?.trim() || !emergencyContactPhone?.trim()) {
@@ -63,8 +72,13 @@ export function validateContactFields(input: ContactValidationInput): ContactVal
     return { ok: false, error: 'Please enter a valid email address' }
   }
 
-  const phoneResult = normalizePhone(emergencyContactPhone)
+  const phoneResult = normalizePhone(phone)
   if (!phoneResult.valid) {
+    return { ok: false, error: 'Please enter a valid phone number' }
+  }
+
+  const emergencyPhoneResult = normalizePhone(emergencyContactPhone)
+  if (!emergencyPhoneResult.valid) {
     return { ok: false, error: 'Please enter a valid emergency contact phone number' }
   }
 
@@ -75,6 +89,7 @@ export function validateContactFields(input: ContactValidationInput): ContactVal
       trimmedLastName: lastName.trim(),
       normalizedEmail: emailResult.normalized,
       normalizedPhone: phoneResult.formatted,
+      normalizedEmergencyPhone: emergencyPhoneResult.formatted,
     },
   }
 }

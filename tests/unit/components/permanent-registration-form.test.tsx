@@ -121,6 +121,7 @@ describe('PermanentRegistrationForm', () => {
       expect(screen.getByLabelText(/first name/i)).toBeInTheDocument()
       expect(screen.getByLabelText(/last name/i)).toBeInTheDocument()
       expect(screen.getByLabelText(/email/i)).toBeInTheDocument()
+      expect(screen.getByLabelText(/cell phone/i)).toBeInTheDocument()
       expect(screen.getByLabelText(/start time/i)).toBeInTheDocument()
     })
 
@@ -129,6 +130,7 @@ describe('PermanentRegistrationForm', () => {
         firstName: 'John',
         lastName: 'Doe',
         email: 'john@example.com',
+        phone: '416-555-9999',
         gender: 'male',
         shareRegistration: true,
         emergencyContactName: 'Jane Doe',
@@ -140,6 +142,7 @@ describe('PermanentRegistrationForm', () => {
 
       expect(screen.getByDisplayValue('John')).toBeInTheDocument()
       expect(screen.getByDisplayValue('Doe')).toBeInTheDocument()
+      expect(screen.getByDisplayValue('416-555-9999')).toBeInTheDocument()
     })
   })
 
@@ -154,6 +157,7 @@ describe('PermanentRegistrationForm', () => {
       // Emergency contact fields use generic labels, so query by id
       await user.type(container.querySelector('#emergencyContactName')!, 'Jane Doe')
       await user.type(container.querySelector('#emergencyContactPhone')!, '555-1234')
+      await user.type(container.querySelector('#phone')!, '416-555-9999')
 
       // Click the submit button - uses "Schedule Permanent" text
       await user.click(screen.getByRole('button', { name: /schedule permanent/i }))
@@ -183,6 +187,7 @@ describe('PermanentRegistrationForm', () => {
       // Emergency contact fields use generic labels, so query by id
       await user.type(container.querySelector('#emergencyContactName')!, 'Jane Doe')
       await user.type(container.querySelector('#emergencyContactPhone')!, '555-1234')
+      await user.type(container.querySelector('#phone')!, '416-555-9999')
 
       await user.click(screen.getByRole('button', { name: /schedule permanent/i }))
 
@@ -253,6 +258,7 @@ describe('PermanentRegistrationForm', () => {
       await user.type(screen.getByLabelText(/email/i), 'john@example.com')
       await user.type(container.querySelector('#emergencyContactName')!, 'Jane Doe')
       await user.type(container.querySelector('#emergencyContactPhone')!, '555-1234')
+      await user.type(container.querySelector('#phone')!, '416-555-9999')
 
       await user.click(screen.getByRole('button', { name: /schedule permanent/i }))
 

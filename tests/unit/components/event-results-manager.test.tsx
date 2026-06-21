@@ -51,6 +51,7 @@ function makeRegistration(
       first_name: firstName,
       last_name: lastName,
       email: `${firstName.toLowerCase()}@example.com`,
+      phone: null,
       emergency_contact_name: null,
       emergency_contact_phone: null,
       rider_memberships: [],
@@ -249,5 +250,40 @@ describe('EventResultsManager — flèche distance flooring', () => {
 
     const [, payload] = vi.mocked(updateResult).mock.calls[0]
     expect(payload.distanceKm).toBe(380)
+  })
+})
+
+describe('EventResultsManager — rider phone', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('renders the rider phone number as a tel: link when present', () => {
+    const reg = makeRegistration({
+      riderId: 'rider-phone',
+      firstName: 'Pat',
+      lastName: 'Phone',
+    })
+    reg.riders!.phone = '416-555-1234'
+
+    render(<EventResultsManager {...baseProps} registrations={[reg]} firstTimeRiderIds={[]} />)
+
+    const row = screen.getByText('Pat Phone').closest('tr')!
+    const link = within(row).getByText('416-555-1234')
+    expect(link).toBeTruthy()
+    expect(link.getAttribute('href')).toBe('tel:416-555-1234')
+  })
+
+  it('renders no phone line when the rider has no phone', () => {
+    const reg = makeRegistration({
+      riderId: 'rider-nophone',
+      firstName: 'Quinn',
+      lastName: 'Quiet',
+    })
+
+    render(<EventResultsManager {...baseProps} registrations={[reg]} firstTimeRiderIds={[]} />)
+
+    const row = screen.getByText('Quinn Quiet').closest('tr')!
+    expect(within(row).queryByText(/tel:/)).toBeNull()
   })
 })

@@ -99,6 +99,7 @@ CREATE TABLE riders (
   first_name TEXT NOT NULL,
   last_name TEXT NOT NULL,
   email TEXT,                       -- Optional, for contact
+  phone TEXT,                       -- Rider's cell phone, to reach them during a ride
   gender TEXT CHECK (gender IN ('M', 'F', 'X')),
   emergency_contact_name TEXT,      -- Emergency contact for rides
   emergency_contact_phone TEXT,
@@ -233,21 +234,21 @@ CREATE INDEX idx_riders_slug ON riders(slug);
 
 ## Key Design Decisions
 
-| Decision | Rationale |
-|----------|-----------|
-| **Single `riders` table** | No user auth means we don't need separate members vs riders. All participants go in one table. |
-| **`events` replaces `brevets`** | More generic name supports all event types (Brevets, Populaires, Fleches, Permanents) |
-| **Permanents as events** | Permanent rides use `event_type='permanent'` rather than a separate table |
-| **`season` computed column** | Automatic year extraction from event_date, saves manual data entry |
-| **`INTERVAL` for finish_time** | Native PostgreSQL type for durations, enables queries like "all sub-12-hour finishes" |
-| **Supabase Auth for admins** | Admins use Supabase Auth; riders do not have accounts |
-| **No membership tracking** | Membership is managed externally via CCN Bikes |
-| **In-app registration** | Registration happens at `/register`, creating entries in `registrations` table |
-| **Route collections** | Simple `collection` column on routes (e.g., "200km-brevets", "devil-week") |
-| **RWGPS ID only** | Store RideWithGPS route ID, construct full URL as needed |
-| **No route versioning** | Significant route changes get a new route name instead |
-| **Manual award assignment** | Awards assigned manually for now; automatic calculation is future work |
-| **Soft status fields** | Events use `status` instead of deleting, preserving history |
+| Decision                        | Rationale                                                                                      |
+| ------------------------------- | ---------------------------------------------------------------------------------------------- |
+| **Single `riders` table**       | No user auth means we don't need separate members vs riders. All participants go in one table. |
+| **`events` replaces `brevets`** | More generic name supports all event types (Brevets, Populaires, Fleches, Permanents)          |
+| **Permanents as events**        | Permanent rides use `event_type='permanent'` rather than a separate table                      |
+| **`season` computed column**    | Automatic year extraction from event_date, saves manual data entry                             |
+| **`INTERVAL` for finish_time**  | Native PostgreSQL type for durations, enables queries like "all sub-12-hour finishes"          |
+| **Supabase Auth for admins**    | Admins use Supabase Auth; riders do not have accounts                                          |
+| **No membership tracking**      | Membership is managed externally via CCN Bikes                                                 |
+| **In-app registration**         | Registration happens at `/register`, creating entries in `registrations` table                 |
+| **Route collections**           | Simple `collection` column on routes (e.g., "200km-brevets", "devil-week")                     |
+| **RWGPS ID only**               | Store RideWithGPS route ID, construct full URL as needed                                       |
+| **No route versioning**         | Significant route changes get a new route name instead                                         |
+| **Manual award assignment**     | Awards assigned manually for now; automatic calculation is future work                         |
+| **Soft status fields**          | Events use `status` instead of deleting, preserving history                                    |
 
 ---
 
@@ -282,6 +283,7 @@ admins (auth.users)
 Since there are no user accounts and riders can register with any name variation (e.g., "Tom Jones" vs "Thomas Jones"), we need a strategy for matching registrations to existing rider records.
 
 **Approach:**
+
 1. **Email-based matching** (going forward): Use email as primary identifier for new registrations. Historical records don't have email, so this only helps with future data.
 2. **Fuzzy name matching**: Suggest potential matches during registration/result entry based on name similarity.
 3. **Admin merge UI**: Provide an admin interface to manually merge duplicate rider records when discovered.

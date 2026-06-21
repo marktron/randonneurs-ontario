@@ -198,7 +198,7 @@ Click "Settings" in the sidebar footer to manage your own account:
 
 ### Brevet and populaire registration
 
-Riders register for scheduled events (brevets and populaires) through the public site at `/register/[event-slug]`. The form collects their name, email, gender (optional), emergency contact, and any notes.
+Riders register for scheduled events (brevets and populaires) through the public site at `/register/[event-slug]`. The form collects their name, email, cell phone, gender (optional), emergency contact, and any notes. The cell phone is required and is normalized the same way as the emergency contact phone (e.g. `4165551234` → `416-555-1234`); organizers can use it to reach a rider during a ride. It appears beside the rider on the admin event page as a clickable `tel:` link.
 
 When a rider submits the form, several things happen behind the scenes:
 
@@ -209,7 +209,7 @@ When a rider submits the form, several things happen behind the scenes:
    - If **no membership** is found, registration is created with an incomplete status and the rider sees an error modal directing them to `/membership` to join the club. You'll see their missing status in the admin so that you can reach out and assist if needed.
 3. **Confirmation email.** A confirmation email is sent to the rider with the event details, location, and route link. If there were membership issues, the email includes a message about them. The chapter VP is CC'd on all confirmation emails.
 
-Rider data (name, email, emergency contact) is saved to localStorage in the browser, so returning riders don't have to re-enter it every time.
+Rider data (name, email, cell phone, emergency contact) is saved to localStorage in the browser, so returning riders don't have to re-enter it every time.
 
 ### Permanent registration
 

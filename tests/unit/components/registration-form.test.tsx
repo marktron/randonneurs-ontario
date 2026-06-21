@@ -72,6 +72,7 @@ describe('RegistrationForm', () => {
       expect(screen.getByLabelText(/first name/i)).toBeInTheDocument()
       expect(screen.getByLabelText(/last name/i)).toBeInTheDocument()
       expect(screen.getByLabelText(/email/i)).toBeInTheDocument()
+      expect(screen.getByLabelText(/cell phone/i)).toBeInTheDocument()
       // Emergency contact fields have generic labels "Name" and "Phone"
       expect(container.querySelector('#emergencyContactName')).toBeInTheDocument()
       expect(container.querySelector('#emergencyContactPhone')).toBeInTheDocument()
@@ -88,6 +89,7 @@ describe('RegistrationForm', () => {
         firstName: 'John',
         lastName: 'Doe',
         email: 'john@example.com',
+        phone: '416-555-9999',
         gender: 'male',
         shareRegistration: true,
         emergencyContactName: 'Jane Doe',
@@ -100,6 +102,7 @@ describe('RegistrationForm', () => {
       expect(screen.getByDisplayValue('John')).toBeInTheDocument()
       expect(screen.getByDisplayValue('Doe')).toBeInTheDocument()
       expect(screen.getByDisplayValue('john@example.com')).toBeInTheDocument()
+      expect(screen.getByDisplayValue('416-555-9999')).toBeInTheDocument()
     })
   })
 
@@ -113,6 +116,7 @@ describe('RegistrationForm', () => {
       await user.type(screen.getByLabelText(/email/i), 'john@example.com')
       await user.type(container.querySelector('#emergencyContactName')!, 'Jane Doe')
       await user.type(container.querySelector('#emergencyContactPhone')!, '555-1234')
+      await user.type(container.querySelector('#phone')!, '416-555-9999')
 
       await user.click(screen.getByRole('button', { name: /register/i }))
 
@@ -122,6 +126,7 @@ describe('RegistrationForm', () => {
           firstName: 'John',
           lastName: 'Doe',
           email: 'john@example.com',
+          phone: '416-555-9999',
           gender: undefined,
           shareRegistration: true,
           notes: undefined,
@@ -141,6 +146,7 @@ describe('RegistrationForm', () => {
       await user.type(screen.getByLabelText(/email/i), 'john@example.com')
       await user.type(container.querySelector('#emergencyContactName')!, 'Jane Doe')
       await user.type(container.querySelector('#emergencyContactPhone')!, '555-1234')
+      await user.type(container.querySelector('#phone')!, '416-555-9999')
 
       await user.click(screen.getByRole('button', { name: /register/i }))
 
@@ -159,6 +165,7 @@ describe('RegistrationForm', () => {
       await user.type(screen.getByLabelText(/email/i), 'john@example.com')
       await user.type(container.querySelector('#emergencyContactName')!, 'Jane Doe')
       await user.type(container.querySelector('#emergencyContactPhone')!, '555-1234')
+      await user.type(container.querySelector('#phone')!, '416-555-9999')
 
       await user.click(screen.getByRole('button', { name: /register/i }))
 
@@ -167,6 +174,7 @@ describe('RegistrationForm', () => {
         expect(saved.firstName).toBe('John')
         expect(saved.lastName).toBe('Doe')
         expect(saved.email).toBe('john@example.com')
+        expect(saved.phone).toBe('416-555-9999')
       })
     })
 
@@ -179,6 +187,7 @@ describe('RegistrationForm', () => {
       await user.type(screen.getByLabelText(/email/i), 'john@example.com')
       await user.type(container.querySelector('#emergencyContactName')!, 'Jane Doe')
       await user.type(container.querySelector('#emergencyContactPhone')!, '555-1234')
+      await user.type(container.querySelector('#phone')!, '416-555-9999')
 
       await user.click(screen.getByRole('button', { name: /register/i }))
 
@@ -203,6 +212,7 @@ describe('RegistrationForm', () => {
       await user.type(screen.getByLabelText(/email/i), 'john@example.com')
       await user.type(container.querySelector('#emergencyContactName')!, 'Jane Doe')
       await user.type(container.querySelector('#emergencyContactPhone')!, '555-1234')
+      await user.type(container.querySelector('#phone')!, '416-555-9999')
 
       await user.click(screen.getByRole('button', { name: /register/i }))
 
@@ -237,6 +247,7 @@ describe('RegistrationForm', () => {
       await user.type(screen.getByLabelText(/email/i), 'john@example.com')
       await user.type(container.querySelector('#emergencyContactName')!, 'Jane Doe')
       await user.type(container.querySelector('#emergencyContactPhone')!, '555-1234')
+      await user.type(container.querySelector('#phone')!, '416-555-9999')
 
       await user.click(screen.getByRole('button', { name: /register/i }))
 
@@ -321,6 +332,7 @@ describe('RegistrationForm', () => {
       await user.type(screen.getByLabelText(/email/i), 'john@example.com')
       await user.type(container.querySelector('#emergencyContactName')!, 'Jane Doe')
       await user.type(container.querySelector('#emergencyContactPhone')!, '555-1234')
+      await user.type(container.querySelector('#phone')!, '416-555-9999')
 
       await user.click(screen.getByRole('button', { name: /register/i }))
 
@@ -407,6 +419,7 @@ describe('RegistrationForm', () => {
       await user.type(screen.getByLabelText(/email/i), 'john@example.com')
       await user.type(container.querySelector('#emergencyContactName')!, 'Jane Doe')
       await user.type(container.querySelector('#emergencyContactPhone')!, '555-1234')
+      await user.type(container.querySelector('#phone')!, '416-555-9999')
 
       const submitButton = screen.getByRole('button', { name: /register/i })
       await user.click(submitButton)

@@ -32,6 +32,7 @@ interface SavedRegistrationData {
   firstName: string
   lastName: string
   email: string
+  phone: string
   gender: string
   shareRegistration: boolean
   emergencyContactName: string
@@ -83,6 +84,7 @@ export function FlecheRegistrationForm({
   const [lastName, setLastName] = useState('')
   const [email, setEmail] = useState('')
   const [blurredEmail, setBlurredEmail] = useState('')
+  const [phone, setPhone] = useState('')
   const [shareRegistration, setShareRegistration] = useState(true)
   const [gender, setGender] = useState<string>('')
   const [emergencyContactName, setEmergencyContactName] = useState('')
@@ -115,6 +117,7 @@ export function FlecheRegistrationForm({
       setFirstName(saved.firstName)
       setLastName(saved.lastName)
       setEmail(saved.email)
+      setPhone(saved.phone || '')
       setGender(saved.gender)
       setShareRegistration(saved.shareRegistration)
       setEmergencyContactName(saved.emergencyContactName || '')
@@ -157,6 +160,7 @@ export function FlecheRegistrationForm({
         firstName,
         lastName,
         email,
+        phone,
         gender: gender || undefined,
         shareRegistration,
         notes: notes || undefined,
@@ -172,6 +176,7 @@ export function FlecheRegistrationForm({
           firstName,
           lastName,
           email,
+          phone,
           gender,
           shareRegistration,
           emergencyContactName,
@@ -209,6 +214,7 @@ export function FlecheRegistrationForm({
         firstName,
         lastName,
         email,
+        phone,
         gender: gender || undefined,
         shareRegistration,
         notes: pendingNotes || undefined,
@@ -225,6 +231,7 @@ export function FlecheRegistrationForm({
           firstName,
           lastName,
           email,
+          phone,
           gender,
           shareRegistration,
           emergencyContactName,
@@ -457,6 +464,26 @@ export function FlecheRegistrationForm({
               setBlurredEmail('')
             }}
           />
+        </div>
+
+        {/* Cell phone */}
+        <div className="space-y-2">
+          <Label htmlFor="phone">Cell phone</Label>
+          <Input
+            id="phone"
+            name="phone"
+            type="tel"
+            inputMode="tel"
+            placeholder="Phone number"
+            required
+            autoComplete="tel"
+            disabled={isPending}
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+          />
+          <p className="text-xs text-muted-foreground">
+            So organizers can reach you during the ride.
+          </p>
         </div>
 
         {/* Gender */}

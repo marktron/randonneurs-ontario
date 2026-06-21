@@ -86,6 +86,7 @@ interface Registration {
     first_name: string
     last_name: string
     email: string | null
+    phone: string | null
     emergency_contact_name: string | null
     emergency_contact_phone: string | null
     rider_memberships?: Array<{ membership_type: string; season: number }> | null
@@ -123,6 +124,7 @@ interface Participant {
   firstName: string
   lastName: string
   email: string | null
+  phone: string | null
   emergencyContactName: string | null
   emergencyContactPhone: string | null
   registrationNotes: string | null
@@ -493,6 +495,13 @@ function RiderRow({
           {participant.email && (
             <p className="text-xs text-muted-foreground">{participant.email}</p>
           )}
+          {participant.phone && (
+            <p className="text-xs text-muted-foreground">
+              <a href={`tel:${participant.phone}`} className="hover:underline underline-offset-2">
+                {participant.phone}
+              </a>
+            </p>
+          )}
           {isFleche && participant.registrationTeamName && (
             <p className="text-xs text-muted-foreground">
               Registered team: {participant.registrationTeamName}
@@ -797,6 +806,7 @@ export function EventResultsManager({
         firstName: reg.riders!.first_name,
         lastName: reg.riders!.last_name,
         email: reg.riders!.email,
+        phone: reg.riders!.phone,
         emergencyContactName: reg.riders!.emergency_contact_name,
         emergencyContactPhone: reg.riders!.emergency_contact_phone,
         registrationNotes: reg.notes,
@@ -818,6 +828,7 @@ export function EventResultsManager({
       firstName: result.riders!.first_name,
       lastName: result.riders!.last_name,
       email: result.riders!.email,
+      phone: null,
       emergencyContactName: null,
       emergencyContactPhone: null,
       registrationNotes: null,

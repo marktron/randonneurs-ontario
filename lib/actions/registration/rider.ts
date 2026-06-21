@@ -83,6 +83,7 @@ export type FindOrCreateRiderReturn = FindOrCreateRiderResult | FindOrCreateRide
  * @param firstName - First name
  * @param lastName - Last name
  * @param gender - Optional gender (M, F, or X)
+ * @param phone - Optional rider cell phone (normalized)
  * @param emergencyContactName - Optional emergency contact name
  * @param emergencyContactPhone - Optional emergency contact phone
  * @returns Either a riderId or match candidates for user selection
@@ -92,6 +93,7 @@ export async function findOrCreateRider(
   firstName: string,
   lastName: string,
   gender?: string,
+  phone?: string,
   emergencyContactName?: string,
   emergencyContactPhone?: string
 ): Promise<FindOrCreateRiderReturn> {
@@ -143,6 +145,7 @@ export async function findOrCreateRider(
       // Update supplementary rider info only — never overwrite the name
       const updateData: RiderUpdate = {
         gender: parsedGender,
+        phone: phone || null,
         emergency_contact_name: emergencyContactName || null,
         emergency_contact_phone: emergencyContactPhone || null,
       }
@@ -179,6 +182,7 @@ export async function findOrCreateRider(
     last_name: trimmedLastName,
     email: normalizedEmail,
     gender: parsedGender,
+    phone: phone || null,
     emergency_contact_name: emergencyContactName || null,
     emergency_contact_phone: emergencyContactPhone || null,
   })

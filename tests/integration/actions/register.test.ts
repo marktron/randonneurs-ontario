@@ -56,6 +56,7 @@ describe('registerForEvent', () => {
         lastName: 'User',
         email: 'test@example.com',
         shareRegistration: false,
+        phone: '416-555-0000',
         emergencyContactName: 'Emergency Contact',
         emergencyContactPhone: '555-1234',
       })
@@ -71,6 +72,7 @@ describe('registerForEvent', () => {
         lastName: 'User',
         email: 'test@example.com',
         shareRegistration: false,
+        phone: '416-555-0000',
         emergencyContactName: 'Emergency Contact',
         emergencyContactPhone: '555-1234',
       })
@@ -86,6 +88,7 @@ describe('registerForEvent', () => {
         lastName: '   ',
         email: 'test@example.com',
         shareRegistration: false,
+        phone: '416-555-0000',
         emergencyContactName: 'Emergency Contact',
         emergencyContactPhone: '555-1234',
       })
@@ -101,12 +104,45 @@ describe('registerForEvent', () => {
         lastName: 'User',
         email: '  ',
         shareRegistration: false,
+        phone: '416-555-0000',
         emergencyContactName: 'Emergency Contact',
         emergencyContactPhone: '555-1234',
       })
 
       expect(result.success).toBe(false)
       expect(result.error).toBe('Missing required fields')
+    })
+
+    it('returns error for missing rider phone', async () => {
+      const result = await registerForEvent({
+        eventId: 'event-123',
+        firstName: 'Test',
+        lastName: 'User',
+        email: 'test@example.com',
+        phone: '   ',
+        shareRegistration: false,
+        emergencyContactName: 'Emergency Contact',
+        emergencyContactPhone: '555-1234',
+      })
+
+      expect(result.success).toBe(false)
+      expect(result.error).toBe('Phone number is required')
+    })
+
+    it('returns error for an invalid rider phone', async () => {
+      const result = await registerForEvent({
+        eventId: 'event-123',
+        firstName: 'Test',
+        lastName: 'User',
+        email: 'test@example.com',
+        phone: '123',
+        shareRegistration: false,
+        emergencyContactName: 'Emergency Contact',
+        emergencyContactPhone: '555-1234',
+      })
+
+      expect(result.success).toBe(false)
+      expect(result.error).toBe('Please enter a valid phone number')
     })
   })
 
@@ -119,6 +155,7 @@ describe('registerForEvent', () => {
         lastName: 'User',
         email: 'test@example.com',
         shareRegistration: false,
+        phone: '416-555-0000',
         emergencyContactName: 'Emergency Contact',
         emergencyContactPhone: '555-1234',
       })
@@ -156,6 +193,7 @@ describe('registerForPermanent', () => {
         lastName: 'User',
         email: 'test@example.com',
         shareRegistration: false,
+        phone: '416-555-0000',
         emergencyContactName: 'Emergency Contact',
         emergencyContactPhone: '555-1234',
       })
@@ -179,6 +217,7 @@ describe('registerForPermanent', () => {
         lastName: 'User',
         email: 'test@example.com',
         shareRegistration: false,
+        phone: '416-555-0000',
         emergencyContactName: 'Emergency Contact',
         emergencyContactPhone: '555-1234',
       })
@@ -204,6 +243,7 @@ describe('registerForPermanent', () => {
         lastName: 'User',
         email: 'test@example.com',
         shareRegistration: false,
+        phone: '416-555-0000',
         emergencyContactName: 'Emergency Contact',
         emergencyContactPhone: '555-1234',
       })
@@ -222,6 +262,7 @@ describe('registerForPermanent', () => {
         lastName: 'User',
         email: 'test@example.com',
         shareRegistration: false,
+        phone: '416-555-0000',
         emergencyContactName: 'Emergency Contact',
         emergencyContactPhone: '555-1234',
       })
@@ -246,6 +287,7 @@ describe('spam guards', () => {
         lastName: 'Bot',
         email: 'spam@example.com',
         shareRegistration: false,
+        phone: '416-555-0000',
         emergencyContactName: 'Emergency Contact',
         emergencyContactPhone: '555-1234',
         homepageUrl: 'https://spam.example.com',
@@ -268,6 +310,7 @@ describe('spam guards', () => {
         lastName: 'Bot',
         email: 'spam@example.com',
         shareRegistration: false,
+        phone: '416-555-0000',
         emergencyContactName: 'Emergency Contact',
         emergencyContactPhone: '555-1234',
         homepageUrl: 'x',
@@ -285,6 +328,7 @@ describe('spam guards', () => {
         lastName: 'User',
         email: 'real@example.com',
         shareRegistration: false,
+        phone: '416-555-0000',
         emergencyContactName: 'Emergency Contact',
         emergencyContactPhone: '555-1234',
         homepageUrl: '',
@@ -301,6 +345,7 @@ describe('spam guards', () => {
         lastName: 'User',
         email: 'real@example.com',
         shareRegistration: false,
+        phone: '416-555-0000',
         emergencyContactName: 'Emergency Contact',
         emergencyContactPhone: '555-1234',
         homepageUrl: '   ',
@@ -316,6 +361,7 @@ describe('spam guards', () => {
         lastName: 'User',
         email: 'rider@example.com',
         shareRegistration: false,
+        phone: '416-555-0000',
         emergencyContactName: 'EC',
         emergencyContactPhone: '555-1234',
         homepageUrl: 'https://spam.example/',
@@ -343,6 +389,7 @@ describe('spam guards', () => {
         lastName: 'User',
         email: 'rider+tag@example.com',
         shareRegistration: false,
+        phone: '416-555-0000',
         emergencyContactName: 'EC',
         emergencyContactPhone: '555-1234',
         homepageUrl: 'x',
@@ -370,6 +417,7 @@ describe('spam guards', () => {
         lastName: 'User',
         email: 'rider@example.com',
         shareRegistration: false,
+        phone: '416-555-0000',
         emergencyContactName: 'EC',
         emergencyContactPhone: '555-1234',
         homepageUrl: 'x',
@@ -401,6 +449,7 @@ describe('spam guards', () => {
         lastName: 'User',
         email: 'rider@example.com',
         shareRegistration: false,
+        phone: '416-555-0000',
         emergencyContactName: 'EC',
         emergencyContactPhone: '555-1234',
         homepageUrl: 'x',

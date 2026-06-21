@@ -707,6 +707,7 @@ export type Database = {
           id: string
           last_name: string
           member_since: number | null
+          phone: string | null
           rider_number: number | null
           slug: string
           updated_at: string | null
@@ -724,6 +725,7 @@ export type Database = {
           id?: string
           last_name: string
           member_since?: number | null
+          phone?: string | null
           rider_number?: number | null
           slug: string
           updated_at?: string | null
@@ -741,6 +743,7 @@ export type Database = {
           id?: string
           last_name?: string
           member_since?: number | null
+          phone?: string | null
           rider_number?: number | null
           slug?: string
           updated_at?: string | null

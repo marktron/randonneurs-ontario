@@ -143,6 +143,7 @@ describe('completeRegistrationWithRider (real DB)', () => {
         last_name: 'Rider',
         email: null,
         gender: null,
+        phone: null,
         emergency_contact_name: null,
         emergency_contact_phone: null,
       })

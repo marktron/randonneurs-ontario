@@ -301,6 +301,7 @@ export type RegistrationWithRiderForAdmin = Pick<
         | 'first_name'
         | 'last_name'
         | 'email'
+        | 'phone'
         | 'emergency_contact_name'
         | 'emergency_contact_phone'
       > & {
