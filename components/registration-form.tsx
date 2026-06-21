@@ -420,7 +420,7 @@ export function RegistrationForm({
             onChange={(e) => setPhone(e.target.value)}
           />
           <p className="text-xs text-muted-foreground">
-            So organizers can reach you during the ride.
+            Used only for urgent ride-day updates, such as weather or safety-related changes.
           </p>
         </div>
 
