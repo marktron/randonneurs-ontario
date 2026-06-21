@@ -647,7 +647,20 @@ export async function completeRegistrationWithRider(
         emergency_contact_name: data.emergencyContactName?.trim() || null,
         emergency_contact_phone: normalizedEmergencyPhone || null,
       }
-      await getSupabaseAdmin().from('riders').update(updateData).eq('id', selectedRiderId)
+      const { error: updateError } = await getSupabaseAdmin()
+        .from('riders')
+        .update(updateData)
+        .eq('id', selectedRiderId)
+
+      // Surface (don't throw) — the rider already exists, so registration can
+      // proceed; log the failed write so a schema/RLS problem doesn't pass
+      // silently.
+      if (updateError) {
+        logError(updateError, {
+          operation: 'registerForEvent.updateMatchedRider',
+          context: { riderId: selectedRiderId, supabaseCode: updateError.code },
+        })
+      }
     } else {
       // User confirmed they're a new rider - create new rider record.
       // insertNewRider logs to Sentry and throws on failure; surface a friendly message.

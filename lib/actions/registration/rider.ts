@@ -149,7 +149,20 @@ export async function findOrCreateRider(
         emergency_contact_name: emergencyContactName || null,
         emergency_contact_phone: emergencyContactPhone || null,
       }
-      await getSupabaseAdmin().from('riders').update(updateData).eq('id', bestRider.id)
+      const { error: updateError } = await getSupabaseAdmin()
+        .from('riders')
+        .update(updateData)
+        .eq('id', bestRider.id)
+
+      // Surface (don't throw) — the rider already exists, so registration can
+      // proceed; we just log the failed contact-info write so a schema/RLS
+      // problem doesn't pass silently.
+      if (updateError) {
+        logError(updateError, {
+          operation: 'findOrCreateRider.updateRider',
+          context: { riderId: bestRider.id, supabaseCode: updateError.code },
+        })
+      }
 
       return { success: true, riderId: bestRider.id }
     }
