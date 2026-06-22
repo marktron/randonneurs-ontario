@@ -88,7 +88,9 @@ calendar year. The only divergence from the env var is if ops leaves
 rolled over will not auto-assign. Admins handle these in the same end-of-season
 manual pass they already do for off-chapter rides (below).
 
-No backfill. Historical rows stay exactly as they are.
+The trigger itself never backfills. Pre-existing historical gaps are corrected
+once by a separate script (see "One-time historical backfill" below); closed
+seasons are otherwise left exactly as they are.
 
 ## Coexistence with manual awards
 
