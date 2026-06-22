@@ -8,6 +8,7 @@
 //   npx tsx scripts/validate-sr-awards.ts --env-file=.env.production.local
 import './load-env'
 import { createClient } from '@supabase/supabase-js'
+import type { WebSocketLikeConstructor } from '@supabase/realtime-js'
 import ws from 'ws'
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -16,9 +17,11 @@ if (!url || !key) {
   console.error('Missing NEXT_PUBLIC_SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY')
   process.exit(1)
 }
+// Node 20 lacks native WebSocket; ws polyfill required by @supabase/realtime-js.
+// The cast is safe: ws fulfils the WebSocketLikeConstructor contract at runtime.
 const supabase = createClient(url, key, {
   auth: { autoRefreshToken: false, persistSession: false },
-  realtime: { transport: ws },
+  realtime: { transport: ws as unknown as WebSocketLikeConstructor },
 })
 
 const CURRENT_YEAR = new Date().getFullYear()
