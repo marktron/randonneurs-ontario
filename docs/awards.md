@@ -270,3 +270,39 @@ now-unearned award from the whole series.
 **Known limitation.** The trigger fires on `results` changes only; editing an
 event's `collection` or date does not re-reconcile results pointing at it
 (matches First Brevet).
+
+### Super Randonneur
+
+Super Randonneur (SR) is assigned automatically by a database trigger for the
+**current season only**. Closed seasons (2025 and earlier, and any season once
+the calendar year rolls over) are frozen and hand-curated.
+
+**Rule.** A qualifying ride is a **finished `brevet`** result of at least 200 km.
+SR needs one ride for each slot {≥200, ≥300, ≥400, ≥600} in a season; a longer
+ride substitutes for any shorter slot (so `200, 400, 400, 600` qualifies, as does
+`200, 300, 600, 1000`). SR can be earned an unlimited number of times per season.
+With `nX` = count of qualifying rides ≥ X km, the number of SRs is
+`LEAST(n600, ⌊n400/2⌋, ⌊n300/3⌋, ⌊n200/4⌋)`. Permanents, flèches, and populaires
+never count.
+
+**Mechanics.** `trg_results_super_randonneur` (in
+`supabase/migrations/20260622201058_auto_assign_super_randonneur.sql`) fires on every
+INSERT, DELETE, and status/event_id/distance_km/rider_id/season UPDATE on
+`results`. It calls `reconcile_super_randonneur_for_rider_season(rider_id, season)`,
+which no-ops unless `season` is the live calendar year, then adds or removes
+**auto-assigned** `rider_awards` rows (`auto_assigned = true`) so their count
+equals the computed SR count.
+
+**Manual rows and off-club rides.** Auto rows never touch manual rows
+(`auto_assigned = false`). When a rider's qualifying ride was ridden at another
+club, the site shows fewer than four qualifying rides, so the auto count is short
+— an admin assigns the missing SR by hand. Auto and manual rows are additive.
+**Operational rule:** in the current season, only manually add an SR for off-club
+series _beyond_ what is auto-computed, to avoid double-counting.
+
+**Status changes / deletions.** Flipping a qualifying result to `dnf` or deleting
+it re-runs the reconciler and removes the now-unsupported auto SR.
+
+**Known limitation.** The trigger fires on `results` changes only; editing an
+event's `event_type` or `event_date` does not re-reconcile results pointing at it
+(matches First Brevet).
