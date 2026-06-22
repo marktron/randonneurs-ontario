@@ -165,4 +165,90 @@ describe('Super Randonneur auto-assignment trigger', () => {
     }
     expect(await autoSrCount(IDS.rider, CURRENT_SEASON)).toBe(0)
   })
+
+  it('grants multiple SRs when the series is repeated (unlimited)', async () => {
+    await seedRider(IDS.rider, SLUGS.rider)
+    for (const d of [200, 300, 400, 600, 200, 300, 400, 600]) {
+      await seedResult(IDS.rider, d, CURRENT_SEASON)
+    }
+    expect(await autoSrCount(IDS.rider, CURRENT_SEASON)).toBe(2)
+  })
+
+  it('is limited by the rarest distance: 3x200 2x300 2x400 1x600 -> 1 SR', async () => {
+    await seedRider(IDS.rider, SLUGS.rider)
+    for (const d of [200, 200, 200, 300, 300, 400, 400, 600]) {
+      await seedResult(IDS.rider, d, CURRENT_SEASON)
+    }
+    expect(await autoSrCount(IDS.rider, CURRENT_SEASON)).toBe(1)
+  })
+
+  it('substitution with a ride over 600: 200/300/600/1000 -> 1 SR', async () => {
+    await seedRider(IDS.rider, SLUGS.rider)
+    for (const d of [200, 300, 600, 1000]) {
+      await seedResult(IDS.rider, d, CURRENT_SEASON)
+    }
+    expect(await autoSrCount(IDS.rider, CURRENT_SEASON)).toBe(1)
+  })
+
+  it('removes the SR when a qualifying result flips to dnf', async () => {
+    await seedRider(IDS.rider, SLUGS.rider)
+    await seedResult(IDS.rider, 200, CURRENT_SEASON)
+    await seedResult(IDS.rider, 300, CURRENT_SEASON)
+    await seedResult(IDS.rider, 400, CURRENT_SEASON)
+    const sixHundredId = await seedResult(IDS.rider, 600, CURRENT_SEASON)
+    expect(await autoSrCount(IDS.rider, CURRENT_SEASON)).toBe(1)
+
+    await checked(
+      supabase.from('results').update({ status: 'dnf' }).eq('id', sixHundredId),
+      'flip 600 to dnf'
+    )
+    expect(await autoSrCount(IDS.rider, CURRENT_SEASON)).toBe(0)
+  })
+
+  it('removes the SR when a qualifying result is deleted', async () => {
+    await seedRider(IDS.rider, SLUGS.rider)
+    await seedResult(IDS.rider, 200, CURRENT_SEASON)
+    await seedResult(IDS.rider, 300, CURRENT_SEASON)
+    await seedResult(IDS.rider, 400, CURRENT_SEASON)
+    const sixHundredId = await seedResult(IDS.rider, 600, CURRENT_SEASON)
+    expect(await autoSrCount(IDS.rider, CURRENT_SEASON)).toBe(1)
+
+    await checked(supabase.from('results').delete().eq('id', sixHundredId), 'delete 600')
+    expect(await autoSrCount(IDS.rider, CURRENT_SEASON)).toBe(0)
+  })
+
+  it('ignores non-brevet results (permanent, fleche)', async () => {
+    await seedRider(IDS.rider, SLUGS.rider)
+    await seedResult(IDS.rider, 200, CURRENT_SEASON)
+    await seedResult(IDS.rider, 300, CURRENT_SEASON)
+    await seedResult(IDS.rider, 400, CURRENT_SEASON, { eventType: 'permanent' })
+    await seedResult(IDS.rider, 600, CURRENT_SEASON, { eventType: 'fleche' })
+    expect(await autoSrCount(IDS.rider, CURRENT_SEASON)).toBe(0)
+  })
+
+  it('never touches manual rows and stacks additively', async () => {
+    await seedRider(IDS.rider, SLUGS.rider)
+    // Pre-existing manual SR (e.g. an off-club series) for the current season.
+    await checked(
+      supabase.from('rider_awards').insert({
+        rider_id: IDS.rider,
+        award_id: srAwardId,
+        season: CURRENT_SEASON,
+        auto_assigned: false,
+        note: 'Off-club 600 — manual',
+      }),
+      'seed manual SR'
+    )
+    // A full on-site series should add exactly one AUTO row, leaving the manual row.
+    for (const d of [200, 300, 400, 600]) {
+      await seedResult(IDS.rider, d, CURRENT_SEASON)
+    }
+    expect(await autoSrCount(IDS.rider, CURRENT_SEASON)).toBe(1)
+    expect(await manualSrCount(IDS.rider, CURRENT_SEASON)).toBe(1)
+
+    // Dropping the on-site series removes only the auto row; manual survives.
+    await supabase.from('results').delete().eq('rider_id', IDS.rider)
+    expect(await autoSrCount(IDS.rider, CURRENT_SEASON)).toBe(0)
+    expect(await manualSrCount(IDS.rider, CURRENT_SEASON)).toBe(1)
+  })
 })
