@@ -22,6 +22,9 @@ DECLARE
   v_n_done   INT;
 BEGIN
   -- Current calendar season only; everything else is frozen.
+  -- p_season is the trigger row's results.season (a plain user-supplied INT); the
+  -- counts/INSERT/DELETE below key on events.season (generated from event_date).
+  -- They coincide normally; this gate intentionally uses the result's season.
   IF p_rider_id IS NULL
      OR p_season IS DISTINCT FROM EXTRACT(YEAR FROM CURRENT_DATE)::int THEN
     RETURN;
