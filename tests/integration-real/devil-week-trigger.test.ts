@@ -163,4 +163,82 @@ describe('Completed Devil Week auto-assignment trigger', () => {
     await seedResult(IDS.rider, e600, 600, CURRENT_SEASON, { status: 'dnf' })
     expect(await devilWeekCount(IDS.rider, CURRENT_SEASON)).toBe(0)
   })
+
+  it('does not award when a finished ride has no finish_time', async () => {
+    await seedRider(IDS.rider, SLUGS.rider)
+    const [e200, e300, e400, e600] = await seedDevilWeekSeason(CURRENT_SEASON)
+    await seedResult(IDS.rider, e200, 200, CURRENT_SEASON)
+    await seedResult(IDS.rider, e300, 300, CURRENT_SEASON)
+    await seedResult(IDS.rider, e400, 400, CURRENT_SEASON)
+    await seedResult(IDS.rider, e600, 600, CURRENT_SEASON, { finishTime: null })
+    expect(await devilWeekCount(IDS.rider, CURRENT_SEASON)).toBe(0)
+  })
+
+  it('removes the award when a qualifying result flips to dnf', async () => {
+    await seedRider(IDS.rider, SLUGS.rider)
+    const [e200, e300, e400, e600] = await seedDevilWeekSeason(CURRENT_SEASON)
+    await seedResult(IDS.rider, e200, 200, CURRENT_SEASON)
+    await seedResult(IDS.rider, e300, 300, CURRENT_SEASON)
+    await seedResult(IDS.rider, e400, 400, CURRENT_SEASON)
+    const last = await seedResult(IDS.rider, e600, 600, CURRENT_SEASON)
+    expect(await devilWeekCount(IDS.rider, CURRENT_SEASON)).toBe(4)
+
+    await checked(
+      supabase.from('results').update({ status: 'dnf' }).eq('id', last),
+      'flip 600 to dnf'
+    )
+    expect(await devilWeekCount(IDS.rider, CURRENT_SEASON)).toBe(0)
+  })
+
+  it('removes the award when a qualifying result is deleted', async () => {
+    await seedRider(IDS.rider, SLUGS.rider)
+    const [e200, e300, e400, e600] = await seedDevilWeekSeason(CURRENT_SEASON)
+    await seedResult(IDS.rider, e200, 200, CURRENT_SEASON)
+    await seedResult(IDS.rider, e300, 300, CURRENT_SEASON)
+    await seedResult(IDS.rider, e400, 400, CURRENT_SEASON)
+    const last = await seedResult(IDS.rider, e600, 600, CURRENT_SEASON)
+    expect(await devilWeekCount(IDS.rider, CURRENT_SEASON)).toBe(4)
+
+    await checked(supabase.from('results').delete().eq('id', last), 'delete 600')
+    expect(await devilWeekCount(IDS.rider, CURRENT_SEASON)).toBe(0)
+  })
+
+  it('does not award when the season has fewer than four tagged events', async () => {
+    await seedRider(IDS.rider, SLUGS.rider)
+    const [e200, e300, e400] = await seedDevilWeekSeason(CURRENT_SEASON, [200, 300, 400])
+    await seedResult(IDS.rider, e200, 200, CURRENT_SEASON)
+    await seedResult(IDS.rider, e300, 300, CURRENT_SEASON)
+    await seedResult(IDS.rider, e400, 400, CURRENT_SEASON)
+    expect(await devilWeekCount(IDS.rider, CURRENT_SEASON)).toBe(0)
+  })
+
+  it('ignores a finished brevet that is not tagged devil-week', async () => {
+    await seedRider(IDS.rider, SLUGS.rider)
+    // Only three tagged events; the fourth finished brevet is untagged, so the
+    // series is incomplete and must not earn the award.
+    const [e200, e300, e400] = await seedDevilWeekSeason(CURRENT_SEASON, [200, 300, 400])
+    await seedResult(IDS.rider, e200, 200, CURRENT_SEASON)
+    await seedResult(IDS.rider, e300, 300, CURRENT_SEASON)
+    await seedResult(IDS.rider, e400, 400, CURRENT_SEASON)
+
+    const untaggedId = '00000000-0000-4000-a000-0000000e1900'
+    await checked(
+      supabase.from('events').insert({
+        id: untaggedId,
+        slug: 'inttest-dw-untagged',
+        name: 'IntTest Untagged 600',
+        chapter_id: CHAPTER_ID,
+        route_id: IDS.route,
+        event_type: 'brevet',
+        distance_km: 600,
+        event_date: `${CURRENT_SEASON}-06-15`,
+        status: 'completed',
+        collection: null,
+      }),
+      'seed untagged event'
+    )
+    await seedResult(IDS.rider, untaggedId, 600, CURRENT_SEASON)
+
+    expect(await devilWeekCount(IDS.rider, CURRENT_SEASON)).toBe(0)
+  })
 })
