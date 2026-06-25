@@ -138,23 +138,22 @@ or clearing its `collection`, or moving its date/season) does not re-reconcile
 results pointing at it. Acceptable; matches First Brevet. In practice events are
 tagged once, before results arrive.
 
-## Validation against historical data
+## Validation
 
-A committed read-only script `scripts/validate-devil-week-awards.ts` (mirrors
-`validate-sr-awards.ts`) confirms the earning logic reproduces the
-known-correct historical awards before we trust the trigger. For each
-(rider, season) it compares:
+**No historical validation (decided 2026-06-25).** Unlike SR, only the **current
+(2026)** Devil Week events are `collection='devil-week'`-tagged; historical Devil
+Weeks were identified by name (`ILIKE '%devil%week%'`) and are not tagged. With
+no historical tags there is nothing to compute historical completion from, so a
+historical computed-vs-recorded check (like SR's) cannot run and is skipped. The
+existing historical awards are assumed correct and stay frozen by the
+current-season gate.
 
-- **computed**: did the rider finish (with `finish_time`) all `>= 4` tagged
-  events that season?
-- **recorded**: does the rider have any `completed-devil-week` row on a result
-  in that season?
-
-It reports every mismatch — `computed && !recorded` (missing award) and
-`recorded && !computed` (award without a complete qualifying series). The user
-expects this to come back clean; any mismatch is surfaced for review, **not**
-written. Read-only; run against prod. Uses the same client/env setup as
-`validate-sr-awards.ts` (including the `ws` realtime workaround on Node 20).
+Confidence comes instead from the real-DB integration tests (below). Because the
+trigger only ever writes the current season, its first real-world effect is
+visible directly in prod after deploy — the 2026 series — which can be spot-checked
+there. If broader assurance is ever wanted, tagging the historical Devil Week
+events (`collection='devil-week'`) would re-enable an SR-style validation pass as
+a follow-up.
 
 ## Testing
 
