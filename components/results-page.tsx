@@ -275,7 +275,7 @@ export function ResultsPage({
                           key={`${rider.name}-${index}`}
                           className="flex items-center justify-between py-1.5 border-b border-border/50 group gap-2"
                         >
-                          <div className="flex items-center gap-1.5 min-w-0">
+                          <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 min-w-0">
                             <Link
                               href={`/riders/${rider.slug}`}
                               className="text-sm hover:text-primary transition-colors truncate"
