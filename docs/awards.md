@@ -239,3 +239,34 @@ is earliest.
 **Manual overrides.** The admin assign form at `/admin/awards` still accepts First
 Brevet, but the trigger will reconcile any out-of-spec assignments the next time
 that rider's results change.
+
+### Completed Devil Week
+
+Completed Devil Week is assigned automatically by a database trigger for the
+**current season only**. Closed seasons are frozen and hand-curated.
+
+**Rule.** The four (or more) events of a season's Devil Week are tagged
+`events.collection = 'devil-week'`. A rider earns the award for a season when
+that season has **at least four** tagged events and the rider has a
+`status='finished'` result **with a `finish_time`** for **every** one of them. A
+finished result with no recorded time does not count.
+
+**Mechanics.** `trg_results_devil_week` (in
+`supabase/migrations/20260625150136_auto_assign_devil_week.sql`) fires on every
+INSERT, DELETE, and status/finish_time/event_id/rider_id/season UPDATE on
+`results`. It calls `reconcile_devil_week_for_rider_season(rider_id, season)`,
+which no-ops unless `season` is the live calendar year, then either tags **each**
+of the rider's results on that season's tagged events with a
+`completed-devil-week` row (when the series is complete) or removes them (when it
+is not). The award is result-scoped, so the series shows on all of its rides.
+
+**Tagging new seasons.** Each season, set `events.collection = 'devil-week'` on
+that year's Devil Week events; the trigger handles the rest as results arrive.
+
+**Status changes / deletions.** Flipping a qualifying result to `dnf`, clearing
+its `finish_time`, or deleting it re-runs the reconciler and removes the
+now-unearned award from the whole series.
+
+**Known limitation.** The trigger fires on `results` changes only; editing an
+event's `collection` or date does not re-reconcile results pointing at it
+(matches First Brevet).
