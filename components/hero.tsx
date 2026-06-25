@@ -14,12 +14,20 @@ type HeroProps = {
 }
 
 export function Hero({ images }: HeroProps) {
+  // Pick a random starting slide on each load so the carousel doesn't always
+  // open on the same image. A lazy initializer keeps this out of the rendered
+  // markup (the DOM slide order is unchanged), so there's no hydration
+  // mismatch — embla just applies the start position client-side on mount.
+  const [startIndex] = useState(() =>
+    images.length > 0 ? Math.floor(Math.random() * images.length) : 0
+  )
   const [selectedIndex, setSelectedIndex] = useState(0)
 
   const [emblaRef, emblaApi] = useEmblaCarousel(
     {
       loop: true,
       duration: 40,
+      startIndex,
     },
     [
       Autoplay({
