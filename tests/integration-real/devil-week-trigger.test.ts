@@ -18,10 +18,6 @@ const ALL_RIDER_IDS = [IDS.rider]
 let dwAwardId: string
 let eventSeq = 0
 let resultSeq = 0
-// IDs of results seeded on pre-existing (seed-data) DW events so we can clean up.
-let preExistingDwResultIds: string[] = []
-// Total number of DW events in the current season including seed data.
-let totalCurrentSeasonDwEvents = 0
 
 beforeAll(async () => {
   const award = await checked(
@@ -47,9 +43,6 @@ afterEach(async () => {
   // Deleting results cascades their result_awards rows (FK ON DELETE CASCADE).
   await supabase.from('results').delete().in('rider_id', ALL_RIDER_IDS)
   await supabase.from('events').delete().eq('route_id', IDS.route)
-  // Reset per-test state.
-  preExistingDwResultIds = []
-  totalCurrentSeasonDwEvents = 0
 })
 
 afterAll(async () => {
@@ -128,26 +121,6 @@ async function seedResult(
   return resultId
 }
 
-// Seed finished results for the test rider on all pre-existing (seed-data) DW
-// events in the given season so the reconciler can reach the "all events done"
-// threshold. Returns the number of additional results inserted and stores their
-// IDs for cleanup.
-async function seedResultsForPreExistingDwEvents(riderId: string, season: number): Promise<number> {
-  const { data, error } = await supabase
-    .from('events')
-    .select('id, distance_km')
-    .eq('collection', 'devil-week')
-    .eq('season', season)
-    .not('route_id', 'eq', IDS.route) // exclude events seeded by this test
-  if (error) throw new Error(`load pre-existing dw events: ${error.message}`)
-  const events = data ?? []
-  for (const ev of events) {
-    const id = await seedResult(riderId, ev.id, ev.distance_km as number, season)
-    preExistingDwResultIds.push(id)
-  }
-  return events.length
-}
-
 // Count of completed-devil-week award rows on this rider's results in `season`.
 async function devilWeekCount(riderId: string, season: number): Promise<number> {
   const { data, error } = await supabase
@@ -164,15 +137,11 @@ describe('Completed Devil Week auto-assignment trigger', () => {
   it('tags all four results when the full series is finished (current season)', async () => {
     await seedRider(IDS.rider, SLUGS.rider)
     const [e200, e300, e400, e600] = await seedDevilWeekSeason(CURRENT_SEASON)
-    // Cover any pre-existing DW events in the current season (seed data).
-    const preExisting = await seedResultsForPreExistingDwEvents(IDS.rider, CURRENT_SEASON)
     await seedResult(IDS.rider, e200, 200, CURRENT_SEASON)
     await seedResult(IDS.rider, e300, 300, CURRENT_SEASON)
     await seedResult(IDS.rider, e400, 400, CURRENT_SEASON)
     await seedResult(IDS.rider, e600, 600, CURRENT_SEASON)
-    // 4 test events + however many pre-existing seed events exist.
-    totalCurrentSeasonDwEvents = 4 + preExisting
-    expect(await devilWeekCount(IDS.rider, CURRENT_SEASON)).toBe(totalCurrentSeasonDwEvents)
+    expect(await devilWeekCount(IDS.rider, CURRENT_SEASON)).toBe(4)
   })
 
   it('does not award for a prior (closed) season', async () => {
@@ -188,8 +157,6 @@ describe('Completed Devil Week auto-assignment trigger', () => {
   it('does not award when only three of four are finished', async () => {
     await seedRider(IDS.rider, SLUGS.rider)
     const [e200, e300, e400, e600] = await seedDevilWeekSeason(CURRENT_SEASON)
-    // NOTE: we intentionally do NOT cover pre-existing events here; the point is
-    // that the series is incomplete, so the award must not fire regardless.
     await seedResult(IDS.rider, e200, 200, CURRENT_SEASON)
     await seedResult(IDS.rider, e300, 300, CURRENT_SEASON)
     await seedResult(IDS.rider, e400, 400, CURRENT_SEASON)
