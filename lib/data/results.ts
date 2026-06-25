@@ -35,6 +35,7 @@ export interface RiderResult {
   slug: string | null
   time: string | 'DNF' | 'DNS' | 'OTL'
   isFirstBrevet: boolean
+  isCompletedDevilWeek: boolean
 }
 
 export interface TeamResult {
@@ -261,6 +262,22 @@ const getChapterResultsInner = cache(
       }
     }
 
+    // Query for Completed Devil Week awards
+    const completedDevilWeekResultIds = new Set<string>()
+    if (allResultIds.length > 0) {
+      const { data: devilWeekAwardData } = await getSupabase()
+        .from('result_awards')
+        .select('result_id, awards!inner(title)')
+        .in('result_id', allResultIds)
+        .eq('awards.title', 'Completed Devil Week')
+
+      if (devilWeekAwardData) {
+        for (const award of devilWeekAwardData) {
+          completedDevilWeekResultIds.add(award.result_id)
+        }
+      }
+    }
+
     // Transform to EventResult format
     const eventResults: EventResult[] = []
 
@@ -279,8 +296,9 @@ const getChapterResultsInner = cache(
         // Show status (DNF/DNS/OTL/DQ) if not finished, otherwise show finish time
         const time = statusStr ?? formatFinishTime(result.finish_time as string | null) ?? ''
         const isFirstBrevet = result.id ? firstBrevetResultIds.has(result.id) : false
+        const isCompletedDevilWeek = result.id ? completedDevilWeekResultIds.has(result.id) : false
 
-        return { name, slug, time, isFirstBrevet }
+        return { name, slug, time, isFirstBrevet, isCompletedDevilWeek }
       })
 
       // Sort riders by last name A→Z
@@ -302,12 +320,17 @@ const getChapterResultsInner = cache(
           const statusStr = formatStatus(result.status ?? 'pending')
           const time = statusStr ?? formatFinishTime(result.finish_time as string | null) ?? ''
           const isFirstBrevet = result.id ? firstBrevetResultIds.has(result.id) : false
+          const isCompletedDevilWeek = result.id
+            ? completedDevilWeekResultIds.has(result.id)
+            : false
           const distance = result.distance_km?.toString() ?? event.distance_km.toString()
 
           if (!teamMap.has(teamName)) {
             teamMap.set(teamName, { distance, riders: [] })
           }
-          teamMap.get(teamName)!.riders.push({ name, slug, time, isFirstBrevet })
+          teamMap
+            .get(teamName)!
+            .riders.push({ name, slug, time, isFirstBrevet, isCompletedDevilWeek })
         }
 
         // Sort riders within each team by last name

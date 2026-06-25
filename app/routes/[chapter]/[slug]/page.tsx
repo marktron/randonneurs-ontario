@@ -170,6 +170,12 @@ export default async function RouteDetailPage({ params }: PageProps) {
                         {rider.isFirstBrevet && (
                           <AwardBadge award={{ title: 'First Brevet' }} className="shrink-0" />
                         )}
+                        {rider.isCompletedDevilWeek && (
+                          <AwardBadge
+                            award={{ title: 'Completed Devil Week' }}
+                            className="shrink-0"
+                          />
+                        )}
                       </div>
                       <span
                         className={`text-sm tabular-nums shrink-0 ${

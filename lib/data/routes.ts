@@ -44,6 +44,7 @@ export interface RouteResultRider {
   time: string
   isFirstBrevet: boolean
   isCourseRecord: boolean
+  isCompletedDevilWeek: boolean
 }
 
 export interface RouteResultEvent {
@@ -135,6 +136,22 @@ const getRouteResultsInner = cache(async (routeSlug: string): Promise<RouteResul
     }
   }
 
+  // Query for Completed Devil Week awards
+  const completedDevilWeekResultIds = new Set<string>()
+  if (allResultIds.length > 0) {
+    const { data: devilWeekAwardData } = await getSupabase()
+      .from('result_awards')
+      .select('result_id, awards!inner(title)')
+      .in('result_id', allResultIds)
+      .eq('awards.title', 'Completed Devil Week')
+
+    if (devilWeekAwardData) {
+      for (const award of devilWeekAwardData) {
+        completedDevilWeekResultIds.add(award.result_id)
+      }
+    }
+  }
+
   // Find the course record (fastest finish time across all results)
   // Track all result IDs with the fastest time to handle ties
   const courseRecordResultIds = new Set<string>()
@@ -180,6 +197,7 @@ const getRouteResultsInner = cache(async (routeSlug: string): Promise<RouteResul
           '',
         isFirstBrevet: r.id ? firstBrevetResultIds.has(r.id) : false,
         isCourseRecord: r.id ? courseRecordResultIds.has(r.id) : false,
+        isCompletedDevilWeek: r.id ? completedDevilWeekResultIds.has(r.id) : false,
       }))
 
     // Sort by last name

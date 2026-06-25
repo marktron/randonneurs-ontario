@@ -208,8 +208,50 @@ describe('getRouteResults', () => {
     expect(result).toEqual([])
   })
 
-  // Note: Tests for results with events require multiple query mocking (events + awards)
-  // which is complex to set up reliably. Full transform behavior is covered by E2E tests.
+  it('sets isCompletedDevilWeek true for riders with that award', async () => {
+    const mockEvents = [
+      {
+        name: 'Toronto Devil Week 200',
+        event_date: '2025-07-01',
+        routes: { slug: 'toronto-200' },
+        public_results: [
+          {
+            id: 'result-route-dw-1',
+            finish_time: '10:00',
+            status: 'finished',
+            rider_slug: 'jane-rider',
+            first_name: 'Jane',
+            last_name: 'Rider',
+          },
+          {
+            id: 'result-route-dw-2',
+            finish_time: '11:00',
+            status: 'finished',
+            rider_slug: 'bob-norider',
+            first_name: 'Bob',
+            last_name: 'Norider',
+          },
+        ],
+      },
+    ]
+
+    // Queue: events response
+    mockModule.__mockRoutesFound(mockEvents)
+    // Queue: First Brevet awards (empty)
+    mockModule.__mockRoutesFound([])
+    // Queue: Completed Devil Week awards (only result-route-dw-1)
+    mockModule.__mockRoutesFound([{ result_id: 'result-route-dw-1' }])
+
+    const result = await getRouteResults('toronto-200')
+
+    expect(result).toHaveLength(1)
+    const janeRider = result[0].riders.find((r) => r.slug === 'jane-rider')
+    const bobNorider = result[0].riders.find((r) => r.slug === 'bob-norider')
+    expect(janeRider?.isCompletedDevilWeek).toBe(true)
+    expect(bobNorider?.isCompletedDevilWeek).toBe(false)
+  })
+
+  // Note: Full transform behavior is also covered by E2E tests.
 })
 
 describe('getActiveRoutes', () => {

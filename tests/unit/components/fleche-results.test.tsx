@@ -39,26 +39,74 @@ const baseFlecheEvent: EventResult = {
   eventType: 'fleche',
   routeSlug: null,
   riders: [
-    { name: 'Alice Anderson', slug: 'alice-anderson', time: '', isFirstBrevet: false },
-    { name: 'Bob Brown', slug: 'bob-brown', time: '', isFirstBrevet: false },
-    { name: 'Carol Clark', slug: 'carol-clark', time: '', isFirstBrevet: false },
-    { name: 'Dave Davis', slug: 'dave-davis', time: 'DNF', isFirstBrevet: false },
+    {
+      name: 'Alice Anderson',
+      slug: 'alice-anderson',
+      time: '',
+      isFirstBrevet: false,
+      isCompletedDevilWeek: false,
+    },
+    {
+      name: 'Bob Brown',
+      slug: 'bob-brown',
+      time: '',
+      isFirstBrevet: false,
+      isCompletedDevilWeek: false,
+    },
+    {
+      name: 'Carol Clark',
+      slug: 'carol-clark',
+      time: '',
+      isFirstBrevet: false,
+      isCompletedDevilWeek: false,
+    },
+    {
+      name: 'Dave Davis',
+      slug: 'dave-davis',
+      time: 'DNF',
+      isFirstBrevet: false,
+      isCompletedDevilWeek: false,
+    },
   ],
   teams: [
     {
       teamName: 'Speed Demons',
       distance: '412',
       riders: [
-        { name: 'Alice Anderson', slug: 'alice-anderson', time: '', isFirstBrevet: false },
-        { name: 'Bob Brown', slug: 'bob-brown', time: '', isFirstBrevet: false },
+        {
+          name: 'Alice Anderson',
+          slug: 'alice-anderson',
+          time: '',
+          isFirstBrevet: false,
+          isCompletedDevilWeek: false,
+        },
+        {
+          name: 'Bob Brown',
+          slug: 'bob-brown',
+          time: '',
+          isFirstBrevet: false,
+          isCompletedDevilWeek: false,
+        },
       ],
     },
     {
       teamName: 'Slow Rollers',
       distance: '380',
       riders: [
-        { name: 'Carol Clark', slug: 'carol-clark', time: '', isFirstBrevet: false },
-        { name: 'Dave Davis', slug: 'dave-davis', time: 'DNF', isFirstBrevet: false },
+        {
+          name: 'Carol Clark',
+          slug: 'carol-clark',
+          time: '',
+          isFirstBrevet: false,
+          isCompletedDevilWeek: false,
+        },
+        {
+          name: 'Dave Davis',
+          slug: 'dave-davis',
+          time: 'DNF',
+          isFirstBrevet: false,
+          isCompletedDevilWeek: false,
+        },
       ],
     },
   ],
@@ -72,8 +120,20 @@ const baseBrevetEvent: EventResult = {
   eventType: 'brevet',
   routeSlug: 'spring-200',
   riders: [
-    { name: 'Alice Anderson', slug: 'alice-anderson', time: '10:30', isFirstBrevet: false },
-    { name: 'Bob Brown', slug: 'bob-brown', time: '11:00', isFirstBrevet: true },
+    {
+      name: 'Alice Anderson',
+      slug: 'alice-anderson',
+      time: '10:30',
+      isFirstBrevet: false,
+      isCompletedDevilWeek: false,
+    },
+    {
+      name: 'Bob Brown',
+      slug: 'bob-brown',
+      time: '11:00',
+      isFirstBrevet: true,
+      isCompletedDevilWeek: false,
+    },
   ],
 }
 
@@ -126,15 +186,33 @@ describe('Fleche results display', () => {
           teamName: 'Speed Demons',
           distance: '412',
           riders: [
-            { name: 'Alice Anderson', slug: 'alice-anderson', time: '', isFirstBrevet: false },
+            {
+              name: 'Alice Anderson',
+              slug: 'alice-anderson',
+              time: '',
+              isFirstBrevet: false,
+              isCompletedDevilWeek: false,
+            },
           ],
         },
         {
           teamName: 'All DNF Team',
           distance: '370',
           riders: [
-            { name: 'Fred Chagnon', slug: 'fred-chagnon', time: 'DNF', isFirstBrevet: false },
-            { name: 'David Cole', slug: 'david-cole', time: 'DNF', isFirstBrevet: false },
+            {
+              name: 'Fred Chagnon',
+              slug: 'fred-chagnon',
+              time: 'DNF',
+              isFirstBrevet: false,
+              isCompletedDevilWeek: false,
+            },
+            {
+              name: 'David Cole',
+              slug: 'david-cole',
+              time: 'DNF',
+              isFirstBrevet: false,
+              isCompletedDevilWeek: false,
+            },
           ],
         },
       ],
@@ -157,7 +235,15 @@ describe('Fleche results display', () => {
         {
           teamName: 'Unknown Team',
           distance: '360',
-          riders: [{ name: 'Eve Evans', slug: 'eve-evans', time: '', isFirstBrevet: false }],
+          riders: [
+            {
+              name: 'Eve Evans',
+              slug: 'eve-evans',
+              time: '',
+              isFirstBrevet: false,
+              isCompletedDevilWeek: false,
+            },
+          ],
         },
       ],
     }

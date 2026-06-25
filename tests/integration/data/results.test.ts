@@ -344,6 +344,57 @@ describe('getChapterResults', () => {
     expect(result[0].routeChapterSlug).toBeNull()
   })
 
+  it('sets isCompletedDevilWeek true for riders with that award', async () => {
+    const mockEvents = [
+      {
+        id: 'event-dw-1',
+        name: 'Devil Week Brevet',
+        event_date: '2025-07-01',
+        distance_km: 200,
+        event_type: 'brevet',
+        start_location: null,
+        routes: { slug: 'dw-route-200' },
+        public_results: [
+          {
+            id: 'result-dw-1',
+            finish_time: '10:00',
+            status: 'finished',
+            team_name: null,
+            distance_km: null,
+            rider_slug: 'jane-rider',
+            first_name: 'Jane',
+            last_name: 'Rider',
+          },
+          {
+            id: 'result-dw-2',
+            finish_time: '11:00',
+            status: 'finished',
+            team_name: null,
+            distance_km: null,
+            rider_slug: 'bob-norider',
+            first_name: 'Bob',
+            last_name: 'Norider',
+          },
+        ],
+      },
+    ]
+
+    // Queue: events response
+    mockModule.__mockEventsFound(mockEvents)
+    // Queue: First Brevet awards (empty)
+    mockModule.__mockEventsFound([])
+    // Queue: Completed Devil Week awards (only result-dw-1)
+    mockModule.__mockEventsFound([{ result_id: 'result-dw-1' }])
+
+    const result = await getChapterResults('toronto', 2025)
+
+    expect(result).toHaveLength(1)
+    const janeRider = result[0].riders.find((r) => r.slug === 'jane-rider')
+    const bobNorider = result[0].riders.find((r) => r.slug === 'bob-norider')
+    expect(janeRider?.isCompletedDevilWeek).toBe(true)
+    expect(bobNorider?.isCompletedDevilWeek).toBe(false)
+  })
+
   it('converts db chapter slug to URL slug for routeChapterSlug', async () => {
     const mockEvents = [
       {
