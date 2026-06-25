@@ -22,6 +22,12 @@ export function Hero({ images }: HeroProps) {
     images.length > 0 ? Math.floor(Math.random() * images.length) : 0
   )
   const [selectedIndex, setSelectedIndex] = useState(0)
+  // Slides render in fixed DOM order, so the first paint would show slide 0
+  // before embla scrolls to the random start — a visible flash. Keep the
+  // carousel hidden until embla has initialized on its start slide, then fade
+  // it in. SSR and the first client render both start hidden, so there's no
+  // hydration mismatch.
+  const [isReady, setIsReady] = useState(false)
 
   const [emblaRef, emblaApi] = useEmblaCarousel(
     {
@@ -47,6 +53,9 @@ export function Hero({ images }: HeroProps) {
   useEffect(() => {
     if (!emblaApi) return
     onSelect()
+    // embla has applied the start slide (and Fade's per-slide opacity) by now,
+    // so it's safe to reveal the carousel without flashing slide 0.
+    setIsReady(true)
     emblaApi.on('select', onSelect)
     return () => {
       emblaApi.off('select', onSelect)
@@ -57,7 +66,13 @@ export function Hero({ images }: HeroProps) {
     <section className="relative">
       {/* Hero Carousel - Full bleed */}
       <div className="relative h-[40vh] min-h-[250px] md:h-[60vh] md:min-h-[400px] lg:h-[70vh] lg:min-h-[500px] w-full overflow-hidden bg-muted">
-        <div ref={emblaRef} className="h-full overflow-hidden">
+        <div
+          ref={emblaRef}
+          className={cn(
+            'h-full overflow-hidden transition-opacity duration-700',
+            isReady ? 'opacity-100' : 'opacity-0'
+          )}
+        >
           <div className="flex h-full">
             {images.map((image, index) => (
               <div key={image.src} className="relative h-full min-w-0 flex-[0_0_100%]">
