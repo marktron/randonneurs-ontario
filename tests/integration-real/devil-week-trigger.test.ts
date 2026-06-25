@@ -212,21 +212,24 @@ describe('Completed Devil Week auto-assignment trigger', () => {
     expect(await devilWeekCount(IDS.rider, CURRENT_SEASON)).toBe(0)
   })
 
-  it('ignores a finished brevet that is not tagged devil-week', async () => {
+  it('awards the tagged series and ignores an untagged finished brevet', async () => {
     await seedRider(IDS.rider, SLUGS.rider)
-    // Only three tagged events; the fourth finished brevet is untagged, so the
-    // series is incomplete and must not earn the award.
-    const [e200, e300, e400] = await seedDevilWeekSeason(CURRENT_SEASON, [200, 300, 400])
+    // Seed the full four-event tagged series and finish all four.
+    const [e200, e300, e400, e600] = await seedDevilWeekSeason(CURRENT_SEASON)
     await seedResult(IDS.rider, e200, 200, CURRENT_SEASON)
     await seedResult(IDS.rider, e300, 300, CURRENT_SEASON)
     await seedResult(IDS.rider, e400, 400, CURRENT_SEASON)
+    await seedResult(IDS.rider, e600, 600, CURRENT_SEASON)
 
-    const untaggedId = '00000000-0000-4000-a000-0000000e1900'
+    // Add an untagged finished brevet using the module-level eventSeq so the
+    // slug is unique and the insert is idempotent across re-runs.
+    eventSeq += 1
+    const untaggedId = `00000000-0000-4000-a000-0000000e1${String(eventSeq).padStart(3, '0')}`
     await checked(
       supabase.from('events').insert({
         id: untaggedId,
-        slug: 'inttest-dw-untagged',
-        name: 'IntTest Untagged 600',
+        slug: `inttest-dw-untagged-${eventSeq}`,
+        name: `IntTest Untagged 600 (${eventSeq})`,
         chapter_id: CHAPTER_ID,
         route_id: IDS.route,
         event_type: 'brevet',
@@ -239,6 +242,8 @@ describe('Completed Devil Week auto-assignment trigger', () => {
     )
     await seedResult(IDS.rider, untaggedId, 600, CURRENT_SEASON)
 
-    expect(await devilWeekCount(IDS.rider, CURRENT_SEASON)).toBe(0)
+    // The four tagged results are awarded; the untagged ride is neither awarded
+    // nor blocks the series.
+    expect(await devilWeekCount(IDS.rider, CURRENT_SEASON)).toBe(4)
   })
 })
