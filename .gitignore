@@ -58,3 +58,6 @@ backups/
 # claude code worktrees
 .claude/worktrees/
 .worktrees/
+
+# superpowers brainstorming/planning scratch (specs, plans, run scaffolding)
+docs/superpowers/
