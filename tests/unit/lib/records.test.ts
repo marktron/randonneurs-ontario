@@ -99,6 +99,7 @@ const rpcResponses: Record<string, unknown[]> = {
   get_best_season_event_counts: mockSeasonRiderRecords,
   get_best_season_distances: mockSeasonRiderRecords,
   get_current_season_distances: mockRiderRecords,
+  get_current_season_event_counts: mockRiderRecords,
   get_season_unique_rider_counts: mockClubSeasonRecords,
   get_season_event_counts: mockClubSeasonRecords,
   get_season_total_distances: mockClubSeasonRecords,
@@ -129,6 +130,7 @@ import {
   getLifetimeRecords,
   getSeasonRecords,
   getCurrentSeasonDistance,
+  getCurrentSeasonEvents,
   getClubAchievements,
   getRouteRecords,
   getPbpRecords,
@@ -256,6 +258,32 @@ describe('Records Data Module', () => {
       await getCurrentSeasonDistance()
 
       const call = rpcCalls.find((c) => c.functionName === 'get_current_season_distances')
+      expect(call?.params).toMatchObject({
+        p_season: expect.any(Number),
+        limit_count: 10,
+      })
+    })
+  })
+
+  describe('getCurrentSeasonEvents', () => {
+    it('returns array of rider records', async () => {
+      const result = await getCurrentSeasonEvents()
+
+      expect(Array.isArray(result)).toBe(true)
+      if (result.length > 0) {
+        expect(result[0]).toMatchObject({
+          rank: expect.any(Number),
+          riderSlug: expect.any(String),
+          riderName: expect.any(String),
+          value: expect.any(Number),
+        })
+      }
+    })
+
+    it('passes current season as parameter', async () => {
+      await getCurrentSeasonEvents()
+
+      const call = rpcCalls.find((c) => c.functionName === 'get_current_season_event_counts')
       expect(call?.params).toMatchObject({
         p_season: expect.any(Number),
         limit_count: 10,

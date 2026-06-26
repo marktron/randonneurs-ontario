@@ -40,7 +40,12 @@ vi.mock('@/lib/utils', () => ({
 
 vi.stubEnv('NEXT_PUBLIC_CURRENT_SEASON', '2025')
 
-import { getLifetimeRecords, getSeasonRecords, getCurrentSeasonDistance } from '@/lib/data/records'
+import {
+  getLifetimeRecords,
+  getSeasonRecords,
+  getCurrentSeasonDistance,
+  getCurrentSeasonEvents,
+} from '@/lib/data/records'
 
 describe('getLifetimeRecords', () => {
   beforeEach(() => {
@@ -98,6 +103,30 @@ describe('getCurrentSeasonDistance', () => {
 
     expect(mock.__rpcMock).toHaveBeenCalledWith(
       'get_current_season_distances',
+      expect.objectContaining({
+        p_season: 2025,
+      })
+    )
+  })
+})
+
+describe('getCurrentSeasonEvents', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('returns empty array when no data', async () => {
+    const result = await getCurrentSeasonEvents()
+
+    expect(result).toEqual([])
+  })
+
+  it('calls RPC with current season', async () => {
+    const mock = await vi.importMock<{ __rpcMock: ReturnType<typeof vi.fn> }>('@/lib/supabase')
+    await getCurrentSeasonEvents()
+
+    expect(mock.__rpcMock).toHaveBeenCalledWith(
+      'get_current_season_event_counts',
       expect.objectContaining({
         p_season: 2025,
       })

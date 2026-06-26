@@ -45,11 +45,12 @@ Recipients of distance awards from Audax Club Parisien. These lists show all rec
 
 Best single-season performances.
 
-| Record                  | Description                                  |
-| ----------------------- | -------------------------------------------- |
-| Most Events in a Season | Highest event count in a single season       |
-| Highest Season Distance | Most kilometers in a single season           |
-| Current Season Leaders  | Top riders by distance in the current season |
+| Record                       | Description                                        |
+| ---------------------------- | -------------------------------------------------- |
+| Most Events in a Season      | Highest event count in a single season             |
+| Highest Season Distance      | Most kilometers in a single season                 |
+| Most Events in {season}      | Top riders by finished event count, current season |
+| Highest Distance in {season} | Top riders by distance in the current season       |
 
 ### Club Achievements
 
