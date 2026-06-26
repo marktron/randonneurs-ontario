@@ -296,6 +296,37 @@ export async function getCurrentSeasonDistance(): Promise<RiderRecord[]> {
 }
 
 // ============================================================================
+// CURRENT SEASON EVENTS
+// ============================================================================
+
+const getCurrentSeasonEventsInner = cache(async (): Promise<RiderRecord[]> => {
+  const currentSeason = getCurrentSeason()
+  const supabase = getSupabase()
+
+  const { data, error } = await supabase.rpc('get_current_season_event_counts', {
+    p_season: currentSeason,
+    limit_count: RECORD_LIMIT,
+  })
+
+  if (error) {
+    return handleDataError(error, { operation: 'getCurrentSeasonEvents' }, [])
+  }
+
+  return toRiderRecords(data)
+})
+
+export async function getCurrentSeasonEvents(): Promise<RiderRecord[]> {
+  return unstable_cache(
+    async () => getCurrentSeasonEventsInner(),
+    ['records-current-season-events'],
+    {
+      tags: ['records', 'records-current-season-events'],
+      revalidate: CACHE_TTL_CURRENT,
+    }
+  )()
+}
+
+// ============================================================================
 // CLUB ACHIEVEMENTS
 // ============================================================================
 

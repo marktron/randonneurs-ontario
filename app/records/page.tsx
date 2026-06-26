@@ -12,6 +12,7 @@ import {
   getLifetimeRecords,
   getSeasonRecords,
   getCurrentSeasonDistance,
+  getCurrentSeasonEvents,
   getClubAchievements,
   getRouteRecords,
   getPbpRecords,
@@ -31,16 +32,25 @@ export const metadata = {
 
 export default async function RecordsPage() {
   // Fetch all records in parallel
-  const [lifetime, season, currentSeasonDistance, club, routes, pbp, graniteAnvil] =
-    await Promise.all([
-      getLifetimeRecords(),
-      getSeasonRecords(),
-      getCurrentSeasonDistance(),
-      getClubAchievements(),
-      getRouteRecords(),
-      getPbpRecords(),
-      getGraniteAnvilRecords(),
-    ])
+  const [
+    lifetime,
+    season,
+    currentSeasonDistance,
+    currentSeasonEvents,
+    club,
+    routes,
+    pbp,
+    graniteAnvil,
+  ] = await Promise.all([
+    getLifetimeRecords(),
+    getSeasonRecords(),
+    getCurrentSeasonDistance(),
+    getCurrentSeasonEvents(),
+    getClubAchievements(),
+    getRouteRecords(),
+    getPbpRecords(),
+    getGraniteAnvilRecords(),
+  ])
 
   const formatDistance = (km: number) => `${km.toLocaleString()} km`
 
@@ -129,12 +139,19 @@ export default async function RecordsPage() {
             formatValue={formatDistance}
           />
         </div>
-        <RiderRecordTable
-          title={`${currentSeason} Season Distance Leaders`}
-          records={currentSeasonDistance}
-          valueLabel="Distance"
-          formatValue={formatDistance}
-        />
+        <div className="grid gap-10 lg:grid-cols-2">
+          <RiderRecordTable
+            title={`Most Events in ${currentSeason}`}
+            records={currentSeasonEvents}
+            valueLabel="Events"
+          />
+          <RiderRecordTable
+            title={`Highest Distance in ${currentSeason}`}
+            records={currentSeasonDistance}
+            valueLabel="Distance"
+            formatValue={formatDistance}
+          />
+        </div>
       </RecordSection>
 
       <RecordSection

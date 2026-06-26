@@ -975,6 +975,15 @@ export type Database = {
           value: number
         }[]
       }
+      get_current_season_event_counts: {
+        Args: { limit_count?: number; p_season: number }
+        Returns: {
+          rank: number
+          rider_name: string
+          rider_slug: string
+          value: number
+        }[]
+      }
       get_distinct_event_seasons: {
         Args: never
         Returns: {
