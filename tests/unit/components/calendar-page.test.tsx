@@ -110,7 +110,7 @@ describe('CalendarPage', () => {
   it('renders the view toggle', () => {
     render(<CalendarPage {...defaultProps} />)
 
-    expect(screen.getByRole('group', { name: 'Calendar view' })).toBeInTheDocument()
+    expect(screen.getByRole('radiogroup', { name: 'Calendar view' })).toBeInTheDocument()
     expect(screen.getByRole('radio', { name: 'List view' })).toBeInTheDocument()
     expect(screen.getByRole('radio', { name: 'Grid view' })).toBeInTheDocument()
   })
