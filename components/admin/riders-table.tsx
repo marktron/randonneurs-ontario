@@ -23,7 +23,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Checkbox } from '@/components/ui/checkbox'
 import { InputGroup, InputGroupAddon, InputGroupInput } from '@/components/ui/input-group'
-import { ChevronLeft, ChevronRight, Eye, GitMerge, Search, X } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Eye, EyeOff, GitMerge, Search, X } from 'lucide-react'
 import { MergeRidersDialog, type RiderForMerge } from './merge-riders-dialog'
 import { getCurrentSeason } from '@/lib/season'
 
@@ -35,6 +35,7 @@ interface RiderWithStats {
   email: string | null
   gender: string | null
   member_since: number | null
+  hidden: boolean
   registrations: { count: number }[] | null
   results: { count: number }[] | null
   rider_memberships:
@@ -281,7 +282,15 @@ export function RidersTable({
                       />
                     </TableCell>
                     <TableCell className="font-medium">
-                      {rider.first_name} {rider.last_name}
+                      <span className="inline-flex items-center gap-2">
+                        {rider.first_name} {rider.last_name}
+                        {rider.hidden && (
+                          <Badge variant="outline" className="gap-1 text-muted-foreground">
+                            <EyeOff className="h-3 w-3" />
+                            Hidden
+                          </Badge>
+                        )}
+                      </span>
                     </TableCell>
                     <TableCell className="hidden sm:table-cell text-center">
                       {regCount > 0 ? (

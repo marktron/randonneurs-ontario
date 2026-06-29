@@ -168,6 +168,7 @@ export default async function RiderDetailPage({ params }: RiderPageProps) {
             first_name: rider.first_name,
             last_name: rider.last_name,
             email: rider.email,
+            hidden: rider.hidden,
           }}
         />
 

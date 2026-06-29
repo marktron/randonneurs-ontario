@@ -40,6 +40,7 @@ async function getRiders(
       email,
       gender,
       member_since,
+      hidden,
       registrations (count),
       results (count),
       rider_memberships (season, membership_type, chapters (name))

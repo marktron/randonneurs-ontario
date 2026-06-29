@@ -450,6 +450,52 @@ describe('updateRider', () => {
       expect(revalidateTag).toHaveBeenCalledWith('results', { expire: 0 })
     })
   })
+
+  describe('cache revalidation', () => {
+    it('skips public cache revalidation for an email-only edit', async () => {
+      // Current row has the same name; only the (non-public) email changes.
+      mockModule.__mockRiderFound({
+        slug: 'john-doe',
+        first_name: 'John',
+        last_name: 'Doe',
+        hidden: false,
+      })
+
+      const result = await updateRider('rider-1', {
+        firstName: 'John',
+        lastName: 'Doe',
+        email: 'new@example.com',
+      })
+
+      expect(result.success).toBe(true)
+      // Email is never shown publicly — nothing public changed, so no bust.
+      expect(revalidateTag).not.toHaveBeenCalled()
+    })
+
+    it('revalidates public caches (incl. the rider slug) when visibility is toggled', async () => {
+      mockModule.__mockRiderFound({
+        slug: 'john-doe',
+        first_name: 'John',
+        last_name: 'Doe',
+        hidden: false,
+      })
+
+      const result = await updateRider('rider-1', {
+        firstName: 'John',
+        lastName: 'Doe',
+        email: null,
+        hidden: true,
+      })
+
+      expect(result.success).toBe(true)
+      expect(revalidateTag).toHaveBeenCalledWith('riders', { expire: 0 })
+      expect(revalidateTag).toHaveBeenCalledWith('results', { expire: 0 })
+      expect(revalidateTag).toHaveBeenCalledWith('records', { expire: 0 })
+      expect(revalidateTag).toHaveBeenCalledWith('awards', { expire: 0 })
+      expect(revalidateTag).toHaveBeenCalledWith('registrations', { expire: 0 })
+      expect(revalidateTag).toHaveBeenCalledWith('rider-john-doe', { expire: 0 })
+    })
+  })
 })
 
 describe('mergeRiders', () => {

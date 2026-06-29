@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Switch } from '@/components/ui/switch'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { AlertCircle, Loader2 } from 'lucide-react'
@@ -17,6 +18,7 @@ interface RiderEditFormProps {
     first_name: string
     last_name: string
     email: string | null
+    hidden: boolean
   }
 }
 
@@ -28,9 +30,13 @@ export function RiderEditForm({ rider }: RiderEditFormProps) {
   const [firstName, setFirstName] = useState(rider.first_name)
   const [lastName, setLastName] = useState(rider.last_name)
   const [email, setEmail] = useState(rider.email || '')
+  const [hidden, setHidden] = useState(rider.hidden)
 
   const hasChanges =
-    firstName !== rider.first_name || lastName !== rider.last_name || email !== (rider.email || '')
+    firstName !== rider.first_name ||
+    lastName !== rider.last_name ||
+    email !== (rider.email || '') ||
+    hidden !== rider.hidden
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -41,6 +47,7 @@ export function RiderEditForm({ rider }: RiderEditFormProps) {
         firstName,
         lastName,
         email: email || null,
+        hidden,
       })
 
       if (result.success) {
@@ -96,6 +103,23 @@ export function RiderEditForm({ rider }: RiderEditFormProps) {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="No email on file"
+            />
+          </div>
+
+          <div className="flex items-start justify-between gap-4 rounded-md border p-4">
+            <div className="space-y-1">
+              <Label htmlFor="hidden">Hidden from public site</Label>
+              <p className="text-sm text-muted-foreground">
+                When on, this rider never appears on public pages (directory, results, awards,
+                records, registered-rider lists). They remain visible here in admin and can still
+                see their own upcoming rides.
+              </p>
+            </div>
+            <Switch
+              id="hidden"
+              checked={hidden}
+              onCheckedChange={setHidden}
+              aria-label="Hidden from public site"
             />
           </div>
 

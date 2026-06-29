@@ -525,6 +525,7 @@ export type Database = {
       }
       rider_awards: {
         Row: {
+          auto_assigned: boolean
           award_id: string
           created_at: string | null
           id: string
@@ -534,6 +535,7 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
+          auto_assigned?: boolean
           award_id: string
           created_at?: string | null
           id?: string
@@ -543,6 +545,7 @@ export type Database = {
           updated_at?: string | null
         }
         Update: {
+          auto_assigned?: boolean
           award_id?: string
           created_at?: string | null
           id?: string
@@ -704,6 +707,7 @@ export type Database = {
           first_name: string
           full_name: string | null
           gender: string | null
+          hidden: boolean
           id: string
           last_name: string
           member_since: number | null
@@ -722,6 +726,7 @@ export type Database = {
           first_name: string
           full_name?: string | null
           gender?: string | null
+          hidden?: boolean
           id?: string
           last_name: string
           member_since?: number | null
@@ -740,6 +745,7 @@ export type Database = {
           first_name?: string
           full_name?: string | null
           gender?: string | null
+          hidden?: boolean
           id?: string
           last_name?: string
           member_since?: number | null
@@ -1243,6 +1249,18 @@ export type Database = {
       }
       is_admin: { Args: never; Returns: boolean }
       is_chapter_admin: { Args: { check_chapter_id: string }; Returns: boolean }
+      reconcile_devil_week_for_rider_season: {
+        Args: { p_rider_id: string; p_season: number }
+        Returns: undefined
+      }
+      reconcile_first_brevet_for_rider: {
+        Args: { p_rider_id: string }
+        Returns: undefined
+      }
+      reconcile_super_randonneur_for_rider_season: {
+        Args: { p_rider_id: string; p_season: number }
+        Returns: undefined
+      }
     }
     Enums: {
       [_ in never]: never

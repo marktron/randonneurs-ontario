@@ -360,7 +360,7 @@ export type RouteWithChapterForAdmin = Route & {
  */
 export type RiderWithStats = Pick<
   Rider,
-  'id' | 'slug' | 'first_name' | 'last_name' | 'email' | 'gender' | 'member_since'
+  'id' | 'slug' | 'first_name' | 'last_name' | 'email' | 'gender' | 'member_since' | 'hidden'
 > & {
   registrations: Array<{ count: number }> | null
   results: Array<{ count: number }> | null

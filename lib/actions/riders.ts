@@ -153,12 +153,13 @@ export interface UpdateRiderData {
   firstName: string
   lastName: string
   email?: string | null
+  hidden?: boolean
 }
 
 export async function updateRider(riderId: string, data: UpdateRiderData): Promise<ActionResult> {
   const admin = await requireAdmin()
 
-  const { firstName, lastName, email } = data
+  const { firstName, lastName, email, hidden } = data
   const trimmedFirst = firstName.trim()
   const trimmedLast = lastName.trim()
   const normalizedEmail = email?.trim().toLowerCase() || null
@@ -166,6 +167,15 @@ export async function updateRider(riderId: string, data: UpdateRiderData): Promi
   if (!trimmedFirst || !trimmedLast) {
     return { success: false, error: 'First name and last name are required' }
   }
+
+  // Load the current row up front so that, after the update, we revalidate only
+  // the caches a public-visible change can actually affect — and so we can
+  // target this rider's own slug-scoped cache tag.
+  const { data: current } = await getSupabaseAdmin()
+    .from('riders')
+    .select('slug, first_name, last_name, hidden')
+    .eq('id', riderId)
+    .single()
 
   // If email is being set, check it's not already used by another rider
   // (case-insensitive — legacy rows may have mixed-case emails)
@@ -187,6 +197,9 @@ export async function updateRider(riderId: string, data: UpdateRiderData): Promi
     last_name: trimmedLast,
     email: normalizedEmail,
   }
+  if (hidden !== undefined) {
+    updateData.hidden = hidden
+  }
 
   const { error } = await getSupabaseAdmin().from('riders').update(updateData).eq('id', riderId)
 
@@ -202,8 +215,26 @@ export async function updateRider(riderId: string, data: UpdateRiderData): Promi
     description: `Updated rider: ${trimmedFirst} ${trimmedLast}`,
   })
 
-  revalidateTag('riders', { expire: 0 })
-  revalidateTag('results', { expire: 0 })
+  // A name change — or toggling public visibility — affects every cached public
+  // surface that shows rider names/slugs, not just the directory and results.
+  // Email is never shown publicly, so an email-only edit needs no public bust.
+  // If we couldn't read the prior row, bust conservatively.
+  const changedPublicData =
+    !current ||
+    current.first_name !== trimmedFirst ||
+    current.last_name !== trimmedLast ||
+    (hidden !== undefined && current.hidden !== hidden)
+
+  if (changedPublicData) {
+    revalidateTag('riders', { expire: 0 }) // /riders directory, profiles, sitemap
+    revalidateTag('results', { expire: 0 }) // chapter results, profile results
+    revalidateTag('records', { expire: 0 }) // /records leaderboards
+    revalidateTag('awards', { expire: 0 }) // /awards
+    revalidateTag('registrations', { expire: 0 }) // registered-rider lists
+    if (current?.slug) {
+      revalidateTag(`rider-${current.slug}`, { expire: 0 }) // this rider's /riders/[slug]
+    }
+  }
 
   return { success: true }
 }

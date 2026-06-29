@@ -23,6 +23,14 @@ All Supabase tables have RLS policies. The three-client pattern ensures proper a
 
 **Never import `getSupabaseAdmin()` in client components.**
 
+### Hidden riders
+
+The `riders_select_public` RLS policy also enforces the **hidden rider** feature:
+a rider flagged `hidden` is invisible to `anon` (base table, public views, and
+PostgREST embeds) while remaining visible to the service role used by admin and
+the My Rides lookup. SECURITY DEFINER record/award RPCs bypass RLS and are
+filtered explicitly. See [hidden-riders.md](hidden-riders.md).
+
 ## Security Headers
 
 The following headers are set on all responses via `next.config.ts`:
