@@ -65,6 +65,7 @@ const resultsOnlyChapters: Record<string, ChapterInfo> = {
     slug: 'fleche',
     name: 'Flèche',
     description: 'Results from 24-hour team events.',
+    coverImage: '/fleche.png',
     dbSlug: 'fleche',
   },
   permanent: {
