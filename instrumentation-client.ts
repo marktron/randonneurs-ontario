@@ -4,6 +4,7 @@
 
 import * as Sentry from '@sentry/nextjs'
 import { initBotId } from 'botid/client/core'
+import { clientIgnoreErrors } from '@/lib/sentry-ignore'
 
 initBotId({
   protect: [{ path: '/register/*', method: 'POST' }],
@@ -24,23 +25,7 @@ Sentry.init({
   // https://docs.sentry.io/platforms/javascript/guides/nextjs/configuration/options/#sendDefaultPii
   sendDefaultPii: false,
 
-  ignoreErrors: [
-    /Invalid call to runtime\.sendMessage/,
-    /Java object is gone/,
-    /window\.webkit\.messageHandlers/,
-    /Event `Event` \(type=error\) captured as exception/,
-    /Non-Error promise rejection captured/,
-    /^Load failed$/,
-    /^network error$/,
-    // Browser translation extensions (Chrome Translate, etc.) mutate the DOM
-    // out from under React; benign and unactionable.
-    /removeChild.*not a child of this node/,
-    /insertBefore.*not a child of this node/,
-    // Stale tabs across deploys: server action IDs change per build, so a
-    // pre-deploy tab POSTs an ID the new build doesn't know. Next.js
-    // self-recovers with a reload.
-    /Server Action .* was not found on the server/,
-  ],
+  ignoreErrors: clientIgnoreErrors,
 })
 
 export const onRouterTransitionStart = Sentry.captureRouterTransitionStart

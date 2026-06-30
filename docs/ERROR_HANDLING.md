@@ -286,6 +286,22 @@ This complements the `ignoreErrors` list in `instrumentation-client.ts`, which
 filters by message string. The synthetic message bypassed that list, so the
 filtering is done at the source instead.
 
+### Client `ignoreErrors` list
+
+The client-side `ignoreErrors` patterns live in `lib/sentry-ignore.ts`
+(`clientIgnoreErrors`), extracted from `instrumentation-client.ts` so they can
+be unit tested (`tests/unit/lib/sentry-ignore.test.ts`). Each pattern targets
+benign, unactionable browser noise and carries an inline rationale.
+
+One such pattern is `/^Connection closed\.$/` (Sentry issue
+`JAVASCRIPT-NEXTJS-28`). Pages marked `export const dynamic = 'force-dynamic'`
+(e.g. `app/register/[slug]/page.tsx`) stream their React Server Component
+(Flight) response to the browser. When the browser aborts that stream mid-load
+— the user navigates away, closes the tab, or hits a flaky connection — React's
+client runtime reports `Error: Connection closed.`. It is handled, has zero user
+impact, and its stack contains no first-party frames, so it is filtered rather
+than fixed.
+
 ## Related Files
 
 - **`lib/errors.ts`**: Error handling utilities
@@ -295,6 +311,7 @@ filtering is done at the source instead.
 - **`sentry.server.config.ts`**: Sentry server configuration
 - **`sentry.edge.config.ts`**: Sentry edge configuration
 - **`instrumentation-client.ts`**: Sentry client configuration
+- **`lib/sentry-ignore.ts`**: Client `ignoreErrors` patterns (`clientIgnoreErrors`)
 
 ## See Also
 
