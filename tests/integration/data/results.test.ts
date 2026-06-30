@@ -209,6 +209,25 @@ describe('getAvailableYears', () => {
 
     expect(result[0]).toBeGreaterThanOrEqual(result[1])
   })
+
+  it('throws on a persistent query error instead of caching empty years', async () => {
+    // Regression: returning [] here would let unstable_cache hide a chapter's
+    // years until revalidation (see JAVASCRIPT-NEXTJS-25).
+    mockModule.__mockQueryError({ message: 'Database error' })
+
+    await expect(getAvailableYears('toronto')).rejects.toThrow(/getAvailableYears failed/)
+  })
+
+  it('retries a transient 5xx and returns years on recovery', async () => {
+    mockModule.__queryBuilder.then.mockImplementationOnce((resolve) =>
+      resolve({ data: null, error: { message: 'Internal server error.' }, status: 500 })
+    )
+    mockModule.__mockEventsFound([{ id: 'e1', season: 2025, results: [{ season: 2025 }] }])
+
+    const result = await getAvailableYears('toronto')
+
+    expect(result).toContain(2025)
+  })
 })
 
 describe('getChapterResults', () => {
@@ -553,6 +572,17 @@ describe('getRiderBySlug', () => {
       expect(result.riderNumber).toBeNull()
     }
   })
+
+  it('throws on a query error instead of caching a bogus not-found', async () => {
+    // Regression: returning null here would cache a 404 for a real rider after a
+    // transient Supabase blip (see JAVASCRIPT-NEXTJS-25).
+    mockModule.__queryBuilder.maybeSingle.mockResolvedValueOnce({
+      data: null,
+      error: { message: 'Database error' },
+    })
+
+    await expect(getRiderBySlug('jane-doe')).rejects.toThrow(/getRiderBySlug failed/)
+  })
 })
 
 describe('getRiderResults', () => {
@@ -576,6 +606,22 @@ describe('getRiderResults', () => {
     await getRiderResults('non-existent-rider')
 
     expect(handleDataError).not.toHaveBeenCalled()
+  })
+
+  it('throws on a rider-lookup query error instead of caching []', async () => {
+    mockModule.__queryBuilder.maybeSingle.mockResolvedValueOnce({
+      data: null,
+      error: { message: 'Database error' },
+    })
+
+    await expect(getRiderResults('jane-doe')).rejects.toThrow(/getRiderResults failed/)
+  })
+
+  it('throws on a results query error instead of caching []', async () => {
+    mockModule.__mockRiderFound({ id: 'rider-1' })
+    mockModule.__mockQueryError({ message: 'Database error' })
+
+    await expect(getRiderResults('jane-doe')).rejects.toThrow(/getRiderResults\.results failed/)
   })
 
   it('groups results by year', async () => {

@@ -4,11 +4,14 @@ import { queryWithRetry } from '@/lib/data/with-retry'
 // No real delays in tests.
 const noDelay = { delayMs: () => 0 }
 
+// Mirrors a Supabase/PostgREST response shape (data + error + status).
+type Resp = { data: unknown; error: { message?: string; code?: string } | null; status?: number }
+
 describe('queryWithRetry', () => {
   it('returns immediately on success without retrying', async () => {
     const run = vi.fn().mockResolvedValue({ data: [1, 2], error: null, status: 200 })
 
-    const result = await queryWithRetry(run, noDelay)
+    const result = await queryWithRetry<Resp>(run, noDelay)
 
     expect(result.data).toEqual([1, 2])
     expect(run).toHaveBeenCalledTimes(1)
@@ -24,7 +27,7 @@ describe('queryWithRetry', () => {
       })
       .mockResolvedValueOnce({ data: ['ok'], error: null, status: 200 })
 
-    const result = await queryWithRetry(run, noDelay)
+    const result = await queryWithRetry<Resp>(run, noDelay)
 
     expect(result.error).toBeNull()
     expect(result.data).toEqual(['ok'])
@@ -36,22 +39,20 @@ describe('queryWithRetry', () => {
       .fn()
       .mockResolvedValue({ data: null, error: { message: 'Internal server error.' }, status: 503 })
 
-    const result = await queryWithRetry(run, { attempts: 3, delayMs: () => 0 })
+    const result = await queryWithRetry<Resp>(run, { attempts: 3, delayMs: () => 0 })
 
     expect(result.error).not.toBeNull()
     expect(run).toHaveBeenCalledTimes(3)
   })
 
   it('does NOT retry a 4xx error (client errors are not transient)', async () => {
-    const run = vi
-      .fn()
-      .mockResolvedValue({
-        data: null,
-        error: { message: 'Bad Request', code: '22007' },
-        status: 400,
-      })
+    const run = vi.fn().mockResolvedValue({
+      data: null,
+      error: { message: 'Bad Request', code: '22007' },
+      status: 400,
+    })
 
-    const result = await queryWithRetry(run, noDelay)
+    const result = await queryWithRetry<Resp>(run, noDelay)
 
     expect(result.error).not.toBeNull()
     expect(run).toHaveBeenCalledTimes(1)
@@ -60,7 +61,7 @@ describe('queryWithRetry', () => {
   it('does NOT retry an error with no status (conservative — avoids masking real bugs)', async () => {
     const run = vi.fn().mockResolvedValue({ data: null, error: { message: 'No events returned' } })
 
-    await queryWithRetry(run, noDelay)
+    await queryWithRetry<Resp>(run, noDelay)
 
     expect(run).toHaveBeenCalledTimes(1)
   })
@@ -71,7 +72,7 @@ describe('queryWithRetry', () => {
       .mockRejectedValueOnce(new Error('fetch failed'))
       .mockResolvedValueOnce({ data: ['ok'], error: null, status: 200 })
 
-    const result = await queryWithRetry(run, noDelay)
+    const result = await queryWithRetry<Resp>(run, noDelay)
 
     expect(result.data).toEqual(['ok'])
     expect(run).toHaveBeenCalledTimes(2)

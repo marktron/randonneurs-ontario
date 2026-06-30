@@ -14,7 +14,7 @@ import { cache } from 'react'
 import { unstable_cache } from 'next/cache'
 import { getSupabase } from '@/lib/supabase'
 import { formatFinishTime, formatStatus } from '@/lib/utils'
-import { handleDataError, logError } from '@/lib/errors'
+import { logError } from '@/lib/errors'
 import { queryWithRetry } from '@/lib/data/with-retry'
 import {
   getResultsChapterInfo,
@@ -80,41 +80,62 @@ const getAvailableYearsInner = cache(async (urlSlug: string): Promise<number[]> 
   const dbSlug = getDbSlug(urlSlug)
 
   let events: EventWithSeasonAndResults[] | null = null
+  let eventsError: { message?: string; code?: string } | null = null
 
   // Collection-based query (e.g., granite-anvil)
   if (dbSlug === null) {
-    const { data } = await getSupabase()
-      .from('events')
-      .select('id, season, results(season)')
-      .eq('collection', urlSlug)
-      .limit(2000)
-    events = data
+    const result = await queryWithRetry(() =>
+      getSupabase()
+        .from('events')
+        .select('id, season, results(season)')
+        .eq('collection', urlSlug)
+        .limit(2000)
+    )
+    events = result.data
+    eventsError = result.error
   } else if (urlSlug === 'permanent' || urlSlug === 'fleche') {
     // Permanent/Fleche results: query by event_type instead of chapter
-    const { data } = await getSupabase()
-      .from('events')
-      .select('id, season, results(season)')
-      .eq('event_type', urlSlug)
-      .limit(2000)
-    events = data
+    const result = await queryWithRetry(() =>
+      getSupabase()
+        .from('events')
+        .select('id, season, results(season)')
+        .eq('event_type', urlSlug)
+        .limit(2000)
+    )
+    events = result.data
+    eventsError = result.error
   } else {
-    // Chapter-based query using a join
-    let query = getSupabase()
-      .from('events')
-      .select('id, season, results(season), chapters!inner(slug)')
-      .eq('chapters.slug', dbSlug)
+    // Chapter-based query using a join. Rebuilt inside the thunk so a retry
+    // doesn't append filters to a reused builder.
+    const result = await queryWithRetry(() => {
+      let query = getSupabase()
+        .from('events')
+        .select('id, season, results(season), chapters!inner(slug)')
+        .eq('chapters.slug', dbSlug)
 
-    // Filter for PBP events if requested
-    if (urlSlug === 'pbp') {
-      query = query.eq('name', 'Paris-Brest-Paris')
-    }
+      // Filter for PBP events if requested
+      if (urlSlug === 'pbp') {
+        query = query.eq('name', 'Paris-Brest-Paris')
+      }
 
-    const { data, error } = await query.limit(2000)
-    if (error) {
-      console.error('🚨 Error fetching available years:', error)
-      return []
-    }
-    events = data
+      return query.limit(2000)
+    })
+    events = result.data
+    eventsError = result.error
+  }
+
+  if (eventsError) {
+    // Don't cache an empty fallback on failure — unstable_cache would persist
+    // it and hide a chapter's years until revalidation (see getChapterResults
+    // / JAVASCRIPT-NEXTJS-25). Retries are exhausted, so throw.
+    logError(eventsError, {
+      operation: 'getAvailableYears',
+      context: { urlSlug },
+      skipSentry: true,
+    })
+    throw new Error(
+      `getAvailableYears failed for ${urlSlug}: ${eventsError.message ?? 'query error'}`
+    )
   }
 
   if (!events || events.length === 0) return []
@@ -443,15 +464,27 @@ export interface RiderYearResults {
 
 const getRiderBySlugInner = cache(async (slug: string): Promise<RiderInfo | null> => {
   // Use public_riders view (riders table is restricted to protect emails)
-  const { data, error } = await getSupabase()
-    .from('public_riders')
-    .select('slug, first_name, last_name, rider_number')
-    .eq('slug', slug)
-    .maybeSingle()
+  const result = await queryWithRetry(() =>
+    getSupabase()
+      .from('public_riders')
+      .select('slug, first_name, last_name, rider_number')
+      .eq('slug', slug)
+      .maybeSingle()
+  )
 
-  if (error || !data) return null
+  if (result.error) {
+    // Throw rather than cache a bogus "not found" (null) on a transient error —
+    // that would 404 the rider page until revalidation (see JAVASCRIPT-NEXTJS-25).
+    logError(result.error, { operation: 'getRiderBySlug', context: { slug }, skipSentry: true })
+    throw new Error(`getRiderBySlug failed for ${slug}: ${result.error.message ?? 'query error'}`)
+  }
 
-  const typedRider = data as Pick<PublicRider, 'slug' | 'first_name' | 'last_name' | 'rider_number'>
+  if (!result.data) return null
+
+  const typedRider = result.data as Pick<
+    PublicRider,
+    'slug' | 'first_name' | 'last_name' | 'rider_number'
+  >
 
   return {
     slug: typedRider.slug ?? '',
@@ -470,25 +503,36 @@ export async function getRiderBySlug(slug: string): Promise<RiderInfo | null> {
 const getRiderResultsInner = cache(async (slug: string): Promise<RiderYearResults[]> => {
   // Get rider ID first (using public_riders view for RLS safety)
   // Note: We can't join through views, so we need this lookup first
-  const { data: rider, error: riderError } = await getSupabase()
-    .from('public_riders')
-    .select('id')
-    .eq('slug', slug)
-    .maybeSingle()
+  const riderLookup = await queryWithRetry(() =>
+    getSupabase().from('public_riders').select('id').eq('slug', slug).maybeSingle()
+  )
 
-  if (riderError) {
-    return handleDataError(riderError, { operation: 'getRiderResults', context: { slug } }, [])
+  if (riderLookup.error) {
+    // Throw rather than cache [] on a transient error (see JAVASCRIPT-NEXTJS-25).
+    logError(riderLookup.error, {
+      operation: 'getRiderResults',
+      context: { slug },
+      skipSentry: true,
+    })
+    throw new Error(
+      `getRiderResults failed for ${slug}: ${riderLookup.error.message ?? 'query error'}`
+    )
   }
 
+  const rider = riderLookup.data
   if (!rider || !rider.id) {
     return []
   }
+  // Capture as a non-null const so the narrowing survives inside the query
+  // thunk closures below (TS widens property narrowing across closures).
+  const riderId = rider.id
 
   // Get all results for this rider with event info and awards in a single query
-  const { data: results, error: resultsError } = await getSupabase()
-    .from('results')
-    .select(
-      `
+  const resultsQuery = await queryWithRetry(() =>
+    getSupabase()
+      .from('results')
+      .select(
+        `
       id,
       finish_time,
       status,
@@ -513,25 +557,31 @@ const getRiderResultsInner = cache(async (slug: string): Promise<RiderYearResult
         )
       )
     `
-    )
-    .eq('rider_id', rider.id)
-    .order('season', { ascending: false })
+      )
+      .eq('rider_id', riderId)
+      .order('season', { ascending: false })
+  )
 
-  if (resultsError) {
-    return handleDataError(
-      resultsError,
-      { operation: 'getRiderResults.results', context: { riderId: rider.id } },
-      []
+  if (resultsQuery.error) {
+    // Throw rather than cache [] on a transient error (see JAVASCRIPT-NEXTJS-25).
+    logError(resultsQuery.error, {
+      operation: 'getRiderResults.results',
+      context: { riderId },
+      skipSentry: true,
+    })
+    throw new Error(
+      `getRiderResults.results failed for rider ${riderId}: ${resultsQuery.error.message ?? 'query error'}`
     )
   }
 
+  const results = resultsQuery.data
   if (!results) return []
 
   // Query season-scoped awards (e.g., Super Randonneur) from rider_awards
   const { data: seasonAwardsData } = await getSupabase()
     .from('rider_awards')
     .select('season, awards(id, title, description)')
-    .eq('rider_id', rider.id)
+    .eq('rider_id', riderId)
 
   // Group season awards by year
   const seasonAwardsByYear = new Map<number, RiderEventAward[]>()

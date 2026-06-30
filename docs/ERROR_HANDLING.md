@@ -165,6 +165,12 @@ return result.data
 `handleDataError()` returning a fallback is still correct for **uncached** reads,
 where the empty result lives only for that single request.
 
+All cached fetchers in `lib/data/results.ts` (`getChapterResults`,
+`getAvailableYears`, `getRiderBySlug`, `getRiderResults`) follow this
+retry-then-throw pattern for their primary queries. Best-effort enrichment
+queries (e.g. season-scoped awards) are intentionally left to degrade silently,
+since they don't determine whether the cached entry is empty.
+
 ### 3. Direct Error Logging
 
 For cases where you need to log an error but handle it differently:

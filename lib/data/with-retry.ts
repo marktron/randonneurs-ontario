@@ -18,8 +18,13 @@
  * on failure is harmful under `unstable_cache`.
  */
 
-export interface QueryResult<T> {
-  data: T | null
+/**
+ * Minimal shape `queryWithRetry` inspects. A Supabase/PostgREST response
+ * (`PostgrestResponse`, `PostgrestMaybeSingleResponse`, etc.) satisfies it,
+ * and `queryWithRetry` returns the caller's exact response type unchanged so
+ * `data` keeps its precise typing.
+ */
+export interface RetryableResponse {
   error: { message?: string; code?: string } | null
   /** HTTP status from the PostgREST response. Absent for synthetic results. */
   status?: number
@@ -32,21 +37,21 @@ export interface QueryRetryOptions {
   delayMs?: (attempt: number) => number
 }
 
-function isTransientFailure(result: QueryResult<unknown>): boolean {
+function isTransientFailure(result: RetryableResponse): boolean {
   if (!result.error) return false
   // status 0 → thrown transport/network error; >=500 → server-side failure.
   return result.status === 0 || (result.status !== undefined && result.status >= 500)
 }
 
-export async function queryWithRetry<T>(
-  run: () => PromiseLike<QueryResult<T>>,
+export async function queryWithRetry<R extends RetryableResponse>(
+  run: () => PromiseLike<R>,
   { attempts = 3, delayMs = (attempt) => 100 * attempt }: QueryRetryOptions = {}
-): Promise<QueryResult<T>> {
-  let result: QueryResult<T> = {
+): Promise<R> {
+  let result = {
     data: null,
     error: { message: 'queryWithRetry: query was never executed' },
     status: 0,
-  }
+  } as unknown as R
 
   for (let attempt = 1; attempt <= attempts; attempt++) {
     try {
@@ -58,7 +63,7 @@ export async function queryWithRetry<T>(
         data: null,
         error: { message: thrown instanceof Error ? thrown.message : String(thrown) },
         status: 0,
-      }
+      } as unknown as R
     }
 
     if (!isTransientFailure(result)) return result
