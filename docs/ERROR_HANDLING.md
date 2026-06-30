@@ -123,6 +123,48 @@ export async function getEventsByChapter(urlSlug: string): Promise<Event[]> {
   - Returns fallback value (empty array, null, etc.)
   - UI continues to work with empty data
 
+#### Caveat: do not cache the fallback (`unstable_cache`)
+
+Graceful degradation is only safe when the fallback is **not cached**. Returning
+`[]` from inside an `unstable_cache` callback persists that empty array under the
+cache key until the next tag-based revalidation. A transient Supabase 5xx
+("Internal server error.") during background ISR revalidation then becomes
+**durable bad data** — the page shows no results for an extended period, silently
+(Sentry `JAVASCRIPT-NEXTJS-25`).
+
+For data fetchers wrapped in `unstable_cache`:
+
+1. Retry transient failures with **`queryWithRetry()`** (`lib/data/with-retry.ts`),
+   which retries HTTP 5xx and transport errors but leaves 4xx/unknown errors
+   alone. A single retry absorbs nearly all gateway blips.
+2. If an error remains, **throw** instead of returning a fallback. A thrown error
+   inside an `unstable_cache` callback is not cached, so Next.js keeps serving the
+   last good (stale) page and retries on the next revalidation. The throw is
+   reported to Sentry via `captureRequestError` (`instrumentation.ts`); pass
+   `skipSentry: true` to `logError` first if you want a console breadcrumb with
+   context without a duplicate Sentry event.
+
+```typescript
+import { logError } from '@/lib/errors'
+import { queryWithRetry } from '@/lib/data/with-retry'
+
+const result = await queryWithRetry(() =>
+  getSupabase().from('events').select('*').eq('status', 'scheduled')
+)
+if (result.error || !result.data) {
+  logError(result.error ?? new Error('No data'), {
+    operation: 'getEventsByChapter',
+    context: { urlSlug },
+    skipSentry: true,
+  })
+  throw new Error(`getEventsByChapter failed for ${urlSlug}: ${result.error?.message}`)
+}
+return result.data
+```
+
+`handleDataError()` returning a fallback is still correct for **uncached** reads,
+where the empty result lives only for that single request.
+
 ### 3. Direct Error Logging
 
 For cases where you need to log an error but handle it differently:
@@ -305,6 +347,7 @@ than fixed.
 ## Related Files
 
 - **`lib/errors.ts`**: Error handling utilities
+- **`lib/data/with-retry.ts`**: `queryWithRetry` — retry transient Supabase 5xx in cached fetchers
 - **`lib/global-error.ts`**: Global error boundary normalization (`normalizeGlobalError`)
 - **`app/global-error.tsx`**: App Router top-level error boundary
 - **`types/actions.ts`**: `ActionResult<T>` type definition

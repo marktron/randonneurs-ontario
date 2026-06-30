@@ -99,6 +99,7 @@ vi.mock('@/lib/utils', () => ({
 
 vi.mock('@/lib/errors', () => ({
   handleDataError: vi.fn((_error, _context, fallback) => fallback),
+  logError: vi.fn(),
 }))
 
 import { getChapterResults } from '@/lib/data/results'

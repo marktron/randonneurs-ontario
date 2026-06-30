@@ -14,7 +14,8 @@ import { cache } from 'react'
 import { unstable_cache } from 'next/cache'
 import { getSupabase } from '@/lib/supabase'
 import { formatFinishTime, formatStatus } from '@/lib/utils'
-import { handleDataError } from '@/lib/errors'
+import { handleDataError, logError } from '@/lib/errors'
+import { queryWithRetry } from '@/lib/data/with-retry'
 import {
   getResultsChapterInfo,
   getAllResultsChapterSlugs,
@@ -158,52 +159,58 @@ const getChapterResultsInner = cache(
     const dbSlug = getDbSlug(urlSlug)
 
     let events: EventWithPublicResults[] | null = null
-    let eventsError: Error | null = null
+    let eventsError: { message?: string; code?: string } | null = null
 
     // Collection-based query (e.g., granite-anvil)
     if (dbSlug === null) {
-      const result = await getSupabase()
-        .from('events')
-        .select(
-          `
+      const result = await queryWithRetry(() =>
+        getSupabase()
+          .from('events')
+          .select(
+            `
         id, name, event_date, distance_km, event_type, start_location,
         routes (slug),
         public_results (
           id, finish_time, status, team_name, distance_km, rider_slug, first_name, last_name
         )
       `
-        )
-        .eq('collection', urlSlug)
-        .gte('event_date', `${year}-01-01`)
-        .lte('event_date', `${year}-12-31`)
-        .order('event_date', { ascending: false })
+          )
+          .eq('collection', urlSlug)
+          .gte('event_date', `${year}-01-01`)
+          .lte('event_date', `${year}-12-31`)
+          .order('event_date', { ascending: false })
+      )
       events = result.data
       eventsError = result.error
     } else if (urlSlug === 'permanent' || urlSlug === 'fleche') {
       // Permanent/Fleche results: query by event_type instead of chapter
-      const result = await getSupabase()
-        .from('events')
-        .select(
-          `
+      const result = await queryWithRetry(() =>
+        getSupabase()
+          .from('events')
+          .select(
+            `
         id, name, event_date, distance_km, event_type, start_location,
         routes (slug, chapters (slug)),
         public_results (
           id, finish_time, status, team_name, distance_km, rider_slug, first_name, last_name
         )
       `
-        )
-        .eq('event_type', urlSlug)
-        .gte('event_date', `${year}-01-01`)
-        .lte('event_date', `${year}-12-31`)
-        .order('event_date', { ascending: false })
+          )
+          .eq('event_type', urlSlug)
+          .gte('event_date', `${year}-01-01`)
+          .lte('event_date', `${year}-12-31`)
+          .order('event_date', { ascending: false })
+      )
       events = result.data
       eventsError = result.error
     } else {
-      // Chapter-based query using a join
-      let query = getSupabase()
-        .from('events')
-        .select(
-          `
+      // Chapter-based query using a join. Rebuilt fresh inside the thunk so a
+      // retry doesn't append filters/order to a reused builder.
+      const result = await queryWithRetry(() => {
+        let query = getSupabase()
+          .from('events')
+          .select(
+            `
         id, name, event_date, distance_km, event_type, start_location,
         routes (slug),
         chapters!inner(slug),
@@ -211,28 +218,41 @@ const getChapterResultsInner = cache(
           id, finish_time, status, team_name, distance_km, rider_slug, first_name, last_name
         )
       `
-        )
-        .eq('chapters.slug', dbSlug)
-        .neq('event_type', 'permanent')
-        .neq('event_type', 'fleche')
-        .gte('event_date', `${year}-01-01`)
-        .lte('event_date', `${year}-12-31`)
+          )
+          .eq('chapters.slug', dbSlug)
+          .neq('event_type', 'permanent')
+          .neq('event_type', 'fleche')
+          .gte('event_date', `${year}-01-01`)
+          .lte('event_date', `${year}-12-31`)
 
-      // Filter for PBP events if requested
-      if (urlSlug === 'pbp') {
-        query = query.eq('name', 'Paris-Brest-Paris')
-      }
+        // Filter for PBP events if requested
+        if (urlSlug === 'pbp') {
+          query = query.eq('name', 'Paris-Brest-Paris')
+        }
 
-      const result = await query.order('event_date', { ascending: false })
+        return query.order('event_date', { ascending: false })
+      })
       events = result.data
       eventsError = result.error
     }
 
     if (eventsError || !events) {
-      return handleDataError(
-        eventsError || new Error('No events returned'),
-        { operation: 'getChapterResults', context: { urlSlug, year } },
-        []
+      // Do NOT return an empty fallback here. This function is wrapped in
+      // unstable_cache (see getChapterResults), which would persist the empty
+      // array and leave the chapter/year page showing no results until the next
+      // tag-based revalidation — turning a transient Supabase 5xx into durable
+      // bad data (Sentry JAVASCRIPT-NEXTJS-25). queryWithRetry has already
+      // retried transient failures, so a remaining error is treated as fatal:
+      // throw so the cache isn't poisoned and ISR keeps serving the last good
+      // page. Log (skipSentry) for context; the throw is reported to Sentry via
+      // captureRequestError in instrumentation.ts.
+      logError(eventsError ?? new Error('No events returned'), {
+        operation: 'getChapterResults',
+        context: { urlSlug, year },
+        skipSentry: true,
+      })
+      throw new Error(
+        `getChapterResults failed for ${urlSlug}/${year}: ${eventsError?.message ?? 'no events returned'}`
       )
     }
 

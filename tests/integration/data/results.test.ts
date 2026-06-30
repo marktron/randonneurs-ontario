@@ -133,6 +133,7 @@ vi.mock('@/lib/utils', () => ({
 
 vi.mock('@/lib/errors', () => ({
   handleDataError: vi.fn((error, context, fallback) => fallback),
+  logError: vi.fn(),
 }))
 
 // Import after mocks
@@ -263,14 +264,65 @@ describe('getChapterResults', () => {
     })
   })
 
-  it('handles query errors gracefully', async () => {
+  it('throws on a persistent query error instead of caching an empty result', async () => {
+    // Regression: Sentry JAVASCRIPT-NEXTJS-25. Returning [] here would let
+    // unstable_cache persist an empty page after a transient Supabase 5xx.
+    // The function must throw so the cache isn't poisoned and ISR serves stale.
     mockModule.__mockQueryError({
       message: 'Database error',
     })
 
+    await expect(getChapterResults('toronto', 2025)).rejects.toThrow(/getChapterResults failed/)
+  })
+
+  it('retries a transient 5xx and returns data on recovery', async () => {
+    // First attempt: Supabase gateway 500. Second attempt: success.
+    mockModule.__queryBuilder.then.mockImplementationOnce((resolve) =>
+      resolve({ data: null, error: { message: 'Internal server error.' }, status: 500 })
+    )
+    mockModule.__queryBuilder.then.mockImplementationOnce((resolve) =>
+      resolve({
+        data: [
+          {
+            id: 'evt-1',
+            name: 'Test Brevet',
+            event_date: '2025-05-01',
+            distance_km: 200,
+            event_type: 'brevet',
+            start_location: 'Toronto',
+            routes: { slug: 'test-200' },
+            chapters: { slug: 'toronto' },
+            public_results: [
+              {
+                id: 'res-1',
+                finish_time: '08:00',
+                status: 'finished',
+                team_name: null,
+                distance_km: 200,
+                rider_slug: 'jane-doe',
+                first_name: 'Jane',
+                last_name: 'Doe',
+              },
+            ],
+          },
+        ],
+        error: null,
+        status: 200,
+      })
+    )
+
     const result = await getChapterResults('toronto', 2025)
 
-    expect(result).toEqual([])
+    expect(result).toHaveLength(1)
+    expect(result[0].riders[0].name).toBe('Jane Doe')
+  })
+
+  it('throws when transient 5xx persists across all retries', async () => {
+    mockModule.__queryBuilder.then.mockImplementation((resolve) =>
+      resolve({ data: null, error: { message: 'Internal server error.' }, status: 503 })
+    )
+
+    await expect(getChapterResults('toronto', 2025)).rejects.toThrow(/getChapterResults failed/)
   })
 
   it('includes routeChapterSlug from route chapters for permanent results', async () => {
