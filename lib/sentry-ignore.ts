@@ -16,6 +16,11 @@ export const clientIgnoreErrors: RegExp[] = [
   // out from under React; benign and unactionable.
   /removeChild.*not a child of this node/,
   /insertBefore.*not a child of this node/,
+  // Safari/iOS translate variant of the same race: it reparents text nodes, so
+  // a later reconciliation removeChild throws a DOMException (code 8) whose value
+  // is "The object can not be found here." Same benign, zero-impact, no
+  // first-party-frame profile as the Chrome wording above (JAVASCRIPT-NEXTJS-29).
+  /The object can not be found here\./,
   // Stale tabs across deploys: server action IDs change per build, so a
   // pre-deploy tab POSTs an ID the new build doesn't know. Next.js
   // self-recovers with a reload.

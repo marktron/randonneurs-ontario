@@ -13,6 +13,28 @@ describe('isIgnoredClientError', () => {
     expect(isIgnoredClientError('Server Action "abc123" was not found on the server')).toBe(true)
   })
 
+  it('ignores the Safari/iOS translate removeChild NotFoundError (JAVASCRIPT-NEXTJS-29)', () => {
+    // iOS Safari auto-translate reparents text nodes out from under React; a
+    // later reconciliation removeChild then throws a DOMException whose value is
+    // "The object can not be found here." Sentry matches ignoreErrors against
+    // both the bare value and the "Type: value" form, so both must be dropped.
+    expect(isIgnoredClientError('The object can not be found here.')).toBe(true)
+    expect(isIgnoredClientError('NotFoundError: The object can not be found here.')).toBe(true)
+  })
+
+  it('still ignores the Chrome/Firefox translate removeChild/insertBefore variants', () => {
+    expect(
+      isIgnoredClientError(
+        "Failed to execute 'removeChild' on 'Node': The node to be removed is not a child of this node."
+      )
+    ).toBe(true)
+    expect(
+      isIgnoredClientError(
+        "Failed to execute 'insertBefore' on 'Node': The node before which the new node is to be inserted is not a child of this node."
+      )
+    ).toBe(true)
+  })
+
   it('does NOT ignore an unrelated application error', () => {
     expect(isIgnoredClientError('Cannot read properties of undefined')).toBe(false)
   })

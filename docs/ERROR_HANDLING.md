@@ -350,6 +350,16 @@ client runtime reports `Error: Connection closed.`. It is handled, has zero user
 impact, and its stack contains no first-party frames, so it is filtered rather
 than fixed.
 
+Browser auto-translation is another source of benign noise. When a translator
+(Chrome Translate, iOS Safari translate, etc.) rewrites text nodes, it reparents
+them out from under React; a later reconciliation `removeChild`/`insertBefore`
+then fails because the node is no longer where React left it. React handles it
+and the user sees nothing. Chrome/Firefox phrase this as `...not a child of this
+node`; **Safari/iOS phrases it differently** — a `NotFoundError` DOMException
+(code 8) with value `The object can not be found here.`, so it needs its own
+pattern `/The object can not be found here\./` (Sentry issue
+`JAVASCRIPT-NEXTJS-29`).
+
 ## Related Files
 
 - **`lib/errors.ts`**: Error handling utilities
