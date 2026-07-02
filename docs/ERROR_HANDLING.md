@@ -360,6 +360,31 @@ node`; **Safari/iOS phrases it differently** — a `NotFoundError` DOMException
 pattern `/The object can not be found here\./` (Sentry issue
 `JAVASCRIPT-NEXTJS-29`).
 
+### Server `ignoreErrors` list
+
+Server-side request errors reach Sentry through
+`onRequestError = Sentry.captureRequestError` (`instrumentation.ts`) and **never
+pass through the client `ignoreErrors` list**. Benign server noise is filtered
+separately via `serverIgnoreErrors` in `lib/sentry-ignore.ts`, wired into
+`sentry.server.config.ts`'s `Sentry.init({ ignoreErrors })`. Sentry runs
+`ignoreErrors` in `beforeSend` for every event, including `captureRequestError`
+ones, so a message match there drops the event.
+
+Two patterns live in the server list:
+
+- `/Invalid character in header content/` — bots/fuzzers request URLs with
+  control chars (e.g. `/%0A`), which crash inside Next.js when it writes the slug
+  into the `x-next-cache-tags` response header. Framework bug, no user impact.
+- `/Failed to find Server Action/` (Sentry issue `JAVASCRIPT-NEXTJS-2A`) — the
+  **server-side** counterpart of the stale-tab Server Action case. Action IDs are
+  minted per build, so after a deploy a browser tab still on the old build POSTs
+  an ID the new build doesn't know (`POST /page`), and Next.js throws `Failed to
+find Server Action. This request might be from an older or newer deployment.`
+  before self-recovering the client with a hard navigation. Handled by the
+  framework, benign. This is distinct from the **client** pattern `/Server Action
+.* was not found on the server/` in `clientIgnoreErrors` — different runtime,
+  different wording.
+
 ## Related Files
 
 - **`lib/errors.ts`**: Error handling utilities
@@ -370,7 +395,8 @@ pattern `/The object can not be found here\./` (Sentry issue
 - **`sentry.server.config.ts`**: Sentry server configuration
 - **`sentry.edge.config.ts`**: Sentry edge configuration
 - **`instrumentation-client.ts`**: Sentry client configuration
-- **`lib/sentry-ignore.ts`**: Client `ignoreErrors` patterns (`clientIgnoreErrors`)
+- **`instrumentation.ts`**: `onRequestError = captureRequestError` — server request error capture
+- **`lib/sentry-ignore.ts`**: Client + server `ignoreErrors` patterns (`clientIgnoreErrors`, `serverIgnoreErrors`)
 
 ## See Also
 

@@ -32,8 +32,30 @@ export const clientIgnoreErrors: RegExp[] = [
   /^Connection closed\.$/,
 ]
 
+// Server-side `ignoreErrors` patterns. Imported by sentry.server.config.ts.
+// Server request errors reach Sentry via `Sentry.captureRequestError`
+// (instrumentation.ts) and never pass through the client list above, so
+// server-only noise must be filtered here.
+export const serverIgnoreErrors: RegExp[] = [
+  // Bots/fuzzers requesting URLs with control chars (e.g. /%0A) crash inside
+  // Next.js when it tries to write the slug into the x-next-cache-tags
+  // response header. Framework bug, no user impact.
+  /Invalid character in header content/,
+  // Stale-deploy Server Action: a pre-deploy browser tab POSTs an action ID the
+  // new build no longer knows (action IDs are per-build). Next.js throws
+  // server-side ("Failed to find Server Action...") then self-recovers the
+  // client with a hard navigation to the new build. Handled by the framework,
+  // benign (JAVASCRIPT-NEXTJS-2A). The client variant ("Server Action ... was
+  // not found on the server") is filtered separately in clientIgnoreErrors.
+  /Failed to find Server Action/,
+]
+
 // Mirrors how Sentry's `ignoreErrors` matches a regex against an event's
 // message: the event is dropped if any pattern matches.
 export function isIgnoredClientError(message: string): boolean {
   return clientIgnoreErrors.some((pattern) => pattern.test(message))
+}
+
+export function isIgnoredServerError(message: string): boolean {
+  return serverIgnoreErrors.some((pattern) => pattern.test(message))
 }

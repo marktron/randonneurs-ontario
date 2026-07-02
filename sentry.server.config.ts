@@ -3,6 +3,7 @@
 // https://docs.sentry.io/platforms/javascript/guides/nextjs/
 
 import * as Sentry from '@sentry/nextjs'
+import { serverIgnoreErrors } from '@/lib/sentry-ignore'
 
 Sentry.init({
   dsn: 'https://d4b6e63820989882a9c3bf92bea953c0@o4510700580110336.ingest.us.sentry.io/4510700583321600',
@@ -20,10 +21,8 @@ Sentry.init({
   // https://docs.sentry.io/platforms/javascript/guides/nextjs/configuration/options/#sendDefaultPii
   sendDefaultPii: false,
 
-  ignoreErrors: [
-    // Bots/fuzzers requesting URLs with control chars (e.g. /%0A) crash inside
-    // Next.js when it tries to write the slug into the x-next-cache-tags
-    // response header. Framework bug, no user impact.
-    /Invalid character in header content/,
-  ],
+  // Benign, unactionable server noise, extracted to lib/sentry-ignore.ts so it
+  // can be unit tested. Sentry runs ignoreErrors in beforeSend for all events,
+  // including captureRequestError ones (instrumentation.ts).
+  ignoreErrors: serverIgnoreErrors,
 })

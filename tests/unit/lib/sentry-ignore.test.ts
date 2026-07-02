@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest'
-import { clientIgnoreErrors, isIgnoredClientError } from '@/lib/sentry-ignore'
+import {
+  clientIgnoreErrors,
+  isIgnoredClientError,
+  serverIgnoreErrors,
+  isIgnoredServerError,
+} from '@/lib/sentry-ignore'
 
 describe('isIgnoredClientError', () => {
   it('ignores RSC stream "Connection closed." noise (JAVASCRIPT-NEXTJS-28)', () => {
@@ -48,5 +53,36 @@ describe('isIgnoredClientError', () => {
   it('exposes the pattern list for Sentry.init({ ignoreErrors })', () => {
     expect(clientIgnoreErrors.length).toBeGreaterThan(0)
     expect(clientIgnoreErrors.every((p) => p instanceof RegExp)).toBe(true)
+  })
+})
+
+describe('isIgnoredServerError', () => {
+  it('ignores the stale-deploy Server Action error (JAVASCRIPT-NEXTJS-2A)', () => {
+    // A pre-deploy browser tab POSTs an action ID the new build no longer knows.
+    // Next.js throws server-side then self-recovers the client with a hard
+    // navigation. Handled by the framework, benign. This is a SERVER error
+    // (captureRequestError), so it needs the server list — the client
+    // ignoreErrors list never sees it.
+    expect(
+      isIgnoredServerError(
+        'Failed to find Server Action. This request might be from an older or newer deployment.\n' +
+          'Read more: https://nextjs.org/docs/messages/failed-to-find-server-action'
+      )
+    ).toBe(true)
+  })
+
+  it('still ignores the bot control-char header error', () => {
+    expect(isIgnoredServerError('Invalid character in header content ["x-next-cache-tags"]')).toBe(
+      true
+    )
+  })
+
+  it('does NOT ignore an unrelated server error', () => {
+    expect(isIgnoredServerError('Cannot read properties of undefined')).toBe(false)
+  })
+
+  it('exposes the server pattern list for Sentry.init({ ignoreErrors })', () => {
+    expect(serverIgnoreErrors.length).toBeGreaterThan(0)
+    expect(serverIgnoreErrors.every((p) => p instanceof RegExp)).toBe(true)
   })
 })
