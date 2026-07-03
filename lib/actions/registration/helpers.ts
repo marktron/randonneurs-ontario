@@ -8,6 +8,8 @@ import { createHash } from 'node:crypto'
 import * as Sentry from '@sentry/nextjs'
 import { format, parseISO } from 'date-fns'
 
+import { isDigitalCardEventType } from '@/lib/brevet-card'
+
 /**
  * Truncated SHA-256 of an email, for forensic correlation in telemetry
  * without leaking PII. 12 hex chars is enough to disambiguate users in
@@ -72,4 +74,24 @@ export function buildManagementUrl(managementToken: string): string {
 export function buildDigitalCardUrl(managementToken: string): string {
   const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://randonneursontario.ca'
   return `${baseUrl}/card/${managementToken}`
+}
+
+// TEMPORARY KILL SWITCH: the digital brevet card is deployed but not yet
+// ready for riders. Flip to true to restore the card link in registration
+// confirmation emails (and update registration-helpers.test.ts to match).
+const DIGITAL_CARD_EMAIL_LINK_ENABLED = false
+
+/**
+ * Card URL to include in the registration confirmation email, or undefined
+ * to omit the section entirely. Included for card-eligible event types even
+ * if the organizer hasn't saved controls yet — the card page explains when
+ * it's not set up, and most organizers configure controls after registration
+ * opens.
+ */
+export function buildConfirmationEmailCardUrl(
+  eventType: string | null,
+  managementToken: string
+): string | undefined {
+  if (!DIGITAL_CARD_EMAIL_LINK_ENABLED) return undefined
+  return isDigitalCardEventType(eventType) ? buildDigitalCardUrl(managementToken) : undefined
 }

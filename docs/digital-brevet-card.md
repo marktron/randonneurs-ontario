@@ -268,6 +268,12 @@ Card" button on the event admin page instead of two).
 
 ## 11. Email
 
+- **Temporarily hidden (July 2026):** the confirmation-email card link is
+  suppressed while the feature is polished for public use. Flip
+  `DIGITAL_CARD_EMAIL_LINK_ENABLED` in
+  `lib/actions/registration/helpers.ts` (and update
+  `tests/unit/lib/registration-helpers.test.ts`) to restore it. The rest of
+  this section describes the intended behavior once re-enabled.
 - The registration-confirmation email includes an "Open your brevet card"
   section for **all card-eligible event types**, whether or not the
   organizer has saved controls yet — most riders register before controls
