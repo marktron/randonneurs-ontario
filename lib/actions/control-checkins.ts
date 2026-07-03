@@ -1,0 +1,357 @@
+'use server'
+
+/**
+ * Admin view and corrections for digital brevet card check-ins
+ * (see docs/digital-brevet-card.md). Mirrors the results-manager rules:
+ * once an event's status is 'submitted', check-ins are frozen.
+ */
+
+import { getSupabaseAdmin } from '@/lib/supabase-server'
+import { requireAdmin } from '@/lib/auth/get-admin'
+import { logAuditEvent } from '@/lib/audit-log'
+import {
+  computeEventStart,
+  computeControlWindow,
+  deriveCheckinFlags,
+  type CheckinFlags,
+} from '@/lib/brevet-card'
+import { handleActionError, handleSupabaseError, createActionResult } from '@/lib/errors'
+import type { ActionResult } from '@/types/actions'
+import type { ControlCheckinInsert } from '@/types/queries'
+
+// ============================================================================
+// Types
+// ============================================================================
+
+export interface AdminCheckin {
+  id: string
+  controlId: string
+  registrationId: string
+  checkedInAt: string
+  receivedAt: string
+  method: string
+  accuracyM: number | null
+  distanceToControlM: number | null
+  note: string | null
+  flags: CheckinFlags
+}
+
+export interface AdminCheckinGridRider {
+  registrationId: string
+  riderId: string
+  riderName: string
+  checkins: AdminCheckin[]
+}
+
+// ============================================================================
+// Read: check-in grid for an event
+// ============================================================================
+
+export async function getEventCheckinsForAdmin(
+  eventId: string
+): Promise<ActionResult<AdminCheckinGridRider[]>> {
+  try {
+    await requireAdmin()
+    const supabase = getSupabaseAdmin()
+
+    const { data: event, error: eventError } = await supabase
+      .from('events')
+      .select('id, event_date, start_time, distance_km')
+      .eq('id', eventId)
+      .single()
+
+    if (eventError || !event) {
+      return { success: false, error: 'Event not found' }
+    }
+
+    const typedEvent = event as {
+      id: string
+      event_date: string
+      start_time: string | null
+      distance_km: number
+    }
+
+    const [{ data: controlRows }, { data: registrationRows }] = await Promise.all([
+      supabase.from('event_controls').select('id, distance_km, radius_m').eq('event_id', eventId),
+      supabase
+        .from('registrations')
+        .select('id, rider_id, riders (first_name, last_name)')
+        .eq('event_id', eventId)
+        .eq('status', 'registered')
+        .order('registered_at', { ascending: true }),
+    ])
+
+    const controls = (controlRows || []) as {
+      id: string
+      distance_km: number
+      radius_m: number
+    }[]
+    const registrations = (registrationRows || []) as {
+      id: string
+      rider_id: string
+      riders: { first_name: string; last_name: string } | null
+    }[]
+
+    const { data: checkinRows, error: checkinError } = await supabase
+      .from('control_checkins')
+      .select(
+        'id, control_id, registration_id, checked_in_at, received_at, method, accuracy_m, distance_to_control_m, note'
+      )
+      .in(
+        'registration_id',
+        registrations.map((r) => r.id)
+      )
+
+    if (checkinError) {
+      return handleSupabaseError(
+        checkinError,
+        { operation: 'getEventCheckinsForAdmin', context: { eventId } },
+        'Failed to load check-ins'
+      )
+    }
+
+    const checkins = (checkinRows || []) as {
+      id: string
+      control_id: string
+      registration_id: string
+      checked_in_at: string
+      received_at: string
+      method: string
+      accuracy_m: number | null
+      distance_to_control_m: number | null
+      note: string | null
+    }[]
+
+    const eventStart = computeEventStart(typedEvent.event_date, typedEvent.start_time)
+    const controlById = new Map(controls.map((c) => [c.id, c]))
+    const byRegistration = new Map<string, AdminCheckin[]>()
+
+    for (const checkin of checkins) {
+      const control = controlById.get(checkin.control_id)
+      if (!control) continue
+      const window = computeControlWindow(eventStart, control.distance_km, typedEvent.distance_km)
+      const entry: AdminCheckin = {
+        id: checkin.id,
+        controlId: checkin.control_id,
+        registrationId: checkin.registration_id,
+        checkedInAt: checkin.checked_in_at,
+        receivedAt: checkin.received_at,
+        method: checkin.method,
+        accuracyM: checkin.accuracy_m,
+        distanceToControlM: checkin.distance_to_control_m,
+        note: checkin.note,
+        flags: deriveCheckinFlags(checkin, control, window),
+      }
+      const list = byRegistration.get(checkin.registration_id) || []
+      list.push(entry)
+      byRegistration.set(checkin.registration_id, list)
+    }
+
+    return createActionResult(
+      registrations.map((reg) => ({
+        registrationId: reg.id,
+        riderId: reg.rider_id,
+        riderName: reg.riders ? `${reg.riders.first_name} ${reg.riders.last_name}` : 'Unknown',
+        checkins: byRegistration.get(reg.id) || [],
+      }))
+    )
+  } catch (error) {
+    return handleActionError(
+      error,
+      { operation: 'getEventCheckinsForAdmin' },
+      'Failed to load check-ins'
+    )
+  }
+}
+
+// ============================================================================
+// Write: add/correct/delete (method = 'admin')
+// ============================================================================
+
+async function assertEventMutable(
+  eventId: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const supabase = getSupabaseAdmin()
+  const { data: event, error } = await supabase
+    .from('events')
+    .select('id, status')
+    .eq('id', eventId)
+    .single()
+
+  if (error || !event) {
+    return { ok: false, error: 'Event not found' }
+  }
+  if ((event as { status: string | null }).status === 'submitted') {
+    return { ok: false, error: 'Results for this event have been submitted; check-ins are frozen' }
+  }
+  return { ok: true }
+}
+
+/**
+ * Set (insert or overwrite) a rider's check-in at a control. Admin
+ * corrections always record method='admin' and require a note explaining
+ * the change.
+ */
+export async function adminSetCheckin(input: {
+  eventId: string
+  registrationId: string
+  controlId: string
+  /** ISO timestamp of the corrected check-in time. */
+  checkedInAt: string
+  note: string
+}): Promise<ActionResult> {
+  try {
+    const admin = await requireAdmin()
+
+    if (!input.note?.trim()) {
+      return { success: false, error: 'A note explaining the correction is required' }
+    }
+    const checkedInAt = new Date(input.checkedInAt || '')
+    if (Number.isNaN(checkedInAt.getTime())) {
+      return { success: false, error: 'Invalid check-in time' }
+    }
+
+    const mutable = await assertEventMutable(input.eventId)
+    if (!mutable.ok) {
+      return { success: false, error: mutable.error }
+    }
+
+    const supabase = getSupabaseAdmin()
+
+    // Verify the control and registration belong to this event.
+    const [{ data: control }, { data: registration }] = await Promise.all([
+      supabase
+        .from('event_controls')
+        .select('id, event_id, name')
+        .eq('id', input.controlId)
+        .single(),
+      supabase.from('registrations').select('id, event_id').eq('id', input.registrationId).single(),
+    ])
+
+    if (!control || (control as { event_id: string }).event_id !== input.eventId) {
+      return { success: false, error: 'Control not found' }
+    }
+    if (!registration || (registration as { event_id: string }).event_id !== input.eventId) {
+      return { success: false, error: 'Registration not found' }
+    }
+
+    const { data: existing } = await supabase
+      .from('control_checkins')
+      .select('id')
+      .eq('registration_id', input.registrationId)
+      .eq('control_id', input.controlId)
+      .maybeSingle()
+
+    if (existing) {
+      const { error: updateError } = await supabase
+        .from('control_checkins')
+        .update({
+          checked_in_at: checkedInAt.toISOString(),
+          method: 'admin',
+          note: input.note.trim(),
+        })
+        .eq('id', (existing as { id: string }).id)
+      if (updateError) {
+        return handleSupabaseError(
+          updateError,
+          { operation: 'adminSetCheckin.update', context: { checkinId: existing.id } },
+          'Failed to save check-in'
+        )
+      }
+    } else {
+      const insertData: ControlCheckinInsert = {
+        control_id: input.controlId,
+        registration_id: input.registrationId,
+        checked_in_at: checkedInAt.toISOString(),
+        method: 'admin',
+        note: input.note.trim(),
+      }
+      const { error: insertError } = await supabase.from('control_checkins').insert(insertData)
+      if (insertError) {
+        return handleSupabaseError(
+          insertError,
+          { operation: 'adminSetCheckin.insert', context: { controlId: input.controlId } },
+          'Failed to save check-in'
+        )
+      }
+    }
+
+    await logAuditEvent({
+      adminId: admin.id,
+      action: 'update',
+      entityType: 'event',
+      entityId: input.eventId,
+      description: `Set brevet card check-in at "${(control as { name: string }).name}" for registration ${input.registrationId}: ${input.note.trim()}`,
+    })
+
+    return createActionResult()
+  } catch (error) {
+    return handleActionError(error, { operation: 'adminSetCheckin' }, 'Failed to save check-in')
+  }
+}
+
+export async function adminDeleteCheckin(input: {
+  eventId: string
+  checkinId: string
+  note: string
+}): Promise<ActionResult> {
+  try {
+    const admin = await requireAdmin()
+
+    if (!input.note?.trim()) {
+      return { success: false, error: 'A note explaining the deletion is required' }
+    }
+
+    const mutable = await assertEventMutable(input.eventId)
+    if (!mutable.ok) {
+      return { success: false, error: mutable.error }
+    }
+
+    const supabase = getSupabaseAdmin()
+
+    // Verify the check-in belongs to this event before deleting.
+    const { data: checkin } = await supabase
+      .from('control_checkins')
+      .select('id, control_id, event_controls!inner (event_id, name)')
+      .eq('id', input.checkinId)
+      .single()
+
+    const typedCheckin = checkin as {
+      id: string
+      event_controls: { event_id: string; name: string }
+    } | null
+
+    if (!typedCheckin || typedCheckin.event_controls.event_id !== input.eventId) {
+      return { success: false, error: 'Check-in not found' }
+    }
+
+    const { error: deleteError } = await supabase
+      .from('control_checkins')
+      .delete()
+      .eq('id', input.checkinId)
+
+    if (deleteError) {
+      return handleSupabaseError(
+        deleteError,
+        { operation: 'adminDeleteCheckin', context: { checkinId: input.checkinId } },
+        'Failed to delete check-in'
+      )
+    }
+
+    await logAuditEvent({
+      adminId: admin.id,
+      action: 'delete',
+      entityType: 'event',
+      entityId: input.eventId,
+      description: `Deleted brevet card check-in at "${typedCheckin.event_controls.name}": ${input.note.trim()}`,
+    })
+
+    return createActionResult()
+  } catch (error) {
+    return handleActionError(
+      error,
+      { operation: 'adminDeleteCheckin' },
+      'Failed to delete check-in'
+    )
+  }
+}
