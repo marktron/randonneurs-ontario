@@ -30,7 +30,8 @@ import {
 } from '@/lib/actions/control-checkins'
 import type { CheckinFlags } from '@/lib/brevet-card'
 import { toast } from 'sonner'
-import { Loader2, RefreshCw } from 'lucide-react'
+import Link from 'next/link'
+import { ExternalLink, Loader2, RefreshCw } from 'lucide-react'
 
 export interface GridControl {
   id: string
@@ -198,7 +199,22 @@ export function EventCheckinsGrid({
               {riders.map((rider) => (
                 <TableRow key={rider.registrationId}>
                   <TableCell className="font-medium sticky left-0 bg-background">
-                    {rider.riderName}
+                    <div className="flex items-center gap-1.5">
+                      <span>{rider.riderName}</span>
+                      {rider.managementToken && (
+                        <Link
+                          href={`/card/${rider.managementToken}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="text-muted-foreground hover:text-foreground"
+                          title={`Open ${rider.riderName}'s digital card`}
+                          aria-label={`Open ${rider.riderName}'s digital card`}
+                        >
+                          <ExternalLink className="h-3.5 w-3.5" />
+                        </Link>
+                      )}
+                    </div>
                   </TableCell>
                   {controls.map((control) => {
                     const checkin = rider.checkins.find((c) => c.controlId === control.id)

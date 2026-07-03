@@ -40,6 +40,8 @@ export interface AdminCheckinGridRider {
   registrationId: string
   riderId: string
   riderName: string
+  /** Capability token for the rider-facing digital card (/card/[token]); null if unset. */
+  managementToken: string | null
   checkins: AdminCheckin[]
 }
 
@@ -75,7 +77,7 @@ export async function getEventCheckinsForAdmin(
       supabase.from('event_controls').select('id, distance_km, radius_m').eq('event_id', eventId),
       supabase
         .from('registrations')
-        .select('id, rider_id, riders (first_name, last_name)')
+        .select('id, rider_id, management_token, riders (first_name, last_name)')
         .eq('event_id', eventId)
         .eq('status', 'registered')
         .order('registered_at', { ascending: true }),
@@ -89,6 +91,7 @@ export async function getEventCheckinsForAdmin(
     const registrations = (registrationRows || []) as {
       id: string
       rider_id: string
+      management_token: string | null
       riders: { first_name: string; last_name: string } | null
     }[]
 
@@ -152,6 +155,7 @@ export async function getEventCheckinsForAdmin(
         registrationId: reg.id,
         riderId: reg.rider_id,
         riderName: reg.riders ? `${reg.riders.first_name} ${reg.riders.last_name}` : 'Unknown',
+        managementToken: reg.management_token,
         checkins: byRegistration.get(reg.id) || [],
       }))
     )

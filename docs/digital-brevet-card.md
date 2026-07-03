@@ -246,6 +246,9 @@ Card" button on the event admin page instead of two).
 - Riders (rows) × controls (columns); cells show time + flag badges
   (out-of-radius, no-gps, early/late, late-sync). Server-loaded with a
   Refresh button; no websockets in Phase 1.
+- Each rider's name links (external-link icon, opens in a new tab) to
+  that rider's digital card at `/card/[management_token]`, so an
+  organizer can see exactly what the rider sees.
 - Click a cell to add / correct / delete a check-in (`method='admin'`,
   note required, audit-logged). Blocked once the event status is
   `submitted`, mirroring results.
