@@ -65,6 +65,7 @@ describe('RegistrationManage', () => {
           event={baseEvent}
           rider={baseRider}
           eventStarted={false}
+          hasDigitalCard={false}
         />
       )
 
@@ -82,6 +83,7 @@ describe('RegistrationManage', () => {
           event={baseEvent}
           rider={baseRider}
           eventStarted={false}
+          hasDigitalCard={false}
         />
       )
 
@@ -99,6 +101,7 @@ describe('RegistrationManage', () => {
           event={baseEvent}
           rider={baseRider}
           eventStarted={false}
+          hasDigitalCard={false}
         />
       )
 
@@ -119,6 +122,7 @@ describe('RegistrationManage', () => {
           event={{ ...baseEvent, status: 'cancelled' }}
           rider={baseRider}
           eventStarted={false}
+          hasDigitalCard={false}
         />
       )
 
@@ -135,6 +139,7 @@ describe('RegistrationManage', () => {
           event={{ ...baseEvent, event_type: 'fleche' }}
           rider={baseRider}
           eventStarted={false}
+          hasDigitalCard={false}
         />
       )
 
@@ -153,6 +158,7 @@ describe('RegistrationManage', () => {
           event={baseEvent}
           rider={baseRider}
           eventStarted={false}
+          hasDigitalCard={false}
         />
       )
 
@@ -178,6 +184,7 @@ describe('RegistrationManage', () => {
           event={baseEvent}
           rider={baseRider}
           eventStarted={false}
+          hasDigitalCard={false}
         />
       )
 
@@ -203,6 +210,7 @@ describe('RegistrationManage', () => {
           event={baseEvent}
           rider={baseRider}
           eventStarted={false}
+          hasDigitalCard={false}
         />
       )
 
