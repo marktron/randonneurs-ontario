@@ -25,10 +25,10 @@ import {
 import {
   saveEventControls,
   importEventControlsFromRwgps,
-  DEFAULT_CONTROL_RADIUS_M,
   type AdminEventControl,
   type EventControlInput,
 } from '@/lib/actions/event-controls'
+import { DEFAULT_CONTROL_RADIUS_M } from '@/lib/brevet-card'
 import { toast } from 'sonner'
 import { Download, Loader2, Plus, Save, Trash2 } from 'lucide-react'
 

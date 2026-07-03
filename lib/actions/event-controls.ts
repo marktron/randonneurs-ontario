@@ -16,8 +16,6 @@ import { handleActionError, handleSupabaseError, createActionResult } from '@/li
 import type { ActionResult } from '@/types/actions'
 import type { EventControlInsert } from '@/types/queries'
 
-export const DEFAULT_CONTROL_RADIUS_M = 500
-
 // ============================================================================
 // Types
 // ============================================================================

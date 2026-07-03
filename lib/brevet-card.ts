@@ -23,6 +23,13 @@ export function isDigitalCardEventType(eventType: string | null): boolean {
   return eventType !== null && (DIGITAL_CARD_EVENT_TYPES as readonly string[]).includes(eventType)
 }
 
+/**
+ * Default check-in radius for new controls. Deliberately generous while
+ * RWGPS control coordinates remain unaudited (see review decisions in
+ * docs/digital-brevet-card.md §14).
+ */
+export const DEFAULT_CONTROL_RADIUS_M = 500
+
 // ============================================================================
 // Event start & check-in acceptance window
 // ============================================================================
