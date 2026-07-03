@@ -72,3 +72,23 @@ describe('email templates render ride name via formatRideName', () => {
     expect(email.subject).toBe('Registration Cancelled: Gentle Start 120')
   })
 })
+
+describe('result submission reminder variant', () => {
+  it('prefixes the subject with Reminder:', () => {
+    const email = buildResultSubmissionRequestEmail({ ...baseResult, reminder: true })
+    expect(email.subject).toBe('Reminder: Submit Your Results: Gentle Start 120km')
+  })
+
+  it('acknowledges the missing results in text and html', () => {
+    const email = buildResultSubmissionRequestEmail({ ...baseResult, reminder: true })
+    expect(email.text).toContain("haven't received your results yet")
+    expect(email.html).toContain("haven't received your results yet")
+  })
+
+  it('does not change the default email', () => {
+    const email = buildResultSubmissionRequestEmail(baseResult)
+    expect(email.subject).toBe('Submit Your Results: Gentle Start 120km')
+    expect(email.text).not.toContain("haven't received your results yet")
+    expect(email.html).not.toContain("haven't received your results yet")
+  })
+})

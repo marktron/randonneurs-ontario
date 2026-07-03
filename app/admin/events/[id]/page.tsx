@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button'
 import { EventResultsManager } from '@/components/admin/event-results-manager'
 import { EventStatusSelect } from '@/components/admin/event-status-select'
 import { EventDeleteButton } from '@/components/admin/event-delete-button'
+import { SendResultRemindersButton } from '@/components/admin/send-result-reminders-button'
 import type { EventStatus } from '@/lib/actions/events'
 import type {
   EventDetailForAdmin,
@@ -148,6 +149,15 @@ export default async function EventDetailPage({ params, searchParams }: EventPag
   )
   const firstTimeRiderIds = await getFirstTimeRiderIds(id, participantRiderIds)
 
+  // Riders who will actually receive a reminder email: registered, result still
+  // pending with a submission token, and an email address on file
+  const remindableRiderIds = new Set(
+    results.filter((r) => r.status === 'pending' && r.submission_token).map((r) => r.rider_id)
+  )
+  const pendingReminderCount = registrations.filter(
+    (r) => r.status === 'registered' && remindableRiderIds.has(r.rider_id) && r.riders?.email
+  ).length
+
   return (
     <div className="space-y-6">
       <Link
@@ -178,6 +188,13 @@ export default async function EventDetailPage({ params, searchParams }: EventPag
               Control Cards
             </Link>
           </Button>
+          {event.status === 'completed' && (
+            <SendResultRemindersButton
+              eventId={event.id}
+              eventName={event.name}
+              pendingCount={pendingReminderCount}
+            />
+          )}
           <EventStatusSelect
             eventId={event.id}
             initialStatus={event.status as EventStatus}

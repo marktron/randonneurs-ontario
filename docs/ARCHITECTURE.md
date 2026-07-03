@@ -194,6 +194,8 @@ Admin submits final results to ACP
 **Key components:**
 
 - `lib/events/complete-event.ts` - Creates pending results and sends emails
+- `lib/events/send-result-reminders.ts` - Re-sends the submission email (reminder variant) to registered riders whose result is still pending; triggered by the "Send Reminders" button on `/admin/events/[id]` for completed events (cancelled registrations excluded)
+- `lib/email/send-result-submission-email.ts` - Shared builder/sender for the submission email and its reminder variant (VP reply-to, submission URL)
 - `lib/actions/rider-results.ts` - Handles rider submissions and file uploads
 - `components/result-submission-form.tsx` - Rider-facing submission form
 - `components/admin/event-results-manager.tsx` - Admin view with evidence column and "Email Participants" mailto link (BCC'd to all registered riders, subject pre-populated with event name and date)

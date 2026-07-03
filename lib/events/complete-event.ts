@@ -1,23 +1,12 @@
 import { getSupabaseAdmin } from '@/lib/supabase-server'
-import { sendEmail, fromEmail, isEmailConfigured } from '@/lib/email/ses'
-import { buildResultSubmissionRequestEmail } from '@/lib/email/templates'
-import { getVpEmail } from '@/lib/email/vp-emails'
-import { format } from 'date-fns'
-import { parseLocalDate } from '@/lib/utils'
+import { sendResultSubmissionEmail } from '@/lib/email/send-result-submission-email'
+import type { EventForSubmissionEmail } from '@/lib/email/send-result-submission-email'
 import type {
   RegistrationWithRider,
   ResultWithRiderId,
   ResultInsert,
   ResultWithSubmissionToken,
 } from '@/types/queries'
-
-interface EventForCompletion {
-  id: string
-  name: string
-  event_date: string
-  distance_km: number
-  chapters: { name: string; slug: string } | null
-}
 
 interface CreatedResult {
   riderId: string
@@ -41,7 +30,7 @@ export interface CompleteEventResult {
  * - The admin action when manually setting status to "completed"
  */
 export async function createPendingResultsAndSendEmails(
-  event: EventForCompletion
+  event: EventForSubmissionEmail
 ): Promise<CompleteEventResult> {
   const supabase = getSupabaseAdmin()
   const errors: string[] = []
@@ -131,42 +120,20 @@ export async function createPendingResultsAndSendEmails(
   }
 
   // Send emails to riders with their submission links
-  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://randonneursontario.ca'
-  const vpEmail = event.chapters?.slug ? getVpEmail(event.chapters.slug) : null
-
   for (const result of created) {
-    const submissionUrl = `${baseUrl}/results/submit/${result.submissionToken}`
-
-    const emailData = {
+    const { sent, error } = await sendResultSubmissionEmail({
+      event,
       riderName: result.riderName,
       riderEmail: result.riderEmail,
-      eventName: event.name,
-      eventDate: format(parseLocalDate(event.event_date), 'MMMM d, yyyy'),
-      eventDistance: event.distance_km,
-      chapterName: event.chapters?.name || 'Randonneurs Ontario',
-      submissionUrl,
+      submissionToken: result.submissionToken,
+    })
+
+    if (sent) {
+      emailsSent++
+      console.log(`Sent result submission email for event ${event.name}`)
     }
-
-    const { subject, text, html } = buildResultSubmissionRequestEmail(emailData)
-
-    try {
-      if (isEmailConfigured()) {
-        await sendEmail({
-          to: result.riderEmail,
-          from: fromEmail,
-          replyTo: vpEmail || undefined,
-          subject,
-          text,
-          html,
-        })
-        emailsSent++
-        console.log(`Sent result submission email for event ${event.name}`)
-      } else {
-        console.warn('AWS SES not configured, skipping result submission email')
-      }
-    } catch (emailError) {
-      const errorMessage = emailError instanceof Error ? emailError.message : 'Unknown error'
-      errors.push(`Failed to send result submission email: ${errorMessage}`)
+    if (error) {
+      errors.push(`Failed to send result submission email: ${error}`)
     }
   }
 

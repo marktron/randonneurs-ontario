@@ -7,6 +7,7 @@ import { sendEmail, fromEmail, isEmailConfigured } from '@/lib/email/ses'
 import { parseLocalDate, createSlug, formatFinishTimeHm } from '@/lib/utils'
 import { getUrlSlugFromDbSlug } from '@/lib/chapter-config'
 import { createPendingResultsAndSendEmails } from '@/lib/events/complete-event'
+import { sendResultSubmissionReminders } from '@/lib/events/send-result-reminders'
 import { createErwEvent, updateErwEvent, deleteErwEvent } from '@/lib/erw/client'
 import { isErwSyncEnabled } from '@/lib/erw/config'
 import { logAuditEvent } from '@/lib/audit-log'
@@ -481,6 +482,63 @@ export async function updateEventStatus(
     return { success: true }
   } catch (error) {
     console.error('Error in updateEventStatus:', error)
+    return { success: false, error: 'An unexpected error occurred' }
+  }
+}
+
+/**
+ * Sends result submission reminder emails to registered riders whose result
+ * is still pending for a completed event.
+ */
+export async function sendResultReminderEmails(
+  eventId: string
+): Promise<ActionResult<{ emailsSent: number }>> {
+  try {
+    const admin = await requireAdmin()
+
+    const { data: event, error: fetchError } = await getSupabaseAdmin()
+      .from('events')
+      .select('id, name, event_date, distance_km, status, chapters(name, slug)')
+      .eq('id', eventId)
+      .single()
+
+    if (fetchError || !event) {
+      return { success: false, error: 'Event not found' }
+    }
+
+    const typedEvent = event as EventWithChapterName
+
+    if (typedEvent.status !== 'completed') {
+      return { success: false, error: 'Reminders can only be sent for completed events' }
+    }
+
+    const { emailsSent, errors } = await sendResultSubmissionReminders({
+      id: typedEvent.id,
+      name: typedEvent.name,
+      event_date: typedEvent.event_date,
+      distance_km: typedEvent.distance_km,
+      chapters: typedEvent.chapters,
+    })
+
+    if (errors.length > 0) {
+      console.error('Errors sending result reminders:', errors)
+    }
+
+    if (emailsSent === 0 && errors.length > 0) {
+      return { success: false, error: errors[0] }
+    }
+
+    await logAuditEvent({
+      adminId: admin.id,
+      action: 'update',
+      entityType: 'event',
+      entityId: eventId,
+      description: `Sent ${emailsSent} result reminder email${emailsSent === 1 ? '' : 's'}: ${typedEvent.name}`,
+    })
+
+    return { success: true, data: { emailsSent } }
+  } catch (error) {
+    console.error('Error in sendResultReminderEmails:', error)
     return { success: false, error: 'An unexpected error occurred' }
   }
 }

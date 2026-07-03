@@ -126,6 +126,10 @@ vi.mock('@/lib/events/complete-event', () => ({
     .mockResolvedValue({ resultsCreated: 0, emailsSent: 0, errors: [] }),
 }))
 
+vi.mock('@/lib/events/send-result-reminders', () => ({
+  sendResultSubmissionReminders: vi.fn().mockResolvedValue({ emailsSent: 0, errors: [] }),
+}))
+
 vi.mock('@/lib/email/ses', () => ({
   sendEmail: vi.fn().mockResolvedValue(undefined),
   fromEmail: 'no-reply@randonneurs.to',
@@ -170,7 +174,9 @@ import {
   deleteEvent,
   updateEventStatus,
   submitEventResults,
+  sendResultReminderEmails,
 } from '@/lib/actions/events'
+import { sendResultSubmissionReminders } from '@/lib/events/send-result-reminders'
 
 // Access mock internals for test configuration
 const mockModule = await vi.importMock<{
@@ -1110,5 +1116,82 @@ describe('updateEventStatus', () => {
       (c) => c.table === 'events' && c.method === 'update'
     )
     expect(updateCalls).toHaveLength(0)
+  })
+})
+
+describe('sendResultReminderEmails', () => {
+  beforeEach(() => {
+    mockModule.__reset()
+    vi.clearAllMocks()
+    vi.mocked(sendResultSubmissionReminders).mockResolvedValue({ emailsSent: 0, errors: [] })
+  })
+
+  it('returns error when event is not found', async () => {
+    const result = await sendResultReminderEmails('nonexistent-id')
+
+    expect(result.success).toBe(false)
+    expect(result.error).toBe('Event not found')
+    expect(sendResultSubmissionReminders).not.toHaveBeenCalled()
+  })
+
+  it('returns error when event is not completed', async () => {
+    mockModule.__mockEventFound({
+      id: 'event-1',
+      name: 'Test Brevet',
+      event_date: '2026-05-10',
+      distance_km: 200,
+      status: 'scheduled',
+      chapters: { name: 'Toronto', slug: 'toronto' },
+    })
+
+    const result = await sendResultReminderEmails('event-1')
+
+    expect(result.success).toBe(false)
+    expect(result.error).toContain('completed')
+    expect(sendResultSubmissionReminders).not.toHaveBeenCalled()
+  })
+
+  it('sends reminders for a completed event and returns the count', async () => {
+    mockModule.__mockEventFound({
+      id: 'event-1',
+      name: 'Test Brevet',
+      event_date: '2026-05-10',
+      distance_km: 200,
+      status: 'completed',
+      chapters: { name: 'Toronto', slug: 'toronto' },
+    })
+    vi.mocked(sendResultSubmissionReminders).mockResolvedValue({ emailsSent: 3, errors: [] })
+
+    const result = await sendResultReminderEmails('event-1')
+
+    expect(result.success).toBe(true)
+    expect(result.data).toEqual({ emailsSent: 3 })
+    expect(sendResultSubmissionReminders).toHaveBeenCalledWith({
+      id: 'event-1',
+      name: 'Test Brevet',
+      event_date: '2026-05-10',
+      distance_km: 200,
+      chapters: { name: 'Toronto', slug: 'toronto' },
+    })
+  })
+
+  it('returns error when no emails could be sent and errors occurred', async () => {
+    mockModule.__mockEventFound({
+      id: 'event-1',
+      name: 'Test Brevet',
+      event_date: '2026-05-10',
+      distance_km: 200,
+      status: 'completed',
+      chapters: { name: 'Toronto', slug: 'toronto' },
+    })
+    vi.mocked(sendResultSubmissionReminders).mockResolvedValue({
+      emailsSent: 0,
+      errors: ['Failed to send result reminder email: SES exploded'],
+    })
+
+    const result = await sendResultReminderEmails('event-1')
+
+    expect(result.success).toBe(false)
+    expect(result.error).toContain('Failed to send')
   })
 })

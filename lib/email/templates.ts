@@ -271,6 +271,8 @@ export interface ResultSubmissionEmailData {
   eventDistance: number
   chapterName: string
   submissionUrl: string
+  /** Reminder variant: "Reminder:" subject and intro acknowledging no results received yet */
+  reminder?: boolean
 }
 
 export function buildResultSubmissionRequestEmail(data: ResultSubmissionEmailData): {
@@ -279,7 +281,9 @@ export function buildResultSubmissionRequestEmail(data: ResultSubmissionEmailDat
   html: string
 } {
   const rideName = formatRideName(data.eventName, data.eventDistance)
-  const subject = `Submit Your Results: ${rideName}`
+  const subject = data.reminder
+    ? `Reminder: Submit Your Results: ${rideName}`
+    : `Submit Your Results: ${rideName}`
 
   // Escape user-supplied values for safe HTML interpolation
   const safe = {
@@ -290,10 +294,14 @@ export function buildResultSubmissionRequestEmail(data: ResultSubmissionEmailDat
     submissionUrl: escapeHtml(data.submissionUrl),
   }
 
+  const textIntro = data.reminder
+    ? `The ${rideName} has finished, but we haven't received your results yet. Please submit them using the link below.`
+    : `The ${rideName} has finished! Please submit your results using the link below.`
+
   const text = `
 Hi ${data.riderName},
 
-The ${rideName} has finished! Please submit your results using the link below.
+${textIntro}
 
 Event: ${rideName}
 Date: ${data.eventDate}
@@ -328,7 +336,11 @@ https://randonneursontario.ca
 <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
   <p>Hi ${safe.riderName},</p>
 
-  <p>The <strong>${safe.rideName}</strong> has finished! Please submit your results using the button below.</p>
+  ${
+    data.reminder
+      ? `<p>The <strong>${safe.rideName}</strong> has finished, but we haven't received your results yet. Please submit them using the button below.</p>`
+      : `<p>The <strong>${safe.rideName}</strong> has finished! Please submit your results using the button below.</p>`
+  }
 
   <table style="width: 100%; border-collapse: collapse; margin: 24px 0;">
     <tr>
