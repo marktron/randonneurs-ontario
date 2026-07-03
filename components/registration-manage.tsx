@@ -16,7 +16,7 @@ import {
 import { cancelRegistration } from '@/lib/actions/manage-registration'
 import { formatRideName } from '@/lib/events/format'
 import { format, parseISO } from 'date-fns'
-import { CalendarDays, MapPin, Clock, XCircle } from 'lucide-react'
+import { CalendarDays, MapPin, Clock, Smartphone, XCircle } from 'lucide-react'
 import Link from 'next/link'
 
 interface RegistrationManageProps {
@@ -47,6 +47,7 @@ interface RegistrationManageProps {
     email: string | null
   }
   eventStarted: boolean
+  hasDigitalCard: boolean
 }
 
 export function RegistrationManage({
@@ -55,6 +56,7 @@ export function RegistrationManage({
   event,
   rider,
   eventStarted,
+  hasDigitalCard,
 }: RegistrationManageProps) {
   const [isPending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
@@ -166,6 +168,25 @@ export function RegistrationManage({
 
       {/* Actions */}
       <div className="space-y-4">
+        {/* Digital brevet card — organizer has saved controls for this event */}
+        {hasDigitalCard && (
+          <div className="rounded-lg border border-border p-6 space-y-3">
+            <div>
+              <h3 className="font-semibold">Digital Brevet Card</h3>
+              <p className="text-sm text-muted-foreground">
+                Check in at controls from your phone on event day. Open it before the start and keep
+                the page handy — check-ins made without signal sync automatically.
+              </p>
+            </div>
+            <Button asChild variant="outline" className="w-full sm:w-auto h-12">
+              <Link href={`/card/${token}`}>
+                <Smartphone className="h-4 w-4 mr-2" />
+                Open your brevet card
+              </Link>
+            </Button>
+          </div>
+        )}
+
         {/* Cancel — show when event is scheduled */}
         {event.status === 'scheduled' && (
           <div className="rounded-lg border border-border p-6 space-y-3">

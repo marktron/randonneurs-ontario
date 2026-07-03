@@ -3,6 +3,7 @@
 import { revalidatePath, revalidateTag } from 'next/cache'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { createTorontoDate } from '@/lib/brmTimes'
+import { isDigitalCardEventType } from '@/lib/brevet-card'
 import { sendCancellationConfirmationEmail } from '@/lib/email/send-registration-email'
 import { createActionResult, handleActionError, handleSupabaseError, logError } from '@/lib/errors'
 import { parseISO } from 'date-fns'
@@ -40,6 +41,8 @@ export interface RegistrationManagementData {
     email: string | null
   }
   existingResultToken: string | null
+  /** True when the event supports a digital brevet card and has controls. */
+  hasDigitalCard: boolean
 }
 
 // ============================================================================
@@ -104,6 +107,17 @@ export async function getRegistrationByToken(
     .eq('submission_token', token)
     .single()
 
+  // Digital brevet card is available when the event type supports it and
+  // the organizer has saved controls (see docs/digital-brevet-card.md).
+  let hasDigitalCard = false
+  if (isDigitalCardEventType(reg.events.event_type)) {
+    const { count } = await supabase
+      .from('event_controls')
+      .select('id', { count: 'exact', head: true })
+      .eq('event_id', reg.events.id)
+    hasDigitalCard = (count ?? 0) > 0
+  }
+
   return {
     registration: {
       id: reg.id,
@@ -133,6 +147,7 @@ export async function getRegistrationByToken(
     existingResultToken: existingResult
       ? (existingResult as { submission_token: string }).submission_token
       : null,
+    hasDigitalCard,
   }
 }
 

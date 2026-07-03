@@ -92,3 +92,23 @@ describe('result submission reminder variant', () => {
     expect(email.html).not.toContain("haven't received your results yet")
   })
 })
+
+describe('registration confirmation digital brevet card link', () => {
+  const cardUrl = 'https://example.com/card/token-123'
+
+  it('includes the card link in text and html when provided', () => {
+    const email = buildRegistrationConfirmationEmail({
+      ...baseRegistration,
+      digitalCardUrl: cardUrl,
+    })
+    expect(email.text).toContain(cardUrl)
+    expect(email.html).toContain(cardUrl)
+    expect(email.html).toContain('Open your brevet card')
+  })
+
+  it('omits the card section when no url is provided', () => {
+    const email = buildRegistrationConfirmationEmail(baseRegistration)
+    expect(email.text).not.toContain('Digital brevet card')
+    expect(email.html).not.toContain('Open your brevet card')
+  })
+})

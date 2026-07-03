@@ -1,0 +1,72 @@
+import { notFound } from 'next/navigation'
+import Link from 'next/link'
+import { PageShell } from '@/components/page-shell'
+import { BrevetCard } from '@/components/brevet-card-view'
+import { getBrevetCardByToken } from '@/lib/actions/brevet-card'
+import { isDigitalCardEventType } from '@/lib/brevet-card'
+import { formatRideName } from '@/lib/events/format'
+
+interface PageProps {
+  params: Promise<{ token: string }>
+}
+
+export const dynamic = 'force-dynamic'
+
+export async function generateMetadata({ params }: PageProps) {
+  const { token } = await params
+  const data = await getBrevetCardByToken(token)
+
+  if (!data) {
+    return { title: 'Brevet Card Not Found' }
+  }
+
+  return {
+    title: `Brevet Card: ${formatRideName(data.event.name, data.event.distanceKm)}`,
+  }
+}
+
+export default async function BrevetCardPage({ params }: PageProps) {
+  const { token } = await params
+  const data = await getBrevetCardByToken(token)
+
+  if (!data) {
+    notFound()
+  }
+
+  const cardAvailable =
+    data.registration.status === 'registered' &&
+    isDigitalCardEventType(data.event.eventType) &&
+    data.controls.length > 0
+
+  if (!cardAvailable) {
+    let reason: string
+    if (data.registration.status !== 'registered') {
+      reason = 'This registration is no longer active, so its brevet card is unavailable.'
+    } else if (!isDigitalCardEventType(data.event.eventType)) {
+      reason = 'Digital brevet cards are not available for this type of event.'
+    } else {
+      reason =
+        'The organizer has not set up digital check-in for this event. Use your paper brevet card.'
+    }
+
+    return (
+      <PageShell>
+        <div className="content-container pt-20 md:pt-28 max-w-2xl pb-16">
+          <h1 className="font-serif text-3xl md:text-4xl tracking-tight">Digital Brevet Card</h1>
+          <p className="mt-4 text-muted-foreground">{reason}</p>
+          <p className="mt-4">
+            <Link href={`/registration/manage/${token}`} className="underline underline-offset-4">
+              Manage your registration
+            </Link>
+          </p>
+        </div>
+      </PageShell>
+    )
+  }
+
+  return (
+    <PageShell>
+      <BrevetCard token={token} initialData={data} />
+    </PageShell>
+  )
+}

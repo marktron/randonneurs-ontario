@@ -68,3 +68,8 @@ export function buildManagementUrl(managementToken: string): string {
   const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://randonneursontario.ca'
   return `${baseUrl}/registration/manage/${managementToken}`
 }
+
+export function buildDigitalCardUrl(managementToken: string): string {
+  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://randonneursontario.ca'
+  return `${baseUrl}/card/${managementToken}`
+}

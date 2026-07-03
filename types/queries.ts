@@ -18,6 +18,12 @@ export type Result = Omit<Database['public']['Tables']['results']['Row'], 'finis
   finish_time: string | null
 }
 export type Registration = Database['public']['Tables']['registrations']['Row']
+export type EventControl = Database['public']['Tables']['event_controls']['Row']
+export type EventControlInsert = Database['public']['Tables']['event_controls']['Insert']
+export type ControlCheckin = Database['public']['Tables']['control_checkins']['Row']
+export type ControlCheckinInsert = Database['public']['Tables']['control_checkins']['Insert']
+// Check-in method enum for type safety
+export type CheckinMethod = 'gps' | 'manual' | 'admin'
 // Membership type enum for type safety
 export type MembershipType =
   | 'Individual Membership'

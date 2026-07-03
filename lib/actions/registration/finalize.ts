@@ -14,7 +14,8 @@ import { sendRegistrationConfirmationEmail } from '@/lib/email/send-registration
 import { getMembershipForRider, isTrialUsed } from '@/lib/memberships/service'
 import { createActionResult, logError } from '@/lib/errors'
 import type { RegistrationInsert } from '@/types/queries'
-import { buildManagementUrl } from './helpers'
+import { buildManagementUrl, buildDigitalCardUrl } from './helpers'
+import { isDigitalCardEventType } from '@/lib/brevet-card'
 import type { BaseEmailPayload } from './types'
 import type { RegistrationResult } from '../register'
 
@@ -173,6 +174,12 @@ export async function finalizeRegistration(
       ...emailBase,
       ...membershipFields,
       managementUrl: buildManagementUrl(managementToken),
+      // Included for card-eligible event types even if the organizer hasn't
+      // saved controls yet — the card page explains when it's not set up,
+      // and most organizers configure controls after registration opens.
+      digitalCardUrl: isDigitalCardEventType(emailBase.eventType)
+        ? buildDigitalCardUrl(managementToken)
+        : undefined,
     }).catch((error) => {
       logError(error, { operation: emailErrorOperation, context: emailErrorContext })
     })

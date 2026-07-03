@@ -5,6 +5,16 @@ export interface ParsedControl {
   distance: string // km, formatted to one decimal
 }
 
+/**
+ * ParsedControl plus coordinates, for consumers that need a physical
+ * location (e.g. digital brevet card GPS check-ins). Coordinates are null
+ * when RWGPS provides none for the point and none can be interpolated.
+ */
+export interface ParsedControlWithCoords extends ParsedControl {
+  lat: number | null
+  lng: number | null
+}
+
 type Source = 'course' | 'poi-control' | 'poi-terminus'
 
 // Lower number = higher precedence during dedupe. POIs win over course
@@ -22,6 +32,8 @@ interface InternalControl {
   name: string
   distanceKm: number
   source: Source
+  lat: number | null
+  lng: number | null
 }
 
 // POI types that should be imported as controls. `start` and `finish` are
@@ -37,6 +49,8 @@ interface RwgpsCoursePoint {
   n?: string
   d?: number
   t?: string
+  x?: number // lng
+  y?: number // lat
 }
 
 interface RwgpsPoi {
@@ -137,13 +151,47 @@ function hasControlNamePrefix(name: string | undefined): boolean {
 
 function parseCoursePointControls(route: RwgpsRoute): InternalControl[] {
   const points = route.course_points ?? []
+  const trackPoints = route.track_points ?? []
   return points
     .filter((cp) => cp.t === 'Control')
-    .map<InternalControl>((cp) => ({
-      name: cleanControlName(cp.n),
-      distanceKm: (cp.d ?? 0) / 1000,
-      source: 'course',
-    }))
+    .map<InternalControl>((cp) => {
+      // Course points usually carry x/y; when absent, interpolate from the
+      // track point nearest along the route to the course point's distance.
+      let lat = cp.y ?? null
+      let lng = cp.x ?? null
+      if ((lat == null || lng == null) && cp.d != null) {
+        const nearest = findTrackPointNearestDistance(cp.d, trackPoints)
+        if (nearest) {
+          lat = nearest.y ?? null
+          lng = nearest.x ?? null
+        }
+      }
+      return {
+        name: cleanControlName(cp.n),
+        distanceKm: (cp.d ?? 0) / 1000,
+        source: 'course',
+        lat,
+        lng,
+      }
+    })
+}
+
+/** Track point whose cumulative distance is closest to `distanceMeters`. */
+function findTrackPointNearestDistance(
+  distanceMeters: number,
+  trackPoints: RwgpsTrackPoint[]
+): RwgpsTrackPoint | null {
+  let best: RwgpsTrackPoint | null = null
+  let bestDelta = Infinity
+  for (const tp of trackPoints) {
+    if (tp.d == null || tp.x == null || tp.y == null) continue
+    const delta = Math.abs(tp.d - distanceMeters)
+    if (delta < bestDelta) {
+      bestDelta = delta
+      best = tp
+    }
+  }
+  return best
 }
 
 function poiSourceFor(poiTypeName: string | undefined): Source | null {
@@ -244,6 +292,8 @@ function parsePoiControls(route: RwgpsRoute): InternalControl[] {
       name: cleanControlName(poi.name),
       distanceKm: match.distanceMeters / 1000,
       source,
+      lat: poi.lat,
+      lng: poi.lng,
     })
   }
   return result
@@ -282,12 +332,22 @@ function dedupeControls(controls: InternalControl[]): InternalControl[] {
  * be more descriptive than the short course instruction text.
  */
 export function extractControls(route: RwgpsRoute): ParsedControl[] {
+  return extractControlsWithCoords(route).map(({ name, distance }) => ({ name, distance }))
+}
+
+/**
+ * extractControls, but preserving each control's coordinates for consumers
+ * that need physical locations (digital brevet card check-in radii).
+ */
+export function extractControlsWithCoords(route: RwgpsRoute): ParsedControlWithCoords[] {
   const course = parseCoursePointControls(route)
   const poi = parsePoiControls(route)
   const merged = dedupeControls([...course, ...poi])
   return merged.map((c) => ({
     name: c.name,
     distance: c.distanceKm.toFixed(1),
+    lat: c.lat,
+    lng: c.lng,
   }))
 }
 
@@ -328,6 +388,17 @@ export async function fetchRwgpsRoute(
  * failure.
  */
 export async function fetchRwgpsControls(rwgpsId: string): Promise<ParsedControl[]> {
+  const controls = await fetchRwgpsControlsWithCoords(rwgpsId)
+  return controls.map(({ name, distance }) => ({ name, distance }))
+}
+
+/**
+ * fetchRwgpsControls, but preserving coordinates (digital brevet card
+ * import). Throws Error with a user-facing message on any failure.
+ */
+export async function fetchRwgpsControlsWithCoords(
+  rwgpsId: string
+): Promise<ParsedControlWithCoords[]> {
   const url = `https://ridewithgps.com/routes/${rwgpsId}.json`
   const response = await fetch(url)
   if (!response.ok) {
@@ -336,7 +407,7 @@ export async function fetchRwgpsControls(rwgpsId: string): Promise<ParsedControl
   const data: unknown = await response.json()
   // RWGPS sometimes nests the route under a `route` key; sometimes it's at the top level.
   const route = (data as { route?: RwgpsRoute }).route ?? (data as RwgpsRoute)
-  const controls = extractControls(route)
+  const controls = extractControlsWithCoords(route)
   if (controls.length === 0) {
     throw new Error(
       'No control points found in the RWGPS route. Add controls as course points (type "Control") or waypoints (comment "control") in the RideWithGPS route editor.'

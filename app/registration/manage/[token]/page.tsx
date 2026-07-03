@@ -73,6 +73,7 @@ export default async function RegistrationManagePage({ params }: PageProps) {
             event={data.event}
             rider={data.rider}
             eventStarted={eventStarted}
+            hasDigitalCard={data.hasDigitalCard}
           />
         </div>
       </div>

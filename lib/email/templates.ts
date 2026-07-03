@@ -28,6 +28,7 @@ export interface RegistrationEmailData {
   membershipType?: string
   membershipStatus?: 'valid' | 'none' | 'trial-used'
   managementUrl?: string
+  digitalCardUrl?: string
 }
 
 export function buildRegistrationConfirmationEmail(data: RegistrationEmailData): {
@@ -50,6 +51,7 @@ export function buildRegistrationConfirmationEmail(data: RegistrationEmailData):
     membershipType: data.membershipType ? escapeHtml(data.membershipType) : '',
     routeUrl: data.routeUrl ? escapeHtml(data.routeUrl) : '',
     managementUrl: data.managementUrl ? escapeHtml(data.managementUrl) : '',
+    digitalCardUrl: data.digitalCardUrl ? escapeHtml(data.digitalCardUrl) : '',
   }
 
   // Membership warning for text version
@@ -142,7 +144,7 @@ Start time: ${data.eventTime} ${data.eventDate}
 Start location: ${data.eventLocation}
 ${membershipTypeRow}
 ${notesSection}
-${data.managementUrl ? `\nNew for 2026! Cancel your event registration or submit your results: ${data.managementUrl}\n` : ''}
+${data.managementUrl ? `\nNew for 2026! Cancel your event registration or submit your results: ${data.managementUrl}\n` : ''}${data.digitalCardUrl ? `\nDigital brevet card — check in at controls from your phone on event day (if your organizer has enabled it): ${data.digitalCardUrl}\n` : ''}
 --------------------
 Brevet Rules
 --------------------
@@ -221,6 +223,20 @@ ${
       </p>
       <p style="text-align: center;">
         <a href="${safe.managementUrl}" style="display: inline-block; background-color: #0066cc; color: white; padding: 8px 16px; text-decoration: none; border-radius: 6px; font-weight: 600;">Manage your registration</a>
+      </p>
+    </div>
+`
+    : ''
+}
+${
+  data.digitalCardUrl
+    ? `
+    <div style="background-color: #F0FAE5; border: 1px solid #A3D373; border-radius: 8px; padding: 16px; margin: 16px 0;">
+      <p style="text-align: center;">
+        <strong>Digital brevet card</strong> — check in at controls from your phone on event day (if your organizer has enabled it). Bookmark it before the start:
+      </p>
+      <p style="text-align: center;">
+        <a href="${safe.digitalCardUrl}" style="display: inline-block; background-color: #4d7c0f; color: white; padding: 8px 16px; text-decoration: none; border-radius: 6px; font-weight: 600;">Open your brevet card</a>
       </p>
     </div>
 `

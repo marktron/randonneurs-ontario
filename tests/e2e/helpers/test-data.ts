@@ -10,6 +10,10 @@ export const E2E_IDS = {
   rider: '00000000-e2e0-4000-a000-000000000005',
   pendingResult: '00000000-e2e0-4000-a000-000000000006',
   submittedResult: '00000000-e2e0-4000-a000-000000000007',
+  activeEvent: '00000000-e2e0-4000-a000-000000000008',
+  activeRegistration: '00000000-e2e0-4000-a000-000000000009',
+  activeControlStart: '00000000-e2e0-4000-a000-00000000000a',
+  activeControlFinish: '00000000-e2e0-4000-a000-00000000000b',
 }
 
 export interface E2ETestData {
@@ -21,6 +25,13 @@ export interface E2ETestData {
   rider: { id: string; slug: string }
   pendingResult: { id: string; submissionToken: string }
   submittedResult: { id: string; submissionToken: string }
+  /** In-progress brevet with controls for digital brevet card tests. */
+  brevetCard: {
+    eventId: string
+    managementToken: string
+    controlLat: number
+    controlLng: number
+  }
 }
 
 const DATA_FILE = join(__dirname, '..', '.e2e-data.json')
