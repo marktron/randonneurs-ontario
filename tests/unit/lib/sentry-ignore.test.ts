@@ -27,6 +27,19 @@ describe('isIgnoredClientError', () => {
     expect(isIgnoredClientError('NotFoundError: The object can not be found here.')).toBe(true)
   })
 
+  it('ignores the Firefox fetch-abort NetworkError (JAVASCRIPT-NEXTJS-2B)', () => {
+    // Firefox's wording for a fetch() aborted at the network layer (navigation
+    // away, tab close, flaky connection, extension). Same benign profile as the
+    // Safari "Load failed" / Android Chromium "network error" filters: unhandled
+    // rejection, no first-party frames, zero user impact. Sentry matches
+    // ignoreErrors against both the bare value and the "Type: value" form, so
+    // both must be dropped.
+    expect(isIgnoredClientError('NetworkError when attempting to fetch resource.')).toBe(true)
+    expect(isIgnoredClientError('TypeError: NetworkError when attempting to fetch resource.')).toBe(
+      true
+    )
+  })
+
   it('still ignores the Chrome/Firefox translate removeChild/insertBefore variants', () => {
     expect(
       isIgnoredClientError(

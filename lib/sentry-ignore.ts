@@ -12,6 +12,14 @@ export const clientIgnoreErrors: RegExp[] = [
   /Non-Error promise rejection captured/,
   /^Load failed$/,
   /^network error$/,
+  // Firefox's wording for a fetch() aborted at the network layer — user
+  // navigated away, closed the tab, hit a flaky connection, or an extension
+  // killed the request (e.g. a route prefetch on /). Same benign profile as the
+  // Safari "Load failed" and Android Chromium "network error" filters above:
+  // unhandled rejection, no first-party frames, zero user impact. Unanchored
+  // because the phrase is distinctive and Sentry matches both the bare value and
+  // the "TypeError: ..." form (JAVASCRIPT-NEXTJS-2B).
+  /NetworkError when attempting to fetch resource/,
   // Browser translation extensions (Chrome Translate, etc.) mutate the DOM
   // out from under React; benign and unactionable.
   /removeChild.*not a child of this node/,
