@@ -167,6 +167,126 @@ export type Database = {
         }
         Relationships: []
       }
+      control_checkins: {
+        Row: {
+          accuracy_m: number | null
+          checked_in_at: string
+          control_id: string
+          created_at: string
+          distance_to_control_m: number | null
+          id: string
+          lat: number | null
+          lng: number | null
+          method: string
+          note: string | null
+          received_at: string
+          registration_id: string
+          updated_at: string
+        }
+        Insert: {
+          accuracy_m?: number | null
+          checked_in_at: string
+          control_id: string
+          created_at?: string
+          distance_to_control_m?: number | null
+          id?: string
+          lat?: number | null
+          lng?: number | null
+          method: string
+          note?: string | null
+          received_at?: string
+          registration_id: string
+          updated_at?: string
+        }
+        Update: {
+          accuracy_m?: number | null
+          checked_in_at?: string
+          control_id?: string
+          created_at?: string
+          distance_to_control_m?: number | null
+          id?: string
+          lat?: number | null
+          lng?: number | null
+          method?: string
+          note?: string | null
+          received_at?: string
+          registration_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'control_checkins_control_id_fkey'
+            columns: ['control_id']
+            isOneToOne: false
+            referencedRelation: 'event_controls'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'control_checkins_registration_id_fkey'
+            columns: ['registration_id']
+            isOneToOne: false
+            referencedRelation: 'public_registrations'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'control_checkins_registration_id_fkey'
+            columns: ['registration_id']
+            isOneToOne: false
+            referencedRelation: 'registrations'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      event_controls: {
+        Row: {
+          created_at: string
+          distance_km: number
+          event_id: string
+          id: string
+          lat: number | null
+          lng: number | null
+          name: string
+          notes: string | null
+          position: number
+          radius_m: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          distance_km: number
+          event_id: string
+          id?: string
+          lat?: number | null
+          lng?: number | null
+          name: string
+          notes?: string | null
+          position: number
+          radius_m?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          distance_km?: number
+          event_id?: string
+          id?: string
+          lat?: number | null
+          lng?: number | null
+          name?: string
+          notes?: string | null
+          position?: number
+          radius_m?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'event_controls_event_id_fkey'
+            columns: ['event_id']
+            isOneToOne: false
+            referencedRelation: 'events'
+            referencedColumns: ['id']
+          },
+        ]
+      }
       events: {
         Row: {
           chapter_id: string

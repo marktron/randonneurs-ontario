@@ -1,9 +1,9 @@
 # Digital Brevet Card — Feature Spec (DRAFT for review)
 
-> Status: **draft** — not yet implemented. This spec adapts the standalone
+> Status: **approved** — open questions settled in review (2026-07-03), see
+> §14. This spec adapts the standalone
 > [CTRL prototype](https://github.com/marktron/ctrl) into the Randonneurs
-> Ontario site. Review the "Decisions & departures from CTRL" and "Open
-> questions" sections first.
+> Ontario site.
 
 ## 1. Summary
 
@@ -45,19 +45,20 @@ database, riders, registrations, capability tokens, admin auth, and email.
 Several CTRL mechanisms exist only to compensate for having no backend, and
 should be dropped rather than ported:
 
-| CTRL mechanism | Decision here | Why |
-| --- | --- | --- |
-| Event Access Code + local rider profile + generated rider token | **Drop.** Card URL is derived from the registration's `management_token`. | We know who's registered. A capability URL is stronger than a shared event code and matches `/results/submit/[token]`. |
-| SHA-256 hash chain on check-ins | **Drop.** Store device timestamp + server `received_at` + geo + accuracy instead. | A hash chain computed entirely on the rider's device can be regenerated wholesale by that device — it detects accidental corruption, not tampering. Server receive-timestamps on append-only rows are better evidence, and the trust model is the same as paper (signatures are forgeable too). |
-| Object-storage mirror (one JSON file per check-in) + CSV export endpoints | **Drop.** Check-ins are Postgres rows; admin views/exports come from normal queries. | The site has a database; the blob layout existed because CTRL refused to have one. |
-| `club-config.json` | **Drop.** Defaults live in code; per-control radius is a column. | One club, one deployment. |
-| IndexedDB as the canonical store, service-worker background sync | **Adapt.** Server is canonical; the device keeps a small **outbox** of unsent check-ins and retries. Full PWA installability/service worker is Phase 2. | See §8 Offline strategy. |
-| BRM time math (`brmTimes.ts`), haversine radius check, "next control" UX, sign-in sheet | **Keep.** The site already has better-tested versions of the first two (`lib/brmTimes.ts`, `lib/geo.ts`); reuse them. | |
-| Code-word check-in fallback | **Defer** (Phase 2, if ever). | Requires organizers to plant/maintain secrets per control. GPS + flagged manual check-in covers the MVP; paper card is the true fallback. |
+| CTRL mechanism                                                                          | Decision here                                                                                                                                           | Why                                                                                                                                                                                                                                                                                             |
+| --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Event Access Code + local rider profile + generated rider token                         | **Drop.** Card URL is derived from the registration's `management_token`.                                                                               | We know who's registered. A capability URL is stronger than a shared event code and matches `/results/submit/[token]`.                                                                                                                                                                          |
+| SHA-256 hash chain on check-ins                                                         | **Drop.** Store device timestamp + server `received_at` + geo + accuracy instead.                                                                       | A hash chain computed entirely on the rider's device can be regenerated wholesale by that device — it detects accidental corruption, not tampering. Server receive-timestamps on append-only rows are better evidence, and the trust model is the same as paper (signatures are forgeable too). |
+| Object-storage mirror (one JSON file per check-in) + CSV export endpoints               | **Drop.** Check-ins are Postgres rows; admin views/exports come from normal queries.                                                                    | The site has a database; the blob layout existed because CTRL refused to have one.                                                                                                                                                                                                              |
+| `club-config.json`                                                                      | **Drop.** Defaults live in code; per-control radius is a column.                                                                                        | One club, one deployment.                                                                                                                                                                                                                                                                       |
+| IndexedDB as the canonical store, service-worker background sync                        | **Adapt.** Server is canonical; the device keeps a small **outbox** of unsent check-ins and retries. Full PWA installability/service worker is Phase 2. | See §8 Offline strategy.                                                                                                                                                                                                                                                                        |
+| BRM time math (`brmTimes.ts`), haversine radius check, "next control" UX, sign-in sheet | **Keep.** The site already has better-tested versions of the first two (`lib/brmTimes.ts`, `lib/geo.ts`); reuse them.                                   |                                                                                                                                                                                                                                                                                                 |
+| Code-word check-in fallback                                                             | **Defer** (Phase 2, if ever).                                                                                                                           | Requires organizers to plant/maintain secrets per control. GPS + flagged manual check-in covers the MVP; paper card is the true fallback.                                                                                                                                                       |
 
 ## 5. User stories
 
 **Rider**
+
 1. After registering, I can open my brevet card from my registration-manage
    page (and the link in my confirmation email).
 2. On event morning the card shows every control: name, km, opening and
@@ -72,14 +73,10 @@ should be dropped rather than ported:
 6. After checking in at the finish, the card links me straight to result
    submission (same token).
 
-**Organizer / admin**
-7. On the event's admin page I import controls from the route's RWGPS data
-   (name, km, lat/lng), tweak them, set radii, and save.
-8. During the event I see a rider × control grid with check-in times and
-   flags (out of radius, no GPS, outside time window, late sync).
-9. I can add, correct, or delete a check-in (recorded as `admin` method).
-10. When validating results, the finish check-in time is surfaced next to
-    the rider's submitted finish time.
+**Organizer / admin** 7. On the event's admin page I import controls from the route's RWGPS data
+(name, km, lat/lng), tweak them, set radii, and save. 8. During the event I see a rider × control grid with check-in times and
+flags (out of radius, no GPS, outside time window, late sync). 9. I can add, correct, or delete a check-in (recorded as `admin` method). 10. When validating results, the finish check-in time is surfaced next to
+the rider's submitted finish time.
 
 ## 6. Data model
 
@@ -97,7 +94,7 @@ CREATE TABLE event_controls (
   distance_km   NUMERIC(6,1) NOT NULL,         -- open/close computed from this, never stored
   lat           DOUBLE PRECISION,              -- nullable: no coords ⇒ GPS check-in unavailable,
   lng           DOUBLE PRECISION,              --   manual check-in only
-  radius_m      INTEGER NOT NULL DEFAULT 150,
+  radius_m      INTEGER NOT NULL DEFAULT 500,
   notes         TEXT,
   created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -140,7 +137,14 @@ Design notes:
 - Controls are **copied per event**, not attached to `routes`: events
   sometimes run routes reversed (`lib/controlPoints.ts`), organizers adjust
   controls per running, and permanents self-schedule.
-- "Digital card enabled" = the event has controls. No new flag on `events`.
+- "Digital card enabled" = the event has controls **and** `event_type` is
+  `brevet`, `populaire`, or `permanent`. Flèches are out of scope for now
+  (team, free-route — unclear what a flèche card means).
+- Default radius is a generous **500 m**: control coordinates come from
+  RWGPS route data that hasn't been fully audited yet. Tighten per control
+  (or lower the default) as coordinates are verified. Out-of-radius
+  check-ins still succeed with a flag, so this only affects how often
+  riders see the "check in anyway" path.
 
 ## 7. Rider-facing flow
 
@@ -186,10 +190,12 @@ Design notes:
 
 - `getBrevetCard(token)` — registration + event + controls + computed
   windows + this rider's check-ins.
-- `checkInAtControl(token, input)` — zod-style validation, rate limit
-  (`isRateLimited('checkin', token, 30, 15 min)`), event-day sanity check
-  (reject if event is not within ~a day of now — see Open question 4),
-  insert, `ON CONFLICT` → return existing check-in (idempotent).
+- `checkInAtControl(token, input)` — input validation, rate limit
+  (`isRateLimited('checkin', token, 30, 15 min)`), **event-window check**:
+  check-ins are rejected outside [event start − 2 h, event start + ACP time
+  limit + 6 h] with a clear message (prevents accidental test check-ins
+  from polluting real data), insert, `ON CONFLICT` → return existing
+  check-in (idempotent).
 - Reads for admin/live views in `lib/data/brevet-card.ts`.
 
 ## 8. Offline strategy (the honest version)
@@ -278,6 +284,7 @@ mid-ride: no signal at the moment of tapping.
 ## 13. Implementation plan
 
 **Phase 1 — MVP (order of work):**
+
 1. Migrations for `event_controls` + `control_checkins` (+ RLS, triggers,
    grants) and regenerated `types/supabase.ts`.
 2. `lib/actions/event-controls.ts` (admin CRUD + RWGPS import) and admin
@@ -292,6 +299,7 @@ mid-ride: no signal at the moment of tapping.
 Each step lands as its own commit; the branch stays shippable throughout.
 
 **Phase 2 — after real-event feedback:**
+
 - Service worker / installable PWA (offline page reload survival).
 - Finish-time prefill into result submission from the finish check-in.
 - Public spectator view of event-day progress (respecting
@@ -299,24 +307,14 @@ Each step lands as its own commit; the branch stays shippable throughout.
 - Printed-card generator reads saved `event_controls`.
 - Code-word fallback, if organizers actually want it.
 
-## 14. Open questions (need your call)
+## 14. Review decisions (settled 2026-07-03)
 
-1. **Route name**: `/card/[token]` vs `/brevet-card/[token]` vs hanging it
-   off `/registration/manage/[token]` as a sub-view. Spec assumes
-   `/card/[token]` (short enough to type on a phone).
-2. **Manual check-in policy**: spec says always allow + flag (never block a
-   rider). Alternative: require GPS within radius, hard-stop otherwise.
-   Recommend allow+flag.
-3. **Ordering**: allow out-of-order check-ins (flagged) vs enforce
-   sequential. Out-and-back routes make pure geo-inference ambiguous;
-   recommend allow+flag.
-4. **Event-day window**: reject check-ins when `now` is far outside the
-   event window (start − 2 h → start + time limit + a few hours)? Recommend
-   yes, with a clear message — it prevents accidental test check-ins from
-   polluting real data.
-5. **Radius default**: CTRL used 100 m; spec says 150 m (GPS in a jersey
-   pocket next to a gas station is noisy, and out-of-radius still succeeds
-   with a flag). Either is fine — pick one.
-6. **Scope of Phase 1 events**: all event types, or brevets/populaires
-   first and leave flèches (team, free-route) out until we decide what a
-   flèche card even means? Recommend excluding `fleche` in Phase 1.
+1. **Route name**: `/card/[token]`.
+2. **Manual check-in policy**: allow + flag — never block a rider.
+3. **Ordering**: out-of-order check-ins allowed, flagged.
+4. **Event-day window**: check-ins rejected far outside the event window
+   ([start − 2 h, start + ACP limit + 6 h]) with a clear message.
+5. **Radius default**: **500 m** — deliberately generous while RWGPS
+   control coordinates remain unaudited; tighten later per control.
+6. **Phase 1 event types**: `brevet`, `populaire`, and `permanent`.
+   `fleche` excluded until a flèche card is defined.
