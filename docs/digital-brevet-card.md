@@ -1,9 +1,9 @@
-# Digital Brevet Card — Feature Spec (DRAFT for review)
+# Digital Brevet Card
 
-> Status: **approved** — open questions settled in review (2026-07-03), see
-> §14. This spec adapts the standalone
-> [CTRL prototype](https://github.com/marktron/ctrl) into the Randonneurs
-> Ontario site.
+> Status: **Phase 1 implemented** (2026-07-03). Review decisions in §14;
+> implementation map and operational notes in §15. This spec adapts the
+> standalone [CTRL prototype](https://github.com/marktron/ctrl) into the
+> Randonneurs Ontario site.
 
 ## 1. Summary
 
@@ -223,27 +223,34 @@ mid-ride: no signal at the moment of tapping.
 
 ## 9. Admin flow
 
-### `app/admin/events/[id]/controls/` — manage controls
+Implemented as a **single page**, `app/admin/events/[id]/brevet-card/`,
+with controls management on top and the check-in grid below (one "Digital
+Card" button on the event admin page instead of two).
 
-- "Import from RWGPS" button: reuses `fetchRwgpsControls()` (already parses
-  `course_points`/POIs with km + lat/lng) seeded from the event's route;
-  respects `reverseControls()` for reversed permanents. Results land in an
-  editable table (name, km, lat/lng, radius, notes) — same UX skeleton as
-  the existing control-cards admin form, but this one **saves to the DB**.
-- Manual add/edit/delete rows; re-import warns before replacing controls
-  that already have check-ins.
-- Stretch: prefill the printed-card form from saved controls so controls
-  are defined once (today the print flow re-fetches from RWGPS each time).
+### Manage controls (top section)
 
-### `app/admin/events/[id]/checkins/` — live grid
+- "Import from RWGPS" button: uses `fetchRwgpsControlsWithCoords()` (the
+  parser was extended to preserve each control's lat/lng; course points
+  without coordinates interpolate from the nearest track point) seeded from
+  the event's route; reversed permanents get order + distances flipped with
+  coordinates kept. Results land in an editable table (name, km, lat/lng,
+  radius, notes) — nothing is saved until the admin hits Save.
+- Manual add/edit/delete rows; saving warns before deleting controls
+  that already have check-ins (the delete cascades to those check-ins).
+- Stretch (Phase 2): prefill the printed-card form from saved controls so
+  controls are defined once (today the print flow re-fetches from RWGPS
+  each time).
 
-- Riders (rows) × controls (columns); cells show time + flag icons
-  (out-of-radius, manual, early/late, late-sync). Server component with a
-  refresh; no websockets in Phase 1.
-- Add / correct / delete a check-in (`method='admin'`, note required).
-  Blocked once the event status is `submitted`, mirroring results.
-- Result validation: the finish-control check-in time shown alongside
-  submitted finish time in the existing event-results manager.
+### Live grid (bottom section)
+
+- Riders (rows) × controls (columns); cells show time + flag badges
+  (out-of-radius, no-gps, early/late, late-sync). Server-loaded with a
+  Refresh button; no websockets in Phase 1.
+- Click a cell to add / correct / delete a check-in (`method='admin'`,
+  note required, audit-logged). Blocked once the event status is
+  `submitted`, mirroring results.
+- Phase 2: the finish-control check-in time shown alongside submitted
+  finish time in the existing event-results manager.
 
 ## 10. Security & abuse
 
@@ -261,9 +268,13 @@ mid-ride: no signal at the moment of tapping.
 
 ## 11. Email
 
-- Add one line + link to the existing registration-confirmation template
-  ("Your digital brevet card: …/card/[token]") — only when the event has
-  controls at send time; otherwise unchanged. No new emails in Phase 1.
+- The registration-confirmation email includes an "Open your brevet card"
+  section for **all card-eligible event types**, whether or not the
+  organizer has saved controls yet — most riders register before controls
+  are configured, and the card page explains itself when digital check-in
+  isn't set up. No new emails in Phase 1.
+- The registration-manage page shows the card section only once controls
+  actually exist (`hasDigitalCard`).
 
 ## 12. Testing & docs
 
@@ -318,3 +329,45 @@ Each step lands as its own commit; the branch stays shippable throughout.
    control coordinates remain unaudited; tighten later per control.
 6. **Phase 1 event types**: `brevet`, `populaire`, and `permanent`.
    `fleche` excluded until a flèche card is defined.
+
+## 15. Implementation map & operational notes
+
+### File map (Phase 1, as shipped)
+
+| Concern                | Location                                                                                                                                  |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| Schema                 | `supabase/migrations/20260703120000_add_digital_brevet_card.sql`                                                                          |
+| Domain logic (pure)    | `lib/brevet-card.ts` — eligibility, event start, acceptance window, control windows, flag derivation                                      |
+| Rider actions          | `lib/actions/brevet-card.ts` — `getBrevetCardByToken`, `checkInAtControl`                                                                 |
+| Admin controls actions | `lib/actions/event-controls.ts` — CRUD + RWGPS import                                                                                     |
+| Admin check-in actions | `lib/actions/control-checkins.ts` — grid read, set/delete corrections                                                                     |
+| RWGPS coordinates      | `lib/rwgps.ts` — `extractControlsWithCoords`, `fetchRwgpsControlsWithCoords`                                                              |
+| Rider page             | `app/card/[token]/page.tsx` + `components/brevet-card-view.tsx` (outbox lives here)                                                       |
+| Admin page             | `app/admin/events/[id]/brevet-card/page.tsx` + `components/admin/event-controls-manager.tsx` + `components/admin/event-checkins-grid.tsx` |
+| Email                  | `lib/email/templates.ts` (`digitalCardUrl`), wired in `lib/actions/registration/finalize.ts`                                              |
+| Tests                  | `tests/unit/lib/brevet-card.test.ts`, `tests/integration-real/brevet-card/checkin.test.ts`, `tests/e2e/brevet-card.spec.ts`               |
+
+### Organizer how-to
+
+1. Open the event in the admin and click **Digital Card**.
+2. Click **Import from RWGPS** (or add rows manually), review names,
+   distances, and coordinates, then **Save controls**. Controls without
+   coordinates still work — riders just check in without GPS (flagged).
+3. Riders reach their card from the registration-confirmation email or
+   their registration-manage page; the URL is
+   `/card/{management_token}` — same token family as result submission.
+4. During the event, watch the check-in grid (Refresh button). Flag
+   badges mean:
+   - **radius** — GPS fix was farther from the control than its radius.
+   - **no gps** — rider checked in without a location fix.
+   - **early / late** — outside the ACP open/close window for that control.
+   - **late sync** — recorded offline and uploaded more than 10 minutes
+     after the tap (normal in dead zones).
+     Flags are advisories for validation, not verdicts — treat them like an
+     odd-looking time on a paper card.
+5. Click any cell to add, correct, or delete a check-in; a note is
+   required and every correction is audit-logged. Once the event is marked
+   `submitted`, check-ins freeze.
+6. Coordinates come from RWGPS and may sit a parking lot away from the
+   actual control — the generous 500 m default radius absorbs that. As
+   coordinates get audited, tighten `radius_m` per control.

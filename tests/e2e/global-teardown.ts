@@ -20,7 +20,17 @@ export default async function globalTeardown() {
     auth: { autoRefreshToken: false, persistSession: false },
   })
 
-  const eventIds = [E2E_IDS.scheduledEvent, E2E_IDS.completedEvent, E2E_IDS.submittedEvent]
+  const eventIds = [
+    E2E_IDS.scheduledEvent,
+    E2E_IDS.completedEvent,
+    E2E_IDS.submittedEvent,
+    E2E_IDS.activeEvent,
+  ]
+
+  // Digital brevet card data (check-ins/controls cascade from events, but
+  // delete explicitly so interrupted runs can't leave orphans)
+  await supabase.from('control_checkins').delete().eq('registration_id', E2E_IDS.activeRegistration)
+  await supabase.from('event_controls').delete().eq('event_id', E2E_IDS.activeEvent)
 
   // Results
   await supabase.from('results').delete().in('id', [E2E_IDS.pendingResult, E2E_IDS.submittedResult])

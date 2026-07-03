@@ -230,7 +230,93 @@ export default async function globalSetup() {
     throw new Error('[e2e-setup] Submission tokens are null after insert')
   }
 
-  // ── 6. Write data file for test workers ─────────────────────────────
+  // ── 6. Digital brevet card: in-progress brevet + registration + controls
+  const CONTROL_LAT = 43.6453 // Union Station, Toronto
+  const CONTROL_LNG = -79.3806
+
+  // Started an hour ago Toronto time, so check-ins are inside the window.
+  const nowToronto = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Toronto',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(new Date(Date.now() - 60 * 60 * 1000))
+  const tzParts = Object.fromEntries(nowToronto.map((p) => [p.type, p.value]))
+  const activeDate = `${tzParts.year}-${tzParts.month}-${tzParts.day}`
+  const activeStart = `${tzParts.hour}:${tzParts.minute}`
+
+  await supabase.from('event_controls').delete().eq('event_id', E2E_IDS.activeEvent)
+  await supabase.from('registrations').delete().eq('event_id', E2E_IDS.activeEvent)
+  await supabase.from('events').delete().eq('id', E2E_IDS.activeEvent)
+
+  await checked(
+    supabase.from('events').insert({
+      id: E2E_IDS.activeEvent,
+      slug: `e2e-test-active-200km-${activeDate}`,
+      chapter_id: TORONTO_CHAPTER_ID,
+      route_id: E2E_IDS.route,
+      name: 'E2E Test Active Brevet',
+      event_type: 'brevet',
+      distance_km: 200,
+      event_date: activeDate,
+      start_time: activeStart,
+      start_location: 'Toronto',
+      status: 'scheduled',
+    }),
+    'insert active event'
+  )
+
+  await checked(
+    supabase.from('event_controls').insert([
+      {
+        id: E2E_IDS.activeControlStart,
+        event_id: E2E_IDS.activeEvent,
+        position: 1,
+        name: 'Start — Union Station',
+        distance_km: 0,
+        lat: CONTROL_LAT,
+        lng: CONTROL_LNG,
+        radius_m: 500,
+      },
+      {
+        id: E2E_IDS.activeControlFinish,
+        event_id: E2E_IDS.activeEvent,
+        position: 2,
+        name: 'Finish — Union Station',
+        distance_km: 200,
+        lat: CONTROL_LAT,
+        lng: CONTROL_LNG,
+        radius_m: 500,
+      },
+    ]),
+    'insert active event controls'
+  )
+
+  await checked(
+    supabase.from('registrations').insert({
+      id: E2E_IDS.activeRegistration,
+      event_id: E2E_IDS.activeEvent,
+      rider_id: E2E_IDS.rider,
+    }),
+    'insert active registration'
+  )
+
+  const activeReg = await checked(
+    supabase
+      .from('registrations')
+      .select('management_token')
+      .eq('id', E2E_IDS.activeRegistration)
+      .single(),
+    'read active management_token'
+  )
+  if (!activeReg?.management_token) {
+    throw new Error('[e2e-setup] Active registration management_token is null after insert')
+  }
+
+  // ── 7. Write data file for test workers ─────────────────────────────
   const testData: E2ETestData = {
     admin: { email: ADMIN_EMAIL, password: ADMIN_PASSWORD, userId: adminUserId },
     scheduledEvent: {
@@ -246,6 +332,12 @@ export default async function globalSetup() {
     submittedResult: {
       id: E2E_IDS.submittedResult,
       submissionToken: submittedRow.submission_token,
+    },
+    brevetCard: {
+      eventId: E2E_IDS.activeEvent,
+      managementToken: activeReg.management_token,
+      controlLat: CONTROL_LAT,
+      controlLng: CONTROL_LNG,
     },
   }
 
