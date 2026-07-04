@@ -86,6 +86,7 @@
     "prettier": "^3.7.4",
     "secretlint": "^11.3.0",
     "shadcn": "^4.1.0",
+    "supabase": "2.105.0",
     "tailwindcss": "^4",
     "typescript": "^6",
     "vitest": "^4.0.16"

@@ -208,9 +208,13 @@ describe('digital brevet card check-in (real DB)', () => {
       'insert controls'
     )
 
+    // Every row needs an explicit status: supabase-js normalizes bulk
+    // inserts to the union of keys and sends missing ones as NULL, which
+    // BYPASSES the column default — a bare row next to the cancelled one
+    // lands with status NULL, not 'registered'.
     await checked(
       supabase.from('registrations').insert([
-        { id: IDS.regActive, event_id: IDS.activeEvent, rider_id: IDS.rider },
+        { id: IDS.regActive, event_id: IDS.activeEvent, rider_id: IDS.rider, status: 'registered' },
         {
           id: IDS.regCancelled,
           event_id: IDS.activeEvent,
@@ -218,8 +222,18 @@ describe('digital brevet card check-in (real DB)', () => {
           status: 'cancelled',
           cancelled_at: new Date().toISOString(),
         },
-        { id: IDS.regFuture, event_id: IDS.futureEvent, rider_id: IDS.rider },
-        { id: IDS.regFleche, event_id: IDS.flecheEvent, rider_id: IDS.rider },
+        {
+          id: IDS.regFuture,
+          event_id: IDS.futureEvent,
+          rider_id: IDS.rider,
+          status: 'registered',
+        },
+        {
+          id: IDS.regFleche,
+          event_id: IDS.flecheEvent,
+          rider_id: IDS.rider,
+          status: 'registered',
+        },
       ]),
       'insert registrations'
     )
