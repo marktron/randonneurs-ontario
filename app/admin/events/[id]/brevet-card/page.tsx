@@ -55,6 +55,9 @@ export default async function BrevetCardAdminPage({ params }: BrevetCardAdminPag
       name: control.name,
       distanceKm: control.distanceKm,
       windowLabel: `${formatControlTime(window.openAt)} – ${formatControlTime(window.closeAt)}`,
+      lat: control.lat,
+      lng: control.lng,
+      radiusM: control.radiusM,
     }
   })
 

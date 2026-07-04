@@ -31,6 +31,8 @@ export interface AdminCheckin {
   checkedInAt: string
   receivedAt: string
   method: string
+  lat: number | null
+  lng: number | null
   accuracyM: number | null
   distanceToControlM: number | null
   note: string | null
@@ -131,7 +133,7 @@ export async function getEventCheckinsForAdmin(
     const { data: checkinRows, error: checkinError } = await supabase
       .from('control_checkins')
       .select(
-        'id, control_id, registration_id, checked_in_at, received_at, method, accuracy_m, distance_to_control_m, note'
+        'id, control_id, registration_id, checked_in_at, received_at, method, lat, lng, accuracy_m, distance_to_control_m, note'
       )
       .in(
         'control_id',
@@ -153,6 +155,8 @@ export async function getEventCheckinsForAdmin(
       checked_in_at: string
       received_at: string
       method: string
+      lat: number | null
+      lng: number | null
       accuracy_m: number | null
       distance_to_control_m: number | null
       note: string | null
@@ -173,6 +177,8 @@ export async function getEventCheckinsForAdmin(
         checkedInAt: checkin.checked_in_at,
         receivedAt: checkin.received_at,
         method: checkin.method,
+        lat: checkin.lat,
+        lng: checkin.lng,
         accuracyM: checkin.accuracy_m,
         distanceToControlM: checkin.distance_to_control_m,
         note: checkin.note,

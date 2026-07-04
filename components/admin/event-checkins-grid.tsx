@@ -33,6 +33,7 @@ import { formatControlTime } from '@/lib/brmTimes'
 import { toast } from 'sonner'
 import Link from 'next/link'
 import { ExternalLink, Loader2, RefreshCw } from 'lucide-react'
+import { CheckinMap } from '@/components/admin/checkin-map'
 
 export interface GridControl {
   id: string
@@ -40,6 +41,29 @@ export interface GridControl {
   distanceKm: number
   /** Preformatted Toronto-time window, e.g. "Sat 08:00 – Sat 11:30". */
   windowLabel: string
+  lat: number | null
+  lng: number | null
+  radiusM: number
+}
+
+/**
+ * Formats the "GPS fix recorded X from the control" caption shown in the
+ * correction dialog: metres under 1 km ("320 m"), one-decimal km at/above
+ * ("2.4 km"), with accuracy appended when known.
+ */
+export function formatCheckinDistanceLabel(
+  distanceToControlM: number,
+  accuracyM: number | null
+): string {
+  const distanceLabel =
+    distanceToControlM < 1000
+      ? `${Math.round(distanceToControlM)} m`
+      : `${(distanceToControlM / 1000).toFixed(1)} km`
+  const accuracyLabel =
+    accuracyM != null && Number.isFinite(accuracyM) && accuracyM > 0
+      ? ` (±${Math.round(accuracyM)} m accuracy)`
+      : ''
+  return `GPS fix recorded ${distanceLabel} from the control${accuracyLabel}`
 }
 
 interface EventCheckinsGridProps {
@@ -323,9 +347,14 @@ function CheckinDialog({ eventId, editing, onClose, onSaved }: CheckinDialogProp
     })
   }
 
+  const existing = editing?.existing ?? null
+  const hasRiderGps = existing != null && existing.lat != null && existing.lng != null
+  const controlHasCoords =
+    editing != null && editing.control.lat != null && editing.control.lng != null
+
   return (
     <Dialog open={editing !== null} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent>
+      <DialogContent className="max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{editing?.existing ? 'Correct check-in' : 'Add check-in'}</DialogTitle>
           <DialogDescription>
@@ -336,6 +365,40 @@ function CheckinDialog({ eventId, editing, onClose, onSaved }: CheckinDialogProp
         <div className="space-y-4">
           {editing?.existing?.note && (
             <p className="text-sm text-muted-foreground">Existing note: {editing.existing.note}</p>
+          )}
+          {existing && hasRiderGps && (
+            <div className="space-y-1.5">
+              <CheckinMap
+                key={existing.id}
+                rider={{
+                  lat: existing.lat as number,
+                  lng: existing.lng as number,
+                  accuracyM: existing.accuracyM,
+                }}
+                control={
+                  controlHasCoords
+                    ? {
+                        lat: editing!.control.lat as number,
+                        lng: editing!.control.lng as number,
+                        radiusM: editing!.control.radiusM,
+                      }
+                    : null
+                }
+                className="h-56 w-full rounded-md border"
+              />
+              <p className="text-xs text-muted-foreground">
+                {existing.distanceToControlM != null
+                  ? formatCheckinDistanceLabel(existing.distanceToControlM, existing.accuracyM)
+                  : controlHasCoords
+                    ? 'Distance to the control was not recorded for this check-in.'
+                    : "This control has no saved coordinates, so distance to control couldn't be calculated."}
+              </p>
+            </div>
+          )}
+          {existing && !hasRiderGps && (
+            <p className="text-sm text-muted-foreground">
+              No GPS fix was recorded for this check-in.
+            </p>
           )}
           <div className="space-y-2">
             <Label htmlFor="checkin-time">Check-in time (your local time)</Label>

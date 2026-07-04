@@ -264,6 +264,14 @@ Card" button on the event admin page instead of two).
 - Click a cell to add / correct / delete a check-in (`method='admin'`,
   note required, audit-logged). Blocked once the event status is
   `submitted`, mirroring results.
+- When correcting an existing check-in that has a GPS fix, the dialog shows
+  a small map (plain Leaflet + OpenStreetMap tiles, no `react-leaflet`) with
+  the rider's recorded point, the control's saved location and radius (when
+  the control has coordinates), and a caption giving the distance between
+  them (e.g. "GPS fix recorded 320 m from the control (±25 m accuracy)").
+  If the control has no saved coordinates, the caption says so but the
+  rider's point still shows. Check-ins with no GPS fix (manual/admin) show
+  a one-line note instead of a map.
 - Phase 2: the finish-control check-in time shown alongside submitted
   finish time in the existing event-results manager.
 
@@ -361,18 +369,18 @@ Each step lands as its own commit; the branch stays shippable throughout.
 
 ### File map (Phase 1, as shipped)
 
-| Concern                | Location                                                                                                                                  |
-| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| Schema                 | `supabase/migrations/20260703120000_add_digital_brevet_card.sql`                                                                          |
-| Domain logic (pure)    | `lib/brevet-card.ts` — eligibility, event start, acceptance window, control windows, flag derivation                                      |
-| Rider actions          | `lib/actions/brevet-card.ts` — `getBrevetCardByToken`, `checkInAtControl`                                                                 |
-| Admin controls actions | `lib/actions/event-controls.ts` — CRUD + RWGPS import                                                                                     |
-| Admin check-in actions | `lib/actions/control-checkins.ts` — grid read, set/delete corrections                                                                     |
-| RWGPS coordinates      | `lib/rwgps.ts` — `extractControlsWithCoords`, `fetchRwgpsControlsWithCoords`                                                              |
-| Rider page             | `app/card/[token]/page.tsx` + `components/brevet-card-view.tsx` (outbox lives here)                                                       |
-| Admin page             | `app/admin/events/[id]/brevet-card/page.tsx` + `components/admin/event-controls-manager.tsx` + `components/admin/event-checkins-grid.tsx` |
-| Email                  | `lib/email/templates.ts` (`digitalCardUrl`), wired in `lib/actions/registration/finalize.ts`                                              |
-| Tests                  | `tests/unit/lib/brevet-card.test.ts`, `tests/integration-real/brevet-card/checkin.test.ts`, `tests/e2e/brevet-card.spec.ts`               |
+| Concern                | Location                                                                                                                                                                                               |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Schema                 | `supabase/migrations/20260703120000_add_digital_brevet_card.sql`                                                                                                                                       |
+| Domain logic (pure)    | `lib/brevet-card.ts` — eligibility, event start, acceptance window, control windows, flag derivation                                                                                                   |
+| Rider actions          | `lib/actions/brevet-card.ts` — `getBrevetCardByToken`, `checkInAtControl`                                                                                                                              |
+| Admin controls actions | `lib/actions/event-controls.ts` — CRUD + RWGPS import                                                                                                                                                  |
+| Admin check-in actions | `lib/actions/control-checkins.ts` — grid read, set/delete corrections                                                                                                                                  |
+| RWGPS coordinates      | `lib/rwgps.ts` — `extractControlsWithCoords`, `fetchRwgpsControlsWithCoords`                                                                                                                           |
+| Rider page             | `app/card/[token]/page.tsx` + `components/brevet-card-view.tsx` (outbox lives here)                                                                                                                    |
+| Admin page             | `app/admin/events/[id]/brevet-card/page.tsx` + `components/admin/event-controls-manager.tsx` + `components/admin/event-checkins-grid.tsx` + `components/admin/checkin-map.tsx` (correction-dialog map) |
+| Email                  | `lib/email/templates.ts` (`digitalCardUrl`), wired in `lib/actions/registration/finalize.ts`                                                                                                           |
+| Tests                  | `tests/unit/lib/brevet-card.test.ts`, `tests/integration-real/brevet-card/checkin.test.ts`, `tests/e2e/brevet-card.spec.ts`                                                                            |
 
 ### Organizer how-to
 

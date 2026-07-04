@@ -5,7 +5,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { EventCheckinsGrid, type GridControl } from '@/components/admin/event-checkins-grid'
+import {
+  EventCheckinsGrid,
+  formatCheckinDistanceLabel,
+  type GridControl,
+} from '@/components/admin/event-checkins-grid'
 import type { AdminCheckin, AdminCheckinGridRider } from '@/lib/actions/control-checkins'
 import { toast } from 'sonner'
 
@@ -26,9 +30,30 @@ vi.mock('sonner', () => ({
   toast: { success: vi.fn(), error: vi.fn() },
 }))
 
+const mockCheckinMap = vi.fn((_props: unknown) => <div data-testid="checkin-map" />)
+vi.mock('@/components/admin/checkin-map', () => ({
+  CheckinMap: (props: unknown) => mockCheckinMap(props),
+}))
+
 const controls: GridControl[] = [
-  { id: 'ctrl-1', name: 'Start', distanceKm: 0, windowLabel: 'Sat 08:00 – Sat 08:30' },
-  { id: 'ctrl-2', name: 'Control 2', distanceKm: 100, windowLabel: 'Sat 11:00 – Sat 14:00' },
+  {
+    id: 'ctrl-1',
+    name: 'Start',
+    distanceKm: 0,
+    windowLabel: 'Sat 08:00 – Sat 08:30',
+    lat: 43.65,
+    lng: -79.38,
+    radiusM: 500,
+  },
+  {
+    id: 'ctrl-2',
+    name: 'Control 2',
+    distanceKm: 100,
+    windowLabel: 'Sat 11:00 – Sat 14:00',
+    lat: null,
+    lng: null,
+    radiusM: 500,
+  },
 ]
 
 function makeRider(overrides: Partial<AdminCheckinGridRider>): AdminCheckinGridRider {
@@ -50,6 +75,8 @@ function makeCheckin(overrides: Partial<AdminCheckin>): AdminCheckin {
     checkedInAt: '2026-06-06T12:32:00.000Z',
     receivedAt: '2026-06-06T12:32:05.000Z',
     method: 'gps',
+    lat: 43.6501,
+    lng: -79.3799,
     accuracyM: 10,
     distanceToControlM: 5,
     note: null,
@@ -223,5 +250,146 @@ describe('EventCheckinsGrid correction dialog', () => {
 
     expect(screen.getByText('Add check-in')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /delete check-in/i })).not.toBeInTheDocument()
+  })
+})
+
+describe('EventCheckinsGrid correction dialog map', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('renders the map with rider and control coordinates for a GPS check-in', async () => {
+    const user = userEvent.setup()
+    const rider = makeRider({
+      checkins: [makeCheckin({ controlId: 'ctrl-1', lat: 43.6501, lng: -79.3799, accuracyM: 12 })],
+    })
+    render(
+      <EventCheckinsGrid
+        eventId="evt-1"
+        eventSubmitted={false}
+        controls={controls}
+        riders={[rider]}
+      />
+    )
+
+    await user.click(screen.getByText('Sat 08:32'))
+
+    expect(screen.getByTestId('checkin-map')).toBeInTheDocument()
+    expect(mockCheckinMap).toHaveBeenCalledWith(
+      expect.objectContaining({
+        rider: { lat: 43.6501, lng: -79.3799, accuracyM: 12 },
+        control: { lat: 43.65, lng: -79.38, radiusM: 500 },
+      })
+    )
+    expect(screen.getByText(/gps fix recorded 5 m from the control/i)).toBeInTheDocument()
+  })
+
+  it('passes a null control to the map and notes missing coordinates when the control has none saved', async () => {
+    const user = userEvent.setup()
+    const rider = makeRider({
+      checkins: [
+        makeCheckin({
+          controlId: 'ctrl-2',
+          lat: 43.6501,
+          lng: -79.3799,
+          accuracyM: 12,
+          distanceToControlM: null,
+        }),
+      ],
+    })
+    render(
+      <EventCheckinsGrid
+        eventId="evt-1"
+        eventSubmitted={false}
+        controls={controls}
+        riders={[rider]}
+      />
+    )
+
+    await user.click(screen.getByText('Sat 08:32'))
+
+    expect(mockCheckinMap).toHaveBeenCalledWith(expect.objectContaining({ control: null }))
+    expect(screen.getByText(/this control has no saved coordinates/i)).toBeInTheDocument()
+  })
+
+  it('shows a "no GPS fix" note and no map for a non-GPS check-in', async () => {
+    const user = userEvent.setup()
+    const rider = makeRider({
+      checkins: [
+        makeCheckin({
+          controlId: 'ctrl-1',
+          method: 'manual',
+          lat: null,
+          lng: null,
+          accuracyM: null,
+        }),
+      ],
+    })
+    render(
+      <EventCheckinsGrid
+        eventId="evt-1"
+        eventSubmitted={false}
+        controls={controls}
+        riders={[rider]}
+      />
+    )
+
+    await user.click(screen.getByText('Sat 08:32'))
+
+    expect(screen.getByText(/no gps fix was recorded for this check-in/i)).toBeInTheDocument()
+    expect(screen.queryByTestId('checkin-map')).not.toBeInTheDocument()
+  })
+
+  it('renders no map and no GPS note in add-check-in mode', async () => {
+    const user = userEvent.setup()
+    render(
+      <EventCheckinsGrid
+        eventId="evt-1"
+        eventSubmitted={false}
+        controls={controls}
+        riders={[makeRider({})]}
+      />
+    )
+
+    await user.click(screen.getAllByText('—')[0])
+
+    expect(screen.getByText('Add check-in')).toBeInTheDocument()
+    expect(screen.queryByTestId('checkin-map')).not.toBeInTheDocument()
+    expect(screen.queryByText(/no gps fix was recorded/i)).not.toBeInTheDocument()
+  })
+})
+
+describe('formatCheckinDistanceLabel', () => {
+  it('formats sub-kilometre distances in metres', () => {
+    expect(formatCheckinDistanceLabel(320, null)).toBe('GPS fix recorded 320 m from the control')
+  })
+
+  it('formats distances at or above a kilometre with one decimal', () => {
+    expect(formatCheckinDistanceLabel(2400, null)).toBe('GPS fix recorded 2.4 km from the control')
+  })
+
+  it('rounds metres to the nearest whole number', () => {
+    expect(formatCheckinDistanceLabel(319.6, null)).toBe('GPS fix recorded 320 m from the control')
+  })
+
+  it('appends accuracy when present', () => {
+    expect(formatCheckinDistanceLabel(320, 25)).toBe(
+      'GPS fix recorded 320 m from the control (±25 m accuracy)'
+    )
+  })
+
+  it('omits accuracy when null', () => {
+    expect(formatCheckinDistanceLabel(320, null)).toBe('GPS fix recorded 320 m from the control')
+  })
+
+  it('omits accuracy when zero or non-finite', () => {
+    expect(formatCheckinDistanceLabel(320, 0)).toBe('GPS fix recorded 320 m from the control')
+    expect(formatCheckinDistanceLabel(320, Number.NaN)).toBe(
+      'GPS fix recorded 320 m from the control'
+    )
+  })
+
+  it('exactly one kilometre is formatted in km', () => {
+    expect(formatCheckinDistanceLabel(1000, null)).toBe('GPS fix recorded 1.0 km from the control')
   })
 })

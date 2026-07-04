@@ -176,6 +176,8 @@ describe('getEventCheckinsForAdmin', () => {
             checked_in_at: '2026-07-11T09:00:00.000Z',
             received_at: '2026-07-11T09:00:00.000Z',
             method: 'gps',
+            lat: 43.6532,
+            lng: -79.3832,
             accuracy_m: 10,
             distance_to_control_m: 20,
             note: null,
@@ -194,6 +196,8 @@ describe('getEventCheckinsForAdmin', () => {
     expect(rider1?.managementToken).toBe('tok-abc')
     expect(rider1?.checkins).toHaveLength(1)
     expect(rider1?.checkins[0].id).toBe('chk-1')
+    expect(rider1?.checkins[0].lat).toBe(43.6532)
+    expect(rider1?.checkins[0].lng).toBe(-79.3832)
     const rider2 = result.data?.find((r) => r.registrationId === 'reg-2')
     expect(rider2?.managementToken).toBeNull()
     expect(rider2?.checkins).toHaveLength(0)
