@@ -3,14 +3,18 @@ import {
   CHECKIN_WINDOW_AFTER_LIMIT_MS,
   CHECKIN_WINDOW_BEFORE_START_MS,
   LATE_SYNC_THRESHOLD_MS,
+  RIDER_UNDO_WINDOW_MS,
   computeControlWindow,
   computeEventStart,
   deriveCheckinFlags,
+  detectWrongControl,
+  formatDistanceKm,
   getCheckinAcceptanceWindow,
   hasAnyFlag,
   isDigitalCardEventType,
   isWithinCheckinAcceptanceWindow,
   type CheckinFlags,
+  type WrongControlCandidate,
 } from '@/lib/brevet-card'
 import { computeControlTimes, createTorontoDate, getNominalDistance } from '@/lib/brmTimes'
 import { getAcpTimeLimitMinutes } from '@/lib/events/finish-time'
@@ -225,5 +229,88 @@ describe('hasAnyFlag', () => {
     for (const key of Object.keys(none) as Array<keyof CheckinFlags>) {
       expect(hasAnyFlag({ ...none, [key]: true })).toBe(true)
     }
+  })
+})
+
+describe('detectWrongControl', () => {
+  // Reference points around Toronto. ~0.001° lat ≈ 111 m.
+  const A = { lat: 43.65, lng: -79.38, radiusM: 500 } // tapped
+  const B_LAT = 43.7 // ~5.6 km north of A
+  const C_LAT = 43.701 // ~111 m north of B
+
+  const insideA = { lat: 43.6501, lng: -79.38 } // ~11 m from A
+  const atB = { lat: B_LAT, lng: -79.38 }
+  const farAway = { lat: 43.9, lng: -79.9 }
+
+  function candidate(over: Partial<WrongControlCandidate> & { id: string }): WrongControlCandidate {
+    return {
+      name: over.id,
+      lat: B_LAT,
+      lng: -79.38,
+      radiusM: 500,
+      alreadyCheckedIn: false,
+      ...over,
+    }
+  }
+
+  it('returns null when the fix is inside the tapped radius, even if another control shares the spot', () => {
+    // Out-and-back: a second control sits at the same coords as the tapped one.
+    const shared = candidate({ id: 'finish', lat: A.lat, lng: A.lng })
+    expect(detectWrongControl(insideA, A, [shared])).toBeNull()
+  })
+
+  it('redirects when the fix is outside the tapped control but inside another', () => {
+    const b = candidate({ id: 'B' })
+    const decision = detectWrongControl(atB, A, [b])
+    expect(decision).not.toBeNull()
+    expect(decision!.kind).toBe('redirect')
+    expect(decision!.control.id).toBe('B')
+  })
+
+  it('picks the nearest control when two others contain the fix (order-independent)', () => {
+    const b = candidate({ id: 'B', lat: B_LAT })
+    const c = candidate({ id: 'C', lat: C_LAT })
+    // C listed first to prove the choice is by distance, not array order.
+    const decision = detectWrongControl(atB, A, [c, b])
+    expect(decision!.control.id).toBe('B')
+  })
+
+  it('skips candidate controls without coordinates', () => {
+    const noCoords = candidate({ id: 'no-coords', lat: null, lng: null })
+    expect(detectWrongControl(atB, A, [noCoords])).toBeNull()
+  })
+
+  it('reports already-checked-in when the matched candidate is done', () => {
+    const b = candidate({ id: 'B', alreadyCheckedIn: true })
+    const decision = detectWrongControl(atB, A, [b])
+    expect(decision!.kind).toBe('already-checked-in')
+    expect(decision!.control.id).toBe('B')
+  })
+
+  it('returns null when the fix is outside every radius', () => {
+    const b = candidate({ id: 'B' })
+    expect(detectWrongControl(farAway, A, [b])).toBeNull()
+  })
+
+  it('still scans others when the tapped control has no coordinates', () => {
+    const noCoordTapped = { lat: null, lng: null, radiusM: 500 }
+    const b = candidate({ id: 'B' })
+    const decision = detectWrongControl(atB, noCoordTapped, [b])
+    expect(decision!.kind).toBe('redirect')
+    expect(decision!.control.id).toBe('B')
+  })
+})
+
+describe('formatDistanceKm', () => {
+  it('formats metres as one-decimal kilometres', () => {
+    expect(formatDistanceKm(0)).toBe('0.0')
+    expect(formatDistanceKm(320)).toBe('0.3')
+    expect(formatDistanceKm(5560)).toBe('5.6')
+  })
+})
+
+describe('RIDER_UNDO_WINDOW_MS', () => {
+  it('is fifteen minutes', () => {
+    expect(RIDER_UNDO_WINDOW_MS).toBe(15 * 60 * 1000)
   })
 })

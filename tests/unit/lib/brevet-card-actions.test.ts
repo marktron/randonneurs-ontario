@@ -7,10 +7,14 @@ const fromCalls: FromCall[] = []
 interface TableState {
   /** Response for `.single()` on a select chain. */
   singleResponse?: { data: unknown; error: unknown }
+  /** Response for `.maybeSingle()` on a select chain. */
+  maybeSingleResponse?: { data: unknown; error: unknown }
   /** Response when the builder itself is awaited (list queries). */
   listResponse?: { data: unknown; error: unknown }
   /** Response for `.single()` after `.insert()`. */
   insertResponse?: { data: unknown; error: unknown }
+  /** Response when a `.delete()` chain is awaited. */
+  deleteResponse?: { data: unknown; error: unknown }
 }
 
 let tables: Record<string, TableState> = {}
@@ -20,6 +24,7 @@ const mockFrom = vi.fn((table: string) => {
   fromCalls.push(call)
   const state = tables[table] ?? {}
   let inserted = false
+  let deleted = false
 
   const builder = {
     select: vi.fn(() => {
@@ -40,17 +45,31 @@ const mockFrom = vi.fn((table: string) => {
       inserted = true
       return builder
     }),
+    delete: vi.fn(() => {
+      call.ops.push('delete')
+      deleted = true
+      return builder
+    }),
     single: vi.fn(() => {
       call.ops.push('single')
       const response = inserted ? state.insertResponse : state.singleResponse
       return Promise.resolve(response ?? { data: null, error: null })
     }),
+    maybeSingle: vi.fn(() => {
+      call.ops.push('maybeSingle')
+      return Promise.resolve(state.maybeSingleResponse ?? { data: null, error: null })
+    }),
     // Supabase query builders are thenables: awaiting the builder directly
-    // runs the list query (used by the controls/check-ins reads).
+    // runs the list query (controls/check-ins reads) or a delete chain.
     then: (
       resolve: (value: { data: unknown; error: unknown }) => unknown,
       reject?: (reason: unknown) => unknown
-    ) => Promise.resolve(state.listResponse ?? { data: [], error: null }).then(resolve, reject),
+    ) => {
+      const response = deleted
+        ? (state.deleteResponse ?? { data: null, error: null })
+        : (state.listResponse ?? { data: [], error: null })
+      return Promise.resolve(response).then(resolve, reject)
+    },
   }
   return builder
 })
@@ -64,7 +83,8 @@ vi.mock('@/lib/rate-limit', () => ({
   isRateLimited: (...args: unknown[]) => mockIsRateLimited(...(args as [])),
 }))
 
-import { checkInAtControl, getBrevetCardByToken } from '@/lib/actions/brevet-card'
+import { checkInAtControl, getBrevetCardByToken, undoCheckin } from '@/lib/actions/brevet-card'
+import { RIDER_UNDO_WINDOW_MS } from '@/lib/brevet-card'
 
 const TOKEN = 'test-token'
 
@@ -286,5 +306,94 @@ describe('getBrevetCardByToken', () => {
     }
 
     expect(await getBrevetCardByToken(TOKEN)).toBeNull()
+  })
+})
+
+describe('undoCheckin', () => {
+  function seedFoundCheckin(over?: { method?: string; receivedAt?: string }) {
+    tables.registrations = { singleResponse: { data: makeRegistration(), error: null } }
+    tables.control_checkins = {
+      maybeSingleResponse: {
+        data: {
+          id: 'checkin-1',
+          method: over?.method ?? 'gps',
+          received_at: over?.receivedAt ?? new Date().toISOString(),
+        },
+        error: null,
+      },
+      deleteResponse: { data: null, error: null },
+    }
+  }
+
+  it('deletes a recent, rider-recorded check-in', async () => {
+    seedFoundCheckin()
+
+    const result = await undoCheckin(TOKEN, { controlId: 'ctrl-1' })
+
+    expect(result.success).toBe(true)
+    const deleteCall = fromCalls.find(
+      (c) => c.table === 'control_checkins' && c.ops.includes('delete')
+    )
+    expect(deleteCall).toBeDefined()
+  })
+
+  it('rejects when no check-in exists for the control', async () => {
+    tables.registrations = { singleResponse: { data: makeRegistration(), error: null } }
+    tables.control_checkins = { maybeSingleResponse: { data: null, error: null } }
+
+    const result = await undoCheckin(TOKEN, { controlId: 'ctrl-1' })
+
+    expect(result.success).toBe(false)
+    expect(result.error).toMatch(/check-in not found/i)
+  })
+
+  it('refuses to remove an organizer (admin) check-in', async () => {
+    seedFoundCheckin({ method: 'admin' })
+
+    const result = await undoCheckin(TOKEN, { controlId: 'ctrl-1' })
+
+    expect(result.success).toBe(false)
+    expect(result.error).toMatch(/organizer/i)
+  })
+
+  it('rejects once the undo window has passed (based on received_at)', async () => {
+    seedFoundCheckin({
+      receivedAt: new Date(Date.now() - RIDER_UNDO_WINDOW_MS - 60_000).toISOString(),
+    })
+
+    const result = await undoCheckin(TOKEN, { controlId: 'ctrl-1' })
+
+    expect(result.success).toBe(false)
+    expect(result.error).toMatch(/undo window has passed/i)
+  })
+
+  it('rejects when the event is frozen (results submitted)', async () => {
+    const reg = makeRegistration()
+    reg.events.status = 'submitted'
+    tables.registrations = { singleResponse: { data: reg, error: null } }
+    tables.control_checkins = {
+      maybeSingleResponse: {
+        data: { id: 'checkin-1', method: 'gps', received_at: new Date().toISOString() },
+        error: null,
+      },
+    }
+
+    const result = await undoCheckin(TOKEN, { controlId: 'ctrl-1' })
+
+    expect(result.success).toBe(false)
+    expect(result.error).toMatch(/submitted/i)
+    // Frozen check is reached before the check-in is even looked up.
+    expect(fromCalls.find((c) => c.table === 'control_checkins')).toBeUndefined()
+  })
+
+  it('rejects an unknown token', async () => {
+    tables.registrations = {
+      singleResponse: { data: null, error: { code: 'PGRST116', message: 'not found' } },
+    }
+
+    const result = await undoCheckin(TOKEN, { controlId: 'ctrl-1' })
+
+    expect(result.success).toBe(false)
+    expect(result.error).toMatch(/not found/i)
   })
 })

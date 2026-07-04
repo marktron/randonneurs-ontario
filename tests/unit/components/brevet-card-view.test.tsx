@@ -6,17 +6,101 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { act } from 'react'
 import { renderToString } from 'react-dom/server'
 import { hydrateRoot } from 'react-dom/client'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { BrevetCard } from '@/components/brevet-card-view'
 import type { BrevetCardData } from '@/lib/actions/brevet-card'
-import { checkInAtControl } from '@/lib/actions/brevet-card'
+import { checkInAtControl, undoCheckin } from '@/lib/actions/brevet-card'
 
 vi.mock('@/lib/actions/brevet-card', () => ({
   checkInAtControl: vi.fn(),
+  undoCheckin: vi.fn(),
 }))
 
 const mockCheckIn = vi.mocked(checkInAtControl)
+const mockUndo = vi.mocked(undoCheckin)
+
+const NO_FLAGS = { outOfRadius: false, noGps: false, early: false, late: false, lateSync: false }
+
+/** Successful check-in response echoing the given control id. */
+function checkinOk(
+  controlId: string,
+  method = 'gps'
+): Awaited<ReturnType<typeof checkInAtControl>> {
+  return {
+    success: true,
+    data: {
+      checkin: {
+        controlId,
+        checkedInAt: new Date().toISOString(),
+        receivedAt: new Date().toISOString(),
+        method,
+        distanceToControlM: method === 'gps' ? 12 : null,
+        flags: { ...NO_FLAGS, noGps: method === 'manual' },
+      },
+      alreadyExisted: false,
+    },
+  } as Awaited<ReturnType<typeof checkInAtControl>>
+}
+
+/**
+ * Two controls with coordinates ~5.6 km apart, both open (their windows are
+ * in the past), so wrong-control detection can fire without the early confirm.
+ */
+function makeTwoControlData(): BrevetCardData {
+  const data = makeData()
+  const openPast = new Date(Date.now() - 30 * 60 * 1000).toISOString()
+  const closeFuture = new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString()
+  data.controls = [
+    {
+      id: 'ctrl-a',
+      position: 1,
+      name: 'Exeter',
+      distanceKm: 50,
+      lat: 43.65,
+      lng: -79.38,
+      radiusM: 500,
+      notes: null,
+      opensAt: openPast,
+      closesAt: closeFuture,
+    },
+    {
+      id: 'ctrl-b',
+      position: 2,
+      name: 'Ilderton',
+      distanceKm: 100,
+      lat: 43.7,
+      lng: -79.38,
+      radiusM: 500,
+      notes: null,
+      opensAt: openPast,
+      closesAt: closeFuture,
+    },
+  ]
+  return data
+}
+
+/** One control whose window opens two hours from now (early check-in). */
+function makeNotOpenData(): BrevetCardData {
+  const data = makeData()
+  const openFuture = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString()
+  const closeFuture = new Date(Date.now() + 5 * 60 * 60 * 1000).toISOString()
+  data.controls = [
+    {
+      id: 'ctrl-1',
+      position: 1,
+      name: 'Exeter',
+      distanceKm: 50,
+      lat: 43.65,
+      lng: -79.38,
+      radiusM: 500,
+      notes: null,
+      opensAt: openFuture,
+      closesAt: closeFuture,
+    },
+  ]
+  return data
+}
 
 const TOKEN = 'test-token'
 
@@ -57,13 +141,13 @@ function makeData(): BrevetCardData {
 }
 
 /** Geolocation stub that reports a fix asynchronously, like a real device. */
-function stubGeolocation() {
+function stubGeolocation(lat = 43.65, lng = -79.38) {
   const getCurrentPosition = vi.fn((success: PositionCallback) => {
     setTimeout(() => {
       success({
         coords: {
-          latitude: 43.65,
-          longitude: -79.38,
+          latitude: lat,
+          longitude: lng,
           accuracy: 10,
         },
       } as GeolocationPosition)
@@ -79,6 +163,9 @@ beforeEach(() => {
   vi.clearAllMocks()
   window.localStorage.clear()
   stubGeolocation()
+  // undoCheckin is fire-and-forget in the pending path (.catch on the result),
+  // so it must resolve a promise even when a test doesn't assert on it.
+  mockUndo.mockResolvedValue({ success: true } as Awaited<ReturnType<typeof undoCheckin>>)
   // happy-dom leaves isSecureContext undefined; real browsers always set it.
   Object.defineProperty(window, 'isSecureContext', { value: true, configurable: true })
 })
@@ -374,5 +461,245 @@ describe('BrevetCard hydration', () => {
       await act(async () => root?.unmount())
       container.remove()
     }
+  })
+})
+
+describe('BrevetCard wrong-control detection', () => {
+  it('warns when the GPS fix is inside a different control than the one tapped', async () => {
+    // Device is physically at Exeter (ctrl-a); rider taps Ilderton (ctrl-b).
+    stubGeolocation(43.65, -79.38)
+    mockCheckIn.mockResolvedValue(checkinOk('ctrl-b'))
+
+    const user = userEvent.setup()
+    render(<BrevetCard token={TOKEN} initialData={makeTwoControlData()} />)
+
+    const buttons = screen.getAllByRole('button', { name: /^check in$/i })
+    await user.click(buttons[1]) // Ilderton
+
+    const dialog = await screen.findByRole('alertdialog')
+    expect(dialog).toHaveTextContent(/you appear to be at exeter/i)
+    expect(dialog).toHaveTextContent(/not ilderton/i)
+    // Nothing recorded until the rider chooses.
+    expect(mockCheckIn).not.toHaveBeenCalled()
+  })
+
+  it('redirects the check-in to the control the rider is actually at', async () => {
+    stubGeolocation(43.65, -79.38)
+    mockCheckIn.mockResolvedValue(checkinOk('ctrl-a'))
+
+    const user = userEvent.setup()
+    render(<BrevetCard token={TOKEN} initialData={makeTwoControlData()} />)
+
+    await user.click(screen.getAllByRole('button', { name: /^check in$/i })[1]) // tap Ilderton
+    const dialog = await screen.findByRole('alertdialog')
+    await user.click(within(dialog).getByRole('button', { name: /check in at exeter/i }))
+
+    await waitFor(() => {
+      expect(mockCheckIn).toHaveBeenCalledWith(
+        TOKEN,
+        expect.objectContaining({ controlId: 'ctrl-a' })
+      )
+    })
+    expect(mockCheckIn).not.toHaveBeenCalledWith(
+      TOKEN,
+      expect.objectContaining({ controlId: 'ctrl-b' })
+    )
+  })
+
+  it('records at the tapped control when the rider chooses "anyway"', async () => {
+    stubGeolocation(43.65, -79.38)
+    mockCheckIn.mockResolvedValue(checkinOk('ctrl-b'))
+
+    const user = userEvent.setup()
+    render(<BrevetCard token={TOKEN} initialData={makeTwoControlData()} />)
+
+    await user.click(screen.getAllByRole('button', { name: /^check in$/i })[1]) // tap Ilderton
+    const dialog = await screen.findByRole('alertdialog')
+    await user.click(within(dialog).getByRole('button', { name: /check in at ilderton anyway/i }))
+
+    await waitFor(() => {
+      expect(mockCheckIn).toHaveBeenCalledWith(
+        TOKEN,
+        expect.objectContaining({ controlId: 'ctrl-b' })
+      )
+    })
+  })
+})
+
+describe('BrevetCard early-window confirm', () => {
+  it('confirms before recording a check-in at a control that has not opened', async () => {
+    stubGeolocation(43.65, -79.38)
+    mockCheckIn.mockResolvedValue(checkinOk('ctrl-1'))
+
+    const user = userEvent.setup()
+    render(<BrevetCard token={TOKEN} initialData={makeNotOpenData()} />)
+
+    await user.click(screen.getByRole('button', { name: /^check in$/i }))
+
+    const dialog = await screen.findByRole('alertdialog')
+    expect(dialog).toHaveTextContent(/doesn't open until/i)
+    expect(mockCheckIn).not.toHaveBeenCalled()
+
+    await user.click(within(dialog).getByRole('button', { name: /check in anyway/i }))
+    await waitFor(() => {
+      expect(mockCheckIn).toHaveBeenCalledWith(
+        TOKEN,
+        expect.objectContaining({ controlId: 'ctrl-1' })
+      )
+    })
+  })
+
+  it('cancelling the early confirm records nothing', async () => {
+    stubGeolocation(43.65, -79.38)
+    mockCheckIn.mockResolvedValue(checkinOk('ctrl-1'))
+
+    const user = userEvent.setup()
+    render(<BrevetCard token={TOKEN} initialData={makeNotOpenData()} />)
+
+    await user.click(screen.getByRole('button', { name: /^check in$/i }))
+    const dialog = await screen.findByRole('alertdialog')
+    await user.click(within(dialog).getByRole('button', { name: /cancel/i }))
+
+    // Give any stray async flush a chance to (not) fire.
+    await new Promise((r) => setTimeout(r, 20))
+    expect(mockCheckIn).not.toHaveBeenCalled()
+  })
+
+  it('shows the early confirm on the manual (no-GPS) path too', async () => {
+    // Insecure context forces the manual dialog; the control is still not open.
+    Object.defineProperty(window, 'isSecureContext', { value: false, configurable: true })
+    mockCheckIn.mockResolvedValue(checkinOk('ctrl-1', 'manual'))
+
+    const user = userEvent.setup()
+    render(<BrevetCard token={TOKEN} initialData={makeNotOpenData()} />)
+
+    await user.click(screen.getByRole('button', { name: /^check in$/i }))
+    // First dialog: check in without GPS.
+    let dialog = await screen.findByRole('alertdialog')
+    expect(dialog).toHaveTextContent(/check in without gps/i)
+    await user.click(within(dialog).getByRole('button', { name: /check in anyway/i }))
+
+    // Second dialog: the early-window confirm.
+    await waitFor(() => {
+      expect(screen.getByRole('alertdialog')).toHaveTextContent(/doesn't open until/i)
+    })
+    expect(mockCheckIn).not.toHaveBeenCalled()
+
+    dialog = screen.getByRole('alertdialog')
+    await user.click(within(dialog).getByRole('button', { name: /check in anyway/i }))
+    await waitFor(() => {
+      expect(mockCheckIn).toHaveBeenCalledWith(
+        TOKEN,
+        expect.objectContaining({ controlId: 'ctrl-1' })
+      )
+    })
+  })
+})
+
+describe('BrevetCard undo', () => {
+  function dataWithCheckin(over: { method?: string; receivedAtMsAgo?: number }): BrevetCardData {
+    const data = makeData()
+    const receivedAt = new Date(Date.now() - (over.receivedAtMsAgo ?? 60 * 1000)).toISOString()
+    data.checkins = [
+      {
+        controlId: 'ctrl-1',
+        checkedInAt: receivedAt,
+        receivedAt,
+        method: over.method ?? 'gps',
+        distanceToControlM: over.method === 'manual' ? null : 12,
+        flags: { ...NO_FLAGS },
+      },
+    ]
+    return data
+  }
+
+  it('shows Undo on a fresh check-in and calls undoCheckin, restoring the check-in button', async () => {
+    mockUndo.mockResolvedValue({ success: true } as Awaited<ReturnType<typeof undoCheckin>>)
+
+    const user = userEvent.setup()
+    render(<BrevetCard token={TOKEN} initialData={dataWithCheckin({})} />)
+
+    await user.click(screen.getByRole('button', { name: /^undo$/i }))
+
+    await waitFor(() => {
+      expect(mockUndo).toHaveBeenCalledWith(TOKEN, { controlId: 'ctrl-1' })
+    })
+    // Row returns to a check-in-able state.
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /^check in$/i })).toBeInTheDocument()
+    })
+  })
+
+  it('does not show Undo for an organizer (admin) check-in', () => {
+    render(<BrevetCard token={TOKEN} initialData={dataWithCheckin({ method: 'admin' })} />)
+    expect(screen.queryByRole('button', { name: /^undo$/i })).not.toBeInTheDocument()
+  })
+
+  it('does not show Undo once the undo window has passed', () => {
+    render(
+      <BrevetCard
+        token={TOKEN}
+        initialData={dataWithCheckin({ receivedAtMsAgo: 20 * 60 * 1000 })}
+      />
+    )
+    expect(screen.queryByRole('button', { name: /^undo$/i })).not.toBeInTheDocument()
+  })
+
+  it('undoes a pending outbox entry by emptying the outbox (offline-safe)', async () => {
+    // Keep the tap queued: the network is down.
+    mockCheckIn.mockRejectedValue(new Error('network down'))
+
+    const user = userEvent.setup()
+    render(<BrevetCard token={TOKEN} initialData={makeData()} />)
+
+    await user.click(screen.getByRole('button', { name: /^check in$/i }))
+    await waitFor(() => {
+      expect(screen.getByText(/waiting to sync/i)).toBeInTheDocument()
+    })
+
+    await user.click(screen.getByRole('button', { name: /^undo$/i }))
+
+    await waitFor(() => {
+      expect(screen.queryByText(/waiting to sync/i)).not.toBeInTheDocument()
+    })
+    expect(window.localStorage.getItem(`brevet-card-outbox-${TOKEN}`)).toBeNull()
+    // A retry may already have reached the server: best-effort undo it there too.
+    expect(mockUndo).toHaveBeenCalledWith(TOKEN, { controlId: 'ctrl-1' })
+  })
+
+  it('does not resurrect a check-in undone while its sync was in flight', async () => {
+    // The check-in POST hangs (slow network) while the rider taps Undo on
+    // the "Waiting to sync" row — then the POST succeeds.
+    let resolveCheckin!: (v: Awaited<ReturnType<typeof checkInAtControl>>) => void
+    mockCheckIn.mockImplementation(
+      () =>
+        new Promise<Awaited<ReturnType<typeof checkInAtControl>>>((resolve) => {
+          resolveCheckin = resolve
+        })
+    )
+
+    const user = userEvent.setup()
+    render(<BrevetCard token={TOKEN} initialData={makeData()} />)
+
+    await user.click(screen.getByRole('button', { name: /^check in$/i }))
+    await waitFor(() => {
+      expect(screen.getByText(/waiting to sync/i)).toBeInTheDocument()
+    })
+
+    await user.click(screen.getByRole('button', { name: /^undo$/i }))
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /^check in$/i })).toBeInTheDocument()
+    })
+    expect(mockUndo).toHaveBeenCalledTimes(1)
+
+    // The in-flight sync lands AFTER the undo. It must not resurrect the
+    // check-in locally, and the row it just created server-side must be
+    // deleted again (second undoCheckin call).
+    resolveCheckin(checkinOk('ctrl-1'))
+    await waitFor(() => {
+      expect(mockUndo).toHaveBeenCalledTimes(2)
+    })
+    expect(screen.getByRole('button', { name: /^check in$/i })).toBeInTheDocument()
+    expect(screen.queryByText(/waiting to sync/i)).not.toBeInTheDocument()
   })
 })

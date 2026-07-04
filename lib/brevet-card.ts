@@ -8,6 +8,7 @@
 
 import { computeControlTimes, createTorontoDate, getNominalDistance } from '@/lib/brmTimes'
 import { getAcpTimeLimitMinutes } from '@/lib/events/finish-time'
+import { haversineMeters } from '@/lib/geo'
 
 // ============================================================================
 // Eligibility
@@ -155,4 +156,86 @@ export function deriveCheckinFlags(
 
 export function hasAnyFlag(flags: CheckinFlags): boolean {
   return flags.outOfRadius || flags.noGps || flags.early || flags.late || flags.lateSync
+}
+
+// ============================================================================
+// Wrong-control detection (GPS check-ins) & rider undo window
+// ============================================================================
+
+/**
+ * How long after a check-in a rider may undo it themselves. After this the
+ * only correction path is an organizer editing the check-in in the admin.
+ */
+export const RIDER_UNDO_WINDOW_MS = 15 * 60 * 1000
+
+/** A control's geometry, enough to test whether a GPS fix lands inside it. */
+export interface ControlGeo {
+  lat: number | null
+  lng: number | null
+  radiusM: number
+}
+
+/** A candidate "other" control the rider might actually be standing at. */
+export interface WrongControlCandidate extends ControlGeo {
+  id: string
+  name: string
+  /** Already checked in (synced or pending in the outbox). */
+  alreadyCheckedIn: boolean
+}
+
+export type WrongControlDecision =
+  | { kind: 'redirect'; control: WrongControlCandidate; distanceM: number }
+  | { kind: 'already-checked-in'; control: WrongControlCandidate; distanceM: number }
+
+/**
+ * Decide whether a GPS fix suggests the rider tapped the wrong control.
+ *
+ * - Tapped control has coords and the fix is inside its radius → `null`
+ *   (proceed silently; also covers out-and-back routes where two controls
+ *   share a location — a satisfied tap is never interrupted).
+ * - Otherwise find the nearest OTHER control (with coords) whose radius
+ *   contains the fix:
+ *     - not yet checked in → `redirect` (offer to check in there instead)
+ *     - already checked in → `already-checked-in` (offer proceed/cancel only)
+ * - Fix inside no control's radius → `null` (today's behaviour: record + let
+ *   the server flag it).
+ *
+ * Pure and React-free so it can be unit-tested directly.
+ */
+export function detectWrongControl(
+  fix: { lat: number; lng: number },
+  tapped: ControlGeo,
+  others: WrongControlCandidate[]
+): WrongControlDecision | null {
+  // Satisfied tap: the fix is inside the control the rider actually tapped.
+  if (
+    tapped.lat !== null &&
+    tapped.lng !== null &&
+    haversineMeters(fix.lat, fix.lng, tapped.lat, tapped.lng) <= tapped.radiusM
+  ) {
+    return null
+  }
+
+  let nearest: { control: WrongControlCandidate; distanceM: number } | null = null
+  for (const other of others) {
+    if (other.lat === null || other.lng === null) continue
+    const distanceM = haversineMeters(fix.lat, fix.lng, other.lat, other.lng)
+    if (distanceM > other.radiusM) continue
+    if (!nearest || distanceM < nearest.distanceM) {
+      nearest = { control: other, distanceM }
+    }
+  }
+
+  if (!nearest) return null
+
+  return {
+    kind: nearest.control.alreadyCheckedIn ? 'already-checked-in' : 'redirect',
+    control: nearest.control,
+    distanceM: nearest.distanceM,
+  }
+}
+
+/** Format a metre distance as kilometres for rider-facing copy (e.g. "0.3"). */
+export function formatDistanceKm(meters: number): string {
+  return (meters / 1000).toFixed(1)
 }

@@ -24,12 +24,21 @@ import {
 } from '@/components/ui/alert-dialog'
 import {
   checkInAtControl,
+  undoCheckin,
   type BrevetCardData,
   type CardCheckin,
   type CardControl,
 } from '@/lib/actions/brevet-card'
 import { formatControlTime } from '@/lib/brmTimes'
-import { CHECKIN_WINDOW_BEFORE_START_MS } from '@/lib/brevet-card'
+import { haversineMeters } from '@/lib/geo'
+import {
+  CHECKIN_WINDOW_BEFORE_START_MS,
+  RIDER_UNDO_WINDOW_MS,
+  detectWrongControl,
+  formatDistanceKm,
+  type WrongControlCandidate,
+  type WrongControlDecision,
+} from '@/lib/brevet-card'
 import { CheckCircle2, CloudOff, Loader2, MapPin } from 'lucide-react'
 
 const OUTBOX_RETRY_INTERVAL_MS = 45 * 1000
@@ -41,6 +50,15 @@ interface OutboxEntry {
   lat?: number
   lng?: number
   accuracyM?: number
+}
+
+/** A GPS fix captured at tap time, carried through the confirm dialogs. */
+interface CheckinFix {
+  lat: number
+  lng: number
+  accuracyM: number
+  /** Device clock at the moment of the fix — preserved across confirmations. */
+  checkedInAt: string
 }
 
 function outboxStorageKey(token: string): string {
@@ -73,6 +91,26 @@ function writeOutbox(token: string, entries: OutboxEntry[]): void {
   }
 }
 
+/** Rider-facing copy for the wrong-control confirm sheet. Pure. */
+function wrongControlMessage(wc: {
+  decision: WrongControlDecision
+  tapped: CardControl
+  fix: CheckinFix
+}): string {
+  const { decision, tapped, fix } = wc
+  const candidate = decision.control
+  if (decision.kind === 'already-checked-in') {
+    return `You appear to be at ${candidate.name}, which you've already checked into. Check in at ${tapped.name} anyway?`
+  }
+  const tappedKm =
+    tapped.lat !== null && tapped.lng !== null
+      ? ` (${formatDistanceKm(haversineMeters(fix.lat, fix.lng, tapped.lat, tapped.lng))} km)`
+      : ''
+  return `You appear to be at ${candidate.name} (${formatDistanceKm(
+    decision.distanceM
+  )} km), not ${tapped.name}${tappedKm}.`
+}
+
 interface BrevetCardProps {
   token: string
   initialData: BrevetCardData
@@ -92,6 +130,18 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
   const [manualControl, setManualControl] = useState<CardControl | null>(null)
   const [manualReason, setManualReason] = useState('')
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [undoingControlId, setUndoingControlId] = useState<string | null>(null)
+  // Wrong-control confirm (GPS only): the fix landed inside another control.
+  const [wrongControl, setWrongControl] = useState<{
+    decision: WrongControlDecision
+    tapped: CardControl
+    fix: CheckinFix
+  } | null>(null)
+  // Early-window confirm (all methods): tapped a control before it opens.
+  const [earlyConfirm, setEarlyConfirm] = useState<{
+    control: CardControl
+    entry: OutboxEntry
+  } | null>(null)
   const flushInFlight = useRef(false)
   // Source of truth for syncing. localStorage is only a best-effort backup
   // for page reloads: writes can throw (quota, private mode) and must never
@@ -128,8 +178,17 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
       for (const entry of entries) {
         try {
           const result = await checkInAtControl(token, entry)
+          // The rider may have tapped Undo while this request was in flight
+          // (the undo path removes the entry from the outbox). Honour the
+          // undo: don't resurrect the check-in locally, and delete the row
+          // the request just created server-side.
+          const undoneInFlight = !outboxRef.current.some((e) => e.controlId === entry.controlId)
           if (result.success && result.data) {
             const { checkin } = result.data
+            if (undoneInFlight) {
+              void undoCheckin(token, { controlId: checkin.controlId }).catch(() => {})
+              continue
+            }
             setCheckins((prev) => new Map(prev).set(checkin.controlId, checkin))
             persistOutbox((prev) => prev.filter((e) => e.controlId !== entry.controlId))
           } else if (result.retryable) {
@@ -139,8 +198,12 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
           } else {
             // The server rejected this check-in outright — retrying the
             // identical payload will never succeed, so stop queueing it.
+            // No error toast if the rider already undid it: the rejection
+            // is moot.
             persistOutbox((prev) => prev.filter((e) => e.controlId !== entry.controlId))
-            setErrorMessage(result.error || 'Check-in was rejected')
+            if (!undoneInFlight) {
+              setErrorMessage(result.error || 'Check-in was rejected')
+            }
           }
         } catch {
           // Network failure: stay queued, try again on the next pass.
@@ -185,6 +248,62 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
     [persistOutbox, flushOutbox]
   )
 
+  /**
+   * Record the check-in, but if the (final, post-redirect) target control
+   * hasn't opened yet, confirm first. Applies to every method.
+   */
+  const enqueueOrConfirmEarly = useCallback(
+    (control: CardControl, entry: OutboxEntry) => {
+      if (Date.now() < new Date(control.opensAt).getTime()) {
+        setEarlyConfirm({ control, entry })
+        return
+      }
+      enqueueCheckin(entry)
+    },
+    [enqueueCheckin]
+  )
+
+  /**
+   * A GPS fix arrived for `tapped`. If it lands inside a *different* control's
+   * radius the rider probably tapped the wrong row — confirm/redirect before
+   * recording. Otherwise fall through to the (possibly early) check-in.
+   */
+  const resolveGpsCheckin = useCallback(
+    (tapped: CardControl, fix: CheckinFix) => {
+      const others: WrongControlCandidate[] = controls
+        .filter((c) => c.id !== tapped.id)
+        .map((c) => ({
+          id: c.id,
+          name: c.name,
+          lat: c.lat,
+          lng: c.lng,
+          radiusM: c.radiusM,
+          alreadyCheckedIn:
+            checkins.has(c.id) || outboxRef.current.some((e) => e.controlId === c.id),
+        }))
+
+      const decision = detectWrongControl(
+        fix,
+        { lat: tapped.lat, lng: tapped.lng, radiusM: tapped.radiusM },
+        others
+      )
+
+      if (decision) {
+        setWrongControl({ decision, tapped, fix })
+        return
+      }
+
+      enqueueOrConfirmEarly(tapped, {
+        controlId: tapped.id,
+        checkedInAt: fix.checkedInAt,
+        lat: fix.lat,
+        lng: fix.lng,
+        accuracyM: fix.accuracyM,
+      })
+    },
+    [controls, checkins, enqueueOrConfirmEarly]
+  )
+
   const handleCheckIn = useCallback(
     (control: CardControl) => {
       setErrorMessage(null)
@@ -207,12 +326,11 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
         navigator.geolocation.getCurrentPosition(
           (position) => {
             setLocatingControlId(null)
-            enqueueCheckin({
-              controlId: control.id,
-              checkedInAt: new Date().toISOString(),
+            resolveGpsCheckin(control, {
               lat: position.coords.latitude,
               lng: position.coords.longitude,
               accuracyM: Math.round(position.coords.accuracy),
+              checkedInAt: new Date().toISOString(),
             })
           },
           () => {
@@ -235,8 +353,81 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
         setManualControl(control)
       }
     },
-    [enqueueCheckin]
+    [resolveGpsCheckin]
   )
+
+  /**
+   * Undo a check-in. For a synced check-in, ask the server (which enforces
+   * the undo window and admin-method rules) and only clear locally on
+   * success. For a pending outbox entry, remove it locally (works offline)
+   * and fire-and-forget a server undo in case a retry already landed it.
+   */
+  const handleUndo = useCallback(
+    async (control: CardControl) => {
+      setErrorMessage(null)
+      const pending =
+        !checkins.has(control.id) && outboxRef.current.some((e) => e.controlId === control.id)
+
+      if (pending) {
+        persistOutbox((prev) => prev.filter((e) => e.controlId !== control.id))
+        // A retried entry may have reached the server without the client
+        // learning of it. Best-effort remove it there too; ignore not-found.
+        if (typeof navigator === 'undefined' || navigator.onLine !== false) {
+          void undoCheckin(token, { controlId: control.id }).catch(() => {})
+        }
+        return
+      }
+
+      setUndoingControlId(control.id)
+      try {
+        const result = await undoCheckin(token, { controlId: control.id })
+        if (result.success) {
+          setCheckins((prev) => {
+            const next = new Map(prev)
+            next.delete(control.id)
+            return next
+          })
+        } else {
+          setErrorMessage(result.error || 'Could not undo the check-in')
+        }
+      } catch {
+        setErrorMessage('Could not undo the check-in — check your connection and try again.')
+      } finally {
+        setUndoingControlId(null)
+      }
+    },
+    [token, checkins, persistOutbox]
+  )
+
+  // Wrong-control sheet actions read from the `wrongControl` state so their
+  // closures don't capture refs during render (React purity rules).
+  const confirmWrongControlTapped = useCallback(() => {
+    if (!wrongControl) return
+    const { tapped, fix } = wrongControl
+    setWrongControl(null)
+    enqueueOrConfirmEarly(tapped, {
+      controlId: tapped.id,
+      checkedInAt: fix.checkedInAt,
+      lat: fix.lat,
+      lng: fix.lng,
+      accuracyM: fix.accuracyM,
+    })
+  }, [wrongControl, enqueueOrConfirmEarly])
+
+  const confirmWrongControlCandidate = useCallback(() => {
+    if (!wrongControl) return
+    const { decision, fix } = wrongControl
+    const candidateCardControl = controls.find((c) => c.id === decision.control.id)
+    setWrongControl(null)
+    if (!candidateCardControl) return
+    enqueueOrConfirmEarly(candidateCardControl, {
+      controlId: decision.control.id,
+      checkedInAt: fix.checkedInAt,
+      lat: fix.lat,
+      lng: fix.lng,
+      accuracyM: fix.accuracyM,
+    })
+  }, [wrongControl, controls, enqueueOrConfirmEarly])
 
   const queuedControlIds = useMemo(() => new Set(outbox.map((e) => e.controlId)), [outbox])
 
@@ -253,12 +444,20 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
   const checkinOpensAt = new Date(startsAt.getTime() - CHECKIN_WINDOW_BEFORE_START_MS)
 
   // Client-clock gate for the pre-event banner; re-evaluated on a timer so
-  // the card unlocks while the page sits open at the start line. The server
-  // enforces the real acceptance window regardless.
+  // the card unlocks while the page sits open at the start line. The same
+  // tick drives the rider-undo window on checked-in rows. Both start unset
+  // (matching SSR — undo affordances and the pre-event banner are
+  // client-only) and hydrate after mount. The server enforces the real
+  // acceptance and undo windows regardless.
   const [beforeWindow, setBeforeWindow] = useState(false)
+  const [now, setNow] = useState<number | null>(null)
   useEffect(() => {
     const opensAtMs = new Date(event.startsAt).getTime() - CHECKIN_WINDOW_BEFORE_START_MS
-    const update = () => setBeforeWindow(Date.now() < opensAtMs)
+    const update = () => {
+      const t = Date.now()
+      setNow(t)
+      setBeforeWindow(t < opensAtMs)
+    }
     update()
     const id = window.setInterval(update, 30 * 1000)
     return () => window.clearInterval(id)
@@ -335,15 +534,41 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
 
               <div className="shrink-0 text-right">
                 {checkin ? (
-                  <p className="inline-flex items-center gap-1.5 text-sm font-medium tabular-nums">
-                    <CheckCircle2 className="h-4 w-4 text-green-600" />
-                    {formatControlTime(new Date(checkin.checkedInAt))}
-                  </p>
+                  <div className="flex flex-col items-end">
+                    <p className="inline-flex items-center gap-1.5 text-sm font-medium tabular-nums">
+                      <CheckCircle2 className="h-4 w-4 text-green-600" />
+                      {formatControlTime(new Date(checkin.checkedInAt))}
+                    </p>
+                    {checkin.method !== 'admin' &&
+                      event.status !== 'submitted' &&
+                      now !== null &&
+                      now - new Date(checkin.receivedAt).getTime() < RIDER_UNDO_WINDOW_MS && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="mt-1 h-auto px-2 py-1 text-xs text-muted-foreground"
+                          disabled={undoingControlId === control.id}
+                          onClick={() => handleUndo(control)}
+                        >
+                          {undoingControlId === control.id ? 'Undoing…' : 'Undo'}
+                        </Button>
+                      )}
+                  </div>
                 ) : queued ? (
-                  <p className="inline-flex items-center gap-1.5 text-sm text-muted-foreground">
-                    <CloudOff className="h-4 w-4" />
-                    Waiting to sync
-                  </p>
+                  <div className="flex flex-col items-end">
+                    <p className="inline-flex items-center gap-1.5 text-sm text-muted-foreground">
+                      <CloudOff className="h-4 w-4" />
+                      Waiting to sync
+                    </p>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="mt-1 h-auto px-2 py-1 text-xs text-muted-foreground"
+                      onClick={() => handleUndo(control)}
+                    >
+                      Undo
+                    </Button>
+                  </div>
                 ) : (
                   <Button
                     size="lg"
@@ -398,12 +623,73 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
             <AlertDialogAction
               onClick={() => {
                 if (manualControl) {
-                  enqueueCheckin({
+                  enqueueOrConfirmEarly(manualControl, {
                     controlId: manualControl.id,
                     checkedInAt: new Date().toISOString(),
                   })
                 }
                 setManualControl(null)
+              }}
+            >
+              Check in anyway
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={wrongControl !== null}
+        onOpenChange={(open) => !open && setWrongControl(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Wrong control?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {wrongControl && wrongControlMessage(wrongControl)}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            {wrongControl?.decision.kind === 'redirect' && (
+              <Button variant="outline" onClick={confirmWrongControlTapped}>
+                Check in at {wrongControl.tapped.name} anyway
+              </Button>
+            )}
+            <AlertDialogAction
+              onClick={
+                wrongControl?.decision.kind === 'redirect'
+                  ? confirmWrongControlCandidate
+                  : confirmWrongControlTapped
+              }
+            >
+              {wrongControl?.decision.kind === 'redirect'
+                ? `Check in at ${wrongControl.decision.control.name}`
+                : `Check in at ${wrongControl?.tapped.name} anyway`}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={earlyConfirm !== null}
+        onOpenChange={(open) => !open && setEarlyConfirm(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Control not open yet</AlertDialogTitle>
+            <AlertDialogDescription>
+              {earlyConfirm &&
+                `${earlyConfirm.control.name} doesn't open until ${formatControlTime(
+                  new Date(earlyConfirm.control.opensAt)
+                )}. Check in anyway?`}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (earlyConfirm) enqueueCheckin(earlyConfirm.entry)
+                setEarlyConfirm(null)
               }}
             >
               Check in anyway

@@ -179,10 +179,38 @@ Design notes:
      submits `method='manual'` (with coords if we have them). Recorded,
      flagged, never blocked. The UI says it will be reviewed by the
      organizer.
+- **Wrong-control detection (GPS check-ins)**: after a fix is obtained but
+  before recording, if the fix falls _outside_ the tapped control's radius
+  but _inside_ another control's radius, the rider is warned before anything
+  is saved (they may have tapped the wrong row — e.g. standing at "Exeter"
+  but tapping "Ilderton"):
+  - If the tapped control is satisfied (fix within its radius) the check-in
+    proceeds silently — this also covers out-and-back routes where two
+    controls share a location.
+  - Nearest matching other control that isn't already checked in → a confirm
+    sheet offers **Check in at ⟨that control⟩** (redirects the check-in),
+    **Check in at ⟨tapped⟩ anyway**, or Cancel.
+  - Matching control already checked in → proceed/cancel only (no redirect).
+  - Fix outside every radius → recorded as-is and flagged out-of-radius by
+    the server (unchanged).
+- **Early-window confirm (all methods, incl. no-GPS)**: if the rider checks
+  in at a control before it opens (`checked_in_at < opensAt`), a single
+  confirm ("⟨name⟩ doesn't open until ⟨time⟩. Check in anyway?") appears
+  first. Evaluated against the _final_ target control, so a redirect
+  re-checks. Within/after the window, one-tap stays one-tap.
 - **Timing rules**: check-in is allowed before open and after close — the
   device records reality; flags mark early/late and organizers adjudicate,
   exactly like a paper card with an odd time written on it. (Blocking would
   strand riders on edge cases and clock skew.)
+- **Rider-side undo**: for `RIDER_UNDO_WINDOW_MS` (15 minutes) after a
+  check-in is recorded, a small **Undo** control appears on that row so a
+  rider can remove a mistaken check-in themselves. The window is measured
+  from `received_at` (so a late offline sync still gets the full window).
+  Undo is hidden for `method='admin'` check-ins and once the event is
+  submitted. Pending (not-yet-synced) check-ins undo by dropping the outbox
+  entry locally (works offline), with a best-effort server undo in case a
+  retry already landed. **After the window, admins remain the only
+  correction path** (edit/delete in the check-in grid).
 - After the finish control is checked: "Submit your result →
   `/results/submit/[token]`" (token already shared between the two flows;
   if no result row exists yet the existing `createEarlyResult` path covers
@@ -205,6 +233,15 @@ Design notes:
   `ON CONFLICT` → return existing check-in (idempotent). Transient failures
   (rate limit, DB errors) are marked `retryable: true` so the client outbox
   keeps them queued; only outright rejections are dropped client-side.
+- `undoCheckin(token, { controlId })` — rider-side undo. Same token
+  validation and per-token rate limit as `checkInAtControl`; rejects with a
+  clear message when the check-in isn't found, was recorded by an organizer
+  (`method='admin'`), the event is frozen (submitted/cancelled), or more than
+  `RIDER_UNDO_WINDOW_MS` has elapsed since `received_at`. On success it
+  deletes the row and revalidates `/card/{token}`.
+- Wrong-control detection (`detectWrongControl`) and the undo window
+  (`RIDER_UNDO_WINDOW_MS`) live in the pure `lib/brevet-card.ts` module so
+  they're client-safe and unit-testable without React.
 - Reads for admin/live views in `lib/actions/control-checkins.ts`.
 
 ## 8. Offline strategy (the honest version)
@@ -369,18 +406,18 @@ Each step lands as its own commit; the branch stays shippable throughout.
 
 ### File map (Phase 1, as shipped)
 
-| Concern                | Location                                                                                                                                                                                               |
-| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Schema                 | `supabase/migrations/20260703120000_add_digital_brevet_card.sql`                                                                                                                                       |
-| Domain logic (pure)    | `lib/brevet-card.ts` — eligibility, event start, acceptance window, control windows, flag derivation                                                                                                   |
-| Rider actions          | `lib/actions/brevet-card.ts` — `getBrevetCardByToken`, `checkInAtControl`                                                                                                                              |
-| Admin controls actions | `lib/actions/event-controls.ts` — CRUD + RWGPS import                                                                                                                                                  |
-| Admin check-in actions | `lib/actions/control-checkins.ts` — grid read, set/delete corrections                                                                                                                                  |
-| RWGPS coordinates      | `lib/rwgps.ts` — `extractControlsWithCoords`, `fetchRwgpsControlsWithCoords`                                                                                                                           |
-| Rider page             | `app/card/[token]/page.tsx` + `components/brevet-card-view.tsx` (outbox lives here)                                                                                                                    |
-| Admin page             | `app/admin/events/[id]/brevet-card/page.tsx` + `components/admin/event-controls-manager.tsx` + `components/admin/event-checkins-grid.tsx` + `components/admin/checkin-map.tsx` (correction-dialog map) |
-| Email                  | `lib/email/templates.ts` (`digitalCardUrl`), wired in `lib/actions/registration/finalize.ts`                                                                                                           |
-| Tests                  | `tests/unit/lib/brevet-card.test.ts`, `tests/integration-real/brevet-card/checkin.test.ts`, `tests/e2e/brevet-card.spec.ts`                                                                            |
+| Concern                | Location                                                                                                                                                                                                                                                                        |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Schema                 | `supabase/migrations/20260703120000_add_digital_brevet_card.sql`                                                                                                                                                                                                                |
+| Domain logic (pure)    | `lib/brevet-card.ts` — eligibility, event start, acceptance window, control windows, flag derivation                                                                                                                                                                            |
+| Rider actions          | `lib/actions/brevet-card.ts` — `getBrevetCardByToken`, `checkInAtControl`                                                                                                                                                                                                       |
+| Admin controls actions | `lib/actions/event-controls.ts` — CRUD + RWGPS import                                                                                                                                                                                                                           |
+| Admin check-in actions | `lib/actions/control-checkins.ts` — grid read, set/delete corrections                                                                                                                                                                                                           |
+| RWGPS coordinates      | `lib/rwgps.ts` — `extractControlsWithCoords`, `fetchRwgpsControlsWithCoords`                                                                                                                                                                                                    |
+| Rider page             | `app/card/[token]/page.tsx` + `components/brevet-card-view.tsx` (outbox lives here)                                                                                                                                                                                             |
+| Admin page             | `app/admin/events/[id]/brevet-card/page.tsx` + `components/admin/event-controls-manager.tsx` + `components/admin/event-checkins-grid.tsx` + `components/admin/checkin-map.tsx` (correction-dialog map)                                                                          |
+| Email                  | `lib/email/templates.ts` (`digitalCardUrl`), wired in `lib/actions/registration/finalize.ts`                                                                                                                                                                                    |
+| Tests                  | `tests/unit/lib/brevet-card.test.ts`, `tests/unit/lib/brevet-card-actions.test.ts`, `tests/unit/components/brevet-card-view.test.tsx`, `tests/integration-real/brevet-card/checkin.test.ts`, `tests/integration-real/brevet-card/undo.test.ts`, `tests/e2e/brevet-card.spec.ts` |
 
 ### Organizer how-to
 

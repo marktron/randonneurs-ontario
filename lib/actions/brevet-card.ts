@@ -9,6 +9,7 @@
  * reads/writes go through the service-role client.
  */
 
+import { revalidatePath } from 'next/cache'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { createActionResult, handleActionError, handleSupabaseError, logError } from '@/lib/errors'
 import { isRateLimited } from '@/lib/rate-limit'
@@ -20,6 +21,7 @@ import {
   getCheckinAcceptanceWindow,
   isDigitalCardEventType,
   isWithinCheckinAcceptanceWindow,
+  RIDER_UNDO_WINDOW_MS,
   type CheckinFlags,
 } from '@/lib/brevet-card'
 import type { ActionResult } from '@/types/actions'
@@ -499,5 +501,126 @@ export async function checkInAtControl(token: string, input: CheckinInput): Prom
       ...handleActionError(error, { operation: 'checkInAtControl' }, 'Failed to record check-in'),
       retryable: true,
     }
+  }
+}
+
+// ============================================================================
+// Write: undo a check-in (rider self-service, time-boxed)
+// ============================================================================
+
+export interface UndoCheckinInput {
+  controlId: string
+}
+
+/**
+ * Let a rider remove their own check-in for a short window after it was
+ * recorded (RIDER_UNDO_WINDOW_MS, keyed off `received_at` so a late offline
+ * sync still gets the full window). After that, only an organizer can
+ * correct it. Admin-recorded check-ins are never rider-removable.
+ */
+export async function undoCheckin(token: string, input: UndoCheckinInput): Promise<ActionResult> {
+  try {
+    if (!token) {
+      return { success: false, error: 'Invalid card link' }
+    }
+
+    if (isRateLimited('checkin', token, CHECKIN_MAX_ATTEMPTS, CHECKIN_WINDOW_MS)) {
+      return {
+        success: false,
+        error: 'Too many attempts. Please wait a few minutes.',
+      }
+    }
+
+    const supabase = getSupabaseAdmin()
+
+    const { data: registration, error: fetchError } = await supabase
+      .from('registrations')
+      .select(
+        `
+        id, status,
+        events!inner (id, status, event_type)
+      `
+      )
+      .eq('management_token', token)
+      .single()
+
+    // Expected "not found" for an invalid token — not logged to Sentry.
+    if (fetchError || !registration) {
+      return { success: false, error: 'Registration not found' }
+    }
+
+    const reg = registration as unknown as {
+      id: string
+      status: string | null
+      events: { id: string; status: string | null; event_type: string | null }
+    }
+    const event = reg.events
+
+    // Mirror checkInAtControl's lifecycle guards: a cancelled or submitted
+    // (frozen) event is no longer rider-mutable.
+    if (event.status === 'cancelled') {
+      return { success: false, error: 'This event has been cancelled' }
+    }
+    if (event.status === 'submitted') {
+      return {
+        success: false,
+        error: 'Results for this event have already been submitted',
+      }
+    }
+
+    const { data: existing, error: existingError } = await supabase
+      .from('control_checkins')
+      .select('id, method, received_at')
+      .eq('registration_id', reg.id)
+      .eq('control_id', input.controlId)
+      .maybeSingle()
+
+    if (existingError) {
+      return handleSupabaseError(
+        existingError,
+        { operation: 'undoCheckin.fetch', context: { controlId: input.controlId } },
+        'Failed to undo check-in'
+      )
+    }
+
+    if (!existing) {
+      return { success: false, error: 'Check-in not found' }
+    }
+
+    const checkin = existing as { id: string; method: string; received_at: string }
+
+    if (checkin.method === 'admin') {
+      return {
+        success: false,
+        error:
+          'This check-in was recorded by an organizer and can only be changed by an organizer.',
+      }
+    }
+
+    if (Date.now() - new Date(checkin.received_at).getTime() > RIDER_UNDO_WINDOW_MS) {
+      return {
+        success: false,
+        error: 'The undo window has passed — the organizer can correct it.',
+      }
+    }
+
+    const { error: deleteError } = await supabase
+      .from('control_checkins')
+      .delete()
+      .eq('id', checkin.id)
+
+    if (deleteError) {
+      return handleSupabaseError(
+        deleteError,
+        { operation: 'undoCheckin.delete', context: { checkinId: checkin.id } },
+        'Failed to undo check-in'
+      )
+    }
+
+    revalidatePath(`/card/${token}`)
+
+    return createActionResult()
+  } catch (error) {
+    return handleActionError(error, { operation: 'undoCheckin' }, 'Failed to undo check-in')
   }
 }
