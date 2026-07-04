@@ -144,7 +144,12 @@ export function deriveCheckinFlags(
     noGps: checkin.method === 'manual',
     early: checkedInAt < window.openAt,
     late: checkedInAt > window.closeAt,
-    lateSync: receivedAt.getTime() - checkedInAt.getTime() > LATE_SYNC_THRESHOLD_MS,
+    // Admin corrections record a historical checked_in_at with received_at
+    // defaulting to the time of the edit — that gap is not an offline-outbox
+    // sync delay, so admin entries are exempt from the lateSync signal.
+    lateSync:
+      checkin.method !== 'admin' &&
+      receivedAt.getTime() - checkedInAt.getTime() > LATE_SYNC_THRESHOLD_MS,
   }
 }
 

@@ -132,7 +132,9 @@ Design notes:
 - **Anomalies are derived, not stored**: out-of-radius
   (`distance_to_control_m > radius_m`), no-GPS (`method = 'manual'`),
   early/late (`checked_in_at` vs computed window), late sync
-  (`received_at - checked_in_at` above a threshold, e.g. 10 min). Computing
+  (`received_at - checked_in_at` above a threshold, e.g. 10 min; never
+  applied to `method = 'admin'` corrections, whose `received_at` is just
+  when the admin typed them in). Computing
   flags at read time keeps ingest dumb and lets us tune thresholds later.
 - Controls are **copied per event**, not attached to `routes`: events
   sometimes run routes reversed (`lib/controlPoints.ts`), organizers adjust
@@ -188,15 +190,22 @@ Design notes:
 
 ### Server actions: `lib/actions/brevet-card.ts` (`'use server'`)
 
-- `getBrevetCard(token)` — registration + event + controls + computed
-  windows + this rider's check-ins.
-- `checkInAtControl(token, input)` — input validation, rate limit
+- `getBrevetCardByToken(token)` — registration + event + controls +
+  computed windows + this rider's check-ins (controls and check-ins fetched
+  concurrently; the card page wraps it in React `cache()` so
+  `generateMetadata` and the page share one fetch).
+- `checkInAtControl(token, input)` — input validation
+  (`Number.isFinite` coordinates/accuracy, accuracy capped), rate limit
   (`isRateLimited('checkin', token, 30, 15 min)`), **event-window check**:
   check-ins are rejected outside [event start − 2 h, event start + ACP time
   limit + 6 h] with a clear message (prevents accidental test check-ins
-  from polluting real data), insert, `ON CONFLICT` → return existing
-  check-in (idempotent).
-- Reads for admin/live views in `lib/data/brevet-card.ts`.
+  from polluting real data). The **claimed tap time is bounded too**:
+  `checked_in_at` may not be in the future (beyond clock skew) or before
+  check-in opened — riders can't backdate outside the window. Then insert,
+  `ON CONFLICT` → return existing check-in (idempotent). Transient failures
+  (rate limit, DB errors) are marked `retryable: true` so the client outbox
+  keeps them queued; only outright rejections are dropped client-side.
+- Reads for admin/live views in `lib/actions/control-checkins.ts`.
 
 ## 8. Offline strategy (the honest version)
 
@@ -204,12 +213,15 @@ Phase 1 is **online-first with an offline outbox**, not a full PWA:
 
 - The page loads all data it needs (controls, windows, existing check-ins)
   up front; no further reads are required to keep functioning.
-- Every check-in attempt is written to a small IndexedDB/localStorage
-  **outbox** first, then sent. On failure it stays queued; retries run on
-  an interval, on `online` events, and on page load. UI shows "queued —
-  will sync automatically". `checked_in_at` is the tap time, so a late sync
-  loses nothing but certainty (and is flagged as late-sync for the
-  organizer).
+- Every check-in attempt is recorded in an in-memory **outbox** (the
+  source of truth for syncing) and mirrored to localStorage best-effort so
+  it survives reloads — a blocked/full localStorage never stops a check-in
+  from sending. Network failures and retryable server responses (rate
+  limit, DB hiccups) stay queued; retries run on an interval, on `online`
+  events, and on page load. Only outright server rejections are dropped
+  (and surfaced to the rider). UI shows "queued — will sync
+  automatically". `checked_in_at` is the tap time, so a late sync loses
+  nothing but certainty (and is flagged as late-sync for the organizer).
 - **Known limitation**: if the rider closes or reloads the tab while
   offline, the page itself won't load until they have signal (the outbox
   survives; it syncs next successful load). Mitigations: phones keep tabs
@@ -260,10 +272,16 @@ Card" button on the event admin page instead of two).
 - Same trust model as every other token flow: unguessable UUID capability
   URL, service-role access only from server actions, token columns already
   revoked from `anon`. New tables get RLS enabled with no anon grants.
-- Rate limiting via existing `lib/rate-limit.ts` (per token, and a
-  per-IP backstop on the action).
-- Validation: coordinates in range, accuracy sane, control belongs to the
-  registration's event, registration status is `registered`.
+- Rate limiting via existing `lib/rate-limit.ts` (per token; in-memory per
+  server instance — no per-IP backstop, which is acceptable because tokens
+  are unguessable UUIDs).
+- Validation: coordinates finite and in range, accuracy finite and capped,
+  claimed tap time bounded to the acceptance window (no backdating before
+  check-in opens, no future times beyond clock skew), control belongs to
+  the registration's event, registration status is `registered`.
+- The site-wide `Permissions-Policy` header must allow `geolocation=(self)`
+  (`next.config.ts`) — an empty allowlist silently blocks the browser
+  Geolocation API and every check-in degrades to no-GPS.
 - GPS spoofing is possible and **out of scope to prevent** — the paper
   equivalent (forged signatures) is too. The system's job is to make honest
   riding effortless and leave an audit trail (`received_at`, accuracy,
@@ -309,8 +327,8 @@ Card" button on the event admin page instead of two).
    grants) and regenerated `types/supabase.ts`.
 2. `lib/actions/event-controls.ts` (admin CRUD + RWGPS import) and admin
    controls page.
-3. `lib/actions/brevet-card.ts` + `lib/data/brevet-card.ts` (token read,
-   check-in write, flag derivation helpers in `lib/brevet-card/`).
+3. `lib/actions/brevet-card.ts` (token read, check-in write) with flag
+   derivation and window helpers in `lib/brevet-card.ts`.
 4. Rider card page `app/card/[token]/` with outbox + check-in UX (style
    guide "Utility" mode: mobile-first, `h-12` targets, tabular numerals).
 5. Admin check-ins grid + manual corrections.
@@ -371,12 +389,14 @@ Each step lands as its own commit; the branch stays shippable throughout.
    - **no gps** — rider checked in without a location fix.
    - **early / late** — outside the ACP open/close window for that control.
    - **late sync** — recorded offline and uploaded more than 10 minutes
-     after the tap (normal in dead zones).
+     after the tap (normal in dead zones; never shown on admin
+     corrections).
      Flags are advisories for validation, not verdicts — treat them like an
      odd-looking time on a paper card.
 5. Click any cell to add, correct, or delete a check-in; a note is
    required and every correction is audit-logged. Once the event is marked
-   `submitted`, check-ins freeze.
+   `submitted`, check-ins freeze — including control edits (`saveEventControls`
+   refuses, since deleting a control would cascade-delete its check-ins).
 6. Coordinates come from RWGPS and may sit a parking lot away from the
    actual control — the generous 500 m default radius absorbs that. As
    coordinates get audited, tighten `radius_m` per control.

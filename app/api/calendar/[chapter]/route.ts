@@ -162,10 +162,13 @@ export async function GET(request: Request, { params }: RouteParams) {
     const [hour, minute] = (event.start_time || '08:00').split(':').map(Number)
 
     // Get the UTC time by using Intl to find Toronto's offset on this date
+    // hourCycle 'h23', never hour12: false — h24 ICU builds report midnight
+    // as hour "24" (harmless here at noon UTC, but the pattern bit us
+    // elsewhere).
     const torontoFormatter = new Intl.DateTimeFormat('en-US', {
       timeZone: 'America/Toronto',
       hour: 'numeric',
-      hour12: false,
+      hourCycle: 'h23',
     })
     // At noon UTC, what hour is it in Toronto?
     const refDate = new Date(Date.UTC(year, month - 1, day, 12, 0, 0))

@@ -77,7 +77,7 @@ export function EventControlsManager({
   hasRwgpsRoute,
 }: EventControlsManagerProps) {
   const router = useRouter()
-  const [rows, setRows] = useState<ControlRow[]>(initialControls.map(toRow))
+  const [rows, setRows] = useState<ControlRow[]>(() => initialControls.map(toRow))
   const [isPending, startTransition] = useTransition()
   const [isImporting, setIsImporting] = useState(false)
   const [confirmSaveOpen, setConfirmSaveOpen] = useState(false)

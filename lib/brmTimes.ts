@@ -21,10 +21,13 @@ export function createTorontoDate(
   const refDate = new Date(Date.UTC(year, month, day, 12, 0, 0))
 
   // Get Toronto's local hour at noon UTC using formatToParts
+  // hourCycle 'h23', never hour12: false — the latter can yield hour "24"
+  // at midnight on some ICU builds (harmless here at noon UTC, but the
+  // pattern bit us elsewhere).
   const formatter = new Intl.DateTimeFormat('en-US', {
     timeZone: TORONTO_TZ,
     hour: 'numeric',
-    hour12: false,
+    hourCycle: 'h23',
   })
   const torontoHourAtNoonUTC = parseInt(formatter.format(refDate), 10)
 
@@ -181,11 +184,14 @@ export function formatControlTime(date: Date): string {
     timeZone: TORONTO_TZ,
   })
 
-  // Format time in Toronto timezone (24-hour)
+  // Format time in Toronto timezone (24-hour). hourCycle 'h23' (not
+  // hour12: false) — hour12 resolves to the h24 cycle on some ICU builds,
+  // rendering midnight as "24:19" on the server and "00:19" in the browser,
+  // which caused hydration mismatches on the brevet card.
   const time = date.toLocaleTimeString('en-US', {
     hour: '2-digit',
     minute: '2-digit',
-    hour12: false,
+    hourCycle: 'h23',
     timeZone: TORONTO_TZ,
   })
 

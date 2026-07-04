@@ -67,7 +67,8 @@ function saveData(data: SavedRegistrationData): void {
 
 const TORONTO_TZ = 'America/Toronto'
 
-function getMinPermanentDate(): Date {
+/** Exported for tests: midnight-hour Intl behavior is environment-sensitive. */
+export function getMinPermanentDate(): Date {
   const now = new Date()
   const parts = new Intl.DateTimeFormat('en-US', {
     timeZone: TORONTO_TZ,
@@ -75,7 +76,9 @@ function getMinPermanentDate(): Date {
     month: '2-digit',
     day: '2-digit',
     hour: 'numeric',
-    hour12: false,
+    // 'h23', never hour12: false — h24 ICU builds report midnight as hour
+    // "24", which would wrongly trip the >= 20:00 cutoff below.
+    hourCycle: 'h23',
   }).formatToParts(now)
   const get = (type: string) => parseInt(parts.find((p) => p.type === type)!.value, 10)
 

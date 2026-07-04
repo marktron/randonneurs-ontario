@@ -1,3 +1,4 @@
+import { cache } from 'react'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { PageShell } from '@/components/page-shell'
@@ -12,9 +13,13 @@ interface PageProps {
 
 export const dynamic = 'force-dynamic'
 
+// Dedupe the card fetch between generateMetadata and the page within a
+// single request (force-dynamic disables any other caching layer).
+const getCard = cache(getBrevetCardByToken)
+
 export async function generateMetadata({ params }: PageProps) {
   const { token } = await params
-  const data = await getBrevetCardByToken(token)
+  const data = await getCard(token)
 
   if (!data) {
     return { title: 'Brevet Card Not Found' }
@@ -27,7 +32,7 @@ export async function generateMetadata({ params }: PageProps) {
 
 export default async function BrevetCardPage({ params }: PageProps) {
   const { token } = await params
-  const data = await getBrevetCardByToken(token)
+  const data = await getCard(token)
 
   if (!data) {
     notFound()

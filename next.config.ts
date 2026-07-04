@@ -3,6 +3,13 @@ import { withBotId } from 'botid/next/config'
 import type { NextConfig } from 'next'
 
 const nextConfig: NextConfig = {
+  // Dev-only: origins allowed to reach the dev server's /_next assets.
+  // Without this, opening the app from another device (e.g. a phone via
+  // Tailscale) serves HTML that never hydrates — buttons render but do
+  // nothing. Covers the Mac's Tailscale IP and `tailscale serve` HTTPS.
+  // NB: the wildcard matches a single label, so it must include the
+  // tailnet name — '*.ts.net' does NOT match machine.tailnet.ts.net.
+  allowedDevOrigins: ['100.125.20.122', '*.taild49717.ts.net'],
   experimental: {
     serverActions: {
       // Vercel caps Serverless/Fluid Compute request bodies at 4.5 MB, so
@@ -57,7 +64,10 @@ const nextConfig: NextConfig = {
         },
         {
           key: 'Permissions-Policy',
-          value: 'camera=(), microphone=(), geolocation=()',
+          // geolocation=(self) keeps third parties blocked but lets our own
+          // pages use it — the digital brevet card (/card/[token]) needs GPS
+          // for control check-ins. An empty allowlist would deny it site-wide.
+          value: 'camera=(), microphone=(), geolocation=(self)',
         },
       ],
     },

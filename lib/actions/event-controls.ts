@@ -9,6 +9,7 @@
 
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { requireAdmin } from '@/lib/auth/get-admin'
+import { assertEventMutable } from '@/lib/actions/event-mutability'
 import { logAuditEvent } from '@/lib/audit-log'
 import { fetchRwgpsControlsWithCoords } from '@/lib/rwgps'
 import { isReversedEvent } from '@/lib/controlPoints'
@@ -164,6 +165,13 @@ export async function saveEventControls(
       }
     }
 
+    // Once results are submitted, controls are frozen too: deleting a
+    // control cascade-deletes its check-ins (FK ON DELETE CASCADE).
+    const mutable = await assertEventMutable(eventId)
+    if (!mutable.ok) {
+      return { success: false, error: mutable.error }
+    }
+
     // Verify the event exists (and get its name for the audit log).
     const { data: event, error: eventError } = await supabase
       .from('events')
@@ -192,8 +200,30 @@ export async function saveEventControls(
     const keptIds = new Set(controls.filter((c) => c.id).map((c) => c.id!))
     const toDelete = [...existingIds].filter((id) => !keptIds.has(id))
 
-    // Sort by distance so position always reflects route order.
+    // Sort by distance so position always reflects route order, then split
+    // into kept rows (upserted by id) and new rows (inserted without id).
+    // Only ids that belong to this event (existingIds) go down the upsert
+    // path, so a stray id can never overwrite another event's control.
     const ordered = [...controls].sort((a, b) => a.distanceKm - b.distanceKm)
+    const keptRows: EventControlInsert[] = []
+    const newRows: EventControlInsert[] = []
+    for (const [i, control] of ordered.entries()) {
+      const row: EventControlInsert = {
+        event_id: eventId,
+        position: i + 1,
+        name: control.name.trim(),
+        distance_km: control.distanceKm,
+        lat: control.lat,
+        lng: control.lng,
+        radius_m: Math.round(control.radiusM),
+        notes: control.notes?.trim() || null,
+      }
+      if (control.id && existingIds.has(control.id)) {
+        keptRows.push({ ...row, id: control.id })
+      } else {
+        newRows.push(row)
+      }
+    }
 
     // Deleting a control cascades to its check-ins — the form warns first.
     if (toDelete.length > 0) {
@@ -210,15 +240,15 @@ export async function saveEventControls(
       }
     }
 
-    // Two-pass position update: shift kept rows out of the way first so the
-    // UNIQUE (event_id, position) constraint can't collide mid-update.
-    const updates = ordered.filter((c) => c.id && existingIds.has(c.id))
-    for (const [i, control] of updates.entries()) {
+    // Two-pass position update, one batched statement per pass: shift kept
+    // rows to unique negative positions first so the non-deferrable UNIQUE
+    // (event_id, position) constraint can't collide while final positions
+    // are written (Postgres checks it per row, not per statement).
+    if (keptRows.length > 0) {
+      const shiftRows = keptRows.map((row, i) => ({ ...row, position: -(i + 1) }))
       const { error: shiftError } = await supabase
         .from('event_controls')
-        .update({ position: -(i + 1) })
-        .eq('id', control.id!)
-        .eq('event_id', eventId)
+        .upsert(shiftRows, { onConflict: 'id' })
       if (shiftError) {
         return handleSupabaseError(
           shiftError,
@@ -226,50 +256,29 @@ export async function saveEventControls(
           'Failed to save controls'
         )
       }
+
+      const { error: updateError } = await supabase
+        .from('event_controls')
+        .upsert(keptRows, { onConflict: 'id' })
+      if (updateError) {
+        return handleSupabaseError(
+          updateError,
+          { operation: 'saveEventControls.update', context: { eventId } },
+          'Failed to save controls'
+        )
+      }
     }
 
-    for (const control of ordered) {
-      const position = ordered.indexOf(control) + 1
-      if (control.id && existingIds.has(control.id)) {
-        const { error: updateError } = await supabase
-          .from('event_controls')
-          .update({
-            position,
-            name: control.name.trim(),
-            distance_km: control.distanceKm,
-            lat: control.lat,
-            lng: control.lng,
-            radius_m: Math.round(control.radiusM),
-            notes: control.notes?.trim() || null,
-          })
-          .eq('id', control.id)
-          .eq('event_id', eventId)
-        if (updateError) {
-          return handleSupabaseError(
-            updateError,
-            { operation: 'saveEventControls.update', context: { eventId } },
-            'Failed to save controls'
-          )
-        }
-      } else {
-        const insertData: EventControlInsert = {
-          event_id: eventId,
-          position,
-          name: control.name.trim(),
-          distance_km: control.distanceKm,
-          lat: control.lat,
-          lng: control.lng,
-          radius_m: Math.round(control.radiusM),
-          notes: control.notes?.trim() || null,
-        }
-        const { error: insertError } = await supabase.from('event_controls').insert(insertData)
-        if (insertError) {
-          return handleSupabaseError(
-            insertError,
-            { operation: 'saveEventControls.insert', context: { eventId } },
-            'Failed to save controls'
-          )
-        }
+    // New rows go in a separate batched insert: PostgREST requires every row
+    // in a statement to share the same columns, and new rows must omit `id`.
+    if (newRows.length > 0) {
+      const { error: insertError } = await supabase.from('event_controls').insert(newRows)
+      if (insertError) {
+        return handleSupabaseError(
+          insertError,
+          { operation: 'saveEventControls.insert', context: { eventId } },
+          'Failed to save controls'
+        )
       }
     }
 

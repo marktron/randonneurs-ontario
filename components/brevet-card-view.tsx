@@ -66,8 +66,10 @@ function writeOutbox(token: string, entries: OutboxEntry[]): void {
       window.localStorage.setItem(outboxStorageKey(token), JSON.stringify(entries))
     }
   } catch {
-    // Storage full/blocked: the entry still lives in React state for this
-    // page's lifetime, so the check-in isn't lost unless the tab closes.
+    // Storage full/blocked: persistence is best-effort. The in-memory
+    // outboxRef is the source of truth for syncing, so the check-in still
+    // sends for this page's lifetime — it's only lost if the tab closes
+    // before it syncs.
   }
 }
 
@@ -82,33 +84,47 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
   const [checkins, setCheckins] = useState<Map<string, CardCheckin>>(
     () => new Map(initialData.checkins.map((c) => [c.controlId, c]))
   )
-  const [outbox, setOutbox] = useState<OutboxEntry[]>(() => readOutbox(token))
+  // Starts empty (matching the server-rendered HTML — reading localStorage
+  // in the initializer would cause a hydration mismatch) and is hydrated
+  // from storage in the mount effect below.
+  const [outbox, setOutbox] = useState<OutboxEntry[]>([])
   const [locatingControlId, setLocatingControlId] = useState<string | null>(null)
   const [manualControl, setManualControl] = useState<CardControl | null>(null)
   const [manualReason, setManualReason] = useState('')
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const flushInFlight = useRef(false)
+  // Source of truth for syncing. localStorage is only a best-effort backup
+  // for page reloads: writes can throw (quota, private mode) and must never
+  // block a check-in from sending.
+  const outboxRef = useRef<OutboxEntry[]>([])
 
+  /**
+   * Update the outbox ref *synchronously*, then mirror it into localStorage
+   * (best-effort) and React state. The ref update must not live inside the
+   * setOutbox updater: React defers updaters, so a flushOutbox() fired right
+   * after enqueueing would see stale entries and sync nothing until the next
+   * retry interval.
+   */
   const persistOutbox = useCallback(
     (updater: (prev: OutboxEntry[]) => OutboxEntry[]) => {
-      setOutbox((prev) => {
-        const next = updater(prev)
-        writeOutbox(token, next)
-        return next
-      })
+      const next = updater(outboxRef.current)
+      outboxRef.current = next
+      writeOutbox(token, next)
+      setOutbox(next)
     },
     [token]
   )
 
   /**
-   * Try to send every queued check-in. Resolved rejections (server said no)
-   * are dropped and surfaced; network failures keep the entry queued.
+   * Try to send every queued check-in. Permanent rejections (server said no)
+   * are dropped and surfaced; retryable rejections (rate limit, DB hiccup)
+   * and network failures keep the entry queued for the next pass.
    */
   const flushOutbox = useCallback(async () => {
     if (flushInFlight.current) return
     flushInFlight.current = true
     try {
-      const entries = readOutbox(token)
+      const entries = outboxRef.current
       for (const entry of entries) {
         try {
           const result = await checkInAtControl(token, entry)
@@ -116,6 +132,10 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
             const { checkin } = result.data
             setCheckins((prev) => new Map(prev).set(checkin.controlId, checkin))
             persistOutbox((prev) => prev.filter((e) => e.controlId !== entry.controlId))
+          } else if (result.retryable) {
+            // Transient rejection (e.g. rate limited): stay queued and stop
+            // this pass — later entries would hit the same wall.
+            break
           } else {
             // The server rejected this check-in outright — retrying the
             // identical payload will never succeed, so stop queueing it.
@@ -132,14 +152,22 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
     }
   }, [token, persistOutbox])
 
-  // Retry queued check-ins on load, when connectivity returns, and on an
-  // interval while anything is pending.
+  // On mount: recover check-ins queued by a previous page load, then retry
+  // queued check-ins now, when connectivity returns, and on an interval
+  // while anything is pending.
   useEffect(() => {
+    const stored = readOutbox(token)
+    if (stored.length > 0) {
+      const known = new Set(outboxRef.current.map((e) => e.controlId))
+      const merged = [...stored.filter((e) => !known.has(e.controlId)), ...outboxRef.current]
+      outboxRef.current = merged
+      setOutbox(merged)
+    }
     flushOutbox()
     const onOnline = () => flushOutbox()
     window.addEventListener('online', onOnline)
     const interval = window.setInterval(() => {
-      if (readOutbox(token).length > 0) flushOutbox()
+      if (outboxRef.current.length > 0) flushOutbox()
     }, OUTBOX_RETRY_INTERVAL_MS)
     return () => {
       window.removeEventListener('online', onOnline)
@@ -160,32 +188,52 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
   const handleCheckIn = useCallback(
     (control: CardControl) => {
       setErrorMessage(null)
+      // Browsers disable geolocation on http:// (except localhost); calling
+      // it would just burn the timeout before failing. Say why instead.
+      if (!window.isSecureContext) {
+        setManualReason(
+          'Location needs a secure (HTTPS) connection, which this page does not have. You can still check in — the organizer will see it was recorded without GPS.'
+        )
+        setManualControl(control)
+        return
+      }
       if (!('geolocation' in navigator)) {
         setManualReason('Your browser does not support location.')
         setManualControl(control)
         return
       }
       setLocatingControlId(control.id)
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          setLocatingControlId(null)
-          enqueueCheckin({
-            controlId: control.id,
-            checkedInAt: new Date().toISOString(),
-            lat: position.coords.latitude,
-            lng: position.coords.longitude,
-            accuracyM: Math.round(position.coords.accuracy),
-          })
-        },
-        () => {
-          setLocatingControlId(null)
-          setManualReason(
-            'Your location could not be determined. You can still check in — the organizer will see it was recorded without GPS.'
-          )
-          setManualControl(control)
-        },
-        { enableHighAccuracy: true, timeout: GEOLOCATION_TIMEOUT_MS, maximumAge: 30 * 1000 }
-      )
+      try {
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            setLocatingControlId(null)
+            enqueueCheckin({
+              controlId: control.id,
+              checkedInAt: new Date().toISOString(),
+              lat: position.coords.latitude,
+              lng: position.coords.longitude,
+              accuracyM: Math.round(position.coords.accuracy),
+            })
+          },
+          () => {
+            setLocatingControlId(null)
+            setManualReason(
+              'Your location could not be determined. You can still check in — the organizer will see it was recorded without GPS.'
+            )
+            setManualControl(control)
+          },
+          { enableHighAccuracy: true, timeout: GEOLOCATION_TIMEOUT_MS, maximumAge: 30 * 1000 }
+        )
+      } catch {
+        // Permissions-Policy blocks and some embedded webviews throw
+        // synchronously instead of invoking the error callback — without
+        // this catch the tap silently does nothing and the spinner sticks.
+        setLocatingControlId(null)
+        setManualReason(
+          'Location is not available in this browser. You can still check in — the organizer will see it was recorded without GPS.'
+        )
+        setManualControl(control)
+      }
     },
     [enqueueCheckin]
   )

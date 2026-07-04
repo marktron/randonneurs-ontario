@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { memo, useMemo, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -29,6 +29,7 @@ import {
   type AdminCheckinGridRider,
 } from '@/lib/actions/control-checkins'
 import type { CheckinFlags } from '@/lib/brevet-card'
+import { formatControlTime } from '@/lib/brmTimes'
 import { toast } from 'sonner'
 import Link from 'next/link'
 import { ExternalLink, Loader2, RefreshCw } from 'lucide-react'
@@ -56,18 +57,6 @@ const FLAG_LABELS: Array<{ key: keyof CheckinFlags; label: string; title: string
   { key: 'lateSync', label: 'late sync', title: 'Synced well after the tap (offline outbox)' },
 ]
 
-function formatTorontoTime(iso: string): string {
-  const date = new Date(iso)
-  const day = date.toLocaleDateString('en-US', { weekday: 'short', timeZone: 'America/Toronto' })
-  const time = date.toLocaleTimeString('en-US', {
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-    timeZone: 'America/Toronto',
-  })
-  return `${day} ${time}`
-}
-
 /** ISO → value usable in a datetime-local input, in the browser's timezone. */
 function isoToLocalInputValue(iso: string): string {
   const date = new Date(iso)
@@ -88,71 +77,18 @@ export function EventCheckinsGrid({
   riders,
 }: EventCheckinsGridProps) {
   const router = useRouter()
-  const [isPending, startTransition] = useTransition()
   const [editing, setEditing] = useState<EditingCell | null>(null)
-  const [timeValue, setTimeValue] = useState('')
-  const [noteValue, setNoteValue] = useState('')
 
-  const openCell = (rider: AdminCheckinGridRider, control: GridControl) => {
+  const openCell = (
+    rider: AdminCheckinGridRider,
+    control: GridControl,
+    existing: AdminCheckin | null
+  ) => {
     if (eventSubmitted) return
-    const existing = rider.checkins.find((c) => c.controlId === control.id) || null
     setEditing({ rider, control, existing })
-    setTimeValue(existing ? isoToLocalInputValue(existing.checkedInAt) : '')
-    setNoteValue('')
   }
 
   const closeDialog = () => setEditing(null)
-
-  const handleSave = () => {
-    if (!editing) return
-    if (!timeValue) {
-      toast.error('Enter a check-in time')
-      return
-    }
-    if (!noteValue.trim()) {
-      toast.error('A note explaining the correction is required')
-      return
-    }
-    const iso = new Date(timeValue).toISOString()
-    startTransition(async () => {
-      const result = await adminSetCheckin({
-        eventId,
-        registrationId: editing.rider.registrationId,
-        controlId: editing.control.id,
-        checkedInAt: iso,
-        note: noteValue.trim(),
-      })
-      if (result.success) {
-        toast.success('Check-in saved')
-        closeDialog()
-        router.refresh()
-      } else {
-        toast.error(result.error || 'Failed to save check-in')
-      }
-    })
-  }
-
-  const handleDelete = () => {
-    if (!editing?.existing) return
-    if (!noteValue.trim()) {
-      toast.error('A note explaining the deletion is required')
-      return
-    }
-    startTransition(async () => {
-      const result = await adminDeleteCheckin({
-        eventId,
-        checkinId: editing.existing!.id,
-        note: noteValue.trim(),
-      })
-      if (result.success) {
-        toast.success('Check-in deleted')
-        closeDialog()
-        router.refresh()
-      } else {
-        toast.error(result.error || 'Failed to delete check-in')
-      }
-    })
-  }
 
   return (
     <div className="space-y-4">
@@ -197,117 +133,242 @@ export function EventCheckinsGrid({
             </TableHeader>
             <TableBody>
               {riders.map((rider) => (
-                <TableRow key={rider.registrationId}>
-                  <TableCell className="font-medium sticky left-0 bg-background">
-                    <div className="flex items-center gap-1.5">
-                      <span>{rider.riderName}</span>
-                      {rider.managementToken && (
-                        <Link
-                          href={`/card/${rider.managementToken}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          onClick={(e) => e.stopPropagation()}
-                          className="text-muted-foreground hover:text-foreground"
-                          title={`Open ${rider.riderName}'s digital card`}
-                          aria-label={`Open ${rider.riderName}'s digital card`}
-                        >
-                          <ExternalLink className="h-3.5 w-3.5" />
-                        </Link>
-                      )}
-                    </div>
-                  </TableCell>
-                  {controls.map((control) => {
-                    const checkin = rider.checkins.find((c) => c.controlId === control.id)
-                    const activeFlags = checkin
-                      ? FLAG_LABELS.filter(({ key }) => checkin.flags[key])
-                      : []
-                    return (
-                      <TableCell
-                        key={control.id}
-                        className={eventSubmitted ? '' : 'cursor-pointer hover:bg-muted/50'}
-                        onClick={() => openCell(rider, control)}
-                      >
-                        {checkin ? (
-                          <div className="space-y-1">
-                            <div className="tabular-nums">
-                              {formatTorontoTime(checkin.checkedInAt)}
-                            </div>
-                            {activeFlags.length > 0 && (
-                              <div className="flex flex-wrap gap-1">
-                                {activeFlags.map(({ key, label, title }) => (
-                                  <Badge
-                                    key={key}
-                                    variant="outline"
-                                    title={title}
-                                    className="text-[10px] px-1 py-0"
-                                  >
-                                    {label}
-                                  </Badge>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        ) : (
-                          <span className="text-muted-foreground">—</span>
-                        )}
-                      </TableCell>
-                    )
-                  })}
-                </TableRow>
+                <RiderRow
+                  key={rider.registrationId}
+                  rider={rider}
+                  controls={controls}
+                  eventSubmitted={eventSubmitted}
+                  onOpenCell={openCell}
+                />
               ))}
             </TableBody>
           </Table>
         </div>
       )}
 
-      <Dialog open={editing !== null} onOpenChange={(open) => !open && closeDialog()}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{editing?.existing ? 'Correct check-in' : 'Add check-in'}</DialogTitle>
-            <DialogDescription>
-              {editing?.rider.riderName} at {editing?.control.name} ({editing?.control.distanceKm}{' '}
-              km). Recorded as an admin correction with your note in the audit trail.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            {editing?.existing?.note && (
-              <p className="text-sm text-muted-foreground">
-                Existing note: {editing.existing.note}
-              </p>
-            )}
-            <div className="space-y-2">
-              <Label htmlFor="checkin-time">Check-in time (your local time)</Label>
-              <Input
-                id="checkin-time"
-                type="datetime-local"
-                value={timeValue}
-                onChange={(e) => setTimeValue(e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="checkin-note">Note (required)</Label>
-              <Input
-                id="checkin-note"
-                value={noteValue}
-                onChange={(e) => setNoteValue(e.target.value)}
-                placeholder="e.g. Rider's phone died; receipt shows 14:32"
-              />
-            </div>
-          </div>
-          <DialogFooter className="gap-2">
-            {editing?.existing && (
-              <Button variant="destructive" onClick={handleDelete} disabled={isPending}>
-                {isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                Delete check-in
-              </Button>
-            )}
-            <Button onClick={handleSave} disabled={isPending}>
-              {isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              Save
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <CheckinDialog
+        eventId={eventId}
+        editing={editing}
+        onClose={closeDialog}
+        onSaved={() => router.refresh()}
+      />
     </div>
+  )
+}
+
+interface RiderRowProps {
+  rider: AdminCheckinGridRider
+  controls: GridControl[]
+  eventSubmitted: boolean
+  onOpenCell: (
+    rider: AdminCheckinGridRider,
+    control: GridControl,
+    existing: AdminCheckin | null
+  ) => void
+}
+
+/**
+ * Memoized so that typing in the correction dialog (which only changes state
+ * owned by CheckinDialog) doesn't re-render every rider row / cell in the
+ * grid — this table can have 100+ riders × several controls.
+ */
+const RiderRow = memo(function RiderRow({
+  rider,
+  controls,
+  eventSubmitted,
+  onOpenCell,
+}: RiderRowProps) {
+  const checkinsByControl = useMemo(() => {
+    const map = new Map<string, AdminCheckin>()
+    for (const checkin of rider.checkins) {
+      map.set(checkin.controlId, checkin)
+    }
+    return map
+  }, [rider.checkins])
+
+  return (
+    <TableRow>
+      <TableCell className="font-medium sticky left-0 bg-background">
+        <div className="flex items-center gap-1.5">
+          <span>{rider.riderName}</span>
+          {rider.managementToken && (
+            <Link
+              href={`/card/${rider.managementToken}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-muted-foreground hover:text-foreground"
+              title={`Open ${rider.riderName}'s digital card`}
+              aria-label={`Open ${rider.riderName}'s digital card`}
+            >
+              <ExternalLink className="h-3.5 w-3.5" />
+            </Link>
+          )}
+        </div>
+      </TableCell>
+      {controls.map((control) => {
+        const checkin = checkinsByControl.get(control.id) || null
+        const activeFlags = checkin ? FLAG_LABELS.filter(({ key }) => checkin.flags[key]) : []
+        return (
+          <TableCell
+            key={control.id}
+            className={eventSubmitted ? '' : 'cursor-pointer hover:bg-muted/50'}
+            onClick={() => onOpenCell(rider, control, checkin)}
+          >
+            {checkin ? (
+              <div className="space-y-1">
+                <div className="tabular-nums">
+                  {formatControlTime(new Date(checkin.checkedInAt))}
+                </div>
+                {activeFlags.length > 0 && (
+                  <div className="flex flex-wrap gap-1">
+                    {activeFlags.map(({ key, label, title }) => (
+                      <Badge
+                        key={key}
+                        variant="outline"
+                        title={title}
+                        className="text-[10px] px-1 py-0"
+                      >
+                        {label}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <span className="text-muted-foreground">—</span>
+            )}
+          </TableCell>
+        )
+      })}
+    </TableRow>
+  )
+})
+
+interface CheckinDialogProps {
+  eventId: string
+  editing: EditingCell | null
+  onClose: () => void
+  onSaved: () => void
+}
+
+/**
+ * Owns the correction dialog's form state (timeValue/noteValue) so that
+ * keystrokes only re-render this component, not the full riders × controls
+ * table. `editing` changes on open/close (not per keystroke).
+ */
+function CheckinDialog({ eventId, editing, onClose, onSaved }: CheckinDialogProps) {
+  const [isPending, startTransition] = useTransition()
+  const [timeValue, setTimeValue] = useState('')
+  const [noteValue, setNoteValue] = useState('')
+  // Reset the form fields whenever a new cell is opened (or the dialog is
+  // closed), without an effect: this is React's documented "adjusting state
+  // during render" pattern, applied here to avoid a flash of stale values.
+  const [lastEditing, setLastEditing] = useState<EditingCell | null>(null)
+  if (editing !== lastEditing) {
+    setLastEditing(editing)
+    if (editing) {
+      setTimeValue(editing.existing ? isoToLocalInputValue(editing.existing.checkedInAt) : '')
+      setNoteValue('')
+    }
+  }
+
+  const handleSave = () => {
+    if (!editing) return
+    if (!timeValue) {
+      toast.error('Enter a check-in time')
+      return
+    }
+    if (!noteValue.trim()) {
+      toast.error('A note explaining the correction is required')
+      return
+    }
+    const iso = new Date(timeValue).toISOString()
+    startTransition(async () => {
+      const result = await adminSetCheckin({
+        eventId,
+        registrationId: editing.rider.registrationId,
+        controlId: editing.control.id,
+        checkedInAt: iso,
+        note: noteValue.trim(),
+      })
+      if (result.success) {
+        toast.success('Check-in saved')
+        onClose()
+        onSaved()
+      } else {
+        toast.error(result.error || 'Failed to save check-in')
+      }
+    })
+  }
+
+  const handleDelete = () => {
+    if (!editing?.existing) return
+    if (!noteValue.trim()) {
+      toast.error('A note explaining the deletion is required')
+      return
+    }
+    startTransition(async () => {
+      const result = await adminDeleteCheckin({
+        eventId,
+        checkinId: editing.existing!.id,
+        note: noteValue.trim(),
+      })
+      if (result.success) {
+        toast.success('Check-in deleted')
+        onClose()
+        onSaved()
+      } else {
+        toast.error(result.error || 'Failed to delete check-in')
+      }
+    })
+  }
+
+  return (
+    <Dialog open={editing !== null} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{editing?.existing ? 'Correct check-in' : 'Add check-in'}</DialogTitle>
+          <DialogDescription>
+            {editing?.rider.riderName} at {editing?.control.name} ({editing?.control.distanceKm}{' '}
+            km). Recorded as an admin correction with your note in the audit trail.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4">
+          {editing?.existing?.note && (
+            <p className="text-sm text-muted-foreground">Existing note: {editing.existing.note}</p>
+          )}
+          <div className="space-y-2">
+            <Label htmlFor="checkin-time">Check-in time (your local time)</Label>
+            <Input
+              id="checkin-time"
+              type="datetime-local"
+              value={timeValue}
+              onChange={(e) => setTimeValue(e.target.value)}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="checkin-note">Note (required)</Label>
+            <Input
+              id="checkin-note"
+              value={noteValue}
+              onChange={(e) => setNoteValue(e.target.value)}
+              placeholder="e.g. Rider's phone died; receipt shows 14:32"
+            />
+          </div>
+        </div>
+        <DialogFooter className="gap-2">
+          {editing?.existing && (
+            <Button variant="destructive" onClick={handleDelete} disabled={isPending}>
+              {isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Delete check-in
+            </Button>
+          )}
+          <Button onClick={handleSave} disabled={isPending}>
+            {isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+            Save
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }

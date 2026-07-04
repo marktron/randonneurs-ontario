@@ -10,13 +10,14 @@
  */
 
 import { getSupabaseAdmin } from '@/lib/supabase-server'
-import { createActionResult, handleActionError, handleSupabaseError } from '@/lib/errors'
+import { createActionResult, handleActionError, handleSupabaseError, logError } from '@/lib/errors'
 import { isRateLimited } from '@/lib/rate-limit'
 import { haversineMeters } from '@/lib/geo'
 import {
   computeEventStart,
   computeControlWindow,
   deriveCheckinFlags,
+  getCheckinAcceptanceWindow,
   isDigitalCardEventType,
   isWithinCheckinAcceptanceWindow,
   type CheckinFlags,
@@ -31,6 +32,9 @@ const CHECKIN_WINDOW_MS = 15 * 60 * 1000
 
 // Device clocks can drift; a tap "from the future" beyond this is rejected.
 const MAX_CLOCK_SKEW_MS = 5 * 60 * 1000
+
+// A GPS fix claiming worse accuracy than this is garbage input, not a fix.
+const MAX_GPS_ACCURACY_M = 100_000
 
 // ============================================================================
 // Types
@@ -140,14 +144,35 @@ export async function getBrevetCardByToken(token: string): Promise<BrevetCardDat
   const reg = registration as unknown as RegistrationWithEvent
   const event = reg.events
 
-  const { data: controlRows, error: controlsError } = await supabase
-    .from('event_controls')
-    .select('id, position, name, distance_km, lat, lng, radius_m, notes')
-    .eq('event_id', event.id)
-    .order('position', { ascending: true })
+  // Both queries depend only on the registration row — run them together.
+  const [{ data: controlRows, error: controlsError }, { data: checkinRows, error: checkinsError }] =
+    await Promise.all([
+      supabase
+        .from('event_controls')
+        .select('id, position, name, distance_km, lat, lng, radius_m, notes')
+        .eq('event_id', event.id)
+        .order('position', { ascending: true }),
+      supabase
+        .from('control_checkins')
+        .select('control_id, checked_in_at, received_at, method, distance_to_control_m')
+        .eq('registration_id', reg.id),
+    ])
 
+  // Fail loud on transient DB errors: returning null here would 404 the
+  // page and rendering without check-ins would silently show an empty card.
   if (controlsError) {
-    return null
+    logError(controlsError, {
+      operation: 'getBrevetCardByToken.controls',
+      context: { eventId: event.id },
+    })
+    throw new Error('Failed to load brevet card controls')
+  }
+  if (checkinsError) {
+    logError(checkinsError, {
+      operation: 'getBrevetCardByToken.checkins',
+      context: { registrationId: reg.id },
+    })
+    throw new Error('Failed to load brevet card check-ins')
   }
 
   const controls = (controlRows || []) as {
@@ -160,11 +185,6 @@ export async function getBrevetCardByToken(token: string): Promise<BrevetCardDat
     radius_m: number
     notes: string | null
   }[]
-
-  const { data: checkinRows } = await supabase
-    .from('control_checkins')
-    .select('control_id, checked_in_at, received_at, method, distance_to_control_m')
-    .eq('registration_id', reg.id)
 
   const checkins = (checkinRows || []) as {
     control_id: string
@@ -251,17 +271,27 @@ export interface CheckinOutcome {
   alreadyExisted: boolean
 }
 
-export async function checkInAtControl(
-  token: string,
-  input: CheckinInput
-): Promise<ActionResult<CheckinOutcome>> {
+/**
+ * Result of a check-in attempt. `retryable` marks failures that are
+ * transient (rate limit, DB hiccup): the client outbox must keep the entry
+ * queued and retry later instead of dropping the tap.
+ */
+export type CheckinResult = ActionResult<CheckinOutcome> & {
+  retryable?: boolean
+}
+
+export async function checkInAtControl(token: string, input: CheckinInput): Promise<CheckinResult> {
   try {
     if (!token) {
       return { success: false, error: 'Invalid card link' }
     }
 
     if (isRateLimited('checkin', token, CHECKIN_MAX_ATTEMPTS, CHECKIN_WINDOW_MS)) {
-      return { success: false, error: 'Too many check-in attempts. Please wait a few minutes.' }
+      return {
+        success: false,
+        error: 'Too many check-in attempts. Please wait a few minutes.',
+        retryable: true,
+      }
     }
 
     const checkedInAt = new Date(input.checkedInAt || '')
@@ -271,10 +301,22 @@ export async function checkInAtControl(
 
     const hasCoords = typeof input.lat === 'number' && typeof input.lng === 'number'
     if (hasCoords) {
-      if (input.lat! < -90 || input.lat! > 90 || input.lng! < -180 || input.lng! > 180) {
+      if (
+        !Number.isFinite(input.lat!) ||
+        input.lat! < -90 ||
+        input.lat! > 90 ||
+        !Number.isFinite(input.lng!) ||
+        input.lng! < -180 ||
+        input.lng! > 180
+      ) {
         return { success: false, error: 'Invalid GPS coordinates' }
       }
-      if (typeof input.accuracyM === 'number' && input.accuracyM < 0) {
+      if (
+        typeof input.accuracyM === 'number' &&
+        (!Number.isFinite(input.accuracyM) ||
+          input.accuracyM < 0 ||
+          input.accuracyM > MAX_GPS_ACCURACY_M)
+      ) {
         return { success: false, error: 'Invalid GPS accuracy' }
       }
     }
@@ -329,6 +371,15 @@ export async function checkInAtControl(
     // Reject taps claiming to be from the future beyond plausible clock skew.
     if (checkedInAt.getTime() > Date.now() + MAX_CLOCK_SKEW_MS) {
       return { success: false, error: 'Check-in time is in the future' }
+    }
+
+    // ...and taps backdated to before check-ins opened for this event.
+    const { opensAt: checkinOpensAt } = getCheckinAcceptanceWindow(eventStart, event.distance_km)
+    if (checkedInAt.getTime() < checkinOpensAt.getTime()) {
+      return {
+        success: false,
+        error: 'Check-in time is before check-in opened for this event (2 hours before the start)',
+      }
     }
 
     // Verify the control belongs to this registration's event.
@@ -402,25 +453,31 @@ export async function checkInAtControl(
           .single()
 
         if (existingError || !existing) {
-          return handleSupabaseError(
-            existingError,
-            { operation: 'checkInAtControl.fetchExisting', context: { controlId: control.id } },
-            'Failed to record check-in'
-          )
+          return {
+            ...handleSupabaseError(
+              existingError,
+              { operation: 'checkInAtControl.fetchExisting', context: { controlId: control.id } },
+              'Failed to record check-in'
+            ),
+            retryable: true,
+          }
         }
         row = existing as typeof row
         alreadyExisted = true
       } else {
-        return handleSupabaseError(
-          insertError,
-          { operation: 'checkInAtControl', context: { controlId: control.id } },
-          'Failed to record check-in'
-        )
+        return {
+          ...handleSupabaseError(
+            insertError,
+            { operation: 'checkInAtControl', context: { controlId: control.id } },
+            'Failed to record check-in'
+          ),
+          retryable: true,
+        }
       }
     }
 
     if (!row) {
-      return { success: false, error: 'Failed to record check-in' }
+      return { success: false, error: 'Failed to record check-in', retryable: true }
     }
 
     const window = computeControlWindow(eventStart, control.distance_km, event.distance_km)
@@ -437,6 +494,10 @@ export async function checkInAtControl(
       alreadyExisted,
     })
   } catch (error) {
-    return handleActionError(error, { operation: 'checkInAtControl' }, 'Failed to record check-in')
+    // Unexpected failures (DB down, network to Supabase) are transient.
+    return {
+      ...handleActionError(error, { operation: 'checkInAtControl' }, 'Failed to record check-in'),
+      retryable: true,
+    }
   }
 }

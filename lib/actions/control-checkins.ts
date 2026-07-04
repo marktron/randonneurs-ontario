@@ -15,6 +15,7 @@ import {
   deriveCheckinFlags,
   type CheckinFlags,
 } from '@/lib/brevet-card'
+import { assertEventMutable } from '@/lib/actions/event-mutability'
 import { handleActionError, handleSupabaseError, createActionResult } from '@/lib/errors'
 import type { ActionResult } from '@/types/actions'
 import type { ControlCheckinInsert } from '@/types/queries'
@@ -73,7 +74,10 @@ export async function getEventCheckinsForAdmin(
       distance_km: number
     }
 
-    const [{ data: controlRows }, { data: registrationRows }] = await Promise.all([
+    const [
+      { data: controlRows, error: controlsError },
+      { data: registrationRows, error: registrationsError },
+    ] = await Promise.all([
       supabase.from('event_controls').select('id, distance_km, radius_m').eq('event_id', eventId),
       supabase
         .from('registrations')
@@ -82,6 +86,21 @@ export async function getEventCheckinsForAdmin(
         .eq('status', 'registered')
         .order('registered_at', { ascending: true }),
     ])
+
+    if (controlsError) {
+      return handleSupabaseError(
+        controlsError,
+        { operation: 'getEventCheckinsForAdmin.controls', context: { eventId } },
+        'Failed to load controls'
+      )
+    }
+    if (registrationsError) {
+      return handleSupabaseError(
+        registrationsError,
+        { operation: 'getEventCheckinsForAdmin.registrations', context: { eventId } },
+        'Failed to load registrations'
+      )
+    }
 
     const controls = (controlRows || []) as {
       id: string
@@ -95,14 +114,28 @@ export async function getEventCheckinsForAdmin(
       riders: { first_name: string; last_name: string } | null
     }[]
 
+    // Nothing to show without controls or registered riders — skip the
+    // check-ins query (and avoid an unbounded/empty `.in()` filter).
+    if (controls.length === 0 || registrations.length === 0) {
+      return createActionResult(
+        registrations.map((reg) => ({
+          registrationId: reg.id,
+          riderId: reg.rider_id,
+          riderName: reg.riders ? `${reg.riders.first_name} ${reg.riders.last_name}` : 'Unknown',
+          managementToken: reg.management_token,
+          checkins: [],
+        }))
+      )
+    }
+
     const { data: checkinRows, error: checkinError } = await supabase
       .from('control_checkins')
       .select(
         'id, control_id, registration_id, checked_in_at, received_at, method, accuracy_m, distance_to_control_m, note'
       )
       .in(
-        'registration_id',
-        registrations.map((r) => r.id)
+        'control_id',
+        controls.map((c) => c.id)
       )
 
     if (checkinError) {
@@ -171,25 +204,6 @@ export async function getEventCheckinsForAdmin(
 // ============================================================================
 // Write: add/correct/delete (method = 'admin')
 // ============================================================================
-
-async function assertEventMutable(
-  eventId: string
-): Promise<{ ok: true } | { ok: false; error: string }> {
-  const supabase = getSupabaseAdmin()
-  const { data: event, error } = await supabase
-    .from('events')
-    .select('id, status')
-    .eq('id', eventId)
-    .single()
-
-  if (error || !event) {
-    return { ok: false, error: 'Event not found' }
-  }
-  if ((event as { status: string | null }).status === 'submitted') {
-    return { ok: false, error: 'Results for this event have been submitted; check-ins are frozen' }
-  }
-  return { ok: true }
-}
 
 /**
  * Set (insert or overwrite) a rider's check-in at a control. Admin

@@ -70,6 +70,31 @@ vi.mock('date-fns', async () => {
   }
 })
 
+describe('getMinPermanentDate', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('treats the midnight hour as before the 20:00 cutoff (Intl h24 renders it as hour 24)', async () => {
+    const { getMinPermanentDate } = await import('@/components/permanent-registration-form')
+    // 00:19 Toronto (EDT), Sat July 4 2026. On h24 ICU builds Intl reports
+    // hour "24", which must not trip the >= 20:00 cutoff.
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-07-04T04:19:00Z'))
+
+    expect(getMinPermanentDate()).toEqual(new Date(2026, 6, 5))
+  })
+
+  it('moves the earliest date out a day at/after 20:00 Toronto', async () => {
+    const { getMinPermanentDate } = await import('@/components/permanent-registration-form')
+    // 21:00 Toronto (EDT), Fri July 3 2026.
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-07-04T01:00:00Z'))
+
+    expect(getMinPermanentDate()).toEqual(new Date(2026, 6, 5))
+  })
+})
+
 describe('PermanentRegistrationForm', () => {
   const mockRoutes: ActiveRoute[] = [
     {

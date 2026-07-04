@@ -177,6 +177,39 @@ describe('deriveCheckinFlags', () => {
     const flags = deriveCheckinFlags({ ...cleanCheckin, received_at: receivedAt }, control, window)
     expect(flags.lateSync).toBe(false)
   })
+
+  it('never flags lateSync for admin-entered check-ins, even with a huge received-vs-checked-in gap', () => {
+    // Admin corrections insert with received_at defaulting to now() while
+    // checked_in_at is the historical corrected time — that gap is not an
+    // offline-outbox sync delay and must not produce a lateSync badge.
+    const receivedAt = new Date(
+      new Date(insideWindow).getTime() + 30 * 24 * 60 * 60 * 1000
+    ).toISOString()
+    const flags = deriveCheckinFlags(
+      { ...cleanCheckin, method: 'admin', received_at: receivedAt },
+      control,
+      window
+    )
+    expect(flags.lateSync).toBe(false)
+  })
+
+  it('still flags lateSync for gps and manual check-ins beyond the threshold', () => {
+    const receivedAt = new Date(
+      new Date(insideWindow).getTime() + LATE_SYNC_THRESHOLD_MS + 1000
+    ).toISOString()
+    const gpsFlags = deriveCheckinFlags(
+      { ...cleanCheckin, method: 'gps', received_at: receivedAt },
+      control,
+      window
+    )
+    const manualFlags = deriveCheckinFlags(
+      { ...cleanCheckin, method: 'manual', distance_to_control_m: null, received_at: receivedAt },
+      control,
+      window
+    )
+    expect(gpsFlags.lateSync).toBe(true)
+    expect(manualFlags.lateSync).toBe(true)
+  })
 })
 
 describe('hasAnyFlag', () => {

@@ -355,6 +355,17 @@ describe('formatControlTime', () => {
 
     expect(result).toMatch(/^Sun 14:30$/)
   })
+
+  it('formats the midnight hour as 00:MM, never 24:MM', () => {
+    // Intl's hour12:false resolves to the h24 cycle on some ICU builds
+    // (e.g. Node) and h23 on others (browsers), so midnight rendered
+    // "24:19" on the server and "00:19" in the browser — a hydration
+    // mismatch on any card whose control window crosses midnight.
+    const date = createTorontoDate(2026, 6, 4, 0, 19)
+    const result = formatControlTime(date)
+
+    expect(result).toBe('Sat 00:19')
+  })
 })
 
 describe('formatCardDate', () => {
