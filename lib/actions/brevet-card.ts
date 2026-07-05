@@ -41,6 +41,34 @@ const MAX_CLOCK_SKEW_MS = 5 * 60 * 1000
 const MAX_GPS_ACCURACY_M = 100_000
 
 // ============================================================================
+// Shared: derive whether a control is the event's final control
+// ============================================================================
+
+/**
+ * Given the result of a MAX(position) event_controls query (run alongside
+ * other work, never as an added sequential round trip) and the position of
+ * the control being checked in or undone, decide whether that control is
+ * the event's final one. Used by both `checkInAtControl` and `undoCheckin`
+ * so the fallback policy lives in one place: any failure to resolve either
+ * side (a failed max-position query, or — for `undoCheckin` — a failed
+ * lookup of the undone control's own position, signalled by a null
+ * `position`) fails closed as not-final and is logged. Wrongly triggering
+ * the finish/revert flow is worse than occasionally missing it.
+ */
+function deriveIsFinalControl(
+  maxPositionRow: { position: number } | null,
+  maxPositionError: unknown,
+  position: number | null,
+  logContext: { operation: string; context?: Record<string, unknown> }
+): boolean {
+  if (maxPositionError) {
+    logError(maxPositionError, logContext)
+    return false
+  }
+  return maxPositionRow != null && position != null && maxPositionRow.position === position
+}
+
+// ============================================================================
 // Types
 // ============================================================================
 
@@ -428,19 +456,12 @@ export async function checkInAtControl(token: string, input: CheckinInput): Prom
       return { success: false, error: 'Control not found' }
     }
 
-    // If the max-position query failed, treat this as not the final control
-    // (same fallback the old sequential query used) rather than risk a
-    // wrongly-triggered finish flow.
-    if (maxPositionError) {
-      logError(maxPositionError, {
-        operation: 'checkInAtControl.maxPosition',
-        context: { eventId: event.id },
-      })
-    }
-    const isFinalControl =
-      !maxPositionError &&
-      maxPositionRow != null &&
-      (maxPositionRow as { position: number }).position === control.position
+    const isFinalControl = deriveIsFinalControl(
+      maxPositionRow as { position: number } | null,
+      maxPositionError,
+      control.position,
+      { operation: 'checkInAtControl.maxPosition', context: { eventId: event.id } }
+    )
 
     // The server derives the method: coordinates present → gps, absent →
     // manual (recorded and flagged for organizer review, never blocked).
@@ -520,7 +541,6 @@ export async function checkInAtControl(token: string, input: CheckinInput): Prom
     // Final-control check-ins pre-fill the rider's result and send the
     // "add your track" email. Never blocks the check-in (module never throws).
     await handleFinishIfFinalControl({
-      controlPosition: control.position,
       isFinalControl,
       event: {
         id: event.id,
@@ -689,33 +709,29 @@ export async function undoCheckin(token: string, input: UndoCheckinInput): Promi
       )
     }
 
-    // Either query failing means we can't confirm this was the final
-    // control — same not-final fallback the old sequential lookup used.
+    // The undone control's own position lookup can fail independently of
+    // the max-position query; log that here (same not-final fallback the
+    // old sequential lookup used), then let the shared derivation below
+    // handle the max-position side.
     if (controlPositionError) {
       logError(controlPositionError, {
         operation: 'undoCheckin.controlPosition',
         context: { controlId: input.controlId },
       })
     }
-    if (maxPositionError) {
-      logError(maxPositionError, {
-        operation: 'undoCheckin.maxPosition',
-        context: { eventId: event.id },
-      })
-    }
-    const isFinalControl =
-      !controlPositionError &&
-      controlPositionRow != null &&
-      !maxPositionError &&
-      maxPositionRow != null &&
-      (controlPositionRow as { position: number }).position ===
-        (maxPositionRow as { position: number }).position
+    const isFinalControl = deriveIsFinalControl(
+      maxPositionRow as { position: number } | null,
+      maxPositionError,
+      controlPositionError
+        ? null
+        : ((controlPositionRow as { position: number } | null)?.position ?? null),
+      { operation: 'undoCheckin.maxPosition', context: { eventId: event.id } }
+    )
 
     // If the rider undid their finish check-in, roll back the pre-filled result.
     await revertFinishIfFinalControl({
       eventId: event.id,
       riderId: reg.rider_id,
-      controlId: input.controlId,
       isFinalControl,
     })
 

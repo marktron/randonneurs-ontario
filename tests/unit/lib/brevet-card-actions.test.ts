@@ -279,7 +279,7 @@ describe('checkInAtControl input validation', () => {
     expect(insertCall?.insertPayload).toMatchObject({ control_id: 'ctrl-1', method: 'gps' })
   })
 
-  it('hands a successful check-in to the finish flow with control position and elapsed time', async () => {
+  it('hands a successful check-in to the finish flow with elapsed time', async () => {
     tables.registrations = { singleResponse: { data: makeRegistration(), error: null } }
     tables.event_controls = { singleResponse: { data: makeControlRow(), error: null } }
     const nowIso = new Date().toISOString()
@@ -307,7 +307,6 @@ describe('checkInAtControl input validation', () => {
     expect(result.success).toBe(true)
     expect(mockHandleFinish).toHaveBeenCalledTimes(1)
     const call = mockHandleFinish.mock.calls[0][0]
-    expect(call.controlPosition).toBe(1)
     expect(call.managementToken).toBe(TOKEN)
     expect(call.finishTime).toMatch(/^\d{1,3}:\d{2}$/)
     expect(call.rider.id).toBe('rider-1')
@@ -481,7 +480,6 @@ describe('undoCheckin', () => {
     expect(mockRevertFinish).toHaveBeenCalledWith({
       eventId: 'evt-1',
       riderId: 'rider-1',
-      controlId: 'ctrl-1',
       isFinalControl: true,
     })
   })

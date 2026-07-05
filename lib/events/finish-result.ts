@@ -25,7 +25,6 @@ import type { ResultInsert, ResultUpdate } from '@/types/queries'
  */
 
 export interface FinishCheckinParams {
-  controlPosition: number
   isFinalControl: boolean
   event: {
     id: string
@@ -222,7 +221,6 @@ export async function handleFinishIfFinalControl(params: FinishCheckinParams): P
 export async function revertFinishIfFinalControl(params: {
   eventId: string
   riderId: string
-  controlId: string
   isFinalControl: boolean
 }): Promise<void> {
   try {

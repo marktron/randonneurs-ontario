@@ -183,7 +183,6 @@ const baseRider: FinishCheckinParams['rider'] = {
 
 function baseParams(overrides: Partial<FinishCheckinParams> = {}): FinishCheckinParams {
   return {
-    controlPosition: 3,
     isFinalControl: true,
     event: baseEvent,
     rider: baseRider,
@@ -203,7 +202,7 @@ describe('handleFinishIfFinalControl', () => {
   it('does nothing when the caller says this was not the final control', async () => {
     const calls = setupSupabase({})
 
-    await handleFinishIfFinalControl(baseParams({ controlPosition: 1, isFinalControl: false }))
+    await handleFinishIfFinalControl(baseParams({ isFinalControl: false }))
 
     expect(resultsCalls(calls)).toHaveLength(0)
     expect(mockSendRideCompleteEmail).not.toHaveBeenCalled()
@@ -558,7 +557,6 @@ describe('revertFinishIfFinalControl', () => {
     await revertFinishIfFinalControl({
       eventId: EVENT_ID,
       riderId: RIDER_ID,
-      controlId: 'control-3',
       isFinalControl: true,
     })
 
@@ -580,7 +578,6 @@ describe('revertFinishIfFinalControl', () => {
     await revertFinishIfFinalControl({
       eventId: EVENT_ID,
       riderId: RIDER_ID,
-      controlId: 'control-1',
       isFinalControl: false,
     })
 
@@ -596,7 +593,6 @@ describe('revertFinishIfFinalControl', () => {
       revertFinishIfFinalControl({
         eventId: EVENT_ID,
         riderId: RIDER_ID,
-        controlId: 'control-3',
         isFinalControl: true,
       })
     ).resolves.toBeUndefined()

@@ -239,16 +239,26 @@ as `isFinalControl` — `finish-result.ts` never queries `event_controls`.
     to the registration's `management_token`, same as the completion cron;
     `prefilled_at` set).
   - If a row already exists (unique-violation path), it's inspected first
-    (`submission_token, submitted_at, status`) before being touched. Only a
-    row that is still `status = 'pending'` **and** has no `submitted_at` is
-    re-filled — an admin-entered row (`finished`/`dnf`/`otd`, `prefilled_at`
-    NULL because a human created it) or a row the rider already submitted
-    is left completely alone: no update, no email claim. The re-fill update
-    re-asserts `status = 'pending'` and `submitted_at IS NULL` as filters
-    (closing the race the initial select can't fully rule out) and backfills
-    `submission_token` **only when it's NULL** — a cron-issued or
-    admin-default token that may already have been emailed is never
-    clobbered.
+    (`submission_token, submitted_at, status, prefilled_at`) before being
+    touched. A row is re-fillable when it has no `submitted_at` **and**
+    either `status = 'pending'`, or `status = 'finished'` with
+    `prefilled_at` already set — that second case is the card's own
+    earlier pre-fill, re-entered rather than rejected. It exists for a
+    **retried check-in**: if the process crashes between the pre-fill
+    insert and the email claim below, a client retry hits the same unique
+    violation, sees its own prior write (`finished` + `prefilled_at`), and
+    carries the flow forward to the email claim instead of bailing out —
+    the `finish_email_sent_at` single-send guard makes that retry safe even
+    if the email already went out. An admin-entered row
+    (`finished`/`dnf`/`otd` with `prefilled_at` NULL, because a human
+    created it) or a row the rider already submitted is left completely
+    alone: no update, no email claim. The re-fill update re-asserts the
+    exact state just observed as its filters — `status = 'pending'`, or
+    `status = 'finished'` **and** `prefilled_at IS NOT NULL`, plus
+    `submitted_at IS NULL` in both cases (closing the race the initial
+    select can't fully rule out) — and backfills `submission_token` **only
+    when it's NULL** — a cron-issued or admin-default token that may
+    already have been emailed is never clobbered.
   - `submitted_at` is never touched by pre-fill; admin `updateResult` and
     rider `submitRiderResult` both clear `prefilled_at` on save, so an
     organizer or rider correction immediately becomes "not a card row"
@@ -266,11 +276,14 @@ as `isFinalControl` — `finish-result.ts` never queries `event_controls`.
   token (never clobbered by the backfill-only-when-NULL rule above), so
   emailing the management token there would be a dead link; the management
   token is used only as a fallback for the vanishingly unlikely case the
-  claimed row's token is itself NULL. The email is **skipped** when the
-  event is already `status = 'completed'` (the event-close flow already
-  asked for results — see below) or when the rider has no email on file.
-  Email failures are logged, never surfaced to the rider mid-check-in — the
-  admin "Send Reminders" flow is the backstop (see below).
+  claimed row's token is itself NULL. Both re-fill branches above always
+  fall through to this claim — including the retried-check-in case — so a
+  crash-and-retry recovers the email rather than losing it permanently.
+  The email is **skipped** when the event is already `status = 'completed'`
+  (the event-close flow already asked for results — see below) or when the
+  rider has no email on file. Email failures are logged, never surfaced to
+  the rider mid-check-in — the admin "Send Reminders" flow is the backstop
+  (see below).
 - **Undoing the final check-in** (`revertFinishIfFinalControl`, invoked
   from `undoCheckin`) reverts the pre-fill — `status` back to `pending`,
   `finish_time` cleared, `prefilled_at` cleared — but the update filters
@@ -283,16 +296,29 @@ as `isFinalControl` — `finish-result.ts` never queries `event_controls`.
   is deliberately **not** cleared by undo, so a later re-check-in can't
   double-send the email.
 - The event-close flow (`createPendingResultsAndSendEmails` in
-  `lib/events/complete-event.ts`) skips its own "submit your results"
-  email for any rider whose results row already has `finish_email_sent_at`
-  or `submitted_at` set, so a finisher never gets both emails. It also now
-  **emails registered riders whose results row already exists but is still
-  a pending, un-submitted placeholder** (e.g. a rider undid a mistaken
-  final check-in before the event closed) — those rows are otherwise
-  invisible to the "create pending results" loop, which only handles
-  riders with no row at all. It reuses the row's own `submission_token`,
-  backfilling it first (same NULL-only rule as the card pre-fill) when the
-  row has none.
+  `lib/events/complete-event.ts`) only ever considers riders still awaiting
+  their own submission: a finished/dnf/otd/submitted row is never touched,
+  so a card finisher never gets a "submit your results" ask on top of
+  their ride-complete email. It also **emails registered riders whose
+  results row already exists but is still a pending, un-submitted
+  placeholder** (e.g. a rider undid a mistaken final check-in before the
+  event closed) — those rows are otherwise invisible to the "create
+  pending results" loop, which only handles riders with no row at all. It
+  reuses the row's own `submission_token`, backfilling it first (same
+  NULL-only rule as the card pre-fill, filtered to a row that's still
+  `pending` with no `submitted_at` so a concurrently-finalized row can
+  never be stamped or emailed) when the row has none.
+  Every send — from the new-row loop and the existing-pending-row loop
+  alike — goes through an atomic single-send claim on
+  **`results.submission_email_sent_at`** (a column distinct from
+  `finish_email_sent_at`, which guards the finish-flow email above): the
+  update stamps that column only while it's still NULL, and zero rows back
+  means another run already claimed it, so the send is skipped without
+  error. That makes re-running this function (a cron retry, or an admin
+  re-completing an event) safe: it never double-emails a rider. The admin
+  "Send Reminders" flow below deliberately **ignores**
+  `submission_email_sent_at` — re-sending to a still-pending rider is the
+  whole point of that flow.
 - The results form (`components/result-submission-form.tsx`) shows an
   "Almost done — add your ride track" banner instead of the generic
   "Previously Submitted" one only when the loaded result is `finished`,
@@ -303,10 +329,15 @@ as `isFinalControl` — `finish-result.ts` never queries `event_controls`.
 - The admin "Send Reminders" flow (`lib/events/send-result-reminders.ts`)
   skips any rider whose result already has `submitted_at` set, for either
   the pending-submission reminder or the track-only reminder — a rider who
-  submitted is never re-nagged. A `control_checkins` fetch error doesn't
-  abort the run: pending-submission reminders still go out that pass, just
-  without any track reminders (which need the check-in set to know who
-  actually finished via the card).
+  submitted is never re-nagged. The run is **all-or-nothing**: the
+  `control_checkins` fetch (needed to know who actually finished via the
+  card, for the track reminder) is retried once on error; if the retry
+  also fails, the whole run returns `{ emailsSent: 0 }` with the error
+  recorded and sends **nothing at all** — it does not fall back to sending
+  the pending-submission reminders alone. This flow has no per-rider
+  send-marker, so a partial send followed by an admin re-run would
+  double-email every pending rider; failing the whole run closed avoids
+  that.
 
 ### Server actions: `lib/actions/brevet-card.ts` (`'use server'`)
 
