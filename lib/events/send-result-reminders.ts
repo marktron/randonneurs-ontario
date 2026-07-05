@@ -17,6 +17,7 @@ interface ReminderResultRow {
   finish_time: string | null
   gpx_url: string | null
   gpx_file_path: string | null
+  submitted_at: string | null
 }
 
 export interface SendRemindersResult {
@@ -57,7 +58,7 @@ export async function sendResultSubmissionReminders(
 
   const { data: resultRows, error: resError } = await supabase
     .from('results')
-    .select('rider_id, submission_token, status, finish_time, gpx_url, gpx_file_path')
+    .select('rider_id, submission_token, status, finish_time, gpx_url, gpx_file_path, submitted_at')
     .eq('event_id', event.id)
 
   if (resError) {
@@ -77,11 +78,12 @@ export async function sendResultSubmissionReminders(
 
   if (checkinError) {
     errors.push(`Failed to fetch check-ins: ${checkinError.message}`)
-    return { emailsSent: 0, errors }
   }
 
   const registrationsWithCheckins = new Set(
-    ((checkinRows || []) as { registration_id: string }[]).map((c) => c.registration_id)
+    checkinError
+      ? []
+      : ((checkinRows || []) as { registration_id: string }[]).map((c) => c.registration_id)
   )
 
   for (const reg of typedRegistrations) {
@@ -89,6 +91,10 @@ export async function sendResultSubmissionReminders(
     const result = resultsByRiderId.get(reg.rider_id)
 
     if (!rider || !rider.email || !result || !result.submission_token) {
+      continue
+    }
+
+    if (result.submitted_at) {
       continue
     }
 

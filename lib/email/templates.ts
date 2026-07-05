@@ -460,8 +460,7 @@ ${data.submissionUrl}
 
 Event: ${rideName}
 Date: ${data.eventDate}
-Chapter: ${data.chapterName}
-Recorded time: ${data.finishTime}
+Chapter: ${data.chapterName}${data.finishTime ? `\nRecorded time: ${data.finishTime}` : ''}
 
 This link is unique to you - please don't share it with others.
 
@@ -508,10 +507,14 @@ https://randonneursontario.ca
       <td style="padding: 8px 0; border-bottom: 1px solid #eee; font-weight: 600;">Chapter</td>
       <td style="padding: 8px 0; border-bottom: 1px solid #eee;">${safe.chapterName}</td>
     </tr>
-    <tr>
+    ${
+      data.finishTime
+        ? `<tr>
       <td style="padding: 8px 0; font-weight: 600;">Recorded time</td>
       <td style="padding: 8px 0;">${safe.finishTime}</td>
-    </tr>
+    </tr>`
+        : ''
+    }
   </table>
 
   <p style="background-color: #f5f5f5; padding: 12px 16px; border-radius: 6px; font-size: 14px;">

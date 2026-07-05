@@ -152,4 +152,10 @@ describe('ride complete email', () => {
     })
     expect(email.html).not.toContain('<script>alert(1)</script>')
   })
+
+  it('omits the recorded time row when finishTime is empty', () => {
+    const email = buildRideCompleteEmail({ ...baseRideComplete, finishTime: '' })
+    expect(email.text).not.toContain('Recorded time')
+    expect(email.html).not.toContain('Recorded time')
+  })
 })

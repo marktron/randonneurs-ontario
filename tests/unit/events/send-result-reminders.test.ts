@@ -34,6 +34,7 @@ function buildSupabase({
   registrations,
   results,
   checkins = [],
+  checkinError = null,
 }: {
   registrations: Array<{
     id: string
@@ -47,13 +48,16 @@ function buildSupabase({
     finish_time?: string | null
     gpx_url?: string | null
     gpx_file_path?: string | null
+    submitted_at?: string | null
   }>
   checkins?: string[]
+  checkinError?: { message: string } | null
 }) {
   const resultRows = results.map((r) => ({
     finish_time: null,
     gpx_url: null,
     gpx_file_path: null,
+    submitted_at: null,
     ...r,
   }))
 
@@ -79,10 +83,14 @@ function buildSupabase({
         return {
           select: vi.fn(() => ({
             in: vi.fn(() =>
-              Promise.resolve({
-                data: checkins.map((registration_id) => ({ registration_id })),
-                error: null,
-              })
+              Promise.resolve(
+                checkinError
+                  ? { data: null, error: checkinError }
+                  : {
+                      data: checkins.map((registration_id) => ({ registration_id })),
+                      error: null,
+                    }
+              )
             ),
           })),
         }
@@ -330,6 +338,69 @@ describe('sendResultSubmissionReminders', () => {
     expect(mockSendRideComplete).toHaveBeenCalledTimes(1)
     expect(mockSendRideComplete).toHaveBeenCalledWith(
       expect.objectContaining({ riderEmail: 'rider2@test.com', reminder: true })
+    )
+  })
+
+  it('never re-emails a rider who has already submitted, finished or not', async () => {
+    mockSupabaseAdmin.mockReturnValue(
+      buildSupabase({
+        registrations: [rider(1), rider(2)],
+        results: [
+          {
+            rider_id: 'rider-1',
+            submission_token: 'token-1',
+            status: 'pending',
+            submitted_at: '2026-05-11T00:00:00Z',
+          },
+          {
+            rider_id: 'rider-2',
+            submission_token: 'token-2',
+            status: 'finished',
+            finish_time: '13:07:00',
+            gpx_url: null,
+            gpx_file_path: null,
+            submitted_at: '2026-05-11T00:00:00Z',
+          },
+        ],
+        checkins: ['reg-1', 'reg-2'],
+      })
+    )
+
+    const result = await sendResultSubmissionReminders(testEvent)
+
+    expect(result.emailsSent).toBe(0)
+    expect(result.errors).toEqual([])
+    expect(mockSendEmail).not.toHaveBeenCalled()
+    expect(mockSendRideComplete).not.toHaveBeenCalled()
+  })
+
+  it('still sends pending reminders when the check-in fetch errors, recording the error', async () => {
+    mockSupabaseAdmin.mockReturnValue(
+      buildSupabase({
+        registrations: [rider(1), rider(2)],
+        results: [
+          { rider_id: 'rider-1', submission_token: 'token-1', status: 'pending' },
+          {
+            rider_id: 'rider-2',
+            submission_token: 'token-2',
+            status: 'finished',
+            finish_time: '13:07:00',
+            gpx_url: null,
+            gpx_file_path: null,
+          },
+        ],
+        checkinError: { message: 'connection reset' },
+      })
+    )
+
+    const result = await sendResultSubmissionReminders(testEvent)
+
+    expect(result.emailsSent).toBe(1)
+    expect(mockSendEmail).toHaveBeenCalledTimes(1)
+    expect(mockSendEmail).toHaveBeenCalledWith(expect.objectContaining({ to: 'rider1@test.com' }))
+    expect(mockSendRideComplete).not.toHaveBeenCalled()
+    expect(result.errors).toEqual(
+      expect.arrayContaining([expect.stringContaining('connection reset')])
     )
   })
 })
