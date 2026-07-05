@@ -83,6 +83,16 @@ vi.mock('@/lib/rate-limit', () => ({
   isRateLimited: (...args: unknown[]) => mockIsRateLimited(...(args as [])),
 }))
 
+const { mockHandleFinish, mockRevertFinish } = vi.hoisted(() => ({
+  mockHandleFinish: vi.fn(),
+  mockRevertFinish: vi.fn(),
+}))
+
+vi.mock('@/lib/events/finish-result', () => ({
+  handleFinishIfFinalControl: mockHandleFinish,
+  revertFinishIfFinalControl: mockRevertFinish,
+}))
+
 import { checkInAtControl, getBrevetCardByToken, undoCheckin } from '@/lib/actions/brevet-card'
 import { RIDER_UNDO_WINDOW_MS } from '@/lib/brevet-card'
 
@@ -122,6 +132,7 @@ function makeRegistration() {
   return {
     id: 'reg-1',
     status: 'registered',
+    rider_id: 'rider-1',
     events: {
       id: 'evt-1',
       slug: 'test-200',
@@ -131,9 +142,9 @@ function makeRegistration() {
       event_date: started.date,
       start_time: started.time,
       distance_km: 200,
-      chapters: { name: 'Toronto' },
+      chapters: { name: 'Toronto', slug: 'toronto' },
     },
-    riders: { first_name: 'Ada', last_name: 'Lovelace' },
+    riders: { first_name: 'Ada', last_name: 'Lovelace', email: 'ada@example.com' },
   }
 }
 
@@ -142,6 +153,7 @@ function makeControlRow() {
     id: 'ctrl-1',
     event_id: 'evt-1',
     name: 'Start',
+    position: 1,
     distance_km: 0,
     lat: 43.65,
     lng: -79.38,
@@ -262,6 +274,86 @@ describe('checkInAtControl input validation', () => {
     const insertCall = fromCalls.find((c) => c.table === 'control_checkins')
     expect(insertCall?.insertPayload).toMatchObject({ control_id: 'ctrl-1', method: 'gps' })
   })
+
+  it('hands a successful check-in to the finish flow with control position and elapsed time', async () => {
+    tables.registrations = { singleResponse: { data: makeRegistration(), error: null } }
+    tables.event_controls = { singleResponse: { data: makeControlRow(), error: null } }
+    const nowIso = new Date().toISOString()
+    tables.control_checkins = {
+      insertResponse: {
+        data: {
+          control_id: 'ctrl-1',
+          checked_in_at: nowIso,
+          received_at: nowIso,
+          method: 'gps',
+          distance_to_control_m: 0,
+        },
+        error: null,
+      },
+    }
+
+    const result = await checkInAtControl(TOKEN, {
+      controlId: 'ctrl-1',
+      checkedInAt: nowIso,
+      lat: 43.65,
+      lng: -79.38,
+      accuracyM: 12,
+    })
+
+    expect(result.success).toBe(true)
+    expect(mockHandleFinish).toHaveBeenCalledTimes(1)
+    const call = mockHandleFinish.mock.calls[0][0]
+    expect(call.controlPosition).toBe(1)
+    expect(call.managementToken).toBe(TOKEN)
+    expect(call.finishTime).toMatch(/^\d{1,3}:\d{2}$/)
+    expect(call.rider.id).toBe('rider-1')
+  })
+
+  it('still calls the finish flow when the check-in already existed (idempotent retry)', async () => {
+    tables.registrations = { singleResponse: { data: makeRegistration(), error: null } }
+    tables.event_controls = { singleResponse: { data: makeControlRow(), error: null } }
+    const nowIso = new Date().toISOString()
+    tables.control_checkins = {
+      insertResponse: { data: null, error: { code: '23505' } },
+      singleResponse: {
+        data: {
+          control_id: 'ctrl-1',
+          checked_in_at: nowIso,
+          received_at: nowIso,
+          method: 'gps',
+          distance_to_control_m: 0,
+        },
+        error: null,
+      },
+    }
+
+    const result = await checkInAtControl(TOKEN, {
+      controlId: 'ctrl-1',
+      checkedInAt: nowIso,
+      lat: 43.65,
+      lng: -79.38,
+    })
+
+    expect(result.success).toBe(true)
+    expect(result.data!.alreadyExisted).toBe(true)
+    expect(mockHandleFinish).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not call the finish flow when the check-in fails', async () => {
+    tables.registrations = { singleResponse: { data: makeRegistration(), error: null } }
+    // Control belongs to a different event than the registration's.
+    tables.event_controls = {
+      singleResponse: { data: { ...makeControlRow(), event_id: 'other-evt' }, error: null },
+    }
+
+    const result = await checkInAtControl(TOKEN, {
+      controlId: 'ctrl-1',
+      checkedInAt: new Date().toISOString(),
+    })
+
+    expect(result.success).toBe(false)
+    expect(mockHandleFinish).not.toHaveBeenCalled()
+  })
 })
 
 describe('getBrevetCardByToken', () => {
@@ -335,6 +427,30 @@ describe('undoCheckin', () => {
       (c) => c.table === 'control_checkins' && c.ops.includes('delete')
     )
     expect(deleteCall).toBeDefined()
+  })
+
+  it('undo hands off to revertFinishIfFinalControl after a successful delete', async () => {
+    seedFoundCheckin()
+
+    const result = await undoCheckin(TOKEN, { controlId: 'ctrl-1' })
+
+    expect(result.success).toBe(true)
+    expect(mockRevertFinish).toHaveBeenCalledWith({
+      eventId: 'evt-1',
+      riderId: 'rider-1',
+      controlId: 'ctrl-1',
+    })
+  })
+
+  it('undo does not call revert when the delete is rejected', async () => {
+    seedFoundCheckin({
+      receivedAt: new Date(Date.now() - RIDER_UNDO_WINDOW_MS - 60_000).toISOString(),
+    })
+
+    const result = await undoCheckin(TOKEN, { controlId: 'ctrl-1' })
+
+    expect(result.success).toBe(false)
+    expect(mockRevertFinish).not.toHaveBeenCalled()
   })
 
   it('rejects when no check-in exists for the control', async () => {

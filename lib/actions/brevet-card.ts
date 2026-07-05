@@ -17,6 +17,7 @@ import { haversineMeters } from '@/lib/geo'
 import {
   computeEventStart,
   computeControlWindow,
+  computeElapsedHm,
   deriveCheckinFlags,
   getCheckinAcceptanceWindow,
   isDigitalCardEventType,
@@ -24,6 +25,7 @@ import {
   RIDER_UNDO_WINDOW_MS,
   type CheckinFlags,
 } from '@/lib/brevet-card'
+import { handleFinishIfFinalControl, revertFinishIfFinalControl } from '@/lib/events/finish-result'
 import type { ActionResult } from '@/types/actions'
 import type { CheckinMethod, ControlCheckinInsert } from '@/types/queries'
 
@@ -94,6 +96,7 @@ export interface BrevetCardData {
 interface RegistrationWithEvent {
   id: string
   status: string | null
+  rider_id: string
   events: {
     id: string
     slug: string
@@ -103,9 +106,9 @@ interface RegistrationWithEvent {
     event_date: string
     start_time: string | null
     distance_km: number
-    chapters: { name: string } | null
+    chapters: { name: string; slug: string } | null
   }
-  riders: { first_name: string; last_name: string }
+  riders: { first_name: string; last_name: string; email: string | null }
 }
 
 // ============================================================================
@@ -127,12 +130,12 @@ export async function getBrevetCardByToken(token: string): Promise<BrevetCardDat
     .from('registrations')
     .select(
       `
-      id, status,
+      id, status, rider_id,
       events!inner (
         id, slug, name, status, event_type, event_date, start_time, distance_km,
-        chapters (name)
+        chapters (name, slug)
       ),
-      riders!inner (first_name, last_name)
+      riders!inner (first_name, last_name, email)
     `
     )
     .eq('management_token', token)
@@ -329,9 +332,9 @@ export async function checkInAtControl(token: string, input: CheckinInput): Prom
       .from('registrations')
       .select(
         `
-        id, status,
-        events!inner (id, slug, name, status, event_type, event_date, start_time, distance_km, chapters (name)),
-        riders!inner (first_name, last_name)
+        id, status, rider_id,
+        events!inner (id, slug, name, status, event_type, event_date, start_time, distance_km, chapters (name, slug)),
+        riders!inner (first_name, last_name, email)
       `
       )
       .eq('management_token', token)
@@ -387,7 +390,7 @@ export async function checkInAtControl(token: string, input: CheckinInput): Prom
     // Verify the control belongs to this registration's event.
     const { data: controlRow, error: controlError } = await supabase
       .from('event_controls')
-      .select('id, event_id, name, distance_km, lat, lng, radius_m')
+      .select('id, event_id, name, position, distance_km, lat, lng, radius_m')
       .eq('id', input.controlId)
       .single()
 
@@ -399,6 +402,7 @@ export async function checkInAtControl(token: string, input: CheckinInput): Prom
       id: string
       event_id: string
       name: string
+      position: number
       distance_km: number
       lat: number | null
       lng: number | null
@@ -484,6 +488,28 @@ export async function checkInAtControl(token: string, input: CheckinInput): Prom
 
     const window = computeControlWindow(eventStart, control.distance_km, event.distance_km)
 
+    // Final-control check-ins pre-fill the rider's result and send the
+    // "add your track" email. Never blocks the check-in (module never throws).
+    await handleFinishIfFinalControl({
+      controlPosition: control.position,
+      event: {
+        id: event.id,
+        name: event.name,
+        status: event.status,
+        event_date: event.event_date,
+        distance_km: event.distance_km,
+        chapters: event.chapters,
+      },
+      rider: {
+        id: reg.rider_id,
+        firstName: reg.riders.first_name,
+        lastName: reg.riders.last_name,
+        email: reg.riders.email,
+      },
+      managementToken: token,
+      finishTime: computeElapsedHm(eventStart, new Date(row.checked_in_at)),
+    })
+
     return createActionResult<CheckinOutcome>({
       checkin: {
         controlId: row.control_id,
@@ -537,7 +563,7 @@ export async function undoCheckin(token: string, input: UndoCheckinInput): Promi
       .from('registrations')
       .select(
         `
-        id, status,
+        id, status, rider_id,
         events!inner (id, status, event_type)
       `
       )
@@ -552,6 +578,7 @@ export async function undoCheckin(token: string, input: UndoCheckinInput): Promi
     const reg = registration as unknown as {
       id: string
       status: string | null
+      rider_id: string
       events: { id: string; status: string | null; event_type: string | null }
     }
     const event = reg.events
@@ -616,6 +643,13 @@ export async function undoCheckin(token: string, input: UndoCheckinInput): Promi
         'Failed to undo check-in'
       )
     }
+
+    // If the rider undid their finish check-in, roll back the pre-filled result.
+    await revertFinishIfFinalControl({
+      eventId: event.id,
+      riderId: reg.rider_id,
+      controlId: input.controlId,
+    })
 
     revalidatePath(`/card/${token}`)
 
