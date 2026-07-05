@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest'
-import { reverseControls, isReversedEvent } from '@/lib/controlPoints'
+import {
+  reverseControls,
+  isReversedEvent,
+  matchImportedControls,
+  controlsInSync,
+} from '@/lib/controlPoints'
 
 describe('reverseControls', () => {
   it('reverses a 5-control route with recalculated distances', () => {
@@ -98,5 +103,129 @@ describe('isReversedEvent', () => {
 
   it('returns false for similar but different text', () => {
     expect(isReversedEvent('Waterfront Trail Reversed')).toBe(false)
+  })
+})
+
+describe('matchImportedControls', () => {
+  const saved = [
+    { id: 's1', name: 'Start', distanceKm: 0 },
+    { id: 's2', name: 'Georgetown', distanceKm: 45.2 },
+    { id: 's3', name: 'Finish', distanceKm: 200 },
+  ]
+
+  it('matches by trimmed, case-insensitive name', () => {
+    const imported = [
+      { name: '  start ', distanceKm: 0 },
+      { name: 'GEORGETOWN', distanceKm: 45.2 },
+      { name: 'finish', distanceKm: 200 },
+    ]
+    const result = matchImportedControls(imported, saved)
+    expect(result.map((m) => m?.id)).toEqual(['s1', 's2', 's3'])
+  })
+
+  it('falls back to distance match within 0.1 km when the name differs', () => {
+    const imported = [{ name: 'Renamed Control', distanceKm: 45.25 }]
+    const result = matchImportedControls(imported, saved)
+    expect(result[0]?.id).toBe('s2')
+  })
+
+  it('does not distance-match beyond the 0.1 km tolerance', () => {
+    const imported = [{ name: 'Renamed Control', distanceKm: 45.5 }]
+    const result = matchImportedControls(imported, saved)
+    expect(result[0]).toBeNull()
+  })
+
+  it('returns null for genuinely new imported controls', () => {
+    const imported = [{ name: 'Brand New', distanceKm: 120 }]
+    const result = matchImportedControls(imported, saved)
+    expect(result[0]).toBeNull()
+  })
+
+  it('matches each saved control at most once (one-to-one)', () => {
+    const imported = [
+      { name: 'Start', distanceKm: 0 },
+      { name: 'Start', distanceKm: 0.05 },
+    ]
+    const result = matchImportedControls(imported, saved)
+    // First takes s1 by name; second cannot re-use s1 and finds nothing else.
+    expect(result[0]?.id).toBe('s1')
+    expect(result[1]).toBeNull()
+  })
+
+  it('prefers name matches over distance matches across the whole set', () => {
+    const twoSaved = [
+      { id: 'a', name: 'Alpha', distanceKm: 10 },
+      { id: 'b', name: 'Beta', distanceKm: 10 },
+    ]
+    // "Beta" should claim its name match even though it appears second and
+    // shares a distance with "Alpha".
+    const imported = [
+      { name: 'Renamed', distanceKm: 10 },
+      { name: 'Beta', distanceKm: 10 },
+    ]
+    const result = matchImportedControls(imported, twoSaved)
+    expect(result[1]?.id).toBe('b')
+    expect(result[0]?.id).toBe('a')
+  })
+})
+
+describe('controlsInSync', () => {
+  const saved = [
+    { name: 'Start', distanceKm: 0 },
+    { name: 'Midway', distanceKm: 100 },
+    { name: 'Finish', distanceKm: 200 },
+  ]
+
+  it('returns true for an identical ordered sequence', () => {
+    expect(controlsInSync([...saved], saved)).toBe(true)
+  })
+
+  it('trims names before comparing', () => {
+    const rows = [
+      { name: ' Start ', distanceKm: 0 },
+      { name: 'Midway', distanceKm: 100 },
+      { name: 'Finish ', distanceKm: 200 },
+    ]
+    expect(controlsInSync(rows, saved)).toBe(true)
+  })
+
+  it('is case-sensitive on names', () => {
+    const rows = [
+      { name: 'start', distanceKm: 0 },
+      { name: 'Midway', distanceKm: 100 },
+      { name: 'Finish', distanceKm: 200 },
+    ]
+    expect(controlsInSync(rows, saved)).toBe(false)
+  })
+
+  it('returns false when order differs', () => {
+    const rows = [
+      { name: 'Midway', distanceKm: 100 },
+      { name: 'Start', distanceKm: 0 },
+      { name: 'Finish', distanceKm: 200 },
+    ]
+    expect(controlsInSync(rows, saved)).toBe(false)
+  })
+
+  it('returns false when a distance differs', () => {
+    const rows = [
+      { name: 'Start', distanceKm: 0 },
+      { name: 'Midway', distanceKm: 101 },
+      { name: 'Finish', distanceKm: 200 },
+    ]
+    expect(controlsInSync(rows, saved)).toBe(false)
+  })
+
+  it('returns false when the counts differ', () => {
+    expect(controlsInSync(saved.slice(0, 2), saved)).toBe(false)
+  })
+
+  it('treats numerically-equal distances as equal', () => {
+    const rows = [
+      { name: 'Start', distanceKm: 0.0 },
+      { name: 'Midway', distanceKm: 100.0 },
+      { name: 'Finish', distanceKm: 200.0 },
+    ]
+    expect(controlsInSync(rows, saved)).toBe(true)
   })
 })

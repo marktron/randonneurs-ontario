@@ -1,0 +1,88 @@
+/**
+ * @vitest-environment happy-dom
+ */
+
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { render, screen, waitFor } from '@testing-library/react'
+import { EventControlsManager } from '@/components/admin/event-controls-manager'
+import type { AdminEventControl } from '@/lib/actions/event-controls'
+
+const mockSaveEventControls = vi.fn()
+const mockImportEventControlsFromRwgps = vi.fn()
+
+vi.mock('@/lib/actions/event-controls', () => ({
+  saveEventControls: (...args: unknown[]) => mockSaveEventControls(...args),
+  importEventControlsFromRwgps: (...args: unknown[]) => mockImportEventControlsFromRwgps(...args),
+}))
+
+vi.mock('sonner', () => ({
+  toast: { success: vi.fn(), error: vi.fn() },
+}))
+
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ refresh: vi.fn() }),
+}))
+
+function makeSaved(overrides: Partial<AdminEventControl> = {}): AdminEventControl {
+  return {
+    id: 'ctrl-1',
+    position: 1,
+    name: 'Start',
+    distanceKm: 0,
+    lat: 43.65,
+    lng: -79.38,
+    radiusM: 500,
+    notes: null,
+    checkinCount: 0,
+    ...overrides,
+  }
+}
+
+const importedTwo = [
+  { name: 'Alpha', distanceKm: 0, lat: 43.6, lng: -79.4 },
+  { name: 'Omega', distanceKm: 100, lat: null, lng: null },
+]
+
+function controlNameInputs(): HTMLInputElement[] {
+  return screen.getAllByPlaceholderText('Control name') as HTMLInputElement[]
+}
+
+beforeEach(() => {
+  mockSaveEventControls.mockReset().mockResolvedValue({ success: true })
+  mockImportEventControlsFromRwgps.mockReset().mockResolvedValue({ success: true, data: [] })
+})
+
+describe('EventControlsManager mount auto-load', () => {
+  it('auto-imports from RWGPS on mount when there are no controls and a route is linked', async () => {
+    mockImportEventControlsFromRwgps.mockResolvedValue({ success: true, data: importedTwo })
+
+    render(<EventControlsManager eventId="event-1" initialControls={[]} hasRwgpsRoute={true} />)
+
+    await waitFor(() => expect(mockImportEventControlsFromRwgps).toHaveBeenCalledWith('event-1'))
+    // Imported rows populate the (unsaved) table for review.
+    await waitFor(() => expect(controlNameInputs().map((i) => i.value)).toEqual(['Alpha', 'Omega']))
+    // Auto-load never auto-saves — the admin reviews and clicks Save.
+    expect(mockSaveEventControls).not.toHaveBeenCalled()
+  })
+
+  it('does not auto-import when initial controls already exist', () => {
+    render(
+      <EventControlsManager
+        eventId="event-1"
+        initialControls={[makeSaved({ name: 'Start' })]}
+        hasRwgpsRoute={true}
+      />
+    )
+
+    expect(mockImportEventControlsFromRwgps).not.toHaveBeenCalled()
+    expect(controlNameInputs().map((i) => i.value)).toEqual(['Start'])
+  })
+
+  it('does not auto-import when the event has no RWGPS route', async () => {
+    render(<EventControlsManager eventId="event-1" initialControls={[]} hasRwgpsRoute={false} />)
+
+    // Give any (unexpected) effect a chance to fire.
+    await Promise.resolve()
+    expect(mockImportEventControlsFromRwgps).not.toHaveBeenCalled()
+  })
+})

@@ -5,9 +5,12 @@ import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { ChevronLeft } from 'lucide-react'
 import { ControlCardsForm } from '@/components/admin/control-cards-form'
+import { getEventControlsForAdmin } from '@/lib/actions/event-controls'
 import type { EventForControlCards, RegistrationForControlCards } from '@/types/queries'
 
-async function getEventDetails(eventId: string): Promise<EventForControlCards | null> {
+type EventForControlCardsWithStatus = EventForControlCards & { status: string | null }
+
+async function getEventDetails(eventId: string): Promise<EventForControlCardsWithStatus | null> {
   const { data: event } = await getSupabaseAdmin()
     .from('events')
     .select(
@@ -19,6 +22,7 @@ async function getEventDetails(eventId: string): Promise<EventForControlCards | 
       start_location,
       distance_km,
       event_type,
+      status,
       chapters (id, name),
       routes (id, name, rwgps_id)
     `
@@ -26,7 +30,7 @@ async function getEventDetails(eventId: string): Promise<EventForControlCards | 
     .eq('id', eventId)
     .single()
 
-  return event as EventForControlCards | null
+  return event as EventForControlCardsWithStatus | null
 }
 
 async function getRegistrations(eventId: string): Promise<RegistrationForControlCards[]> {
@@ -54,11 +58,17 @@ export default async function ControlCardsPage({ params }: ControlCardsPageProps
   const { id } = await params
   const admin = await requireAdmin()
 
-  const [event, registrations] = await Promise.all([getEventDetails(id), getRegistrations(id)])
+  const [event, registrations, controlsResult] = await Promise.all([
+    getEventDetails(id),
+    getRegistrations(id),
+    getEventControlsForAdmin(id),
+  ])
 
   if (!event) {
     notFound()
   }
+
+  const savedControls = controlsResult.success && controlsResult.data ? controlsResult.data : []
 
   const eventDate = parseLocalDate(event.event_date)
 
@@ -110,6 +120,8 @@ export default async function ControlCardsPage({ params }: ControlCardsPageProps
           phone: admin.phone || '',
           email: admin.email,
         }}
+        savedControls={savedControls}
+        eventSubmitted={event.status === 'submitted'}
       />
     </div>
   )

@@ -3,14 +3,26 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import type { ComponentProps } from 'react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ControlCardsForm } from '@/components/admin/control-cards-form'
 import type { CardRider } from '@/types/control-card'
+import type { AdminEventControl } from '@/lib/actions/event-controls'
+import { toast } from 'sonner'
 
-// Avoid the on-mount RWGPS fetch firing during tests.
-vi.mock('@/lib/rwgps', () => ({
-  fetchRwgpsControls: vi.fn().mockResolvedValue([]),
+const mockSaveEventControls = vi.fn()
+const mockGetEventControlsForAdmin = vi.fn()
+const mockImportEventControlsFromRwgps = vi.fn()
+
+vi.mock('@/lib/actions/event-controls', () => ({
+  saveEventControls: (...args: unknown[]) => mockSaveEventControls(...args),
+  getEventControlsForAdmin: (...args: unknown[]) => mockGetEventControlsForAdmin(...args),
+  importEventControlsFromRwgps: (...args: unknown[]) => mockImportEventControlsFromRwgps(...args),
+}))
+
+vi.mock('sonner', () => ({
+  toast: { success: vi.fn(), error: vi.fn() },
 }))
 
 const event = {
@@ -34,11 +46,45 @@ const riders: CardRider[] = [
   { id: 'rider-c', firstName: 'Cy', lastName: 'Chen' },
 ]
 
-function renderForm(props?: { riders?: CardRider[] }) {
+function makeSaved(overrides: Partial<AdminEventControl> = {}): AdminEventControl {
+  return {
+    id: 'ctrl-1',
+    position: 1,
+    name: 'Start',
+    distanceKm: 0,
+    lat: 43.65,
+    lng: -79.38,
+    radiusM: 500,
+    notes: null,
+    checkinCount: 0,
+    ...overrides,
+  }
+}
+
+function renderForm(props?: {
+  riders?: CardRider[]
+  event?: ComponentProps<typeof ControlCardsForm>['event']
+  savedControls?: AdminEventControl[]
+  eventSubmitted?: boolean
+}) {
   return render(
-    <ControlCardsForm event={event} organizer={organizer} riders={props?.riders ?? riders} />
+    <ControlCardsForm
+      event={props?.event ?? event}
+      organizer={organizer}
+      riders={props?.riders ?? riders}
+      savedControls={props?.savedControls}
+      eventSubmitted={props?.eventSubmitted}
+    />
   )
 }
+
+beforeEach(() => {
+  mockSaveEventControls.mockReset().mockResolvedValue({ success: true })
+  mockGetEventControlsForAdmin.mockReset().mockResolvedValue({ success: true, data: [] })
+  mockImportEventControlsFromRwgps.mockReset().mockResolvedValue({ success: true, data: [] })
+  vi.mocked(toast.success).mockClear()
+  vi.mocked(toast.error).mockClear()
+})
 
 /** The generate link href, decoded for assertions. */
 function generateHref(): string {
@@ -97,5 +143,201 @@ describe('ControlCardsForm rider selection', () => {
   it('hides the Choose individually option when there are no registered riders', () => {
     renderForm({ riders: [] })
     expect(screen.queryByRole('radio', { name: 'Choose' })).toBeNull()
+  })
+})
+
+const eventWithRwgps = { ...event, rwgpsId: '12345' }
+
+const savedThree: AdminEventControl[] = [
+  makeSaved({ id: 'ctrl-1', position: 1, name: 'Start', distanceKm: 0, lat: 43.6, lng: -79.4 }),
+  makeSaved({ id: 'ctrl-2', position: 2, name: 'Midway', distanceKm: 100, lat: 44.0, lng: -79.9 }),
+  makeSaved({ id: 'ctrl-3', position: 3, name: 'Finish', distanceKm: 200, lat: 43.6, lng: -79.4 }),
+]
+
+function controlNameInputs(): HTMLInputElement[] {
+  return screen.getAllByPlaceholderText('Control name') as HTMLInputElement[]
+}
+
+describe('ControlCardsForm digital-card sync', () => {
+  it('prefills rows from savedControls and does not auto-import from RWGPS', () => {
+    renderForm({ event: eventWithRwgps, savedControls: savedThree })
+
+    const names = controlNameInputs().map((i) => i.value)
+    expect(names).toEqual(['Start', 'Midway', 'Finish'])
+    expect(mockImportEventControlsFromRwgps).not.toHaveBeenCalled()
+    // No import means no auto-save either — saved controls are left untouched.
+    expect(mockSaveEventControls).not.toHaveBeenCalled()
+    // Starts in sync with the saved controls.
+    expect(screen.getByText(/In sync with the digital brevet card controls/i)).toBeTruthy()
+  })
+
+  it('auto-imports on mount when there are no saved controls and a route is linked', async () => {
+    renderForm({ event: eventWithRwgps })
+    await waitFor(() => expect(mockImportEventControlsFromRwgps).toHaveBeenCalledWith('event-1'))
+  })
+
+  it('shows the drift note when a prefilled row is edited, and Reset to saved restores it', async () => {
+    const user = userEvent.setup()
+    renderForm({ event: eventWithRwgps, savedControls: savedThree })
+
+    expect(screen.getByText(/In sync with the digital brevet card controls/i)).toBeTruthy()
+
+    await user.type(controlNameInputs()[1], 'X') // Midway -> MidwayX
+
+    expect(
+      screen.getByText(/These controls differ from the saved digital-card controls/i)
+    ).toBeTruthy()
+    expect(screen.queryByText(/In sync with the digital brevet card controls/i)).toBeNull()
+
+    await user.click(screen.getByRole('button', { name: /Reset to saved/i }))
+
+    expect(
+      screen.queryByText(/These controls differ from the saved digital-card controls/i)
+    ).toBeNull()
+    expect(screen.getByText(/In sync with the digital brevet card controls/i)).toBeTruthy()
+    expect(controlNameInputs().map((i) => i.value)).toEqual(['Start', 'Midway', 'Finish'])
+  })
+
+  it('Update saved controls saves with saved ids and coordinates preserved', async () => {
+    const user = userEvent.setup()
+    mockGetEventControlsForAdmin.mockResolvedValue({ success: true, data: savedThree })
+    renderForm({ event: eventWithRwgps, savedControls: savedThree })
+
+    await user.type(controlNameInputs()[1], 'X') // drift
+    await user.click(screen.getByRole('button', { name: /Update saved controls/i }))
+
+    await waitFor(() => expect(mockSaveEventControls).toHaveBeenCalled())
+    const [eventId, inputs] = mockSaveEventControls.mock.calls[0]
+    expect(eventId).toBe('event-1')
+    expect(inputs).toHaveLength(3)
+    // Saved ids preserved so save updates in place (does not wipe check-ins).
+    expect(inputs.map((c: { id?: string }) => c.id)).toEqual(['ctrl-1', 'ctrl-2', 'ctrl-3'])
+    // Coordinates carried through untouched.
+    expect(inputs[0]).toMatchObject({ lat: 43.6, lng: -79.4, radiusM: 500 })
+  })
+
+  it('shows Save controls to this event only when there are no saved controls', () => {
+    const { unmount } = renderForm({ event: eventWithRwgps })
+    expect(screen.getByRole('button', { name: /Save controls to this event/i })).toBeTruthy()
+    unmount()
+
+    renderForm({ event: eventWithRwgps, savedControls: savedThree })
+    expect(screen.queryByRole('button', { name: /Save controls to this event/i })).toBeNull()
+  })
+
+  it('flips from the save button to the in-sync affordance after the first save', async () => {
+    const user = userEvent.setup()
+    // No savedControls prop: the form seeds Test Start (0) / Finish (200).
+    // The post-save snapshot refresh returns those rows with fresh ids.
+    mockGetEventControlsForAdmin.mockResolvedValue({
+      success: true,
+      data: [
+        makeSaved({ id: 'new-1', position: 1, name: 'Test Start', distanceKm: 0 }),
+        makeSaved({ id: 'new-2', position: 2, name: 'Finish', distanceKm: 200 }),
+      ],
+    })
+    renderForm()
+
+    await user.click(screen.getByRole('button', { name: /Save controls to this event/i }))
+
+    await waitFor(() => {
+      expect(screen.getByText(/In sync with the digital brevet card controls/i)).toBeTruthy()
+    })
+    expect(screen.queryByRole('button', { name: /Save controls to this event/i })).toBeNull()
+  })
+
+  it('hides all sync affordances when the event is submitted', () => {
+    renderForm({ event: eventWithRwgps, savedControls: savedThree, eventSubmitted: true })
+    expect(screen.queryByRole('button', { name: /Save controls to this event/i })).toBeNull()
+    expect(screen.queryByRole('button', { name: /Update saved controls/i })).toBeNull()
+    expect(screen.queryByText(/In sync with the digital brevet card controls/i)).toBeNull()
+    expect(
+      screen.queryByText(/These controls differ from the saved digital-card controls/i)
+    ).toBeNull()
+  })
+})
+
+const importedTwo = [
+  { name: 'Start', distanceKm: 0, lat: 43.6, lng: -79.4 },
+  { name: 'Finish', distanceKm: 200, lat: 43.7, lng: -79.5 },
+]
+
+describe('ControlCardsForm mount auto-save', () => {
+  it('auto-saves the imported rows on mount when there are no saved controls, then lands in sync', async () => {
+    mockImportEventControlsFromRwgps.mockResolvedValue({ success: true, data: importedTwo })
+    mockGetEventControlsForAdmin.mockResolvedValue({
+      success: true,
+      data: [
+        makeSaved({
+          id: 'new-1',
+          position: 1,
+          name: 'Start',
+          distanceKm: 0,
+          lat: 43.6,
+          lng: -79.4,
+        }),
+        makeSaved({
+          id: 'new-2',
+          position: 2,
+          name: 'Finish',
+          distanceKm: 200,
+          lat: 43.7,
+          lng: -79.5,
+        }),
+      ],
+    })
+
+    renderForm({ event: eventWithRwgps })
+
+    await waitFor(() => expect(mockSaveEventControls).toHaveBeenCalledTimes(1))
+    const [eventId, inputs] = mockSaveEventControls.mock.calls[0]
+    expect(eventId).toBe('event-1')
+    // Imported rows are saved with their coordinates carried through.
+    expect(inputs).toHaveLength(2)
+    expect(inputs[0]).toMatchObject({ name: 'Start', distanceKm: 0, lat: 43.6, lng: -79.4 })
+    expect(inputs[1]).toMatchObject({ name: 'Finish', distanceKm: 200, lat: 43.7, lng: -79.5 })
+    // Distinct success toast for the auto-import + save path.
+    expect(toast.success).toHaveBeenCalledWith(
+      'Controls imported from RWGPS and saved to this event'
+    )
+    // After the snapshot refresh the form reports in sync.
+    await waitFor(() =>
+      expect(screen.getByText(/In sync with the digital brevet card controls/i)).toBeTruthy()
+    )
+  })
+
+  it('does not auto-save when the event is submitted (import still runs for printing)', async () => {
+    mockImportEventControlsFromRwgps.mockResolvedValue({ success: true, data: importedTwo })
+    renderForm({ event: eventWithRwgps, eventSubmitted: true })
+
+    await waitFor(() => expect(mockImportEventControlsFromRwgps).toHaveBeenCalledWith('event-1'))
+    expect(mockSaveEventControls).not.toHaveBeenCalled()
+  })
+
+  it('does not auto-save on a manual Import from RWGPS click when saved controls exist', async () => {
+    const user = userEvent.setup()
+    mockImportEventControlsFromRwgps.mockResolvedValue({ success: true, data: importedTwo })
+    renderForm({ event: eventWithRwgps, savedControls: savedThree })
+
+    // Saved controls prefilled — nothing imports on mount.
+    expect(mockImportEventControlsFromRwgps).not.toHaveBeenCalled()
+
+    await user.click(screen.getByRole('button', { name: /Import from RWGPS/i }))
+
+    await waitFor(() => expect(mockImportEventControlsFromRwgps).toHaveBeenCalledWith('event-1'))
+    // Manual imports populate rows only; the drift UI persists them, so no save fires.
+    expect(mockSaveEventControls).not.toHaveBeenCalled()
+  })
+
+  it('leaves the save button available when the auto-save fails', async () => {
+    mockImportEventControlsFromRwgps.mockResolvedValue({ success: true, data: importedTwo })
+    mockSaveEventControls.mockResolvedValue({ success: false, error: 'Save exploded' })
+
+    renderForm({ event: eventWithRwgps })
+
+    await waitFor(() => expect(mockSaveEventControls).toHaveBeenCalled())
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Save exploded'))
+    // Snapshot was never refreshed, so the form degrades to the manual save affordance.
+    expect(screen.getByRole('button', { name: /Save controls to this event/i })).toBeTruthy()
   })
 })

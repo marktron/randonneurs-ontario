@@ -176,8 +176,8 @@ Rendered with `qrcode.react`. Up to two QR codes appear in the bottom of the mid
 Permanents can be ridden in reverse. The `events.name` convention is to append `(Reversed)` to the route name. The admin control-cards form detects this via `isReversedEvent(name)` and:
 
 1. Swaps the default Start/Finish labels in the initial 2-control list.
-2. After RWGPS import, passes the imported controls through `reverseControls(controls, totalDistance)`, which reverses the order and recalculates each distance as `totalDistance - originalDistance`.
-3. Shows an info banner in the form. Combined with custom start locations on permanents, the banner has three variants (see `components/admin/control-cards-form.tsx` lines ~309–320):
+2. Reverses imported controls. The public form uses `reverseControls(controls, totalDistance)` directly. The **admin** form now imports via the `importEventControlsFromRwgps(eventId)` server action, which applies the reversal server-side (using the event's `distance_km`) — see "RWGPS import" below.
+3. Shows an info banner in the form. Combined with custom start locations on permanents, the banner has three variants (see `components/admin/control-cards-form.tsx`):
    - Reversed + custom start: "Controls are shown in reversed direction, starting from {location}."
    - Reversed only: "Controls are shown in reversed direction."
    - Custom start only: "Starting from {location}."
@@ -188,9 +188,16 @@ Logic lives in `lib/controlPoints.ts`, covered by `tests/unit/lib/controlPoints.
 
 ## RWGPS import
 
-Both forms auto-import controls when the route has an `rwgps_id`. This happens on mount (public form: when the user selects a route; admin form: on initial mount if the event's route has one). All fetching, parsing, and dedupe logic lives in `lib/rwgps.ts` — both forms call `fetchRwgpsControls(rwgpsId)` and differ only in downstream handling (the admin form additionally feeds the result through `reverseControls()` for reversed permanents).
+Both forms auto-import controls when the route has an `rwgps_id`, on mount (public form: when the user selects a route; admin form: on initial mount **only when the event has no saved `event_controls`** — otherwise it prefills from those, see below). When the admin form auto-imports on mount, it also **auto-saves** the imported rows back to `event_controls` (via the same save flow as the manual button), so an unconfigured event lands in sync with the digital brevet card without a click — a distinct toast ("Controls imported from RWGPS and saved to this event") confirms it. The auto-save is skipped when the event is submitted (controls are frozen — the import still runs so the printed card is populated), and a run-once ref guard keeps React strict-mode's double-invoked mount effect from importing or saving twice. A **manual** "Import from RWGPS" click never auto-saves; it only repopulates the rows and lets the drift affordances persist them. All fetching, parsing, and dedupe logic lives in `lib/rwgps.ts`.
 
-The fetch is **client-side** against `https://ridewithgps.com/routes/{id}.json`. RWGPS accepts unauthenticated JSON requests; we rely on this.
+The two forms now differ in **how** they fetch:
+
+- **Public form** calls `fetchRwgpsControls(rwgpsId)` **client-side** against `https://ridewithgps.com/routes/{id}.json` (RWGPS accepts unauthenticated JSON) and applies `reverseControls()` itself when needed. It strips coordinates.
+- **Admin form** calls the `importEventControlsFromRwgps(eventId)` **server action**, which fetches with coordinates (`fetchRwgpsControlsWithCoords`) and applies reversed-event handling server-side. This is the same importer the digital brevet card manager uses, so both produce identical results. Coordinates are kept internally (for save-back to `event_controls`) but never encoded into the print URL.
+
+### Shared controls with the digital brevet card
+
+The admin control-cards form treats the saved `event_controls` rows as the single source of truth: it prefills from them, and offers save / update / reset affordances to write back. See `docs/digital-brevet-card.md` §16 for the full description, and `lib/controlPoints.ts` (`matchImportedControls`, `controlsInSync`) for the pure helpers.
 
 ### Two encodings
 

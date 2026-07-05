@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useEffect, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -196,6 +196,21 @@ export function EventControlsManager({
     }
     doSave(parsed)
   }
+
+  // Auto-load controls from RWGPS on mount when the event has none saved yet, so
+  // the table is prefilled for review instead of showing an empty state. This
+  // mirrors clicking "Import from RWGPS" (unsaved rows; the admin still hits
+  // Save). The ref guard keeps strict-mode's double-invoked effect from
+  // importing twice in development.
+  const didAutoImportRef = useRef(false)
+  useEffect(() => {
+    if (didAutoImportRef.current) return
+    if (initialControls.length === 0 && hasRwgpsRoute) {
+      didAutoImportRef.current = true
+      handleImport()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   return (
     <div className="space-y-4">

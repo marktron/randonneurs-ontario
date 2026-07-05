@@ -284,11 +284,18 @@ Card" button on the event admin page instead of two).
   the event's route; reversed permanents get order + distances flipped with
   coordinates kept. Results land in an editable table (name, km, lat/lng,
   radius, notes) — nothing is saved until the admin hits Save.
+- **Auto-load when empty.** When the event has no saved controls yet and its
+  route has an `rwgps_id`, the manager runs that same RWGPS import
+  automatically on mount, so the table is prefilled for review instead of
+  showing the empty state. This is unsaved — the admin still reviews and hits
+  Save (it never auto-saves, unlike the printed-card form). A run-once ref
+  guard keeps strict-mode's double-invoked mount effect from importing twice.
 - Manual add/edit/delete rows; saving warns before deleting controls
   that already have check-ins (the delete cascades to those check-ins).
-- Stretch (Phase 2): prefill the printed-card form from saved controls so
-  controls are defined once (today the print flow re-fetches from RWGPS
-  each time).
+- **Shared with the printed control card.** The saved `event_controls`
+  rows are the single source of truth for control points. The printed
+  control-cards form (`app/admin/events/[id]/control-cards`) prefills from
+  them, so controls are defined once. See §16.
 
 ### Live grid (bottom section)
 
@@ -406,18 +413,19 @@ Each step lands as its own commit; the branch stays shippable throughout.
 
 ### File map (Phase 1, as shipped)
 
-| Concern                | Location                                                                                                                                                                                                                                                                        |
-| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Schema                 | `supabase/migrations/20260703120000_add_digital_brevet_card.sql`                                                                                                                                                                                                                |
-| Domain logic (pure)    | `lib/brevet-card.ts` — eligibility, event start, acceptance window, control windows, flag derivation                                                                                                                                                                            |
-| Rider actions          | `lib/actions/brevet-card.ts` — `getBrevetCardByToken`, `checkInAtControl`                                                                                                                                                                                                       |
-| Admin controls actions | `lib/actions/event-controls.ts` — CRUD + RWGPS import                                                                                                                                                                                                                           |
-| Admin check-in actions | `lib/actions/control-checkins.ts` — grid read, set/delete corrections                                                                                                                                                                                                           |
-| RWGPS coordinates      | `lib/rwgps.ts` — `extractControlsWithCoords`, `fetchRwgpsControlsWithCoords`                                                                                                                                                                                                    |
-| Rider page             | `app/card/[token]/page.tsx` + `components/brevet-card-view.tsx` (outbox lives here)                                                                                                                                                                                             |
-| Admin page             | `app/admin/events/[id]/brevet-card/page.tsx` + `components/admin/event-controls-manager.tsx` + `components/admin/event-checkins-grid.tsx` + `components/admin/checkin-map.tsx` (correction-dialog map)                                                                          |
-| Email                  | `lib/email/templates.ts` (`digitalCardUrl`), wired in `lib/actions/registration/finalize.ts`                                                                                                                                                                                    |
-| Tests                  | `tests/unit/lib/brevet-card.test.ts`, `tests/unit/lib/brevet-card-actions.test.ts`, `tests/unit/components/brevet-card-view.test.tsx`, `tests/integration-real/brevet-card/checkin.test.ts`, `tests/integration-real/brevet-card/undo.test.ts`, `tests/e2e/brevet-card.spec.ts` |
+| Concern                 | Location                                                                                                                                                                                                                                                                        |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Schema                  | `supabase/migrations/20260703120000_add_digital_brevet_card.sql`                                                                                                                                                                                                                |
+| Domain logic (pure)     | `lib/brevet-card.ts` — eligibility, event start, acceptance window, control windows, flag derivation                                                                                                                                                                            |
+| Rider actions           | `lib/actions/brevet-card.ts` — `getBrevetCardByToken`, `checkInAtControl`                                                                                                                                                                                                       |
+| Admin controls actions  | `lib/actions/event-controls.ts` — CRUD + RWGPS import                                                                                                                                                                                                                           |
+| Shared controls (print) | `components/admin/control-cards-form.tsx` prefills/saves back `event_controls`; matching + drift helpers in `lib/controlPoints.ts` (`matchImportedControls`, `controlsInSync`). See §16.                                                                                        |
+| Admin check-in actions  | `lib/actions/control-checkins.ts` — grid read, set/delete corrections                                                                                                                                                                                                           |
+| RWGPS coordinates       | `lib/rwgps.ts` — `extractControlsWithCoords`, `fetchRwgpsControlsWithCoords`                                                                                                                                                                                                    |
+| Rider page              | `app/card/[token]/page.tsx` + `components/brevet-card-view.tsx` (outbox lives here)                                                                                                                                                                                             |
+| Admin page              | `app/admin/events/[id]/brevet-card/page.tsx` + `components/admin/event-controls-manager.tsx` + `components/admin/event-checkins-grid.tsx` + `components/admin/checkin-map.tsx` (correction-dialog map)                                                                          |
+| Email                   | `lib/email/templates.ts` (`digitalCardUrl`), wired in `lib/actions/registration/finalize.ts`                                                                                                                                                                                    |
+| Tests                   | `tests/unit/lib/brevet-card.test.ts`, `tests/unit/lib/brevet-card-actions.test.ts`, `tests/unit/components/brevet-card-view.test.tsx`, `tests/integration-real/brevet-card/checkin.test.ts`, `tests/integration-real/brevet-card/undo.test.ts`, `tests/e2e/brevet-card.spec.ts` |
 
 ### Organizer how-to
 
@@ -445,3 +453,36 @@ Each step lands as its own commit; the branch stays shippable throughout.
 6. Coordinates come from RWGPS and may sit a parking lot away from the
    actual control — the generous 500 m default radius absorbs that. As
    coordinates get audited, tighten `radius_m` per control.
+
+## 16. Shared controls with the printed control card
+
+The saved `event_controls` rows are the **single source of truth** for an
+event's control points, shared between the digital brevet card and the
+printed control card.
+
+- **Prefill.** The printed control-cards form
+  (`components/admin/control-cards-form.tsx`) seeds its rows from the saved
+  controls when any exist, in saved order, and **skips** the on-mount RWGPS
+  auto-import. With no saved controls it behaves as before (default
+  Start/Finish rows + auto-import when the route has an `rwgps_id`).
+- **Unified import.** Both forms import via the same
+  `importEventControlsFromRwgps(eventId)` server action, so coordinates and
+  reversed-event handling are computed identically server-side. (The print
+  form previously computed reversal client-side using
+  `max(route distance, event distance)`; it now uses the event distance like
+  the digital importer.) A re-import matches imported rows back to saved rows
+  (`matchImportedControls` in `lib/controlPoints.ts`) to preserve each saved
+  row's id, radius, and notes.
+- **Save-back affordances** (hidden once the event is `submitted`):
+  - _No saved controls yet_ → **Save controls to this event** button, which
+    makes the current rows the digital card's controls.
+  - _Rows drift from saved_ → an amber note with **Update saved controls**
+    (writes back, preserving saved ids so check-ins survive) and **Reset to
+    saved** (restores rows from the saved snapshot).
+  - _In sync_ → a muted "In sync with the digital brevet card controls." line.
+  - Drift is detected by `controlsInSync` comparing the ordered
+    (trimmed name, numeric distance) sequence.
+- **Coordinates never travel through the print URL** — only `{name, distance}`
+  is encoded. Rows added by hand in the print form carry no coordinates until
+  an admin sets them in the digital brevet card manager; such controls still
+  work (riders check in without GPS, flagged `no gps`).

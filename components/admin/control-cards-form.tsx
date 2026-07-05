@@ -1,21 +1,46 @@
 'use client'
 
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef, useTransition } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Plus, Trash2, Printer, GripVertical, Download, Loader2, Info } from 'lucide-react'
+import {
+  Plus,
+  Trash2,
+  Printer,
+  GripVertical,
+  Download,
+  Loader2,
+  Info,
+  Save,
+  RotateCcw,
+  AlertTriangle,
+} from 'lucide-react'
 import type { CardRider } from '@/types/control-card'
-import { reverseControls, isReversedEvent } from '@/lib/controlPoints'
-import { fetchRwgpsControls } from '@/lib/rwgps'
+import { isReversedEvent, matchImportedControls, controlsInSync } from '@/lib/controlPoints'
+import {
+  saveEventControls,
+  getEventControlsForAdmin,
+  importEventControlsFromRwgps,
+  type AdminEventControl,
+  type EventControlInput,
+} from '@/lib/actions/event-controls'
+import { DEFAULT_CONTROL_RADIUS_M } from '@/lib/brevet-card'
+import { toast } from 'sonner'
 import { Checkbox } from '@/components/ui/checkbox'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 
 interface ControlInput {
   id: string
+  /** DB id of the saved event_controls row this maps to; absent for new rows. */
+  savedId?: string
   name: string
   distance: string
+  lat: number | null
+  lng: number | null
+  radiusM: number
+  notes: string | null
 }
 
 interface EventInput {
@@ -41,9 +66,33 @@ interface ControlCardsFormProps {
   event: EventInput
   riders: CardRider[]
   organizer?: OrganizerInput
+  /** Saved digital brevet card controls — the shared source of truth. */
+  savedControls?: AdminEventControl[]
+  /** When the event's results are submitted, controls are frozen. */
+  eventSubmitted?: boolean
 }
 
-export function ControlCardsForm({ event, riders, organizer }: ControlCardsFormProps) {
+/** Build an editable row from a saved digital-card control. */
+function rowFromSaved(control: AdminEventControl): ControlInput {
+  return {
+    id: crypto.randomUUID(),
+    savedId: control.id,
+    name: control.name,
+    distance: String(control.distanceKm),
+    lat: control.lat,
+    lng: control.lng,
+    radiusM: control.radiusM,
+    notes: control.notes,
+  }
+}
+
+export function ControlCardsForm({
+  event,
+  riders,
+  organizer,
+  savedControls = [],
+  eventSubmitted = false,
+}: ControlCardsFormProps) {
   // Organizer details - pre-fill from logged-in admin
   const [organizerName, setOrganizerName] = useState(organizer?.name || '')
   const [organizerPhone, setOrganizerPhone] = useState(organizer?.phone || '')
@@ -51,19 +100,44 @@ export function ControlCardsForm({ event, riders, organizer }: ControlCardsFormP
 
   const reversed = isReversedEvent(event.name)
 
-  // Controls - initialize with start and finish (swapped for reversed routes)
-  const [controls, setControls] = useState<ControlInput[]>([
-    {
-      id: crypto.randomUUID(),
-      name: reversed ? 'Finish' : event.startLocation || 'Start',
-      distance: '0',
-    },
-    {
-      id: crypto.randomUUID(),
-      name: reversed ? event.startLocation || 'Start' : 'Finish',
-      distance: String(event.distance),
-    },
-  ])
+  // Snapshot of the saved controls; drift is measured against this and it is
+  // refreshed after a successful save so a subsequent save updates rather than
+  // deletes-and-reinserts (which would wipe recorded check-ins).
+  const [savedSnapshot, setSavedSnapshot] = useState<AdminEventControl[]>(savedControls)
+  // Derived from the snapshot, not the prop, so the affordances flip from
+  // "Save controls to this event" to in-sync/drift right after the first save
+  // (the prop only changes on a full page load).
+  const hasSavedControls = savedSnapshot.length > 0
+
+  // Controls: prefill from the saved digital-card controls when they exist
+  // (they are the shared source of truth); otherwise seed Start/Finish
+  // (swapped for reversed routes) and auto-import from RWGPS on mount.
+  const [controls, setControls] = useState<ControlInput[]>(() =>
+    savedControls.length > 0
+      ? savedControls.map(rowFromSaved)
+      : [
+          {
+            id: crypto.randomUUID(),
+            savedId: undefined,
+            name: reversed ? 'Finish' : event.startLocation || 'Start',
+            distance: '0',
+            lat: null,
+            lng: null,
+            radiusM: DEFAULT_CONTROL_RADIUS_M,
+            notes: null,
+          },
+          {
+            id: crypto.randomUUID(),
+            savedId: undefined,
+            name: reversed ? event.startLocation || 'Start' : 'Finish',
+            distance: String(event.distance),
+            lat: null,
+            lng: null,
+            radiusM: DEFAULT_CONTROL_RADIUS_M,
+            notes: null,
+          },
+        ]
+  )
 
   // Extra blank cards for day-of registrations
   const [extraBlankCards, setExtraBlankCards] = useState(0)
@@ -106,8 +180,18 @@ export function ControlCardsForm({ event, riders, organizer }: ControlCardsFormP
   const individualSelectionValid = selectionMode === 'all' || chosenRiderCount > 0
 
   const addControl = useCallback(() => {
-    // Insert before the last control (finish)
-    const newControl = { id: crypto.randomUUID(), name: '', distance: '' }
+    // Insert before the last control (finish). Hand-added rows carry no
+    // coordinates until an admin sets them in the digital brevet card manager.
+    const newControl: ControlInput = {
+      id: crypto.randomUUID(),
+      savedId: undefined,
+      name: '',
+      distance: '',
+      lat: null,
+      lng: null,
+      radiusM: DEFAULT_CONTROL_RADIUS_M,
+      notes: null,
+    }
     setControls((prev) => [...prev.slice(0, -1), newControl, prev[prev.length - 1]])
   }, [])
 
@@ -137,40 +221,118 @@ export function ControlCardsForm({ event, riders, organizer }: ControlCardsFormP
   const [isLoadingRwgps, setIsLoadingRwgps] = useState(false)
   const [rwgpsError, setRwgpsError] = useState<string | null>(null)
 
-  const importFromRwgps = useCallback(async () => {
-    if (!event.rwgpsId) return
+  // ---- Digital brevet card sync ----------------------------------------
+  const [isSaving, startSaveTransition] = useTransition()
 
-    setIsLoadingRwgps(true)
-    setRwgpsError(null)
-
-    try {
-      const parsed = await fetchRwgpsControls(event.rwgpsId)
-      const newControls: ControlInput[] = parsed.map((c) => ({
-        id: crypto.randomUUID(),
+  // Persist the given rows to the digital brevet card. Takes an explicit rows
+  // argument so callers can save freshly-computed rows without waiting for a
+  // setControls to commit (used by both the manual save affordance and the
+  // mount auto-import path).
+  const saveRows = useCallback(
+    (rowsToSave: ControlInput[], successMessage = 'Controls saved to the digital brevet card') => {
+      const inputs: EventControlInput[] = rowsToSave.map((c) => ({
+        id: c.savedId,
         name: c.name,
-        distance: c.distance,
+        distanceKm: parseFloat(c.distance),
+        lat: c.lat,
+        lng: c.lng,
+        radiusM: c.radiusM,
+        notes: c.notes,
       }))
 
-      if (reversed) {
-        const totalDistance = Math.max(
-          ...newControls.map((c) => parseFloat(c.distance)),
-          event.distance
-        )
-        setControls(reverseControls(newControls, totalDistance))
-      } else {
-        setControls(newControls)
-      }
-    } catch (error) {
-      setRwgpsError(error instanceof Error ? error.message : 'Failed to fetch route data')
-    } finally {
-      setIsLoadingRwgps(false)
-    }
-  }, [event.rwgpsId, event.distance, reversed])
+      startSaveTransition(async () => {
+        const result = await saveEventControls(event.id, inputs)
+        if (!result.success) {
+          toast.error(result.error || 'Failed to save controls')
+          return
+        }
+        toast.success(successMessage)
 
-  // Auto-import controls from RWGPS on mount
+        // Refresh the snapshot and re-attach the freshly-assigned ids to the
+        // current rows (matched by name/distance) so the next save updates rows
+        // in place instead of delete+reinserting them (which wipes check-ins).
+        const refreshed = await getEventControlsForAdmin(event.id)
+        if (refreshed.success && refreshed.data) {
+          const saved = refreshed.data
+          setSavedSnapshot(saved)
+          setControls((prev) => {
+            const matched = matchImportedControls(
+              prev.map((c) => ({ name: c.name, distanceKm: parseFloat(c.distance || '0') })),
+              saved
+            )
+            return prev.map((c, i) => ({ ...c, savedId: matched[i]?.id ?? c.savedId }))
+          })
+        }
+      })
+    },
+    [event.id]
+  )
+
+  const importFromRwgps = useCallback(
+    async (options?: { autoSave?: boolean }) => {
+      if (!event.rwgpsId) return
+
+      setIsLoadingRwgps(true)
+      setRwgpsError(null)
+
+      try {
+        // Canonical importer: fetches coordinates and applies reversed-event
+        // handling server-side, so the printed and digital cards import
+        // identically.
+        const result = await importEventControlsFromRwgps(event.id)
+        if (!result.success || !result.data) {
+          setRwgpsError(result.error || 'Failed to fetch route data')
+          return
+        }
+
+        // Preserve saved ids/radius/notes across a re-import so saving updates
+        // rows in place rather than delete+reinserting (which loses check-ins).
+        const matched = matchImportedControls(
+          result.data.map((c) => ({ name: c.name, distanceKm: c.distanceKm })),
+          savedSnapshot
+        )
+        const importedRows: ControlInput[] = result.data.map((c, i) => {
+          const m = matched[i]
+          return {
+            id: crypto.randomUUID(),
+            savedId: m?.id,
+            name: c.name,
+            distance: String(c.distanceKm),
+            lat: c.lat,
+            lng: c.lng,
+            radiusM: m?.radiusM ?? DEFAULT_CONTROL_RADIUS_M,
+            notes: m?.notes ?? null,
+          }
+        })
+        setControls(importedRows)
+
+        // Auto-save only from the mount auto-import path — never on a manual
+        // "Import from RWGPS" click (drift UI handles persistence there) and
+        // never once the event is submitted (controls are frozen). Pass the
+        // freshly-imported rows directly so the save doesn't race setControls.
+        if (options?.autoSave && !eventSubmitted) {
+          saveRows(importedRows, 'Controls imported from RWGPS and saved to this event')
+        }
+      } catch (error) {
+        setRwgpsError(error instanceof Error ? error.message : 'Failed to fetch route data')
+      } finally {
+        setIsLoadingRwgps(false)
+      }
+    },
+    [event.id, event.rwgpsId, savedSnapshot, eventSubmitted, saveRows]
+  )
+
+  // Auto-import controls from RWGPS on mount — but only when there are no saved
+  // controls to prefill from (saved controls are the source of truth) — and
+  // auto-save the result so the form lands in sync without a manual click. The
+  // ref guard keeps strict-mode's double-invoked effect from importing (and
+  // saving) twice in development.
+  const didAutoImportRef = useRef(false)
   useEffect(() => {
-    if (event.rwgpsId) {
-      importFromRwgps()
+    if (didAutoImportRef.current) return
+    if (event.rwgpsId && !hasSavedControls) {
+      didAutoImportRef.current = true
+      importFromRwgps({ autoSave: true })
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -215,6 +377,24 @@ export function ControlCardsForm({ event, riders, organizer }: ControlCardsFormP
     selectedRiderIds,
     riders,
   ])
+
+  // Every row must have a name and a parseable distance before it can be saved.
+  const controlsAreSaveable = controls.every(
+    (c) => c.name.trim() !== '' && Number.isFinite(parseFloat(c.distance))
+  )
+
+  const inSync = controlsInSync(
+    controls.map((c) => ({ name: c.name, distanceKm: parseFloat(c.distance || '0') })),
+    savedSnapshot.map((c) => ({ name: c.name, distanceKm: c.distanceKm }))
+  )
+
+  const handleResetToSaved = useCallback(() => {
+    setControls(savedSnapshot.map(rowFromSaved))
+  }, [savedSnapshot])
+
+  const handleSaveControls = useCallback(() => {
+    saveRows(controls)
+  }, [saveRows, controls])
 
   const isFormValid =
     organizerName &&
@@ -369,7 +549,7 @@ export function ControlCardsForm({ event, riders, organizer }: ControlCardsFormP
                 type="button"
                 variant="outline"
                 size="sm"
-                onClick={importFromRwgps}
+                onClick={() => importFromRwgps()}
                 disabled={isLoadingRwgps}
               >
                 {isLoadingRwgps ? (
@@ -386,6 +566,71 @@ export function ControlCardsForm({ event, riders, organizer }: ControlCardsFormP
             <p className="text-sm text-muted-foreground">
               No RWGPS route linked to this event. Add control points manually or link a route.
             </p>
+          )}
+
+          {/* Digital brevet card sync — hidden once the event is submitted. */}
+          {!eventSubmitted && (
+            <div className="border-t pt-4">
+              {!hasSavedControls ? (
+                <div className="space-y-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleSaveControls}
+                    disabled={!controlsAreSaveable || isSaving}
+                  >
+                    {isSaving ? (
+                      <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                    ) : (
+                      <Save className="h-4 w-4 mr-1" />
+                    )}
+                    Save controls to this event
+                  </Button>
+                  <p className="text-sm text-muted-foreground">
+                    Saving makes these the digital brevet card&apos;s controls and enables GPS
+                    check-in when coordinates are present.
+                  </p>
+                </div>
+              ) : inSync ? (
+                <p className="text-sm text-muted-foreground">
+                  In sync with the digital brevet card controls.
+                </p>
+              ) : (
+                <div className="space-y-3 rounded-md border border-amber-500/50 bg-amber-50 p-3 text-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
+                  <div className="flex items-start gap-2 text-sm">
+                    <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+                    <span>These controls differ from the saved digital-card controls.</span>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={handleSaveControls}
+                      disabled={!controlsAreSaveable || isSaving}
+                    >
+                      {isSaving ? (
+                        <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                      ) : (
+                        <Save className="h-4 w-4 mr-1" />
+                      )}
+                      Update saved controls
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleResetToSaved}
+                      disabled={isSaving}
+                    >
+                      <RotateCcw className="h-4 w-4 mr-1" />
+                      Reset to saved
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
           )}
         </CardContent>
       </Card>
