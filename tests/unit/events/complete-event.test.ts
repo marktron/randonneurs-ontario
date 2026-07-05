@@ -21,7 +21,9 @@ function buildSupabase({
   registrations,
   existingResults = [],
   createdToken = 'token-123',
+  backfilledToken,
   onInsert,
+  onUpdate,
 }: {
   registrations: Array<{
     id: string
@@ -29,9 +31,17 @@ function buildSupabase({
     management_token: string | null
     riders: { id: string; first_name: string; last_name: string; email: string | null } | null
   }>
-  existingResults?: Array<{ rider_id: string }>
+  existingResults?: Array<{
+    rider_id: string
+    status?: string
+    submitted_at?: string | null
+    submission_token?: string | null
+  }>
   createdToken?: string
+  /** Value the backfill update's `.select().maybeSingle()` reports back. */
+  backfilledToken?: string | null
   onInsert?: (row: Record<string, unknown>) => void
+  onUpdate?: (row: Record<string, unknown>) => void
 }) {
   return {
     from: vi.fn((table: string) => {
@@ -59,6 +69,27 @@ function buildSupabase({
                     error: null,
                   })
                 ),
+              })),
+            }
+          }),
+          update: vi.fn((row: Record<string, unknown>) => {
+            onUpdate?.(row)
+            return {
+              eq: vi.fn(() => ({
+                eq: vi.fn(() => ({
+                  is: vi.fn(() => ({
+                    select: vi.fn(() => ({
+                      maybeSingle: vi.fn(() =>
+                        Promise.resolve({
+                          data: {
+                            submission_token: backfilledToken ?? (row.submission_token as string),
+                          },
+                          error: null,
+                        })
+                      ),
+                    })),
+                  })),
+                })),
               })),
             }
           }),
@@ -204,7 +235,14 @@ describe('createPendingResultsAndSendEmails', () => {
             },
           },
         ],
-        existingResults: [{ rider_id: 'rider-1' }],
+        existingResults: [
+          {
+            rider_id: 'rider-1',
+            status: 'finished',
+            submitted_at: null,
+            submission_token: 'tok-existing',
+          },
+        ],
       })
     )
 
@@ -248,7 +286,14 @@ describe('createPendingResultsAndSendEmails', () => {
             },
           },
         ],
-        existingResults: [{ rider_id: 'rider-1' }],
+        existingResults: [
+          {
+            rider_id: 'rider-1',
+            status: 'finished',
+            submitted_at: null,
+            submission_token: 'tok-existing',
+          },
+        ],
       })
     )
 
@@ -269,5 +314,134 @@ describe('createPendingResultsAndSendEmails', () => {
         replyTo: 'vp-toronto@randonneursontario.ca',
       })
     )
+  })
+
+  it('emails a rider whose existing pending row already carries a submission token', async () => {
+    mockSupabaseAdmin.mockReturnValue(
+      buildSupabase({
+        registrations: [
+          {
+            id: 'reg-1',
+            rider_id: 'rider-1',
+            management_token: 'mgmt-1',
+            riders: {
+              id: 'rider-1',
+              first_name: 'Undo',
+              last_name: 'Rider',
+              email: 'undo@test.com',
+            },
+          },
+        ],
+        existingResults: [
+          {
+            rider_id: 'rider-1',
+            status: 'pending',
+            submitted_at: null,
+            submission_token: 'tok-existing',
+          },
+        ],
+      })
+    )
+
+    const result = await createPendingResultsAndSendEmails({
+      id: 'event-1',
+      name: 'Test Brevet',
+      event_date: '2026-05-10',
+      distance_km: 200,
+      chapters: { name: 'Toronto', slug: 'toronto' },
+    })
+
+    expect(result.resultsCreated).toBe(0)
+    expect(result.emailsSent).toBe(1)
+    expect(mockSendEmail).toHaveBeenCalledTimes(1)
+    expect(mockSendEmail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: 'undo@test.com',
+        html: expect.stringContaining('tok-existing'),
+      })
+    )
+  })
+
+  it('backfills a NULL submission token on an existing pending row before emailing', async () => {
+    const updated: Array<Record<string, unknown>> = []
+    mockSupabaseAdmin.mockReturnValue(
+      buildSupabase({
+        registrations: [
+          {
+            id: 'reg-1',
+            rider_id: 'rider-1',
+            management_token: 'mgmt-backfill-abc',
+            riders: {
+              id: 'rider-1',
+              first_name: 'Undo',
+              last_name: 'Rider',
+              email: 'undo@test.com',
+            },
+          },
+        ],
+        existingResults: [
+          { rider_id: 'rider-1', status: 'pending', submitted_at: null, submission_token: null },
+        ],
+        onUpdate: (row) => updated.push(row),
+      })
+    )
+
+    const result = await createPendingResultsAndSendEmails({
+      id: 'event-1',
+      name: 'Test Brevet',
+      event_date: '2026-05-10',
+      distance_km: 200,
+      chapters: { name: 'Toronto', slug: 'toronto' },
+    })
+
+    expect(result.resultsCreated).toBe(0)
+    expect(result.emailsSent).toBe(1)
+    expect(updated[0]).toMatchObject({ submission_token: 'mgmt-backfill-abc' })
+    expect(mockSendEmail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: 'undo@test.com',
+        html: expect.stringContaining('mgmt-backfill-abc'),
+      })
+    )
+  })
+
+  it('skips an existing pending row that already has submitted_at set', async () => {
+    mockSupabaseAdmin.mockReturnValue(
+      buildSupabase({
+        registrations: [
+          {
+            id: 'reg-1',
+            rider_id: 'rider-1',
+            management_token: 'mgmt-1',
+            riders: {
+              id: 'rider-1',
+              first_name: 'Submitted',
+              last_name: 'Rider',
+              email: 'submitted@test.com',
+            },
+          },
+        ],
+        existingResults: [
+          {
+            rider_id: 'rider-1',
+            status: 'pending',
+            submitted_at: '2026-05-11T00:00:00Z',
+            submission_token: 'tok-existing',
+          },
+        ],
+      })
+    )
+
+    const result = await createPendingResultsAndSendEmails({
+      id: 'event-1',
+      name: 'Test Brevet',
+      event_date: '2026-05-10',
+      distance_km: 200,
+      chapters: { name: 'Toronto', slug: 'toronto' },
+    })
+
+    expect(result.resultsCreated).toBe(0)
+    expect(result.emailsSent).toBe(0)
+    expect(mockSendEmail).not.toHaveBeenCalled()
   })
 })

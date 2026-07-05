@@ -3,12 +3,13 @@ import { sendResultSubmissionEmail } from '@/lib/email/send-result-submission-em
 import type { EventForSubmissionEmail } from '@/lib/email/send-result-submission-email'
 import type {
   RegistrationWithRider,
-  ResultWithRiderId,
+  ResultForCompletionCheck,
   ResultInsert,
+  ResultUpdate,
   ResultWithSubmissionToken,
 } from '@/types/queries'
 
-interface CreatedResult {
+interface ResultToEmail {
   riderId: string
   riderName: string
   riderEmail: string
@@ -34,7 +35,7 @@ export async function createPendingResultsAndSendEmails(
 ): Promise<CompleteEventResult> {
   const supabase = getSupabaseAdmin()
   const errors: string[] = []
-  const created: CreatedResult[] = []
+  const toEmail: ResultToEmail[] = []
   let resultsCreated = 0
   let emailsSent = 0
 
@@ -50,10 +51,14 @@ export async function createPendingResultsAndSendEmails(
     return { resultsCreated: 0, emailsSent: 0, errors }
   }
 
-  // Get existing results to avoid duplicates
+  // Get existing results to avoid duplicates. Also pull status/submitted_at/
+  // submission_token so we can still email riders who already hold a row
+  // (e.g. a card pre-fill reverted by an undo) that's still an un-submitted
+  // pending placeholder — createPendingResults never touches those rows, so
+  // without this they'd miss the event-close email entirely.
   const { data: existingResults, error: resError } = await supabase
     .from('results')
-    .select('rider_id')
+    .select('rider_id, status, submitted_at, submission_token')
     .eq('event_id', event.id)
 
   if (resError) {
@@ -61,8 +66,8 @@ export async function createPendingResultsAndSendEmails(
     return { resultsCreated: 0, emailsSent: 0, errors }
   }
 
-  const typedExistingResults = (existingResults || []) as ResultWithRiderId[]
-  const existingRiderIds = new Set(typedExistingResults.map((r) => r.rider_id))
+  const typedExistingResults = (existingResults || []) as ResultForCompletionCheck[]
+  const existingByRiderId = new Map(typedExistingResults.map((r) => [r.rider_id, r]))
 
   // Filter registrations that don't already have a result. Riders without an
   // email still get a pending result (admin can share the submission URL
@@ -71,8 +76,16 @@ export async function createPendingResultsAndSendEmails(
     management_token: string | null
   })[]
   const registrationsNeedingResults = typedRegistrations.filter(
-    (reg) => !existingRiderIds.has(reg.rider_id)
+    (reg) => !existingByRiderId.has(reg.rider_id)
   )
+
+  // Registrations that already have a row, but one still awaiting the
+  // rider's own submission (status pending, submitted_at NULL). All other
+  // existing rows (finished/dnf/otd/submitted) are left alone.
+  const registrationsWithPendingResults = typedRegistrations.filter((reg) => {
+    const existing = existingByRiderId.get(reg.rider_id)
+    return !!existing && existing.status === 'pending' && !existing.submitted_at
+  })
 
   // Calculate season from event date
   const eventYear = parseInt(event.event_date.split('-')[0])
@@ -111,7 +124,7 @@ export async function createPendingResultsAndSendEmails(
       continue
     }
 
-    created.push({
+    toEmail.push({
       riderId: reg.rider_id,
       riderName: `${rider.first_name} ${rider.last_name}`,
       riderEmail: rider.email,
@@ -119,8 +132,51 @@ export async function createPendingResultsAndSendEmails(
     })
   }
 
+  // Also email registered riders whose row already exists but is still an
+  // un-submitted pending placeholder (e.g. a rider undid a mistaken final
+  // check-in on the digital card). Use the row's own token; backfill it only
+  // if NULL, the same way a brand-new row would get one.
+  for (const reg of registrationsWithPendingResults) {
+    const rider = reg.riders
+    if (!rider || !rider.email) continue
+
+    const existing = existingByRiderId.get(reg.rider_id)!
+    let submissionToken = existing.submission_token
+
+    if (!submissionToken) {
+      const backfillToken = reg.management_token || crypto.randomUUID()
+      const { data: backfilled, error: backfillError } = await supabase
+        .from('results')
+        .update({ submission_token: backfillToken } as ResultUpdate)
+        .eq('event_id', event.id)
+        .eq('rider_id', reg.rider_id)
+        .is('submission_token', null)
+        .select('submission_token')
+        .maybeSingle()
+
+      if (backfillError) {
+        errors.push(
+          `Failed to backfill submission token for ${rider.first_name} ${rider.last_name}: ${backfillError.message}`
+        )
+        continue
+      }
+      // Zero rows matched (a race already gave the row a token, or moved it
+      // out of pending) — nothing left to backfill or email against.
+      if (!backfilled) continue
+
+      submissionToken = (backfilled as ResultWithSubmissionToken).submission_token
+    }
+
+    toEmail.push({
+      riderId: reg.rider_id,
+      riderName: `${rider.first_name} ${rider.last_name}`,
+      riderEmail: rider.email,
+      submissionToken: submissionToken || '',
+    })
+  }
+
   // Send emails to riders with their submission links
-  for (const result of created) {
+  for (const result of toEmail) {
     const { sent, error } = await sendResultSubmissionEmail({
       event,
       riderName: result.riderName,

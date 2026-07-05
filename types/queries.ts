@@ -515,6 +515,16 @@ export type RegistrationWithRider = Pick<Registration, 'id' | 'rider_id'> & {
 export type ResultWithSubmissionToken = Pick<Result, 'submission_token'>
 
 /**
+ * Result with status/submission fields for event completion's existing-row
+ * check — distinguishes a still-pending, un-submitted pre-fill (needs the
+ * event-close email) from finished/dnf/otd/submitted rows (skip).
+ */
+export type ResultForCompletionCheck = Pick<
+  Result,
+  'rider_id' | 'status' | 'submitted_at' | 'submission_token'
+>
+
+/**
  * Result with event and rider for submission page
  */
 export type ResultForSubmission = Pick<
