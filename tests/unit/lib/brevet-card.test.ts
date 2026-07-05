@@ -5,6 +5,7 @@ import {
   LATE_SYNC_THRESHOLD_MS,
   RIDER_UNDO_WINDOW_MS,
   computeControlWindow,
+  computeElapsedHm,
   computeEventStart,
   deriveCheckinFlags,
   detectWrongControl,
@@ -312,5 +313,28 @@ describe('formatDistanceKm', () => {
 describe('RIDER_UNDO_WINDOW_MS', () => {
   it('is fifteen minutes', () => {
     expect(RIDER_UNDO_WINDOW_MS).toBe(15 * 60 * 1000)
+  })
+})
+
+describe('computeElapsedHm', () => {
+  it('formats whole hours and minutes with zero-padded minutes', () => {
+    const start = new Date('2026-07-04T06:00:00Z')
+    expect(computeElapsedHm(start, new Date('2026-07-04T19:07:00Z'))).toBe('13:07')
+    expect(computeElapsedHm(start, new Date('2026-07-04T06:05:00Z'))).toBe('0:05')
+  })
+
+  it('rounds seconds down to the completed minute', () => {
+    const start = new Date('2026-07-04T06:00:00Z')
+    expect(computeElapsedHm(start, new Date('2026-07-04T07:30:59Z'))).toBe('1:30')
+  })
+
+  it('handles multi-day elapsed times as total hours', () => {
+    const start = new Date('2026-07-04T06:00:00Z')
+    expect(computeElapsedHm(start, new Date('2026-07-08T15:30:00Z'))).toBe('105:30')
+  })
+
+  it('clamps a finish before the start (clock skew) to 0:00', () => {
+    const start = new Date('2026-07-04T06:00:00Z')
+    expect(computeElapsedHm(start, new Date('2026-07-04T05:59:00Z'))).toBe('0:00')
   })
 })

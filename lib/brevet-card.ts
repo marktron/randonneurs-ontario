@@ -239,3 +239,15 @@ export function detectWrongControl(
 export function formatDistanceKm(meters: number): string {
   return (meters / 1000).toFixed(1)
 }
+
+/**
+ * Elapsed ride time as the H:MM string the results form accepts
+ * (`/^\d{1,3}:\d{2}$/` in submitRiderResult). Seconds round down; a finish
+ * before the start (device clock skew) clamps to 0:00.
+ */
+export function computeElapsedHm(start: Date, end: Date): string {
+  const totalMinutes = Math.max(0, Math.floor((end.getTime() - start.getTime()) / 60_000))
+  const hours = Math.floor(totalMinutes / 60)
+  const minutes = totalMinutes % 60
+  return `${hours}:${String(minutes).padStart(2, '0')}`
+}
