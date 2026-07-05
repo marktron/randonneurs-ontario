@@ -1,15 +1,22 @@
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { sendResultSubmissionEmail } from '@/lib/email/send-result-submission-email'
+import { sendRideCompleteEmail } from '@/lib/email/send-ride-complete-email'
+import { formatFinishTime } from '@/lib/utils'
 import type { EventForSubmissionEmail } from '@/lib/email/send-result-submission-email'
 
 interface RegistrationRow {
+  id: string
   rider_id: string
   riders: { id: string; first_name: string; last_name: string; email: string | null } | null
 }
 
-interface PendingResultRow {
+interface ReminderResultRow {
   rider_id: string
   submission_token: string | null
+  status: string | null
+  finish_time: string | null
+  gpx_url: string | null
+  gpx_file_path: string | null
 }
 
 export interface SendRemindersResult {
@@ -18,10 +25,15 @@ export interface SendRemindersResult {
 }
 
 /**
- * Sends result submission reminder emails to registered riders whose result
- * for the event is still pending. Re-uses the submission token created when
- * the event was completed (see complete-event.ts); riders without an email,
- * a pending result, or a token are skipped.
+ * Sends result reminder emails to registered riders for a completed event:
+ * - riders whose result is still pending get the standard submission
+ *   reminder (unchanged);
+ * - riders whose result is finished (digital-card pre-fill) but has neither
+ *   a Strava link nor a GPX file — and who have at least one card check-in —
+ *   get the "add your ride track" reminder. Paper-card riders without
+ *   check-ins are never nagged for a track.
+ * Re-uses the submission token created when the event was completed; riders
+ * without an email or token are skipped.
  */
 export async function sendResultSubmissionReminders(
   event: EventForSubmissionEmail
@@ -32,7 +44,7 @@ export async function sendResultSubmissionReminders(
 
   const { data: registrations, error: regError } = await supabase
     .from('registrations')
-    .select('rider_id, riders(id, first_name, last_name, email)')
+    .select('id, rider_id, riders(id, first_name, last_name, email)')
     .eq('event_id', event.id)
     .eq('status', 'registered')
 
@@ -41,42 +53,70 @@ export async function sendResultSubmissionReminders(
     return { emailsSent: 0, errors }
   }
 
-  const { data: pendingResults, error: resError } = await supabase
+  const typedRegistrations = (registrations || []) as RegistrationRow[]
+
+  const { data: resultRows, error: resError } = await supabase
     .from('results')
-    .select('rider_id, submission_token')
+    .select('rider_id, submission_token, status, finish_time, gpx_url, gpx_file_path')
     .eq('event_id', event.id)
-    .eq('status', 'pending')
 
   if (resError) {
-    errors.push(`Failed to fetch pending results: ${resError.message}`)
+    errors.push(`Failed to fetch results: ${resError.message}`)
     return { emailsSent: 0, errors }
   }
 
-  const tokensByRiderId = new Map(
-    ((pendingResults || []) as PendingResultRow[]).map((r) => [r.rider_id, r.submission_token])
+  const resultsByRiderId = new Map(
+    ((resultRows || []) as ReminderResultRow[]).map((r) => [r.rider_id, r])
   )
 
-  for (const reg of (registrations || []) as RegistrationRow[]) {
-    const rider = reg.riders
-    const submissionToken = tokensByRiderId.get(reg.rider_id)
+  const registrationIds = typedRegistrations.map((r) => r.id)
+  const { data: checkinRows, error: checkinError } = await supabase
+    .from('control_checkins')
+    .select('registration_id')
+    .in('registration_id', registrationIds)
 
-    if (!rider || !rider.email || !submissionToken) {
+  if (checkinError) {
+    errors.push(`Failed to fetch check-ins: ${checkinError.message}`)
+    return { emailsSent: 0, errors }
+  }
+
+  const registrationsWithCheckins = new Set(
+    ((checkinRows || []) as { registration_id: string }[]).map((c) => c.registration_id)
+  )
+
+  for (const reg of typedRegistrations) {
+    const rider = reg.riders
+    const result = resultsByRiderId.get(reg.rider_id)
+
+    if (!rider || !rider.email || !result || !result.submission_token) {
       continue
     }
 
-    const { sent, error } = await sendResultSubmissionEmail({
-      event,
-      riderName: `${rider.first_name} ${rider.last_name}`,
-      riderEmail: rider.email,
-      submissionToken,
-      reminder: true,
-    })
-
-    if (sent) {
-      emailsSent++
+    if (result.status === 'pending') {
+      const { sent, error } = await sendResultSubmissionEmail({
+        event,
+        riderName: `${rider.first_name} ${rider.last_name}`,
+        riderEmail: rider.email,
+        submissionToken: result.submission_token,
+        reminder: true,
+      })
+      if (sent) emailsSent++
+      if (error) errors.push(`Failed to send result reminder email: ${error}`)
+      continue
     }
-    if (error) {
-      errors.push(`Failed to send result reminder email: ${error}`)
+
+    const missingTrack = !result.gpx_url && !result.gpx_file_path
+    if (result.status === 'finished' && missingTrack && registrationsWithCheckins.has(reg.id)) {
+      const { sent, error } = await sendRideCompleteEmail({
+        event,
+        riderName: `${rider.first_name} ${rider.last_name}`,
+        riderEmail: rider.email,
+        submissionToken: result.submission_token,
+        finishTime: formatFinishTime(result.finish_time),
+        reminder: true,
+      })
+      if (sent) emailsSent++
+      if (error) errors.push(`Failed to send track reminder email: ${error}`)
     }
   }
 
