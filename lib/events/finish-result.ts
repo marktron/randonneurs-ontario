@@ -10,8 +10,12 @@ import type { ResultInsert, ResultUpdate } from '@/types/queries'
  * (status=finished + elapsed time) and email them once asking for their GPS
  * track. Pre-fill never sets submitted_at — that column stays the marker for
  * "the rider themselves submitted" — and never overwrites a row that has it.
- * Nothing here may throw: these run inside check-in/undo actions whose
- * success must not depend on the follow-up work.
+ * A retried check-in re-enters the card's OWN pre-fill (a finished row with
+ * prefilled_at set): if a crash landed the pre-fill insert but lost the email
+ * claim, the retry refreshes the row and resumes the single-send claim. The
+ * finish_email_sent_at guard keeps that idempotent. Nothing here may throw:
+ * these run inside check-in/undo actions whose success must not depend on the
+ * follow-up work.
  *
  * Neither function queries `event_controls` itself: whether the checked-in
  * (or undone) control is the event's final one is decided by the caller
@@ -59,11 +63,12 @@ export async function handleFinishIfFinalControl(params: FinishCheckinParams): P
     if (insertError) {
       // Unique violation (event_id, rider_id): the row already exists (cron,
       // manage page, or an earlier final check-in). Inspect it before touching
-      // it — only a still-pending, un-submitted card row may be re-filled.
+      // it — an un-submitted card pre-fill may be (re-)filled; anything an
+      // admin or the rider owns is authoritative.
       if (insertError.code === '23505') {
         const { data: existing, error: existingError } = await supabase
           .from('results')
-          .select('submission_token, submitted_at, status')
+          .select('submission_token, submitted_at, status, prefilled_at')
           .eq('event_id', event.id)
           .eq('rider_id', rider.id)
           .maybeSingle()
@@ -80,12 +85,25 @@ export async function handleFinishIfFinalControl(params: FinishCheckinParams): P
           submission_token: string | null
           submitted_at: string | null
           status: string | null
+          prefilled_at: string | null
         } | null
 
-        // No row (a concurrent delete), a row the rider already submitted, or
-        // any non-pending row (admin-entered finished/DNF/OTD) is authoritative
-        // — never overwrite it, and never claim/send an email against it.
-        if (!existingRow || existingRow.submitted_at || existingRow.status !== 'pending') {
+        // The row is re-enterable only if the rider hasn't submitted it AND it
+        // is either still pending, or a finish the card itself pre-filled
+        // (status 'finished' WITH prefilled_at set). The latter is the
+        // crash-retry case: the pre-fill insert landed but the process died
+        // before the email claim, so a retried check-in must carry it forward.
+        // A row with no match, a submitted row, or an admin-entered
+        // finished/DNF/OTD row (prefilled_at NULL) is authoritative — never
+        // overwrite it, and never claim/send an email against it.
+        const reenterablePending = existingRow?.status === 'pending'
+        const reenterablePrefill =
+          existingRow?.status === 'finished' && existingRow?.prefilled_at != null
+        if (
+          !existingRow ||
+          existingRow.submitted_at ||
+          !(reenterablePending || reenterablePrefill)
+        ) {
           return
         }
 
@@ -97,15 +115,20 @@ export async function handleFinishIfFinalControl(params: FinishCheckinParams): P
           // clobber a cron-issued token that may already have been emailed.
           ...(existingRow.submission_token ? {} : { submission_token: params.managementToken }),
         }
-        const { data: filled, error: updateError } = await supabase
+        // Re-assert the exact state we observed in the update's filters so a
+        // race that flips the row (admin edit, rider submit, undo) can still
+        // never be overwritten: a pending row must stay pending; a re-entered
+        // pre-fill must stay finished AND keep its prefilled_at marker.
+        let updateQuery = supabase
           .from('results')
           .update(updateData)
           .eq('event_id', event.id)
           .eq('rider_id', rider.id)
           .is('submitted_at', null)
-          .eq('status', 'pending')
-          .select('id')
-          .maybeSingle()
+        updateQuery = reenterablePending
+          ? updateQuery.eq('status', 'pending')
+          : updateQuery.eq('status', 'finished').not('prefilled_at', 'is', null)
+        const { data: filled, error: updateError } = await updateQuery.select('id').maybeSingle()
 
         if (updateError) {
           logError(updateError, {

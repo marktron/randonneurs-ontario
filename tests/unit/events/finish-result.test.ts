@@ -284,11 +284,18 @@ describe('handleFinishIfFinalControl', () => {
     expect(prefill?.payload && 'submission_token' in prefill.payload).toBe(false)
   })
 
-  it('never overwrites an admin-entered (non-pending) row on 23505', async () => {
+  it('never overwrites an admin-entered (finished, no prefilled_at) row on 23505', async () => {
     const calls = setupSupabase({
       insertResponse: { error: { code: '23505' } },
       existingRowResponse: {
-        data: { submission_token: null, submitted_at: null, status: 'finished' },
+        // Organizer-entered finished row: prefilled_at NULL marks it as NOT
+        // the card's own work, so it must stay fully authoritative.
+        data: {
+          submission_token: null,
+          submitted_at: null,
+          status: 'finished',
+          prefilled_at: null,
+        },
         error: null,
       },
     })
@@ -298,6 +305,78 @@ describe('handleFinishIfFinalControl', () => {
     expect(existingSelectCall(calls)).toBeDefined()
     expect(prefillUpdateCall(calls)).toBeUndefined()
     expect(claimCall(calls)).toBeUndefined()
+    expect(mockSendRideCompleteEmail).not.toHaveBeenCalled()
+  })
+
+  it('resumes its own pre-filled finish on 23505 when no email stamp exists (crash-retry)', async () => {
+    // Crash between the pre-fill insert and the email claim: the row is
+    // finished WITH prefilled_at set and submitted_at null — the card's own
+    // work. A retried final check-in must re-enter, refresh the row, and run
+    // the claim/send that was lost, rather than returning early.
+    const calls = setupSupabase({
+      insertResponse: { error: { code: '23505' } },
+      existingRowResponse: {
+        data: {
+          submission_token: 'tok-cron',
+          submitted_at: null,
+          status: 'finished',
+          prefilled_at: '2026-07-05T00:00:00Z',
+        },
+        error: null,
+      },
+      prefillUpdateResponse: { data: { id: 'r1' }, error: null },
+      claimResponse: { data: { id: 'r1', submission_token: 'tok-cron' }, error: null },
+    })
+
+    await handleFinishIfFinalControl(baseParams())
+
+    const prefill = prefillUpdateCall(calls)
+    expect(prefill).toBeDefined()
+    // The update re-asserts the observed finished+prefilled state so a
+    // concurrent admin/rider write can still never be clobbered.
+    expect(prefill?.eqArgs).toEqual([
+      ['event_id', EVENT_ID],
+      ['rider_id', RIDER_ID],
+      ['status', 'finished'],
+    ])
+    expect(prefill?.isArgs).toEqual([['submitted_at', null]])
+    expect(prefill?.notArgs).toEqual([['prefilled_at', 'is', null]])
+    // Token already present (non-NULL) so the payload carries no backfill.
+    expect(prefill?.payload).toEqual({
+      status: 'finished',
+      finish_time: FINISH_TIME,
+      prefilled_at: expect.any(String),
+    })
+
+    // The lost email claim/send now runs against the row's own token.
+    expect(claimCall(calls)).toBeDefined()
+    expect(mockSendRideCompleteEmail).toHaveBeenCalledTimes(1)
+    expect(mockSendRideCompleteEmail.mock.calls[0][0].submissionToken).toBe('tok-cron')
+  })
+
+  it('re-enters a pre-filled finish but sends nothing when the email was already stamped', async () => {
+    // Same crash-retry shape, but a prior retry already claimed the single
+    // send: the claim update matches zero rows, so re-entry refreshes the row
+    // yet never double-sends.
+    const calls = setupSupabase({
+      insertResponse: { error: { code: '23505' } },
+      existingRowResponse: {
+        data: {
+          submission_token: 'tok-cron',
+          submitted_at: null,
+          status: 'finished',
+          prefilled_at: '2026-07-05T00:00:00Z',
+        },
+        error: null,
+      },
+      prefillUpdateResponse: { data: { id: 'r1' }, error: null },
+      claimResponse: { data: null, error: null },
+    })
+
+    await handleFinishIfFinalControl(baseParams())
+
+    expect(prefillUpdateCall(calls)).toBeDefined()
+    expect(claimCall(calls)).toBeDefined()
     expect(mockSendRideCompleteEmail).not.toHaveBeenCalled()
   })
 

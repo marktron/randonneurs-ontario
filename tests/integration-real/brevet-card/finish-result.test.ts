@@ -448,6 +448,55 @@ describe('digital brevet card finish flow (real DB)', () => {
     expect(as.finish_email_sent_at).toBe(firstStamp)
   })
 
+  it('resumes the finish flow on a re-check-in when a prior pre-fill left no email stamp', async () => {
+    // Crash-retry shape: the pre-fill insert landed (status finished,
+    // prefilled_at set, submitted_at null) but the process died before the
+    // email claim, so finish_email_sent_at is still NULL. A retried final
+    // check-in must re-enter the card's own pre-fill and run the lost claim.
+    await checked(
+      supabase.from('results').insert({
+        event_id: IDS.event,
+        rider_id: IDS.rider,
+        status: 'finished',
+        finish_time: '6:00',
+        season: new Date().getFullYear(),
+        distance_km: 200,
+        submission_token: token,
+        prefilled_at: new Date().toISOString(),
+      }),
+      'seed pre-filled finished row without email stamp'
+    )
+
+    const checkin = await checkInAtControl(token, {
+      controlId: IDS.controlFinish,
+      checkedInAt: new Date().toISOString(),
+    })
+    expect(checkin.success).toBe(true)
+
+    const row = await checked(
+      supabase
+        .from('results')
+        .select('status, submission_token, submitted_at, prefilled_at, finish_email_sent_at')
+        .eq('event_id', IDS.event)
+        .eq('rider_id', IDS.rider)
+        .single(),
+      'read result after crash-retry re-check-in'
+    )
+    const typed = row as {
+      status: string
+      submission_token: string | null
+      submitted_at: string | null
+      prefilled_at: string | null
+      finish_email_sent_at: string | null
+    }
+    expect(typed.status).toBe('finished')
+    expect(typed.submission_token).toBe(token)
+    expect(typed.submitted_at).toBeNull()
+    expect(typed.prefilled_at).not.toBeNull()
+    // The claim that the crash lost now runs and stamps the single-send column.
+    expect(typed.finish_email_sent_at).not.toBeNull()
+  })
+
   it('backfills the management token when the existing pending row has none', async () => {
     // Pending row with a NULL submission_token (finding 2's edge case).
     await checked(
