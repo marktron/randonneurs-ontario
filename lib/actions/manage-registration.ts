@@ -357,6 +357,29 @@ export async function createEarlyResult(
     const { error: createError } = await supabase.from('results').insert(insertData)
 
     if (createError) {
+      // Unique violation (event_id, rider_id) — a concurrent writer (duplicate
+      // page load, or the event-completion job) created the result between our
+      // existence check and the insert. Return the existing row's token.
+      if (createError.code === '23505') {
+        const { data: existing, error: existingError } = await supabase
+          .from('results')
+          .select('submission_token')
+          .eq('event_id', reg.event_id)
+          .eq('rider_id', reg.rider_id)
+          .single()
+
+        if (!existingError && existing) {
+          const typed = existing as { submission_token: string | null }
+          return { ...createActionResult(), submissionToken: typed.submission_token || undefined }
+        }
+
+        return handleSupabaseError(
+          existingError,
+          { operation: 'createEarlyResult.fetchExisting', context: { registrationId: reg.id } },
+          'Failed to create result'
+        )
+      }
+
       return handleSupabaseError(
         createError,
         { operation: 'createEarlyResult', context: { registrationId: reg.id } },

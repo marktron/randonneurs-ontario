@@ -183,4 +183,40 @@ describe('createEarlyResult', () => {
     const result = await createEarlyResult('mgmt-token')
     expect(result).toEqual({ success: true, submissionToken: 'mgmt-token' })
   })
+
+  it('recovers when a concurrent writer inserts the result first (23505)', async () => {
+    // Registration found; no existing result at check time; insert loses the
+    // race; re-fetch returns the row the other writer created.
+    mockSingle
+      .mockResolvedValueOnce({ data: startedRegistration(), error: null })
+      .mockResolvedValueOnce({ data: null, error: { code: 'PGRST116' } })
+      .mockResolvedValueOnce({ data: { submission_token: 'cron-token' }, error: null })
+    mockInsert.mockResolvedValue({
+      data: null,
+      error: {
+        code: '23505',
+        message: 'duplicate key value violates unique constraint "results_event_id_rider_id_key"',
+      },
+    })
+
+    const result = await createEarlyResult('mgmt-token')
+    expect(result).toEqual({ success: true, submissionToken: 'cron-token' })
+    expect(Sentry.captureException).not.toHaveBeenCalled()
+  })
+
+  it('returns a failure when the 23505 re-fetch also fails', async () => {
+    mockSingle
+      .mockResolvedValueOnce({ data: startedRegistration(), error: null })
+      .mockResolvedValueOnce({ data: null, error: { code: 'PGRST116' } })
+      .mockResolvedValueOnce({ data: null, error: { message: 'connection reset' } })
+    mockInsert.mockResolvedValue({
+      data: null,
+      error: { code: '23505', message: 'duplicate key value' },
+    })
+
+    const result = await createEarlyResult('mgmt-token')
+    expect(result.success).toBe(false)
+    expect(result.error).toBe('Failed to create result')
+    expect(Sentry.captureException).toHaveBeenCalled()
+  })
 })
