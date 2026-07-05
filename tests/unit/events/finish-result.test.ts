@@ -172,6 +172,8 @@ function baseParams(overrides: Partial<FinishCheckinParams> = {}): FinishCheckin
 describe('handleFinishIfFinalControl', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    // Default the mock to a successful send
+    mockSendRideCompleteEmail.mockResolvedValue({ sent: true })
   })
 
   it('does nothing when the control is not the final one', async () => {
@@ -299,6 +301,45 @@ describe('handleFinishIfFinalControl', () => {
     expect(resultsCalls(calls)).toHaveLength(1)
     expect(insertCall(calls)).toBeDefined()
     expect(mockSendRideCompleteEmail).not.toHaveBeenCalled()
+  })
+
+  it('logs email error but continues when sendRideCompleteEmail fails', async () => {
+    const calls = setupSupabase({
+      maxPositionResponse: { data: { position: 3 }, error: null },
+      insertResponse: { error: null },
+      claimResponse: { data: { id: 'r1' }, error: null },
+    })
+
+    // Override the default mock for this test: simulate SES send failure
+    mockSendRideCompleteEmail.mockResolvedValue({ sent: false, error: 'SES error: quota exceeded' })
+
+    await expect(handleFinishIfFinalControl(baseParams())).resolves.toBeUndefined()
+
+    // The function should still return without throwing
+    expect(resultsCalls(calls)).toHaveLength(2) // insert, then claim update
+    expect(mockSendRideCompleteEmail).toHaveBeenCalledTimes(1)
+    // Verify that logError was called for the email operation
+    expect(mockLogError).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ operation: 'handleFinishIfFinalControl.email' })
+    )
+  })
+
+  it('logs and continues when querying max position fails', async () => {
+    const calls = setupSupabase({
+      maxPositionResponse: { data: null, error: { message: 'DB connection failed' } },
+    })
+
+    await expect(handleFinishIfFinalControl(baseParams())).resolves.toBeUndefined()
+
+    // No result operations should occur when the query fails
+    expect(resultsCalls(calls)).toHaveLength(0)
+    expect(mockSendRideCompleteEmail).not.toHaveBeenCalled()
+    // Verify that logError was called for the max position query
+    expect(mockLogError).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ operation: 'finishResult.maxPosition' })
+    )
   })
 
   it('logs and continues when the result insert fails with a non-unique error', async () => {
