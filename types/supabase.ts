@@ -565,6 +565,7 @@ export type Database = {
           created_at: string | null
           distance_km: number
           event_id: string
+          finish_email_sent_at: string | null
           finish_time: string | null
           gpx_file_path: string | null
           gpx_url: string | null
@@ -585,6 +586,7 @@ export type Database = {
           created_at?: string | null
           distance_km: number
           event_id: string
+          finish_email_sent_at?: string | null
           finish_time?: string | null
           gpx_file_path?: string | null
           gpx_url?: string | null
@@ -605,6 +607,7 @@ export type Database = {
           created_at?: string | null
           distance_km?: number
           event_id?: string
+          finish_email_sent_at?: string | null
           finish_time?: string | null
           gpx_file_path?: string | null
           gpx_url?: string | null
@@ -645,7 +648,6 @@ export type Database = {
       }
       rider_awards: {
         Row: {
-          auto_assigned: boolean
           award_id: string
           created_at: string | null
           id: string
@@ -655,7 +657,6 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
-          auto_assigned?: boolean
           award_id: string
           created_at?: string | null
           id?: string
@@ -665,7 +666,6 @@ export type Database = {
           updated_at?: string | null
         }
         Update: {
-          auto_assigned?: boolean
           award_id?: string
           created_at?: string | null
           id?: string
@@ -1375,10 +1375,6 @@ export type Database = {
       }
       reconcile_first_brevet_for_rider: {
         Args: { p_rider_id: string }
-        Returns: undefined
-      }
-      reconcile_super_randonneur_for_rider_season: {
-        Args: { p_rider_id: string; p_season: number }
         Returns: undefined
       }
     }
