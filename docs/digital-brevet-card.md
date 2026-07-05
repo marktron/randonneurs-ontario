@@ -214,7 +214,50 @@ Design notes:
 - After the finish control is checked: "Submit your result →
   `/results/submit/[token]`" (token already shared between the two flows;
   if no result row exists yet the existing `createEarlyResult` path covers
-  it via the manage page).
+  it via the manage page). See "Finish flow: result pre-fill & track
+  follow-up" below for what happens to the result row and email at that
+  moment.
+
+### Finish flow: result pre-fill & track follow-up
+
+Checking in at the **final control** (`lib/events/finish-result.ts`,
+`handleFinishIfFinalControl`) does two things beyond recording the
+check-in, so the rider never has to separately "start" their result:
+
+- **Pre-fills the result row**: `status = 'finished'` and `finish_time`
+  computed from the official event start to the final check-in's
+  `checked_in_at` (`computeElapsedHm` in `lib/brevet-card.ts`). If no
+  `results` row exists yet it's created (`submission_token` set to the
+  registration's `management_token`, same as the completion cron); if one
+  already exists it's updated in place. `submitted_at` is never touched by
+  pre-fill and a row that already has `submitted_at` set (the rider
+  submitted themselves) is never overwritten — pre-fill only ever loses to
+  the rider, not the other way around.
+- **Sends a one-time "add your ride track" email** (`sendRideCompleteEmail`,
+  `lib/email/send-ride-complete-email.ts`) asking the rider to add their
+  Strava link or GPX file once their device syncs, linking to
+  `/results/submit/[token]`. Guarded by the `results.finish_email_sent_at`
+  column: claimed atomically (update-where-null) so concurrent writers or a
+  later re-check-in never send it twice. The email is **skipped** when the
+  event is already `status = 'completed'` (the event-close flow already
+  asked for results — see below) or when the rider has no email on file.
+  Email failures are logged, never surfaced to the rider mid-check-in — the
+  admin "Send Reminders" flow is the backstop (see below).
+- **Undoing the final check-in** (`revertFinishIfFinalControl`, invoked
+  from `undoCheckin`) reverts the pre-fill — `status` back to `pending`,
+  `finish_time` cleared — but only while `submitted_at` is still null; a
+  rider who has since submitted keeps their submission. `finish_email_sent_at`
+  is deliberately **not** cleared by undo, so a later re-check-in can't
+  double-send the email.
+- The event-close flow (`createPendingResultsAndSendEmails` in
+  `lib/events/complete-event.ts`) skips its own "submit your results"
+  email for any rider whose results row already has `finish_email_sent_at`
+  or `submitted_at` set, so a finisher never gets both emails.
+- The results form (`components/result-submission-form.tsx`) shows an
+  "Almost done — add your ride track" banner instead of the generic
+  "Previously Submitted" one whenever the loaded result is `finished` with
+  neither a `gpx_url` nor a `gpx_file_path`, regardless of `submitted_at` —
+  submitting without a track is still allowed, this is messaging only.
 
 ### Server actions: `lib/actions/brevet-card.ts` (`'use server'`)
 
@@ -413,19 +456,20 @@ Each step lands as its own commit; the branch stays shippable throughout.
 
 ### File map (Phase 1, as shipped)
 
-| Concern                 | Location                                                                                                                                                                                                                                                                        |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Schema                  | `supabase/migrations/20260703120000_add_digital_brevet_card.sql`                                                                                                                                                                                                                |
-| Domain logic (pure)     | `lib/brevet-card.ts` — eligibility, event start, acceptance window, control windows, flag derivation                                                                                                                                                                            |
-| Rider actions           | `lib/actions/brevet-card.ts` — `getBrevetCardByToken`, `checkInAtControl`                                                                                                                                                                                                       |
-| Admin controls actions  | `lib/actions/event-controls.ts` — CRUD + RWGPS import                                                                                                                                                                                                                           |
-| Shared controls (print) | `components/admin/control-cards-form.tsx` prefills/saves back `event_controls`; matching + drift helpers in `lib/controlPoints.ts` (`matchImportedControls`, `controlsInSync`). See §16.                                                                                        |
-| Admin check-in actions  | `lib/actions/control-checkins.ts` — grid read, set/delete corrections                                                                                                                                                                                                           |
-| RWGPS coordinates       | `lib/rwgps.ts` — `extractControlsWithCoords`, `fetchRwgpsControlsWithCoords`                                                                                                                                                                                                    |
-| Rider page              | `app/card/[token]/page.tsx` + `components/brevet-card-view.tsx` (outbox lives here)                                                                                                                                                                                             |
-| Admin page              | `app/admin/events/[id]/brevet-card/page.tsx` + `components/admin/event-controls-manager.tsx` + `components/admin/event-checkins-grid.tsx` + `components/admin/checkin-map.tsx` (correction-dialog map)                                                                          |
-| Email                   | `lib/email/templates.ts` (`digitalCardUrl`), wired in `lib/actions/registration/finalize.ts`                                                                                                                                                                                    |
-| Tests                   | `tests/unit/lib/brevet-card.test.ts`, `tests/unit/lib/brevet-card-actions.test.ts`, `tests/unit/components/brevet-card-view.test.tsx`, `tests/integration-real/brevet-card/checkin.test.ts`, `tests/integration-real/brevet-card/undo.test.ts`, `tests/e2e/brevet-card.spec.ts` |
+| Concern                 | Location                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Schema                  | `supabase/migrations/20260703120000_add_digital_brevet_card.sql`                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| Domain logic (pure)     | `lib/brevet-card.ts` — eligibility, event start, acceptance window, control windows, flag derivation                                                                                                                                                                                                                                                                                                                                                                                               |
+| Rider actions           | `lib/actions/brevet-card.ts` — `getBrevetCardByToken`, `checkInAtControl`                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| Finish pre-fill & email | `lib/events/finish-result.ts` — `handleFinishIfFinalControl`, `revertFinishIfFinalControl`; `lib/email/send-ride-complete-email.ts` + `buildRideCompleteEmail` template; `results.finish_email_sent_at` column (migration `20260705120000_add_finish_email_sent_at.sql`)                                                                                                                                                                                                                           |
+| Admin controls actions  | `lib/actions/event-controls.ts` — CRUD + RWGPS import                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| Shared controls (print) | `components/admin/control-cards-form.tsx` prefills/saves back `event_controls`; matching + drift helpers in `lib/controlPoints.ts` (`matchImportedControls`, `controlsInSync`). See §16.                                                                                                                                                                                                                                                                                                           |
+| Admin check-in actions  | `lib/actions/control-checkins.ts` — grid read, set/delete corrections                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| RWGPS coordinates       | `lib/rwgps.ts` — `extractControlsWithCoords`, `fetchRwgpsControlsWithCoords`                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| Rider page              | `app/card/[token]/page.tsx` + `components/brevet-card-view.tsx` (outbox lives here)                                                                                                                                                                                                                                                                                                                                                                                                                |
+| Admin page              | `app/admin/events/[id]/brevet-card/page.tsx` + `components/admin/event-controls-manager.tsx` + `components/admin/event-checkins-grid.tsx` + `components/admin/checkin-map.tsx` (correction-dialog map)                                                                                                                                                                                                                                                                                             |
+| Email                   | `lib/email/templates.ts` (`digitalCardUrl`), wired in `lib/actions/registration/finalize.ts`                                                                                                                                                                                                                                                                                                                                                                                                       |
+| Tests                   | `tests/unit/lib/brevet-card.test.ts`, `tests/unit/lib/brevet-card-actions.test.ts`, `tests/unit/components/brevet-card-view.test.tsx`, `tests/integration-real/brevet-card/checkin.test.ts`, `tests/integration-real/brevet-card/undo.test.ts`, `tests/e2e/brevet-card.spec.ts`, `tests/unit/events/finish-result.test.ts`, `tests/integration-real/brevet-card/finish-result.test.ts`, `tests/unit/events/send-result-reminders.test.ts`, `tests/unit/components/result-submission-form.test.tsx` |
 
 ### Organizer how-to
 
@@ -453,6 +497,12 @@ Each step lands as its own commit; the branch stays shippable throughout.
 6. Coordinates come from RWGPS and may sit a parking lot away from the
    actual control — the generous 500 m default radius absorbs that. As
    coordinates get audited, tighten `radius_m` per control.
+7. The event's **Send Reminders** button (on `/admin/events/[id]` once the
+   event is completed) also covers digital-card finishers who checked in
+   at the final control but haven't added a Strava link or GPX file yet —
+   they get a track-only reminder instead of the full submission reminder.
+   Riders with no check-ins at all (paper-card only) are never nagged for
+   a track. See `lib/events/send-result-reminders.ts`.
 
 ## 16. Shared controls with the printed control card
 

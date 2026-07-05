@@ -33,6 +33,7 @@ import {
   ExternalLink,
   Clock,
   ArrowRight,
+  Route,
 } from 'lucide-react'
 import { format } from 'date-fns'
 import Link from 'next/link'
@@ -402,6 +403,8 @@ export function ResultSubmissionForm({ token, initialData }: ResultSubmissionFor
   }
 
   const eventDate = format(new Date(initialData.eventDate + 'T00:00:00'), 'EEEE, MMMM d, yyyy')
+  const needsTrack =
+    initialData.currentStatus === 'finished' && !initialData.gpxUrl && !initialData.gpxFilePath
 
   return (
     <div className="md:rounded-2xl md:border md:border-border md:bg-card md:p-8">
@@ -418,7 +421,20 @@ export function ResultSubmissionForm({ token, initialData }: ResultSubmissionFor
         </p>
       </header>
 
-      {initialData.submittedAt && (
+      {needsTrack ? (
+        <div className="flex items-start gap-3 mb-6 pb-6 border-b border-border">
+          <div className="flex-shrink-0 w-10 h-10 rounded-full bg-muted flex items-center justify-center">
+            <Route className="h-5 w-5 text-muted-foreground" />
+          </div>
+          <div>
+            <p className="font-medium text-sm">Almost done — add your ride track</p>
+            <p className="text-sm text-muted-foreground">
+              Your finish is recorded. Add your Strava link or GPX file below to complete your
+              submission.
+            </p>
+          </div>
+        </div>
+      ) : initialData.submittedAt ? (
         <div className="flex items-start gap-3 mb-6 pb-6 border-b border-border">
           <div className="flex-shrink-0 w-10 h-10 rounded-full bg-muted flex items-center justify-center">
             <Clock className="h-5 w-5 text-muted-foreground" />
@@ -430,7 +446,7 @@ export function ResultSubmissionForm({ token, initialData }: ResultSubmissionFor
             </p>
           </div>
         </div>
-      )}
+      ) : null}
 
       <form className="space-y-6" onSubmit={handleSubmit}>
         {error && (

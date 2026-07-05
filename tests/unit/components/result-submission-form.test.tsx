@@ -284,4 +284,76 @@ describe('ResultSubmissionForm', () => {
       expect(screen.queryByRole('button', { name: /submit your result/i })).not.toBeInTheDocument()
     })
   })
+
+  describe('almost-done banner', () => {
+    it('shows the almost-done banner when finished with no track', () => {
+      render(
+        <ResultSubmissionForm
+          token="test-token-123"
+          initialData={{
+            ...mockInitialData,
+            currentStatus: 'finished',
+            gpxUrl: null,
+            gpxFilePath: null,
+            submittedAt: null,
+          }}
+        />
+      )
+
+      expect(screen.getByText(/almost done/i)).toBeInTheDocument()
+      expect(screen.getByText(/strava link or gpx file/i)).toBeInTheDocument()
+    })
+
+    it('prefers the almost-done banner over the previously-submitted banner', () => {
+      render(
+        <ResultSubmissionForm
+          token="test-token-123"
+          initialData={{
+            ...mockInitialData,
+            currentStatus: 'finished',
+            gpxUrl: null,
+            gpxFilePath: null,
+            submittedAt: '2025-05-15T12:00:00Z',
+          }}
+        />
+      )
+
+      expect(screen.getByText(/almost done/i)).toBeInTheDocument()
+      expect(screen.queryByText('Previously Submitted')).not.toBeInTheDocument()
+    })
+
+    it('shows the previously-submitted banner when a track exists', () => {
+      render(
+        <ResultSubmissionForm
+          token="test-token-123"
+          initialData={{
+            ...mockInitialData,
+            currentStatus: 'finished',
+            gpxUrl: 'https://strava.com/activities/123',
+            gpxFilePath: null,
+            submittedAt: '2025-05-15T12:00:00Z',
+          }}
+        />
+      )
+
+      expect(screen.getByText('Previously Submitted')).toBeInTheDocument()
+      expect(screen.queryByText(/almost done/i)).not.toBeInTheDocument()
+    })
+
+    it('shows no banner for a pending unsubmitted result', () => {
+      render(
+        <ResultSubmissionForm
+          token="test-token-123"
+          initialData={{
+            ...mockInitialData,
+            currentStatus: 'pending',
+            submittedAt: null,
+          }}
+        />
+      )
+
+      expect(screen.queryByText(/almost done/i)).not.toBeInTheDocument()
+      expect(screen.queryByText('Previously Submitted')).not.toBeInTheDocument()
+    })
+  })
 })

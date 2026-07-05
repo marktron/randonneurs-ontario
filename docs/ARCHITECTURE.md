@@ -194,8 +194,10 @@ Admin submits final results to ACP
 **Key components:**
 
 - `lib/events/complete-event.ts` - Creates pending results and sends emails
-- `lib/events/send-result-reminders.ts` - Re-sends the submission email (reminder variant) to registered riders whose result is still pending; triggered by the "Send Reminders" button on `/admin/events/[id]` for completed events (cancelled registrations excluded)
+- `lib/events/send-result-reminders.ts` - Re-sends the submission email (reminder variant) to registered riders whose result is still pending; triggered by the "Send Reminders" button on `/admin/events/[id]` for completed events (cancelled registrations excluded). Also sends a track-only reminder to digital-card riders whose result is `finished` (pre-filled from their final check-in) but still missing a Strava link/GPX file, provided their registration has at least one `control_checkins` row — see `docs/digital-brevet-card.md`
+- `lib/events/finish-result.ts` - Pre-fills a rider's result (`status`, `finish_time`) from their final-control check-in and sends the one-time "add your ride track" email (`results.finish_email_sent_at` guard); reverts the pre-fill on check-in undo unless the rider already submitted
 - `lib/email/send-result-submission-email.ts` - Shared builder/sender for the submission email and its reminder variant (VP reply-to, submission URL)
+- `lib/email/send-ride-complete-email.ts` - Builder/sender for the finish-flow "add your ride track" email and its reminder variant
 - `lib/actions/rider-results.ts` - Handles rider submissions and file uploads
 - `components/result-submission-form.tsx` - Rider-facing submission form
 - `components/admin/event-results-manager.tsx` - Admin view with evidence column and "Email Participants" mailto link (BCC'd to all registered riders, subject pre-populated with event name and date)
