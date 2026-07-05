@@ -488,4 +488,60 @@ describe('digital brevet card finish flow (real DB)', () => {
     expect(typed.submission_token).toBe(token)
     expect(typed.prefilled_at).not.toBeNull()
   })
+
+  it('keeps a pending row token that is not the management token and still stamps the email claim', async () => {
+    // Admin-created pending shape: inserting without submission_token lets the
+    // gen_random_uuid() default fill a token that is NOT the management token.
+    await checked(
+      supabase.from('results').insert({
+        event_id: IDS.event,
+        rider_id: IDS.rider,
+        status: 'pending',
+        season: new Date().getFullYear(),
+        distance_km: 200,
+      }),
+      'seed pending result with default token'
+    )
+
+    const seeded = await checked(
+      supabase
+        .from('results')
+        .select('submission_token')
+        .eq('event_id', IDS.event)
+        .eq('rider_id', IDS.rider)
+        .single(),
+      'read seeded default token'
+    )
+    const seededToken = (seeded as { submission_token: string | null }).submission_token
+    expect(seededToken).not.toBeNull()
+    expect(seededToken).not.toBe(token)
+
+    const checkin = await checkInAtControl(token, {
+      controlId: IDS.controlFinish,
+      checkedInAt: new Date().toISOString(),
+    })
+    expect(checkin.success).toBe(true)
+
+    const row = await checked(
+      supabase
+        .from('results')
+        .select('status, submission_token, prefilled_at, finish_email_sent_at')
+        .eq('event_id', IDS.event)
+        .eq('rider_id', IDS.rider)
+        .single(),
+      'read result after pre-fill on a default-token row'
+    )
+    const typed = row as {
+      status: string
+      submission_token: string | null
+      prefilled_at: string | null
+      finish_email_sent_at: string | null
+    }
+    expect(typed.status).toBe('finished')
+    // The existing token is preserved (no clobber with the management token);
+    // the unit suite asserts the email links this row token.
+    expect(typed.submission_token).toBe(seededToken)
+    expect(typed.prefilled_at).not.toBeNull()
+    expect(typed.finish_email_sent_at).not.toBeNull()
+  })
 })

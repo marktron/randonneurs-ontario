@@ -153,7 +153,7 @@ export async function handleFinishIfFinalControl(params: FinishCheckinParams): P
       .eq('rider_id', rider.id)
       .is('finish_email_sent_at', null)
       .is('submitted_at', null)
-      .select('id')
+      .select('id, submission_token')
       .maybeSingle()
 
     if (claimError) {
@@ -165,6 +165,15 @@ export async function handleFinishIfFinalControl(params: FinishCheckinParams): P
     }
     if (!claimed) return
 
+    // Link the token the claimed row actually carries. An admin-created
+    // pending row holds a gen_random_uuid() default token (non-NULL, so the
+    // pre-fill never backfills it) — emailing the management token there
+    // would be a dead link. Fall back to the management token only if the
+    // row's token is somehow NULL (the insert path and backfill prevent it).
+    const rowToken =
+      (claimed as { id: string; submission_token: string | null }).submission_token ??
+      params.managementToken
+
     const { error: emailError } = await sendRideCompleteEmail({
       event: {
         id: event.id,
@@ -175,7 +184,7 @@ export async function handleFinishIfFinalControl(params: FinishCheckinParams): P
       },
       riderName: `${rider.firstName} ${rider.lastName}`,
       riderEmail: rider.email,
-      submissionToken: params.managementToken,
+      submissionToken: rowToken,
       finishTime: params.finishTime,
     })
 

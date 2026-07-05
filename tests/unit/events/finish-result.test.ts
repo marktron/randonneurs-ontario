@@ -337,6 +337,28 @@ describe('handleFinishIfFinalControl', () => {
     expect(mockSendRideCompleteEmail).not.toHaveBeenCalled()
   })
 
+  it('emails the row token, not the management token, when a pending row carries its own', async () => {
+    // Admin-created pending rows get a gen_random_uuid() default token: it is
+    // non-NULL so no backfill happens, and the email must link THAT token —
+    // the management token would be a dead link no row carries.
+    const calls = setupSupabase({
+      maxPositionResponse: { data: { position: 3 }, error: null },
+      insertResponse: { error: { code: '23505' } },
+      existingRowResponse: {
+        data: { submission_token: 'tok-random-uuid', submitted_at: null, status: 'pending' },
+        error: null,
+      },
+      prefillUpdateResponse: { data: { id: 'r1' }, error: null },
+      claimResponse: { data: { id: 'r1', submission_token: 'tok-random-uuid' }, error: null },
+    })
+
+    await handleFinishIfFinalControl(baseParams())
+
+    expect(claimCall(calls)).toBeDefined()
+    expect(mockSendRideCompleteEmail).toHaveBeenCalledTimes(1)
+    expect(mockSendRideCompleteEmail.mock.calls[0][0].submissionToken).toBe('tok-random-uuid')
+  })
+
   it('does not claim/send when the 23505 pre-fill update matches zero rows', async () => {
     const calls = setupSupabase({
       maxPositionResponse: { data: { position: 3 }, error: null },
@@ -359,7 +381,8 @@ describe('handleFinishIfFinalControl', () => {
     const calls = setupSupabase({
       maxPositionResponse: { data: { position: 3 }, error: null },
       insertResponse: { error: null },
-      claimResponse: { data: { id: 'r1' }, error: null },
+      // On the insert path the row's token IS the management token.
+      claimResponse: { data: { id: 'r1', submission_token: MANAGEMENT_TOKEN }, error: null },
     })
 
     await handleFinishIfFinalControl(baseParams())
