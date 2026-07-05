@@ -576,6 +576,7 @@ export type Database = {
           rider_notes: string | null
           season: number
           status: string | null
+          submission_email_sent_at: string | null
           submission_token: string | null
           submitted_at: string | null
           team_name: string | null
@@ -598,6 +599,7 @@ export type Database = {
           rider_notes?: string | null
           season: number
           status?: string | null
+          submission_email_sent_at?: string | null
           submission_token?: string | null
           submitted_at?: string | null
           team_name?: string | null
@@ -620,6 +622,7 @@ export type Database = {
           rider_notes?: string | null
           season?: number
           status?: string | null
+          submission_email_sent_at?: string | null
           submission_token?: string | null
           submitted_at?: string | null
           team_name?: string | null

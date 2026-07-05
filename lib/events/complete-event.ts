@@ -151,6 +151,8 @@ export async function createPendingResultsAndSendEmails(
         .eq('event_id', event.id)
         .eq('rider_id', reg.rider_id)
         .is('submission_token', null)
+        .eq('status', 'pending')
+        .is('submitted_at', null)
         .select('submission_token')
         .maybeSingle()
 
@@ -175,8 +177,30 @@ export async function createPendingResultsAndSendEmails(
     })
   }
 
-  // Send emails to riders with their submission links
+  // Send emails to riders with their submission links. Both the new-row and
+  // existing-pending-row candidates flow through here, so a single atomic
+  // claim covers both: re-running this function (cron retry, admin
+  // re-completing an event) must never double-email a rider. Stamp
+  // submission_email_sent_at only if it's still NULL; zero rows back means
+  // another run already claimed (or won) the send — skip without emailing.
   for (const result of toEmail) {
+    const { data: claimed, error: claimError } = await supabase
+      .from('results')
+      .update({ submission_email_sent_at: new Date().toISOString() } as ResultUpdate)
+      .eq('event_id', event.id)
+      .eq('rider_id', result.riderId)
+      .is('submission_email_sent_at', null)
+      .select('id')
+      .maybeSingle()
+
+    if (claimError) {
+      errors.push(
+        `Failed to claim submission email send for ${result.riderName}: ${claimError.message}`
+      )
+      continue
+    }
+    if (!claimed) continue
+
     const { sent, error } = await sendResultSubmissionEmail({
       event,
       riderName: result.riderName,
