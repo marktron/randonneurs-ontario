@@ -304,7 +304,7 @@ describe('ResultSubmissionForm', () => {
       expect(screen.getByText(/strava link or gpx file/i)).toBeInTheDocument()
     })
 
-    it('prefers the almost-done banner over the previously-submitted banner', () => {
+    it('shows the previously-submitted banner even without a track after submission', () => {
       render(
         <ResultSubmissionForm
           token="test-token-123"
@@ -318,8 +318,8 @@ describe('ResultSubmissionForm', () => {
         />
       )
 
-      expect(screen.getByText(/almost done/i)).toBeInTheDocument()
-      expect(screen.queryByText('Previously Submitted')).not.toBeInTheDocument()
+      expect(screen.getByText('Previously Submitted')).toBeInTheDocument()
+      expect(screen.queryByText(/almost done/i)).not.toBeInTheDocument()
     })
 
     it('shows the previously-submitted banner when a track exists', () => {

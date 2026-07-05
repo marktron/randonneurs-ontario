@@ -404,7 +404,10 @@ export function ResultSubmissionForm({ token, initialData }: ResultSubmissionFor
 
   const eventDate = format(new Date(initialData.eventDate + 'T00:00:00'), 'EEEE, MMMM d, yyyy')
   const needsTrack =
-    initialData.currentStatus === 'finished' && !initialData.gpxUrl && !initialData.gpxFilePath
+    initialData.currentStatus === 'finished' &&
+    !initialData.gpxUrl &&
+    !initialData.gpxFilePath &&
+    !initialData.submittedAt
 
   return (
     <div className="md:rounded-2xl md:border md:border-border md:bg-card md:p-8">
