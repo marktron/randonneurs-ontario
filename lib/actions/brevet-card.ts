@@ -387,12 +387,27 @@ export async function checkInAtControl(token: string, input: CheckinInput): Prom
       }
     }
 
-    // Verify the control belongs to this registration's event.
-    const { data: controlRow, error: controlError } = await supabase
-      .from('event_controls')
-      .select('id, event_id, name, position, distance_km, lat, lng, radius_m')
-      .eq('id', input.controlId)
-      .single()
+    // Verify the control belongs to this registration's event, and — in the
+    // same round trip — find the event's highest control position, so the
+    // finish flow below doesn't need a second sequential event_controls
+    // query to know whether this was the final control.
+    const [
+      { data: controlRow, error: controlError },
+      { data: maxPositionRow, error: maxPositionError },
+    ] = await Promise.all([
+      supabase
+        .from('event_controls')
+        .select('id, event_id, name, position, distance_km, lat, lng, radius_m')
+        .eq('id', input.controlId)
+        .single(),
+      supabase
+        .from('event_controls')
+        .select('position')
+        .eq('event_id', event.id)
+        .order('position', { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+    ])
 
     if (controlError || !controlRow) {
       return { success: false, error: 'Control not found' }
@@ -412,6 +427,20 @@ export async function checkInAtControl(token: string, input: CheckinInput): Prom
     if (control.event_id !== event.id) {
       return { success: false, error: 'Control not found' }
     }
+
+    // If the max-position query failed, treat this as not the final control
+    // (same fallback the old sequential query used) rather than risk a
+    // wrongly-triggered finish flow.
+    if (maxPositionError) {
+      logError(maxPositionError, {
+        operation: 'checkInAtControl.maxPosition',
+        context: { eventId: event.id },
+      })
+    }
+    const isFinalControl =
+      !maxPositionError &&
+      maxPositionRow != null &&
+      (maxPositionRow as { position: number }).position === control.position
 
     // The server derives the method: coordinates present → gps, absent →
     // manual (recorded and flagged for organizer review, never blocked).
@@ -492,6 +521,7 @@ export async function checkInAtControl(token: string, input: CheckinInput): Prom
     // "add your track" email. Never blocks the check-in (module never throws).
     await handleFinishIfFinalControl({
       controlPosition: control.position,
+      isFinalControl,
       event: {
         id: event.id,
         name: event.name,
@@ -631,10 +661,25 @@ export async function undoCheckin(token: string, input: UndoCheckinInput): Promi
       }
     }
 
-    const { error: deleteError } = await supabase
-      .from('control_checkins')
-      .delete()
-      .eq('id', checkin.id)
+    // Delete the check-in and — in the same round trip — find whether the
+    // undone control was the event's final one (control's own position vs.
+    // the event's highest position), so revertFinishIfFinalControl below
+    // doesn't need its own sequential event_controls queries.
+    const [
+      { error: deleteError },
+      { data: controlPositionRow, error: controlPositionError },
+      { data: maxPositionRow, error: maxPositionError },
+    ] = await Promise.all([
+      supabase.from('control_checkins').delete().eq('id', checkin.id),
+      supabase.from('event_controls').select('position').eq('id', input.controlId).single(),
+      supabase
+        .from('event_controls')
+        .select('position')
+        .eq('event_id', event.id)
+        .order('position', { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+    ])
 
     if (deleteError) {
       return handleSupabaseError(
@@ -644,11 +689,34 @@ export async function undoCheckin(token: string, input: UndoCheckinInput): Promi
       )
     }
 
+    // Either query failing means we can't confirm this was the final
+    // control — same not-final fallback the old sequential lookup used.
+    if (controlPositionError) {
+      logError(controlPositionError, {
+        operation: 'undoCheckin.controlPosition',
+        context: { controlId: input.controlId },
+      })
+    }
+    if (maxPositionError) {
+      logError(maxPositionError, {
+        operation: 'undoCheckin.maxPosition',
+        context: { eventId: event.id },
+      })
+    }
+    const isFinalControl =
+      !controlPositionError &&
+      controlPositionRow != null &&
+      !maxPositionError &&
+      maxPositionRow != null &&
+      (controlPositionRow as { position: number }).position ===
+        (maxPositionRow as { position: number }).position
+
     // If the rider undid their finish check-in, roll back the pre-filled result.
     await revertFinishIfFinalControl({
       eventId: event.id,
       riderId: reg.rider_id,
       controlId: input.controlId,
+      isFinalControl,
     })
 
     revalidatePath(`/card/${token}`)

@@ -222,42 +222,91 @@ Design notes:
 
 Checking in at the **final control** (`lib/events/finish-result.ts`,
 `handleFinishIfFinalControl`) does two things beyond recording the
-check-in, so the rider never has to separately "start" their result:
+check-in, so the rider never has to separately "start" their result. Both
+the check-in action and the undo action decide "was this the final
+control?" themselves (see "Server actions" below) and pass the answer in
+as `isFinalControl` — `finish-result.ts` never queries `event_controls`.
 
-- **Pre-fills the result row**: `status = 'finished'` and `finish_time`
-  computed from the official event start to the final check-in's
-  `checked_in_at` (`computeElapsedHm` in `lib/brevet-card.ts`). If no
-  `results` row exists yet it's created (`submission_token` set to the
-  registration's `management_token`, same as the completion cron); if one
-  already exists it's updated in place. `submitted_at` is never touched by
-  pre-fill and a row that already has `submitted_at` set (the rider
-  submitted themselves) is never overwritten — pre-fill only ever loses to
-  the rider, not the other way around.
+- **Pre-fills the result row, marked with `prefilled_at`.** `status =
+'finished'` and `finish_time` computed from the official event start to
+  the final check-in's `checked_in_at` (`computeElapsedHm` in
+  `lib/brevet-card.ts`, which delegates its H:MM formatting to
+  `formatElapsedForSubmission`). Every pre-fill write — the initial insert
+  and any later re-fill — also stamps `results.prefilled_at` with the
+  current time. That column is the provenance marker that answers "did the
+  card write this row, or did a human?":
+  - If no `results` row exists yet, one is created (`submission_token` set
+    to the registration's `management_token`, same as the completion cron;
+    `prefilled_at` set).
+  - If a row already exists (unique-violation path), it's inspected first
+    (`submission_token, submitted_at, status`) before being touched. Only a
+    row that is still `status = 'pending'` **and** has no `submitted_at` is
+    re-filled — an admin-entered row (`finished`/`dnf`/`otd`, `prefilled_at`
+    NULL because a human created it) or a row the rider already submitted
+    is left completely alone: no update, no email claim. The re-fill update
+    re-asserts `status = 'pending'` and `submitted_at IS NULL` as filters
+    (closing the race the initial select can't fully rule out) and backfills
+    `submission_token` **only when it's NULL** — a cron-issued or
+    admin-default token that may already have been emailed is never
+    clobbered.
+  - `submitted_at` is never touched by pre-fill; admin `updateResult` and
+    rider `submitRiderResult` both clear `prefilled_at` on save, so an
+    organizer or rider correction immediately becomes "not a card row"
+    and is safe from a later undo (see below).
 - **Sends a one-time "add your ride track" email** (`sendRideCompleteEmail`,
   `lib/email/send-ride-complete-email.ts`) asking the rider to add their
   Strava link or GPX file once their device syncs, linking to
   `/results/submit/[token]`. Guarded by the `results.finish_email_sent_at`
-  column: claimed atomically (update-where-null) so concurrent writers or a
-  later re-check-in never send it twice. The email is **skipped** when the
+  column: claimed atomically (update-where-null, also requiring
+  `submitted_at IS NULL`) so concurrent writers, a rider who submitted in
+  the interim, or a later re-check-in never send it twice. The claim update
+  returns the row's own `submission_token`, and **that's the token the
+  email links** — not always the check-in's `management_token`. An
+  admin-created pending row can carry its own `gen_random_uuid()` default
+  token (never clobbered by the backfill-only-when-NULL rule above), so
+  emailing the management token there would be a dead link; the management
+  token is used only as a fallback for the vanishingly unlikely case the
+  claimed row's token is itself NULL. The email is **skipped** when the
   event is already `status = 'completed'` (the event-close flow already
   asked for results — see below) or when the rider has no email on file.
   Email failures are logged, never surfaced to the rider mid-check-in — the
   admin "Send Reminders" flow is the backstop (see below).
 - **Undoing the final check-in** (`revertFinishIfFinalControl`, invoked
   from `undoCheckin`) reverts the pre-fill — `status` back to `pending`,
-  `finish_time` cleared — but only while `submitted_at` is still null; a
-  rider who has since submitted keeps their submission. `finish_email_sent_at`
+  `finish_time` cleared, `prefilled_at` cleared — but the update filters
+  require both `submitted_at IS NULL` **and** `prefilled_at IS NOT NULL`.
+  The `prefilled_at` filter is what makes undo safe: it means undo can only
+  ever roll back a row the card itself wrote. An admin-created row
+  (`prefilled_at` NULL from the start) or a row an admin/rider has since
+  corrected (`prefilled_at` cleared by that save) is never touched by an
+  undo, even if its `status` happens to be `finished`. `finish_email_sent_at`
   is deliberately **not** cleared by undo, so a later re-check-in can't
   double-send the email.
 - The event-close flow (`createPendingResultsAndSendEmails` in
   `lib/events/complete-event.ts`) skips its own "submit your results"
   email for any rider whose results row already has `finish_email_sent_at`
-  or `submitted_at` set, so a finisher never gets both emails.
+  or `submitted_at` set, so a finisher never gets both emails. It also now
+  **emails registered riders whose results row already exists but is still
+  a pending, un-submitted placeholder** (e.g. a rider undid a mistaken
+  final check-in before the event closed) — those rows are otherwise
+  invisible to the "create pending results" loop, which only handles
+  riders with no row at all. It reuses the row's own `submission_token`,
+  backfilling it first (same NULL-only rule as the card pre-fill) when the
+  row has none.
 - The results form (`components/result-submission-form.tsx`) shows an
   "Almost done — add your ride track" banner instead of the generic
-  "Previously Submitted" one whenever the loaded result is `finished` with
-  neither a `gpx_url` nor a `gpx_file_path`, regardless of `submitted_at` —
-  submitting without a track is still allowed, this is messaging only.
+  "Previously Submitted" one only when the loaded result is `finished`,
+  has neither a `gpx_url` nor a `gpx_file_path`, **and** `submittedAt` is
+  unset. A rider who has explicitly submitted always sees "Previously
+  Submitted" (with its overwrite warning) — the submitted confirmation
+  takes precedence over the track nudge, never the other way around.
+- The admin "Send Reminders" flow (`lib/events/send-result-reminders.ts`)
+  skips any rider whose result already has `submitted_at` set, for either
+  the pending-submission reminder or the track-only reminder — a rider who
+  submitted is never re-nagged. A `control_checkins` fetch error doesn't
+  abort the run: pending-submission reminders still go out that pass, just
+  without any track reminders (which need the check-in set to know who
+  actually finished via the card).
 
 ### Server actions: `lib/actions/brevet-card.ts` (`'use server'`)
 
@@ -276,12 +325,22 @@ check-in, so the rider never has to separately "start" their result:
   `ON CONFLICT` → return existing check-in (idempotent). Transient failures
   (rate limit, DB errors) are marked `retryable: true` so the client outbox
   keeps them queued; only outright rejections are dropped client-side.
+  While verifying the tapped control belongs to the event, it also fetches
+  the event's highest control position in the same `Promise.all` (rather
+  than a second, sequential query after the check-in is recorded) and
+  computes `isFinalControl` itself, passed straight into
+  `handleFinishIfFinalControl` — see "Finish flow" above. A failed
+  max-position lookup is logged and treated as not-final, same as the code
+  it replaced.
 - `undoCheckin(token, { controlId })` — rider-side undo. Same token
   validation and per-token rate limit as `checkInAtControl`; rejects with a
   clear message when the check-in isn't found, was recorded by an organizer
   (`method='admin'`), the event is frozen (submitted/cancelled), or more than
   `RIDER_UNDO_WINDOW_MS` has elapsed since `received_at`. On success it
-  deletes the row and revalidates `/card/{token}`.
+  deletes the row and revalidates `/card/{token}`. The undone control's own
+  position and the event's highest control position are both fetched in the
+  same `Promise.all` as the delete (not sequentially afterward), and the
+  resulting `isFinalControl` is passed into `revertFinishIfFinalControl`.
 - Wrong-control detection (`detectWrongControl`) and the undo window
   (`RIDER_UNDO_WINDOW_MS`) live in the pure `lib/brevet-card.ts` module so
   they're client-safe and unit-testable without React.
@@ -460,8 +519,8 @@ Each step lands as its own commit; the branch stays shippable throughout.
 | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Schema                  | `supabase/migrations/20260703120000_add_digital_brevet_card.sql`                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | Domain logic (pure)     | `lib/brevet-card.ts` — eligibility, event start, acceptance window, control windows, flag derivation                                                                                                                                                                                                                                                                                                                                                                                               |
-| Rider actions           | `lib/actions/brevet-card.ts` — `getBrevetCardByToken`, `checkInAtControl`                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| Finish pre-fill & email | `lib/events/finish-result.ts` — `handleFinishIfFinalControl`, `revertFinishIfFinalControl`; `lib/email/send-ride-complete-email.ts` + `buildRideCompleteEmail` template; `results.finish_email_sent_at` column (migration `20260705120000_add_finish_email_sent_at.sql`)                                                                                                                                                                                                                           |
+| Rider actions           | `lib/actions/brevet-card.ts` — `getBrevetCardByToken`, `checkInAtControl`, `undoCheckin` (both also decide `isFinalControl` for the finish flow, folded into an existing query)                                                                                                                                                                                                                                                                                                                    |
+| Finish pre-fill & email | `lib/events/finish-result.ts` — `handleFinishIfFinalControl`, `revertFinishIfFinalControl`; `lib/email/send-ride-complete-email.ts` + `lib/email/send-result-submission-email.ts` (share send scaffolding via `lib/email/send-result-flow-email.ts`) + `buildRideCompleteEmail` template; `results.finish_email_sent_at` (migration `20260705120000_add_finish_email_sent_at.sql`) and `results.prefilled_at` (migration `20260705130000_add_prefilled_at.sql`) columns                            |
 | Admin controls actions  | `lib/actions/event-controls.ts` — CRUD + RWGPS import                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | Shared controls (print) | `components/admin/control-cards-form.tsx` prefills/saves back `event_controls`; matching + drift helpers in `lib/controlPoints.ts` (`matchImportedControls`, `controlsInSync`). See §16.                                                                                                                                                                                                                                                                                                           |
 | Admin check-in actions  | `lib/actions/control-checkins.ts` — grid read, set/delete corrections                                                                                                                                                                                                                                                                                                                                                                                                                              |

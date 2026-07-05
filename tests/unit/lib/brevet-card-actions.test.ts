@@ -39,6 +39,10 @@ const mockFrom = vi.fn((table: string) => {
       call.ops.push('order')
       return builder
     }),
+    limit: vi.fn(() => {
+      call.ops.push('limit')
+      return builder
+    }),
     insert: vi.fn((payload: unknown) => {
       call.ops.push('insert')
       call.insertPayload = payload
@@ -354,6 +358,40 @@ describe('checkInAtControl input validation', () => {
     expect(result.success).toBe(false)
     expect(mockHandleFinish).not.toHaveBeenCalled()
   })
+
+  it('treats an unreadable max control position as not-final but still records the check-in', async () => {
+    tables.registrations = { singleResponse: { data: makeRegistration(), error: null } }
+    tables.event_controls = {
+      singleResponse: { data: makeControlRow(), error: null },
+      // The max-position query (run in parallel with the control lookup)
+      // fails — same fallback the old sequential query used: not final.
+      maybeSingleResponse: { data: null, error: { message: 'boom' } },
+    }
+    const nowIso = new Date().toISOString()
+    tables.control_checkins = {
+      insertResponse: {
+        data: {
+          control_id: 'ctrl-1',
+          checked_in_at: nowIso,
+          received_at: nowIso,
+          method: 'gps',
+          distance_to_control_m: 0,
+        },
+        error: null,
+      },
+    }
+
+    const result = await checkInAtControl(TOKEN, {
+      controlId: 'ctrl-1',
+      checkedInAt: nowIso,
+      lat: 43.65,
+      lng: -79.38,
+    })
+
+    expect(result.success).toBe(true)
+    expect(mockHandleFinish).toHaveBeenCalledTimes(1)
+    expect(mockHandleFinish.mock.calls[0][0].isFinalControl).toBe(false)
+  })
 })
 
 describe('getBrevetCardByToken', () => {
@@ -431,6 +469,11 @@ describe('undoCheckin', () => {
 
   it('undo hands off to revertFinishIfFinalControl after a successful delete', async () => {
     seedFoundCheckin()
+    // The undone control is the event's only (and thus final) control.
+    tables.event_controls = {
+      singleResponse: { data: { position: 1 }, error: null },
+      maybeSingleResponse: { data: { position: 1 }, error: null },
+    }
 
     const result = await undoCheckin(TOKEN, { controlId: 'ctrl-1' })
 
@@ -439,7 +482,25 @@ describe('undoCheckin', () => {
       eventId: 'evt-1',
       riderId: 'rider-1',
       controlId: 'ctrl-1',
+      isFinalControl: true,
     })
+  })
+
+  it('treats an unreadable max control position as not-final but still undoes', async () => {
+    seedFoundCheckin()
+    tables.event_controls = {
+      singleResponse: { data: { position: 1 }, error: null },
+      // The max-position query (run in parallel with the delete) fails —
+      // same fallback the old sequential query used: not final.
+      maybeSingleResponse: { data: null, error: { message: 'boom' } },
+    }
+
+    const result = await undoCheckin(TOKEN, { controlId: 'ctrl-1' })
+
+    expect(result.success).toBe(true)
+    expect(mockRevertFinish).toHaveBeenCalledWith(
+      expect.objectContaining({ isFinalControl: false })
+    )
   })
 
   it('undo does not call revert when the delete is rejected', async () => {

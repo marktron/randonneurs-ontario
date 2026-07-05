@@ -12,10 +12,17 @@ import type { ResultInsert, ResultUpdate } from '@/types/queries'
  * "the rider themselves submitted" — and never overwrites a row that has it.
  * Nothing here may throw: these run inside check-in/undo actions whose
  * success must not depend on the follow-up work.
+ *
+ * Neither function queries `event_controls` itself: whether the checked-in
+ * (or undone) control is the event's final one is decided by the caller
+ * (`lib/actions/brevet-card.ts`), which folds that lookup into a Promise.all
+ * alongside a query it already makes — no added sequential round trip on the
+ * check-in/undo hot path.
  */
 
 export interface FinishCheckinParams {
   controlPosition: number
+  isFinalControl: boolean
   event: {
     id: string
     name: string
@@ -29,29 +36,10 @@ export interface FinishCheckinParams {
   finishTime: string
 }
 
-async function isFinalControlPosition(eventId: string, position: number): Promise<boolean> {
-  const supabase = getSupabaseAdmin()
-  const { data, error } = await supabase
-    .from('event_controls')
-    .select('position')
-    .eq('event_id', eventId)
-    .order('position', { ascending: false })
-    .limit(1)
-    .maybeSingle()
-
-  if (error || !data) {
-    if (error) {
-      logError(error, { operation: 'finishResult.maxPosition', context: { eventId } })
-    }
-    return false
-  }
-  return (data as { position: number }).position === position
-}
-
 export async function handleFinishIfFinalControl(params: FinishCheckinParams): Promise<void> {
   try {
     const { event, rider } = params
-    if (!(await isFinalControlPosition(event.id, params.controlPosition))) return
+    if (!params.isFinalControl) return
 
     const supabase = getSupabaseAdmin()
 
@@ -212,28 +200,12 @@ export async function revertFinishIfFinalControl(params: {
   eventId: string
   riderId: string
   controlId: string
+  isFinalControl: boolean
 }): Promise<void> {
   try {
+    if (!params.isFinalControl) return
+
     const supabase = getSupabaseAdmin()
-
-    const { data: controlRow, error: controlError } = await supabase
-      .from('event_controls')
-      .select('position')
-      .eq('id', params.controlId)
-      .single()
-
-    if (controlError || !controlRow) {
-      if (controlError) {
-        logError(controlError, {
-          operation: 'revertFinishIfFinalControl.control',
-          context: { controlId: params.controlId },
-        })
-      }
-      return
-    }
-
-    const position = (controlRow as { position: number }).position
-    if (!(await isFinalControlPosition(params.eventId, position))) return
 
     const updateData: ResultUpdate = { status: 'pending', finish_time: null, prefilled_at: null }
     const { error: updateError } = await supabase

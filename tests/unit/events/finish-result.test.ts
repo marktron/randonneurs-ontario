@@ -35,10 +35,6 @@ interface FromCall {
 }
 
 interface MockState {
-  /** `event_controls` select().eq('event_id',...).order().limit(1).maybeSingle() */
-  maxPositionResponse?: { data: unknown; error: unknown }
-  /** `event_controls` select().eq('id',...).single() */
-  controlByIdResponse?: { data: unknown; error: unknown }
   /** `results` insert(...) — awaited directly. */
   insertResponse?: { error: unknown }
   /** `results` update(...)...not(...) — the revert update, awaited directly. */
@@ -61,6 +57,11 @@ interface MockState {
  * Builds a chainable Supabase stub. Every `.from(table)` call gets its own
  * `FromCall` record (pushed to `calls`) so assertions can inspect the exact
  * filter chain and payload used, not just whether a mock fired.
+ *
+ * Neither `handleFinishIfFinalControl` nor `revertFinishIfFinalControl`
+ * queries `event_controls` any more — "is this the final control" is
+ * decided by the caller and passed in as `isFinalControl` — so this stub
+ * only ever sees `results` table traffic.
  */
 function setupSupabase(state: MockState): FromCall[] {
   const calls: FromCall[] = []
@@ -77,14 +78,6 @@ function setupSupabase(state: MockState): FromCall[] {
       eq: vi.fn((...args: unknown[]) => {
         call.ops.push('eq')
         call.eqArgs.push(args)
-        return builder
-      }),
-      order: vi.fn(() => {
-        call.ops.push('order')
-        return builder
-      }),
-      limit: vi.fn(() => {
-        call.ops.push('limit')
         return builder
       }),
       is: vi.fn((...args: unknown[]) => {
@@ -109,9 +102,6 @@ function setupSupabase(state: MockState): FromCall[] {
       }),
       maybeSingle: vi.fn(() => {
         call.ops.push('maybeSingle')
-        if (table === 'event_controls') {
-          return Promise.resolve(state.maxPositionResponse ?? { data: null, error: null })
-        }
         // results table has three distinct maybeSingle terminals:
         if (!call.ops.includes('update') && !call.ops.includes('insert')) {
           // the 23505 path's existing-row inspection select
@@ -124,12 +114,8 @@ function setupSupabase(state: MockState): FromCall[] {
         // the 23505 path's guarded pre-fill update
         return Promise.resolve(state.prefillUpdateResponse ?? { data: null, error: null })
       }),
-      single: vi.fn(() => {
-        call.ops.push('single')
-        return Promise.resolve(state.controlByIdResponse ?? { data: null, error: null })
-      }),
       // Supabase query builders are thenables: awaiting the builder directly
-      // (no .single()/.maybeSingle() terminal) runs the insert/update as-is.
+      // (no .maybeSingle() terminal) runs the insert/update as-is.
       then: (resolve: (value: unknown) => unknown, reject?: (reason: unknown) => unknown) => {
         const response = call.ops.includes('insert')
           ? (state.insertResponse ?? { error: null })
@@ -198,6 +184,7 @@ const baseRider: FinishCheckinParams['rider'] = {
 function baseParams(overrides: Partial<FinishCheckinParams> = {}): FinishCheckinParams {
   return {
     controlPosition: 3,
+    isFinalControl: true,
     event: baseEvent,
     rider: baseRider,
     managementToken: MANAGEMENT_TOKEN,
@@ -213,12 +200,10 @@ describe('handleFinishIfFinalControl', () => {
     mockSendRideCompleteEmail.mockResolvedValue({ sent: true })
   })
 
-  it('does nothing when the control is not the final one', async () => {
-    const calls = setupSupabase({
-      maxPositionResponse: { data: { position: 3 }, error: null },
-    })
+  it('does nothing when the caller says this was not the final control', async () => {
+    const calls = setupSupabase({})
 
-    await handleFinishIfFinalControl(baseParams({ controlPosition: 1 }))
+    await handleFinishIfFinalControl(baseParams({ controlPosition: 1, isFinalControl: false }))
 
     expect(resultsCalls(calls)).toHaveLength(0)
     expect(mockSendRideCompleteEmail).not.toHaveBeenCalled()
@@ -226,7 +211,6 @@ describe('handleFinishIfFinalControl', () => {
 
   it('inserts a finished result with the management token as submission token', async () => {
     const calls = setupSupabase({
-      maxPositionResponse: { data: { position: 3 }, error: null },
       insertResponse: { error: null },
     })
 
@@ -248,7 +232,6 @@ describe('handleFinishIfFinalControl', () => {
 
   it('pre-fills a pending row on 23505 and backfills the token when it is NULL', async () => {
     const calls = setupSupabase({
-      maxPositionResponse: { data: { position: 3 }, error: null },
       insertResponse: { error: { code: '23505' } },
       existingRowResponse: {
         data: { submission_token: null, submitted_at: null, status: 'pending' },
@@ -282,7 +265,6 @@ describe('handleFinishIfFinalControl', () => {
 
   it('does not backfill the token on 23505 when the pending row already carries one', async () => {
     const calls = setupSupabase({
-      maxPositionResponse: { data: { position: 3 }, error: null },
       insertResponse: { error: { code: '23505' } },
       existingRowResponse: {
         data: { submission_token: 'tok-cron', submitted_at: null, status: 'pending' },
@@ -304,7 +286,6 @@ describe('handleFinishIfFinalControl', () => {
 
   it('never overwrites an admin-entered (non-pending) row on 23505', async () => {
     const calls = setupSupabase({
-      maxPositionResponse: { data: { position: 3 }, error: null },
       insertResponse: { error: { code: '23505' } },
       existingRowResponse: {
         data: { submission_token: null, submitted_at: null, status: 'finished' },
@@ -322,7 +303,6 @@ describe('handleFinishIfFinalControl', () => {
 
   it('never overwrites a rider-submitted row on 23505', async () => {
     const calls = setupSupabase({
-      maxPositionResponse: { data: { position: 3 }, error: null },
       insertResponse: { error: { code: '23505' } },
       existingRowResponse: {
         data: { submission_token: null, submitted_at: '2026-05-10T12:00:00Z', status: 'pending' },
@@ -342,7 +322,6 @@ describe('handleFinishIfFinalControl', () => {
     // non-NULL so no backfill happens, and the email must link THAT token —
     // the management token would be a dead link no row carries.
     const calls = setupSupabase({
-      maxPositionResponse: { data: { position: 3 }, error: null },
       insertResponse: { error: { code: '23505' } },
       existingRowResponse: {
         data: { submission_token: 'tok-random-uuid', submitted_at: null, status: 'pending' },
@@ -361,7 +340,6 @@ describe('handleFinishIfFinalControl', () => {
 
   it('does not claim/send when the 23505 pre-fill update matches zero rows', async () => {
     const calls = setupSupabase({
-      maxPositionResponse: { data: { position: 3 }, error: null },
       insertResponse: { error: { code: '23505' } },
       existingRowResponse: {
         data: { submission_token: 'tok-cron', submitted_at: null, status: 'pending' },
@@ -379,7 +357,6 @@ describe('handleFinishIfFinalControl', () => {
 
   it('sends the finish email only when the claim update returns a row', async () => {
     const calls = setupSupabase({
-      maxPositionResponse: { data: { position: 3 }, error: null },
       insertResponse: { error: null },
       // On the insert path the row's token IS the management token.
       claimResponse: { data: { id: 'r1', submission_token: MANAGEMENT_TOKEN }, error: null },
@@ -417,7 +394,6 @@ describe('handleFinishIfFinalControl', () => {
 
   it('does not send when the claim returns no row (already sent or rider submitted)', async () => {
     const calls = setupSupabase({
-      maxPositionResponse: { data: { position: 3 }, error: null },
       insertResponse: { error: null },
       claimResponse: { data: null, error: null },
     })
@@ -430,7 +406,6 @@ describe('handleFinishIfFinalControl', () => {
 
   it('does not send when the event is already completed', async () => {
     const calls = setupSupabase({
-      maxPositionResponse: { data: { position: 3 }, error: null },
       insertResponse: { error: null },
     })
 
@@ -444,7 +419,6 @@ describe('handleFinishIfFinalControl', () => {
 
   it('does not send when the rider has no email, but still claims nothing', async () => {
     const calls = setupSupabase({
-      maxPositionResponse: { data: { position: 3 }, error: null },
       insertResponse: { error: null },
     })
 
@@ -457,7 +431,6 @@ describe('handleFinishIfFinalControl', () => {
 
   it('logs email error but continues when sendRideCompleteEmail fails', async () => {
     const calls = setupSupabase({
-      maxPositionResponse: { data: { position: 3 }, error: null },
       insertResponse: { error: null },
       claimResponse: { data: { id: 'r1' }, error: null },
     })
@@ -477,26 +450,8 @@ describe('handleFinishIfFinalControl', () => {
     )
   })
 
-  it('logs and continues when querying max position fails', async () => {
-    const calls = setupSupabase({
-      maxPositionResponse: { data: null, error: { message: 'DB connection failed' } },
-    })
-
-    await expect(handleFinishIfFinalControl(baseParams())).resolves.toBeUndefined()
-
-    // No result operations should occur when the query fails
-    expect(resultsCalls(calls)).toHaveLength(0)
-    expect(mockSendRideCompleteEmail).not.toHaveBeenCalled()
-    // Verify that logError was called for the max position query
-    expect(mockLogError).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({ operation: 'finishResult.maxPosition' })
-    )
-  })
-
   it('logs and continues when the result insert fails with a non-unique error', async () => {
     const calls = setupSupabase({
-      maxPositionResponse: { data: { position: 3 }, error: null },
       insertResponse: { error: { code: '500', message: 'boom' } },
     })
 
@@ -516,10 +471,8 @@ describe('revertFinishIfFinalControl', () => {
     vi.clearAllMocks()
   })
 
-  it('reverts a pre-filled finish when the undone control was the final one', async () => {
+  it('reverts a pre-filled finish when the caller says this was the final control', async () => {
     const calls = setupSupabase({
-      controlByIdResponse: { data: { position: 3 }, error: null },
-      maxPositionResponse: { data: { position: 3 }, error: null },
       updateResponse: { error: null },
     })
 
@@ -527,6 +480,7 @@ describe('revertFinishIfFinalControl', () => {
       eventId: EVENT_ID,
       riderId: RIDER_ID,
       controlId: 'control-3',
+      isFinalControl: true,
     })
 
     const update = resultsCalls(calls).find((c) => c.ops.includes('update'))
@@ -541,16 +495,14 @@ describe('revertFinishIfFinalControl', () => {
     expect(update?.notArgs).toEqual([['prefilled_at', 'is', null]])
   })
 
-  it('does nothing when the undone control was not the final one', async () => {
-    const calls = setupSupabase({
-      controlByIdResponse: { data: { position: 1 }, error: null },
-      maxPositionResponse: { data: { position: 3 }, error: null },
-    })
+  it('does nothing when the caller says the undone control was not the final one', async () => {
+    const calls = setupSupabase({})
 
     await revertFinishIfFinalControl({
       eventId: EVENT_ID,
       riderId: RIDER_ID,
       controlId: 'control-1',
+      isFinalControl: false,
     })
 
     expect(resultsCalls(calls)).toHaveLength(0)
@@ -558,13 +510,16 @@ describe('revertFinishIfFinalControl', () => {
 
   it('never throws when the DB errors', async () => {
     const calls = setupSupabase({
-      controlByIdResponse: { data: { position: 3 }, error: null },
-      maxPositionResponse: { data: { position: 3 }, error: null },
       updateResponse: { error: { message: 'update failed' } },
     })
 
     await expect(
-      revertFinishIfFinalControl({ eventId: EVENT_ID, riderId: RIDER_ID, controlId: 'control-3' })
+      revertFinishIfFinalControl({
+        eventId: EVENT_ID,
+        riderId: RIDER_ID,
+        controlId: 'control-3',
+        isFinalControl: true,
+      })
     ).resolves.toBeUndefined()
 
     expect(resultsCalls(calls)).toHaveLength(1)
