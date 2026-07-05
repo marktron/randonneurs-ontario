@@ -406,6 +406,135 @@ https://randonneursontario.ca
   return { subject, text, html }
 }
 
+export interface RideCompleteEmailData {
+  riderName: string
+  eventName: string
+  eventDate: string
+  eventDistance: number
+  chapterName: string
+  submissionUrl: string
+  /** Elapsed finish time as H:MM, from check-ins or the stored result. */
+  finishTime: string
+  /** Reminder variant: rider finished earlier but still has no GPS track. */
+  reminder?: boolean
+}
+
+/**
+ * Sent when a rider completes their final digital brevet card check-in
+ * (and re-used as the "still missing your track" reminder). Messaging
+ * treats the GPS track as required; the system does not enforce it.
+ */
+export function buildRideCompleteEmail(data: RideCompleteEmailData): {
+  subject: string
+  text: string
+  html: string
+} {
+  const rideName = formatRideName(data.eventName, data.eventDistance)
+  const subject = data.reminder
+    ? `Reminder: Add Your Ride Track: ${rideName}`
+    : `Congratulations on finishing the ${rideName}!`
+
+  const safe = {
+    riderName: escapeHtml(data.riderName),
+    rideName: escapeHtml(rideName),
+    eventDate: escapeHtml(data.eventDate),
+    chapterName: escapeHtml(data.chapterName),
+    submissionUrl: escapeHtml(data.submissionUrl),
+    finishTime: escapeHtml(data.finishTime),
+  }
+
+  const textIntro = data.reminder
+    ? `You finished the ${rideName} on ${data.eventDate}, but we still need your GPS track to validate your ride.`
+    : `Congratulations on finishing the ${rideName}! Your finish has been recorded from your digital brevet card check-ins with an elapsed time of ${data.finishTime}.`
+
+  const text = `
+Hi ${data.riderName},
+
+${textIntro}
+
+One thing left: once your ride has synced, add your GPS track — a link to
+your Strava activity or a GPX file. It's required to validate your ride.
+
+Add your track here:
+${data.submissionUrl}
+
+Event: ${rideName}
+Date: ${data.eventDate}
+Chapter: ${data.chapterName}
+Recorded time: ${data.finishTime}
+
+This link is unique to you - please don't share it with others.
+
+If you have any questions, please contact your chapter VP.
+
+Thanks for riding with us!
+
+Randonneurs Ontario
+https://randonneursontario.ca
+  `.trim()
+
+  const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+  <p>Hi ${safe.riderName},</p>
+
+  ${
+    data.reminder
+      ? `<p>You finished the <strong>${safe.rideName}</strong> on ${safe.eventDate}, but we still need your GPS track to validate your ride.</p>`
+      : `<p>Congratulations on finishing the <strong>${safe.rideName}</strong>! Your finish has been recorded from your digital brevet card check-ins with an elapsed time of <strong>${safe.finishTime}</strong>.</p>`
+  }
+
+  <p>One thing left: once your ride has synced, add your GPS track &mdash; a link to your Strava activity or a GPX file. It's required to validate your ride.</p>
+
+  <p style="text-align: center; margin: 32px 0;">
+    <a href="${safe.submissionUrl}" style="display: inline-block; background-color: #0066cc; color: white; padding: 12px 32px; text-decoration: none; border-radius: 6px; font-weight: 600;">Add Your Ride Track</a>
+  </p>
+
+  <table style="width: 100%; border-collapse: collapse; margin: 24px 0;">
+    <tr>
+      <td style="padding: 8px 0; border-bottom: 1px solid #eee; font-weight: 600; width: 140px;">Event</td>
+      <td style="padding: 8px 0; border-bottom: 1px solid #eee;">${safe.rideName}</td>
+    </tr>
+    <tr>
+      <td style="padding: 8px 0; border-bottom: 1px solid #eee; font-weight: 600;">Date</td>
+      <td style="padding: 8px 0; border-bottom: 1px solid #eee;">${safe.eventDate}</td>
+    </tr>
+    <tr>
+      <td style="padding: 8px 0; border-bottom: 1px solid #eee; font-weight: 600;">Chapter</td>
+      <td style="padding: 8px 0; border-bottom: 1px solid #eee;">${safe.chapterName}</td>
+    </tr>
+    <tr>
+      <td style="padding: 8px 0; font-weight: 600;">Recorded time</td>
+      <td style="padding: 8px 0;">${safe.finishTime}</td>
+    </tr>
+  </table>
+
+  <p style="background-color: #f5f5f5; padding: 12px 16px; border-radius: 6px; font-size: 14px;">
+    <strong>Note:</strong> This link is unique to you - please don't share it with others.
+  </p>
+
+  <hr style="border: none; border-top: 1px solid #eee; margin: 32px 0;">
+
+  <p>If you have any questions, please contact your chapter VP.</p>
+
+  <p>Thanks for riding with us!</p>
+
+  <p>
+    <strong>Randonneurs Ontario</strong><br>
+    <a href="https://randonneursontario.ca" style="color: #0066cc;">randonneursontario.ca</a>
+  </p>
+</body>
+</html>
+  `.trim()
+
+  return { subject, text, html }
+}
+
 // ============================================================================
 // Cancellation Confirmation Email
 // ============================================================================

@@ -3,6 +3,7 @@ import {
   buildRegistrationConfirmationEmail,
   buildResultSubmissionRequestEmail,
   buildCancellationConfirmationEmail,
+  buildRideCompleteEmail,
   type RegistrationEmailData,
   type ResultSubmissionEmailData,
   type CancellationEmailData,
@@ -110,5 +111,45 @@ describe('registration confirmation digital brevet card link', () => {
     const email = buildRegistrationConfirmationEmail(baseRegistration)
     expect(email.text).not.toContain('Digital brevet card')
     expect(email.html).not.toContain('Open your brevet card')
+  })
+})
+
+describe('ride complete email', () => {
+  const baseRideComplete = {
+    riderName: 'Jane Rider',
+    eventName: 'Devil Week Classic',
+    eventDate: 'July 4, 2026',
+    eventDistance: 200,
+    chapterName: 'Toronto',
+    submissionUrl: 'https://example.com/results/submit/tok-1',
+    finishTime: '12:34',
+  }
+
+  it('congratulates the rider and shows the recorded elapsed time', () => {
+    const email = buildRideCompleteEmail(baseRideComplete)
+    expect(email.subject).toContain('Congratulations')
+    expect(email.text).toContain('12:34')
+    expect(email.html).toContain('12:34')
+  })
+
+  it('asks for the GPS track as required and links the submission URL', () => {
+    const email = buildRideCompleteEmail(baseRideComplete)
+    expect(email.text.toLowerCase()).toContain('strava')
+    expect(email.text.toLowerCase()).toContain('required')
+    expect(email.html).toContain('https://example.com/results/submit/tok-1')
+  })
+
+  it('reminder variant uses a reminder subject, not congratulations', () => {
+    const email = buildRideCompleteEmail({ ...baseRideComplete, reminder: true })
+    expect(email.subject).toMatch(/^Reminder: Add Your Ride Track/)
+    expect(email.subject).not.toContain('Congratulations')
+  })
+
+  it('escapes HTML in user-supplied values', () => {
+    const email = buildRideCompleteEmail({
+      ...baseRideComplete,
+      riderName: '<script>alert(1)</script>',
+    })
+    expect(email.html).not.toContain('<script>alert(1)</script>')
   })
 })
