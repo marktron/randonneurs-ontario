@@ -35,6 +35,7 @@ function buildSupabase({
   results,
   checkins = [],
   checkinError = null,
+  checkinAttempts,
 }: {
   registrations: Array<{
     id: string
@@ -52,6 +53,13 @@ function buildSupabase({
   }>
   checkins?: string[]
   checkinError?: { message: string } | null
+  /**
+   * When provided, overrides `checkins`/`checkinError`: each entry is the
+   * result of one successive call to the control_checkins fetch, letting
+   * tests simulate a fetch that fails on the first attempt and succeeds (or
+   * fails again) on the retry. The last entry repeats for any extra calls.
+   */
+  checkinAttempts?: Array<{ data: string[] | null; error: { message: string } | null }>
 }) {
   const resultRows = results.map((r) => ({
     finish_time: null,
@@ -60,6 +68,8 @@ function buildSupabase({
     submitted_at: null,
     ...r,
   }))
+
+  let checkinCallCount = 0
 
   return {
     from: vi.fn((table: string) => {
@@ -82,8 +92,23 @@ function buildSupabase({
       if (table === 'control_checkins') {
         return {
           select: vi.fn(() => ({
-            in: vi.fn(() =>
-              Promise.resolve(
+            in: vi.fn(() => {
+              if (checkinAttempts) {
+                const attempt =
+                  checkinAttempts[Math.min(checkinCallCount, checkinAttempts.length - 1)]
+                checkinCallCount++
+                return Promise.resolve(
+                  attempt.error
+                    ? { data: null, error: attempt.error }
+                    : {
+                        data: (attempt.data || []).map((registration_id) => ({
+                          registration_id,
+                        })),
+                        error: null,
+                      }
+                )
+              }
+              return Promise.resolve(
                 checkinError
                   ? { data: null, error: checkinError }
                   : {
@@ -91,7 +116,7 @@ function buildSupabase({
                       error: null,
                     }
               )
-            ),
+            }),
           })),
         }
       }
@@ -374,7 +399,7 @@ describe('sendResultSubmissionReminders', () => {
     expect(mockSendRideComplete).not.toHaveBeenCalled()
   })
 
-  it('still sends pending reminders when the check-in fetch errors, recording the error', async () => {
+  it('sends nothing and records the error when the check-in fetch fails twice in a row', async () => {
     mockSupabaseAdmin.mockReturnValue(
       buildSupabase({
         registrations: [rider(1), rider(2)],
@@ -395,12 +420,45 @@ describe('sendResultSubmissionReminders', () => {
 
     const result = await sendResultSubmissionReminders(testEvent)
 
-    expect(result.emailsSent).toBe(1)
-    expect(mockSendEmail).toHaveBeenCalledTimes(1)
-    expect(mockSendEmail).toHaveBeenCalledWith(expect.objectContaining({ to: 'rider1@test.com' }))
+    expect(result.emailsSent).toBe(0)
+    expect(mockSendEmail).not.toHaveBeenCalled()
     expect(mockSendRideComplete).not.toHaveBeenCalled()
     expect(result.errors).toEqual(
       expect.arrayContaining([expect.stringContaining('connection reset')])
+    )
+  })
+
+  it('retries the check-in fetch once and sends normally when the retry succeeds', async () => {
+    mockSupabaseAdmin.mockReturnValue(
+      buildSupabase({
+        registrations: [rider(1), rider(2)],
+        results: [
+          { rider_id: 'rider-1', submission_token: 'token-1', status: 'pending' },
+          {
+            rider_id: 'rider-2',
+            submission_token: 'token-2',
+            status: 'finished',
+            finish_time: '13:07:00',
+            gpx_url: null,
+            gpx_file_path: null,
+          },
+        ],
+        checkinAttempts: [
+          { data: null, error: { message: 'transient connection reset' } },
+          { data: ['reg-2'], error: null },
+        ],
+      })
+    )
+
+    const result = await sendResultSubmissionReminders(testEvent)
+
+    expect(result.errors).toEqual([])
+    expect(result.emailsSent).toBe(2)
+    expect(mockSendEmail).toHaveBeenCalledTimes(1)
+    expect(mockSendEmail).toHaveBeenCalledWith(expect.objectContaining({ to: 'rider1@test.com' }))
+    expect(mockSendRideComplete).toHaveBeenCalledTimes(1)
+    expect(mockSendRideComplete).toHaveBeenCalledWith(
+      expect.objectContaining({ riderEmail: 'rider2@test.com', reminder: true })
     )
   })
 })

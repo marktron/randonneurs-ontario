@@ -71,19 +71,30 @@ export async function sendResultSubmissionReminders(
   )
 
   const registrationIds = typedRegistrations.map((r) => r.id)
-  const { data: checkinRows, error: checkinError } = await supabase
+  let { data: checkinRows, error: checkinError } = await supabase
     .from('control_checkins')
     .select('registration_id')
     .in('registration_id', registrationIds)
 
   if (checkinError) {
+    // Transient fetch errors are retried once. A control_checkins failure
+    // must never fall back to "send pending reminders only" — with no
+    // send-marker on this flow, a partial send means an admin re-run after
+    // seeing the recorded error double-emails every pending rider. So if the
+    // retry also fails, the whole run aborts without sending anything.
+    ;({ data: checkinRows, error: checkinError } = await supabase
+      .from('control_checkins')
+      .select('registration_id')
+      .in('registration_id', registrationIds))
+  }
+
+  if (checkinError) {
     errors.push(`Failed to fetch check-ins: ${checkinError.message}`)
+    return { emailsSent: 0, errors }
   }
 
   const registrationsWithCheckins = new Set(
-    checkinError
-      ? []
-      : ((checkinRows || []) as { registration_id: string }[]).map((c) => c.registration_id)
+    ((checkinRows || []) as { registration_id: string }[]).map((c) => c.registration_id)
   )
 
   for (const reg of typedRegistrations) {
