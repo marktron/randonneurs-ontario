@@ -1,6 +1,5 @@
-import { sendEmail, fromEmail, isEmailConfigured } from '@/lib/email/ses'
 import { buildResultSubmissionRequestEmail } from '@/lib/email/templates'
-import { getVpEmail } from '@/lib/email/vp-emails'
+import { resolveSiteBaseUrl, sendEventFlowEmail } from '@/lib/email/send-result-flow-email'
 import { format } from 'date-fns'
 import { parseLocalDate } from '@/lib/utils'
 
@@ -25,8 +24,7 @@ export async function sendResultSubmissionEmail(params: {
   reminder?: boolean
 }): Promise<{ sent: boolean; error?: string }> {
   const { event } = params
-  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://randonneursontario.ca'
-  const vpEmail = event.chapters?.slug ? getVpEmail(event.chapters.slug) : null
+  const baseUrl = resolveSiteBaseUrl()
 
   const { subject, text, html } = buildResultSubmissionRequestEmail({
     riderName: params.riderName,
@@ -39,25 +37,12 @@ export async function sendResultSubmissionEmail(params: {
     reminder: params.reminder,
   })
 
-  if (!isEmailConfigured()) {
-    console.warn('AWS SES not configured, skipping result submission email')
-    return { sent: false }
-  }
-
-  try {
-    await sendEmail({
-      to: params.riderEmail,
-      from: fromEmail,
-      replyTo: vpEmail || undefined,
-      subject,
-      text,
-      html,
-    })
-    return { sent: true }
-  } catch (emailError) {
-    return {
-      sent: false,
-      error: emailError instanceof Error ? emailError.message : 'Unknown error',
-    }
-  }
+  return sendEventFlowEmail({
+    event,
+    to: params.riderEmail,
+    subject,
+    text,
+    html,
+    emailKind: 'result submission',
+  })
 }

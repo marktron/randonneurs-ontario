@@ -316,16 +316,16 @@ describe('RIDER_UNDO_WINDOW_MS', () => {
   })
 })
 
+// H:MM formatting itself (zero-padded minutes, unpadded hours, multi-day
+// hour counts) is covered by formatElapsedForSubmission's own tests
+// (tests/unit/lib/events/finish-time.test.ts) — computeElapsedHm delegates
+// to it, so only the Date-diff behaviour unique to this function is
+// asserted here.
 describe('computeElapsedHm', () => {
-  it('formats whole hours and minutes with zero-padded minutes', () => {
+  it('rounds seconds down to the completed minute at the 60-minute rollover boundary', () => {
     const start = new Date('2026-07-04T06:00:00Z')
-    expect(computeElapsedHm(start, new Date('2026-07-04T19:07:00Z'))).toBe('13:07')
-    expect(computeElapsedHm(start, new Date('2026-07-04T06:05:00Z'))).toBe('0:05')
-  })
-
-  it('rounds seconds down to the completed minute', () => {
-    const start = new Date('2026-07-04T06:00:00Z')
-    expect(computeElapsedHm(start, new Date('2026-07-04T07:30:59Z'))).toBe('1:30')
+    // 60 minutes 59 seconds elapsed — must floor to 60 minutes, not roll to 1:01.
+    expect(computeElapsedHm(start, new Date('2026-07-04T07:00:59Z'))).toBe('1:00')
   })
 
   it('handles multi-day elapsed times as total hours', () => {

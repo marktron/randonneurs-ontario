@@ -7,7 +7,7 @@
  */
 
 import { computeControlTimes, createTorontoDate, getNominalDistance } from '@/lib/brmTimes'
-import { getAcpTimeLimitMinutes } from '@/lib/events/finish-time'
+import { formatElapsedForSubmission, getAcpTimeLimitMinutes } from '@/lib/events/finish-time'
 import { haversineMeters } from '@/lib/geo'
 
 // ============================================================================
@@ -243,11 +243,11 @@ export function formatDistanceKm(meters: number): string {
 /**
  * Elapsed ride time as the H:MM string the results form accepts
  * (`/^\d{1,3}:\d{2}$/` in submitRiderResult). Seconds round down; a finish
- * before the start (device clock skew) clamps to 0:00.
+ * before the start (device clock skew) clamps to 0:00. Delegates the H:MM
+ * formatting to `formatElapsedForSubmission` (lib/events/finish-time.ts) so
+ * the two check-in-driven and manual-entry paths can't drift apart.
  */
 export function computeElapsedHm(start: Date, end: Date): string {
   const totalMinutes = Math.max(0, Math.floor((end.getTime() - start.getTime()) / 60_000))
-  const hours = Math.floor(totalMinutes / 60)
-  const minutes = totalMinutes % 60
-  return `${hours}:${String(minutes).padStart(2, '0')}`
+  return formatElapsedForSubmission(totalMinutes)
 }
