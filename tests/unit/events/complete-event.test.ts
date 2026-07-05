@@ -187,4 +187,87 @@ describe('createPendingResultsAndSendEmails', () => {
       })
     )
   })
+
+  it('does not email a rider whose result was pre-filled by the digital card finish flow', async () => {
+    mockSupabaseAdmin.mockReturnValue(
+      buildSupabase({
+        registrations: [
+          {
+            id: 'reg-1',
+            rider_id: 'rider-1',
+            management_token: null,
+            riders: {
+              id: 'rider-1',
+              first_name: 'Card',
+              last_name: 'Finisher',
+              email: 'finisher@test.com',
+            },
+          },
+        ],
+        existingResults: [{ rider_id: 'rider-1' }],
+      })
+    )
+
+    const result = await createPendingResultsAndSendEmails({
+      id: 'event-1',
+      name: 'Test Brevet',
+      event_date: '2026-05-10',
+      distance_km: 200,
+      chapters: { name: 'Toronto', slug: 'toronto' },
+    })
+
+    expect(result.resultsCreated).toBe(0)
+    expect(result.emailsSent).toBe(0)
+    expect(mockSendEmail).not.toHaveBeenCalled()
+  })
+
+  it('still emails riders without results when a card finisher is also registered', async () => {
+    mockSupabaseAdmin.mockReturnValue(
+      buildSupabase({
+        registrations: [
+          {
+            id: 'reg-1',
+            rider_id: 'rider-1',
+            management_token: null,
+            riders: {
+              id: 'rider-1',
+              first_name: 'Card',
+              last_name: 'Finisher',
+              email: 'finisher@test.com',
+            },
+          },
+          {
+            id: 'reg-2',
+            rider_id: 'rider-2',
+            management_token: null,
+            riders: {
+              id: 'rider-2',
+              first_name: 'Regular',
+              last_name: 'Rider',
+              email: 'regular@test.com',
+            },
+          },
+        ],
+        existingResults: [{ rider_id: 'rider-1' }],
+      })
+    )
+
+    const result = await createPendingResultsAndSendEmails({
+      id: 'event-1',
+      name: 'Test Brevet',
+      event_date: '2026-05-10',
+      distance_km: 200,
+      chapters: { name: 'Toronto', slug: 'toronto' },
+    })
+
+    expect(result.resultsCreated).toBe(1)
+    expect(result.emailsSent).toBe(1)
+    expect(mockSendEmail).toHaveBeenCalledTimes(1)
+    expect(mockSendEmail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: 'regular@test.com',
+        replyTo: 'vp-toronto@randonneursontario.ca',
+      })
+    )
+  })
 })
