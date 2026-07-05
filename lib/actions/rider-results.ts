@@ -210,6 +210,9 @@ export async function submitRiderResult(input: SubmitResultInput): Promise<Actio
     gpx_url: gpxUrl || null,
     rider_notes: riderNotes || null,
     submitted_at: new Date().toISOString(),
+    // The rider owns this row now: clear the card pre-fill marker so a later
+    // undo can never revert their submission.
+    prefilled_at: null,
   }
 
   const { error: updateError } = await supabase

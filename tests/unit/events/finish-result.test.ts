@@ -30,6 +30,7 @@ interface FromCall {
   ops: string[]
   eqArgs: unknown[][]
   isArgs: unknown[][]
+  notArgs: unknown[][]
   payload?: Record<string, unknown>
 }
 
@@ -40,9 +41,19 @@ interface MockState {
   controlByIdResponse?: { data: unknown; error: unknown }
   /** `results` insert(...) — awaited directly. */
   insertResponse?: { error: unknown }
-  /** `results` update(...).eq().eq().is(...) or ...eq(status) — awaited directly. */
+  /** `results` update(...)...not(...) — the revert update, awaited directly. */
   updateResponse?: { error: unknown }
-  /** `results` update(...).eq().eq().is().is().select('id').maybeSingle() */
+  /**
+   * `results` select('submission_token, submitted_at, status').eq().eq().maybeSingle()
+   * — the 23505 path's inspection of the existing row.
+   */
+  existingRowResponse?: { data: unknown; error: unknown }
+  /**
+   * `results` update(pre-fill payload).eq().eq().is().eq().select('id').maybeSingle()
+   * — the 23505 path's guarded pre-fill update.
+   */
+  prefillUpdateResponse?: { data: unknown; error: unknown }
+  /** `results` update({finish_email_sent_at}).eq().eq().is().is().select('id').maybeSingle() */
   claimResponse?: { data: unknown; error: unknown }
 }
 
@@ -55,7 +66,7 @@ function setupSupabase(state: MockState): FromCall[] {
   const calls: FromCall[] = []
 
   const fromFn = vi.fn((table: string) => {
-    const call: FromCall = { table, ops: [], eqArgs: [], isArgs: [] }
+    const call: FromCall = { table, ops: [], eqArgs: [], isArgs: [], notArgs: [] }
     calls.push(call)
 
     const builder: Record<string, unknown> = {
@@ -81,6 +92,11 @@ function setupSupabase(state: MockState): FromCall[] {
         call.isArgs.push(args)
         return builder
       }),
+      not: vi.fn((...args: unknown[]) => {
+        call.ops.push('not')
+        call.notArgs.push(args)
+        return builder
+      }),
       insert: vi.fn((payload: Record<string, unknown>) => {
         call.ops.push('insert')
         call.payload = payload
@@ -96,7 +112,17 @@ function setupSupabase(state: MockState): FromCall[] {
         if (table === 'event_controls') {
           return Promise.resolve(state.maxPositionResponse ?? { data: null, error: null })
         }
-        return Promise.resolve(state.claimResponse ?? { data: null, error: null })
+        // results table has three distinct maybeSingle terminals:
+        if (!call.ops.includes('update') && !call.ops.includes('insert')) {
+          // the 23505 path's existing-row inspection select
+          return Promise.resolve(state.existingRowResponse ?? { data: null, error: null })
+        }
+        if (call.payload && 'finish_email_sent_at' in call.payload) {
+          // the single-send claim update
+          return Promise.resolve(state.claimResponse ?? { data: null, error: null })
+        }
+        // the 23505 path's guarded pre-fill update
+        return Promise.resolve(state.prefillUpdateResponse ?? { data: null, error: null })
       }),
       single: vi.fn(() => {
         call.ops.push('single')
@@ -127,14 +153,25 @@ function insertCall(calls: FromCall[]): FromCall | undefined {
   return resultsCalls(calls).find((c) => c.ops.includes('insert'))
 }
 
-/** The guarded fallback update after a 23505 — no `.select()` in its chain. */
-function fallbackUpdateCall(calls: FromCall[]): FromCall | undefined {
-  return resultsCalls(calls).find((c) => c.ops.includes('update') && !c.ops.includes('select'))
+/** The 23505 path's existing-row inspection — a select with no update/insert. */
+function existingSelectCall(calls: FromCall[]): FromCall | undefined {
+  return resultsCalls(calls).find(
+    (c) => c.ops.includes('select') && !c.ops.includes('update') && !c.ops.includes('insert')
+  )
 }
 
-/** The single-send claim update — identifiable by its `.select('id')` call. */
+/** The guarded pre-fill update after a 23505 — carries the `status` payload. */
+function prefillUpdateCall(calls: FromCall[]): FromCall | undefined {
+  return resultsCalls(calls).find(
+    (c) => c.ops.includes('update') && c.payload != null && 'status' in c.payload
+  )
+}
+
+/** The single-send claim update — carries the `finish_email_sent_at` payload. */
 function claimCall(calls: FromCall[]): FromCall | undefined {
-  return resultsCalls(calls).find((c) => c.ops.includes('update') && c.ops.includes('select'))
+  return resultsCalls(calls).find(
+    (c) => c.ops.includes('update') && c.payload != null && 'finish_email_sent_at' in c.payload
+  )
 }
 
 const EVENT_ID = 'event-1'
@@ -204,26 +241,118 @@ describe('handleFinishIfFinalControl', () => {
       season: 2026,
       distance_km: 200,
       submission_token: MANAGEMENT_TOKEN,
+      prefilled_at: expect.any(String),
     })
     expect(insert?.payload && 'submitted_at' in insert.payload).toBe(false)
   })
 
-  it('falls back to a guarded update when the result row already exists', async () => {
+  it('pre-fills a pending row on 23505 and backfills the token when it is NULL', async () => {
     const calls = setupSupabase({
       maxPositionResponse: { data: { position: 3 }, error: null },
       insertResponse: { error: { code: '23505' } },
-      updateResponse: { error: null },
+      existingRowResponse: {
+        data: { submission_token: null, submitted_at: null, status: 'pending' },
+        error: null,
+      },
+      prefillUpdateResponse: { data: { id: 'r1' }, error: null },
     })
 
     await handleFinishIfFinalControl(baseParams())
 
-    const fallback = fallbackUpdateCall(calls)
-    expect(fallback?.payload).toEqual({ status: 'finished', finish_time: FINISH_TIME })
-    expect(fallback?.eqArgs).toEqual([
+    const inspect = existingSelectCall(calls)
+    expect(inspect?.eqArgs).toEqual([
       ['event_id', EVENT_ID],
       ['rider_id', RIDER_ID],
     ])
-    expect(fallback?.isArgs).toEqual([['submitted_at', null]])
+
+    const prefill = prefillUpdateCall(calls)
+    expect(prefill?.payload).toEqual({
+      status: 'finished',
+      finish_time: FINISH_TIME,
+      prefilled_at: expect.any(String),
+      submission_token: MANAGEMENT_TOKEN,
+    })
+    expect(prefill?.eqArgs).toEqual([
+      ['event_id', EVENT_ID],
+      ['rider_id', RIDER_ID],
+      ['status', 'pending'],
+    ])
+    expect(prefill?.isArgs).toEqual([['submitted_at', null]])
+  })
+
+  it('does not backfill the token on 23505 when the pending row already carries one', async () => {
+    const calls = setupSupabase({
+      maxPositionResponse: { data: { position: 3 }, error: null },
+      insertResponse: { error: { code: '23505' } },
+      existingRowResponse: {
+        data: { submission_token: 'tok-cron', submitted_at: null, status: 'pending' },
+        error: null,
+      },
+      prefillUpdateResponse: { data: { id: 'r1' }, error: null },
+    })
+
+    await handleFinishIfFinalControl(baseParams())
+
+    const prefill = prefillUpdateCall(calls)
+    expect(prefill?.payload).toEqual({
+      status: 'finished',
+      finish_time: FINISH_TIME,
+      prefilled_at: expect.any(String),
+    })
+    expect(prefill?.payload && 'submission_token' in prefill.payload).toBe(false)
+  })
+
+  it('never overwrites an admin-entered (non-pending) row on 23505', async () => {
+    const calls = setupSupabase({
+      maxPositionResponse: { data: { position: 3 }, error: null },
+      insertResponse: { error: { code: '23505' } },
+      existingRowResponse: {
+        data: { submission_token: null, submitted_at: null, status: 'finished' },
+        error: null,
+      },
+    })
+
+    await handleFinishIfFinalControl(baseParams())
+
+    expect(existingSelectCall(calls)).toBeDefined()
+    expect(prefillUpdateCall(calls)).toBeUndefined()
+    expect(claimCall(calls)).toBeUndefined()
+    expect(mockSendRideCompleteEmail).not.toHaveBeenCalled()
+  })
+
+  it('never overwrites a rider-submitted row on 23505', async () => {
+    const calls = setupSupabase({
+      maxPositionResponse: { data: { position: 3 }, error: null },
+      insertResponse: { error: { code: '23505' } },
+      existingRowResponse: {
+        data: { submission_token: null, submitted_at: '2026-05-10T12:00:00Z', status: 'pending' },
+        error: null,
+      },
+    })
+
+    await handleFinishIfFinalControl(baseParams())
+
+    expect(prefillUpdateCall(calls)).toBeUndefined()
+    expect(claimCall(calls)).toBeUndefined()
+    expect(mockSendRideCompleteEmail).not.toHaveBeenCalled()
+  })
+
+  it('does not claim/send when the 23505 pre-fill update matches zero rows', async () => {
+    const calls = setupSupabase({
+      maxPositionResponse: { data: { position: 3 }, error: null },
+      insertResponse: { error: { code: '23505' } },
+      existingRowResponse: {
+        data: { submission_token: 'tok-cron', submitted_at: null, status: 'pending' },
+        error: null,
+      },
+      prefillUpdateResponse: { data: null, error: null },
+    })
+
+    await handleFinishIfFinalControl(baseParams())
+
+    expect(prefillUpdateCall(calls)).toBeDefined()
+    expect(claimCall(calls)).toBeUndefined()
+    expect(mockSendRideCompleteEmail).not.toHaveBeenCalled()
   })
 
   it('sends the finish email only when the claim update returns a row', async () => {
@@ -378,14 +507,15 @@ describe('revertFinishIfFinalControl', () => {
     })
 
     const update = resultsCalls(calls).find((c) => c.ops.includes('update'))
-    expect(update?.payload).toEqual({ status: 'pending', finish_time: null })
-    expect(update?.ops).toEqual(['update', 'eq', 'eq', 'is', 'eq'])
+    expect(update?.payload).toEqual({ status: 'pending', finish_time: null, prefilled_at: null })
+    expect(update?.ops).toEqual(['update', 'eq', 'eq', 'is', 'eq', 'not'])
     expect(update?.eqArgs).toEqual([
       ['event_id', EVENT_ID],
       ['rider_id', RIDER_ID],
       ['status', 'finished'],
     ])
     expect(update?.isArgs).toEqual([['submitted_at', null]])
+    expect(update?.notArgs).toEqual([['prefilled_at', 'is', null]])
   })
 
   it('does nothing when the undone control was not the final one', async () => {

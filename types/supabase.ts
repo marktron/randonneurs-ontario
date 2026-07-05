@@ -571,6 +571,7 @@ export type Database = {
           gpx_url: string | null
           id: string
           note: string | null
+          prefilled_at: string | null
           rider_id: string
           rider_notes: string | null
           season: number
@@ -592,6 +593,7 @@ export type Database = {
           gpx_url?: string | null
           id?: string
           note?: string | null
+          prefilled_at?: string | null
           rider_id: string
           rider_notes?: string | null
           season: number
@@ -613,6 +615,7 @@ export type Database = {
           gpx_url?: string | null
           id?: string
           note?: string | null
+          prefilled_at?: string | null
           rider_id?: string
           rider_notes?: string | null
           season?: number

@@ -210,6 +210,9 @@ export async function updateResult(
     status: data.status,
     team_name: data.teamName,
     note: data.note,
+    // An organizer editing a result makes it authoritative: clear the card
+    // pre-fill marker so a later rider undo can never revert it.
+    prefilled_at: null,
     ...(data.distanceKm !== undefined && { distance_km: data.distanceKm }),
   }
 

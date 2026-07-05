@@ -63,25 +63,61 @@ export async function handleFinishIfFinalControl(params: FinishCheckinParams): P
       season: parseInt(event.event_date.split('-')[0]),
       distance_km: event.distance_km,
       submission_token: params.managementToken,
+      prefilled_at: new Date().toISOString(),
     }
 
     const { error: insertError } = await supabase.from('results').insert(insertData)
 
     if (insertError) {
       // Unique violation (event_id, rider_id): the row already exists (cron,
-      // manage page, or an earlier final check-in). Pre-fill it unless the
-      // rider already submitted themselves.
+      // manage page, or an earlier final check-in). Inspect it before touching
+      // it — only a still-pending, un-submitted card row may be re-filled.
       if (insertError.code === '23505') {
+        const { data: existing, error: existingError } = await supabase
+          .from('results')
+          .select('submission_token, submitted_at, status')
+          .eq('event_id', event.id)
+          .eq('rider_id', rider.id)
+          .maybeSingle()
+
+        if (existingError) {
+          logError(existingError, {
+            operation: 'handleFinishIfFinalControl.select',
+            context: { eventId: event.id, riderId: rider.id },
+          })
+          return
+        }
+
+        const existingRow = existing as {
+          submission_token: string | null
+          submitted_at: string | null
+          status: string | null
+        } | null
+
+        // No row (a concurrent delete), a row the rider already submitted, or
+        // any non-pending row (admin-entered finished/DNF/OTD) is authoritative
+        // — never overwrite it, and never claim/send an email against it.
+        if (!existingRow || existingRow.submitted_at || existingRow.status !== 'pending') {
+          return
+        }
+
         const updateData: ResultUpdate = {
           status: 'finished',
           finish_time: params.finishTime,
+          prefilled_at: new Date().toISOString(),
+          // Backfill the management token only when the row carries none — never
+          // clobber a cron-issued token that may already have been emailed.
+          ...(existingRow.submission_token ? {} : { submission_token: params.managementToken }),
         }
-        const { error: updateError } = await supabase
+        const { data: filled, error: updateError } = await supabase
           .from('results')
           .update(updateData)
           .eq('event_id', event.id)
           .eq('rider_id', rider.id)
           .is('submitted_at', null)
+          .eq('status', 'pending')
+          .select('id')
+          .maybeSingle()
 
         if (updateError) {
           logError(updateError, {
@@ -90,6 +126,9 @@ export async function handleFinishIfFinalControl(params: FinishCheckinParams): P
           })
           return
         }
+        // Zero rows matched (a race flipped the row out of pending) — the row
+        // this call would have emailed about no longer exists as we expect.
+        if (!filled) return
       } else {
         logError(insertError, {
           operation: 'handleFinishIfFinalControl.insert',
@@ -154,9 +193,11 @@ export async function handleFinishIfFinalControl(params: FinishCheckinParams): P
 
 /**
  * After a rider undoes their final-control check-in, roll a pre-filled
- * finish back to pending. Guarded so a rider-submitted result is never
- * touched. finish_email_sent_at is deliberately left set: a later
- * re-check-in must not send a second email.
+ * finish back to pending. Only rows the card itself pre-filled (prefilled_at
+ * set) are reverted — admin-created rows (prefilled_at NULL) and admin- or
+ * rider-touched rows (which clear prefilled_at) are never wiped by an undo.
+ * finish_email_sent_at is deliberately left set: a later re-check-in must not
+ * send a second email.
  */
 export async function revertFinishIfFinalControl(params: {
   eventId: string
@@ -185,7 +226,7 @@ export async function revertFinishIfFinalControl(params: {
     const position = (controlRow as { position: number }).position
     if (!(await isFinalControlPosition(params.eventId, position))) return
 
-    const updateData: ResultUpdate = { status: 'pending', finish_time: null }
+    const updateData: ResultUpdate = { status: 'pending', finish_time: null, prefilled_at: null }
     const { error: updateError } = await supabase
       .from('results')
       .update(updateData)
@@ -193,6 +234,7 @@ export async function revertFinishIfFinalControl(params: {
       .eq('rider_id', params.riderId)
       .is('submitted_at', null)
       .eq('status', 'finished')
+      .not('prefilled_at', 'is', null)
 
     if (updateError) {
       logError(updateError, {

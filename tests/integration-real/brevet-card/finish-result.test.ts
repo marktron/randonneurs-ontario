@@ -298,4 +298,194 @@ describe('digital brevet card finish flow (real DB)', () => {
     expect(typed.finish_time).toBeNull()
     expect(typed.finish_email_sent_at).not.toBeNull()
   })
+
+  it('leaves an admin-entered row untouched on final check-in and undo', async () => {
+    // Organizer-entered shape: a finished row with a recorded time, no
+    // submission token, no submitted_at, and — crucially — no prefilled_at.
+    await checked(
+      supabase.from('results').insert({
+        event_id: IDS.event,
+        rider_id: IDS.rider,
+        status: 'finished',
+        finish_time: '7:30',
+        season: new Date().getFullYear(),
+        distance_km: 200,
+        // Explicit null overrides the column's gen_random_uuid() default so
+        // this really is a "no token" organizer row.
+        submission_token: null,
+      }),
+      'seed admin-entered result'
+    )
+
+    const checkin = await checkInAtControl(token, {
+      controlId: IDS.controlFinish,
+      checkedInAt: new Date().toISOString(),
+    })
+    expect(checkin.success).toBe(true)
+
+    const afterCheckin = await checked(
+      supabase
+        .from('results')
+        .select('status, finish_time, submission_token, prefilled_at, finish_email_sent_at')
+        .eq('event_id', IDS.event)
+        .eq('rider_id', IDS.rider)
+        .single(),
+      'read admin row after final check-in'
+    )
+    const ac = afterCheckin as {
+      status: string
+      finish_time: string | null
+      submission_token: string | null
+      prefilled_at: string | null
+      finish_email_sent_at: string | null
+    }
+    // The organizer's row is authoritative: not overwritten, and no email
+    // claim/send stamped against it.
+    expect(ac.status).toBe('finished')
+    expect(ac.finish_time).toBe('07:30:00')
+    expect(ac.submission_token).toBeNull()
+    expect(ac.prefilled_at).toBeNull()
+    expect(ac.finish_email_sent_at).toBeNull()
+
+    const undo = await undoCheckin(token, { controlId: IDS.controlFinish })
+    expect(undo.success).toBe(true)
+
+    const afterUndo = await checked(
+      supabase
+        .from('results')
+        .select('status, finish_time, prefilled_at')
+        .eq('event_id', IDS.event)
+        .eq('rider_id', IDS.rider)
+        .single(),
+      'read admin row after undo'
+    )
+    const au = afterUndo as {
+      status: string
+      finish_time: string | null
+      prefilled_at: string | null
+    }
+    // Undo must not revert an admin-entered row (prefilled_at is NULL).
+    expect(au.status).toBe('finished')
+    expect(au.finish_time).toBe('07:30:00')
+    expect(au.prefilled_at).toBeNull()
+  })
+
+  it('round-trips pre-fill -> undo -> re-check-in with a single email stamp and preserved token', async () => {
+    const first = await checkInAtControl(token, {
+      controlId: IDS.controlFinish,
+      checkedInAt: new Date().toISOString(),
+    })
+    expect(first.success).toBe(true)
+
+    const afterFirst = await checked(
+      supabase
+        .from('results')
+        .select('status, submission_token, prefilled_at, finish_email_sent_at')
+        .eq('event_id', IDS.event)
+        .eq('rider_id', IDS.rider)
+        .single(),
+      'read result after first pre-fill'
+    )
+    const af = afterFirst as {
+      status: string
+      submission_token: string | null
+      prefilled_at: string | null
+      finish_email_sent_at: string | null
+    }
+    expect(af.status).toBe('finished')
+    expect(af.submission_token).toBe(token)
+    expect(af.prefilled_at).not.toBeNull()
+    expect(af.finish_email_sent_at).not.toBeNull()
+    const firstStamp = af.finish_email_sent_at
+
+    const undo = await undoCheckin(token, { controlId: IDS.controlFinish })
+    expect(undo.success).toBe(true)
+
+    const afterUndo = await checked(
+      supabase
+        .from('results')
+        .select('status, prefilled_at, finish_email_sent_at')
+        .eq('event_id', IDS.event)
+        .eq('rider_id', IDS.rider)
+        .single(),
+      'read result after undo'
+    )
+    const au = afterUndo as {
+      status: string
+      prefilled_at: string | null
+      finish_email_sent_at: string | null
+    }
+    expect(au.status).toBe('pending')
+    expect(au.prefilled_at).toBeNull()
+    // The email stamp survives the undo so a re-check-in cannot re-send.
+    expect(au.finish_email_sent_at).toBe(firstStamp)
+
+    const second = await checkInAtControl(token, {
+      controlId: IDS.controlFinish,
+      checkedInAt: new Date().toISOString(),
+    })
+    expect(second.success).toBe(true)
+
+    const afterSecond = await checked(
+      supabase
+        .from('results')
+        .select('status, submission_token, prefilled_at, finish_email_sent_at')
+        .eq('event_id', IDS.event)
+        .eq('rider_id', IDS.rider)
+        .single(),
+      'read result after re-check-in'
+    )
+    const as = afterSecond as {
+      status: string
+      submission_token: string | null
+      prefilled_at: string | null
+      finish_email_sent_at: string | null
+    }
+    expect(as.status).toBe('finished')
+    expect(as.prefilled_at).not.toBeNull()
+    // Token preserved (not re-issued) and the single-send stamp is unchanged.
+    expect(as.submission_token).toBe(token)
+    expect(as.finish_email_sent_at).toBe(firstStamp)
+  })
+
+  it('backfills the management token when the existing pending row has none', async () => {
+    // Pending row with a NULL submission_token (finding 2's edge case).
+    await checked(
+      supabase.from('results').insert({
+        event_id: IDS.event,
+        rider_id: IDS.rider,
+        status: 'pending',
+        season: new Date().getFullYear(),
+        distance_km: 200,
+        // Explicit null overrides the gen_random_uuid() default so the row
+        // genuinely has no token for the pre-fill path to backfill.
+        submission_token: null,
+      }),
+      'seed pending result with null token'
+    )
+
+    const checkin = await checkInAtControl(token, {
+      controlId: IDS.controlFinish,
+      checkedInAt: new Date().toISOString(),
+    })
+    expect(checkin.success).toBe(true)
+
+    const row = await checked(
+      supabase
+        .from('results')
+        .select('status, submission_token, prefilled_at')
+        .eq('event_id', IDS.event)
+        .eq('rider_id', IDS.rider)
+        .single(),
+      'read result after pre-fill with token backfill'
+    )
+    const typed = row as {
+      status: string
+      submission_token: string | null
+      prefilled_at: string | null
+    }
+    expect(typed.status).toBe('finished')
+    expect(typed.submission_token).toBe(token)
+    expect(typed.prefilled_at).not.toBeNull()
+  })
 })
