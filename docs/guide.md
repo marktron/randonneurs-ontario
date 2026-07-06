@@ -82,6 +82,8 @@ For each rider, you can:
 - **Add a note** if needed.
 - **View rider-submitted evidence**: if a rider submitted their own result, you'll see their GPX file and control card photos.
 
+On phones, the results table converts each rider row into a stacked card with labelled fields (Status, Time, Evidence, Note), so long rider notes wrap at full width instead of forcing the table to scroll sideways. Fields with nothing to show (an empty note, no evidence, or a time input that isn't editable yet) are omitted from the card.
+
 A **First event** badge appears next to riders who have never shown up to a Randonneurs Ontario event before — that is, they have no result recorded for any other event with a status other than DNS. DNF, OTL, DQ, finished, and pending results all count as having shown up, so the badge only highlights brand-new riders. Use it as a heads-up to introduce yourself, walk them through the controls, and make them feel welcome.
 
 You can also add riders using the "Add Rider" button, which is available for both scheduled and completed events. For scheduled events, this adds a registration; for completed events, it adds a result entry. Search by name to find an existing rider, or create a new rider directly from the dialog.
