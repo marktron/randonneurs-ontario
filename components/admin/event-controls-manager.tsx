@@ -29,6 +29,7 @@ import {
   type EventControlInput,
 } from '@/lib/actions/event-controls'
 import { DEFAULT_CONTROL_RADIUS_M } from '@/lib/brevet-card'
+import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import { Download, Loader2, Plus, Save, Trash2 } from 'lucide-react'
 
@@ -50,6 +51,9 @@ interface EventControlsManagerProps {
   initialControls: AdminEventControl[]
   hasRwgpsRoute: boolean
 }
+
+// Mobile-only field label for the stacked card layout (< sm)
+const MOBILE_LABEL = 'w-20 shrink-0 text-xs font-medium text-muted-foreground sm:hidden'
 
 let rowKeyCounter = 0
 function nextRowKey(): string {
@@ -255,8 +259,8 @@ export function EventControlsManager({
         </p>
       ) : (
         <div className="overflow-x-auto border rounded-md">
-          <Table>
-            <TableHeader>
+          <Table className="block sm:table">
+            <TableHeader className="hidden sm:table-header-group">
               <TableRow>
                 <TableHead className="min-w-[180px]">Name</TableHead>
                 <TableHead className="w-24 text-right">Km</TableHead>
@@ -268,17 +272,22 @@ export function EventControlsManager({
                 <TableHead className="w-12" />
               </TableRow>
             </TableHeader>
-            <TableBody>
+            <TableBody className="block sm:table-row-group">
               {rows.map((row) => (
-                <TableRow key={row.key}>
-                  <TableCell>
+                <TableRow
+                  key={row.key}
+                  className="relative block space-y-2 p-4 sm:table-row sm:space-y-0 sm:p-0"
+                >
+                  <TableCell className="flex items-center gap-3 p-0 pr-12 sm:table-cell sm:p-3 sm:pr-3">
+                    <span className={MOBILE_LABEL}>Name</span>
                     <Input
                       value={row.name}
                       onChange={(e) => updateRow(row.key, 'name', e.target.value)}
                       placeholder="Control name"
                     />
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="flex items-center gap-3 p-0 sm:table-cell sm:p-3">
+                    <span className={MOBILE_LABEL}>Km</span>
                     <Input
                       value={row.distanceKm}
                       onChange={(e) => updateRow(row.key, 'distanceKm', e.target.value)}
@@ -286,7 +295,8 @@ export function EventControlsManager({
                       className="text-right tabular-nums"
                     />
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="flex items-center gap-3 p-0 sm:table-cell sm:p-3">
+                    <span className={MOBILE_LABEL}>Latitude</span>
                     <Input
                       value={row.lat}
                       onChange={(e) => updateRow(row.key, 'lat', e.target.value)}
@@ -295,7 +305,8 @@ export function EventControlsManager({
                       className="tabular-nums"
                     />
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="flex items-center gap-3 p-0 sm:table-cell sm:p-3">
+                    <span className={MOBILE_LABEL}>Longitude</span>
                     <Input
                       value={row.lng}
                       onChange={(e) => updateRow(row.key, 'lng', e.target.value)}
@@ -304,7 +315,8 @@ export function EventControlsManager({
                       className="tabular-nums"
                     />
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="flex items-center gap-3 p-0 sm:table-cell sm:p-3">
+                    <span className={MOBILE_LABEL}>Radius (m)</span>
                     <Input
                       value={row.radiusM}
                       onChange={(e) => updateRow(row.key, 'radiusM', e.target.value)}
@@ -312,17 +324,24 @@ export function EventControlsManager({
                       className="text-right tabular-nums"
                     />
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="flex items-center gap-3 p-0 sm:table-cell sm:p-3">
+                    <span className={MOBILE_LABEL}>Notes</span>
                     <Input
                       value={row.notes}
                       onChange={(e) => updateRow(row.key, 'notes', e.target.value)}
                       placeholder="Optional"
                     />
                   </TableCell>
-                  <TableCell className="text-right tabular-nums text-muted-foreground">
+                  <TableCell
+                    className={cn(
+                      'items-center gap-3 p-0 text-muted-foreground tabular-nums sm:table-cell sm:p-3 sm:text-right',
+                      row.checkinCount > 0 ? 'flex' : 'hidden'
+                    )}
+                  >
+                    <span className={MOBILE_LABEL}>Check-ins</span>
                     {row.checkinCount}
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="absolute top-2.5 right-2.5 block p-0 sm:static sm:table-cell sm:p-3">
                     <Button
                       variant="ghost"
                       size="icon"

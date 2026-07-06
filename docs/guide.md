@@ -38,6 +38,8 @@ Each row shows the event name, chapter, date, distance, rider count, and status 
 
 Click any row to open the event detail page.
 
+On phones, event rows stack into cards — name and type up top with the status badge in the corner, and the date and distance below — instead of scrolling sideways. The digital brevet card page's Controls and Check-ins tables stack the same way, with a labelled line per field or control.
+
 ### Creating an event
 
 Click "New Event" in the top right of the Events page. The form asks for:

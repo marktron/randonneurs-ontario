@@ -2,17 +2,7 @@ import { requireAdmin } from '@/lib/auth/get-admin'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { getChapters } from '@/lib/actions/admin-users'
 import { getEventRiderCounts } from '@/lib/data/event-rider-counts'
-import { parseLocalDate } from '@/lib/utils'
-import { ClickableTableRow } from '@/components/admin/clickable-table-row'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
-import { Badge } from '@/components/ui/badge'
+import { EventsTable } from '@/components/admin/events-table'
 import { Button } from '@/components/ui/button'
 import { EventFilters, type DateFilter } from '@/components/admin/event-filters'
 import { AdminPagination } from '@/components/admin/admin-pagination'
@@ -164,21 +154,6 @@ export default async function AdminEventsPage({ searchParams }: AdminEventsPageP
     page
   )
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'scheduled':
-        return <Badge variant="secondary">Scheduled</Badge>
-      case 'completed':
-        return <Badge>Completed</Badge>
-      case 'submitted':
-        return <Badge className="bg-green-600 hover:bg-green-600">Submitted</Badge>
-      case 'cancelled':
-        return <Badge variant="destructive">Cancelled</Badge>
-      default:
-        return <Badge variant="outline">{status}</Badge>
-    }
-  }
-
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -204,59 +179,12 @@ export default async function AdminEventsPage({ searchParams }: AdminEventsPageP
         dateFilter={dateFilter}
       />
 
-      <div className="rounded-md border">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Event</TableHead>
-              <TableHead className="hidden md:table-cell">Chapter</TableHead>
-              <TableHead>Date</TableHead>
-              <TableHead className="hidden sm:table-cell">Distance</TableHead>
-              <TableHead className="hidden sm:table-cell">Riders</TableHead>
-              <TableHead>Status</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {events.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={6} className="text-center text-muted-foreground">
-                  No events found
-                </TableCell>
-              </TableRow>
-            ) : (
-              events.map((event) => (
-                <ClickableTableRow
-                  key={event.id}
-                  href={buildEventDetailUrl(event.id, season, chapterId, dateFilter)}
-                >
-                  <TableCell>
-                    <div>
-                      <span className="font-medium">{event.name}</span>
-                      <p className="text-sm text-muted-foreground capitalize">{event.event_type}</p>
-                    </div>
-                  </TableCell>
-                  <TableCell className="hidden md:table-cell">
-                    {event.chapters?.name || '—'}
-                  </TableCell>
-                  <TableCell>
-                    {parseLocalDate(event.event_date).toLocaleDateString('en-CA', {
-                      weekday: 'short',
-                      month: 'short',
-                      day: 'numeric',
-                      year: 'numeric',
-                    })}
-                  </TableCell>
-                  <TableCell className="hidden sm:table-cell">{event.distance_km} km</TableCell>
-                  <TableCell className="hidden sm:table-cell tabular-nums">
-                    {event.rider_count ?? 0}
-                  </TableCell>
-                  <TableCell>{getStatusBadge(event.status ?? 'scheduled')}</TableCell>
-                </ClickableTableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </div>
+      <EventsTable
+        events={events}
+        buildEventDetailUrl={(eventId) =>
+          buildEventDetailUrl(eventId, season, chapterId, dateFilter)
+        }
+      />
 
       {totalCount > 0 && (
         <AdminPagination
