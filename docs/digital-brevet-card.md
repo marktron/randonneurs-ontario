@@ -326,6 +326,15 @@ as `isFinalControl` — `finish-result.ts` never queries `event_controls`.
   unset. A rider who has explicitly submitted always sees "Previously
   Submitted" (with its overwrite warning) — the submitted confirmation
   takes precedence over the track nudge, never the other way around.
+- That same form also hides the "Control Card Photos" upload section for
+  any rider who used the digital brevet card — they have no paper card to
+  photograph. `getResultByToken` (`lib/actions/rider-results.ts`) derives
+  `usedDigitalCard` by looking up the rider's registration for the event
+  and checking for at least one `control_checkins` row against it (same
+  signal as the track-reminder check in
+  `lib/events/send-result-reminders.ts`). No registration row or a lookup
+  error both default to `false`, so the section simply stays visible
+  rather than the action failing.
 - The admin "Send Reminders" flow (`lib/events/send-result-reminders.ts`)
   skips any rider whose result already has `submitted_at` set, for either
   the pending-submission reminder or the track-only reminder — a rider who

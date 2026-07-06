@@ -8,7 +8,7 @@ vi.mock('@/lib/supabase-server', () => {
 
   const createQueryBuilder = () => {
     const builder: Record<string, ReturnType<typeof vi.fn>> = {}
-    const methods = ['select', 'eq', 'insert', 'update', 'single']
+    const methods = ['select', 'eq', 'insert', 'update', 'single', 'maybeSingle']
 
     methods.forEach((method) => {
       builder[method] = vi.fn((...args) => {
@@ -52,6 +52,11 @@ vi.mock('@/lib/supabase-server', () => {
     __reset: () => {
       calls.length = 0
       queryBuilder.single.mockReset()
+      queryBuilder.maybeSingle.mockReset()
+      // Default: no registration found for the digital-card check-in lookup
+      // in getResultByToken, so usedDigitalCard defaults to false unless a
+      // test overrides it with __mockRegistration(...).
+      queryBuilder.maybeSingle.mockResolvedValue({ data: null, error: null })
       storageMock.upload.mockClear()
       storageMock.remove.mockClear()
       storageMock.createSignedUploadUrl.mockClear()
@@ -73,6 +78,25 @@ vi.mock('@/lib/supabase-server', () => {
     __mockUpdateSuccess: () => {
       queryBuilder.update.mockReturnValueOnce({
         eq: vi.fn().mockResolvedValue({ error: null }),
+      })
+    },
+    // Controls the registrations lookup used by getResultByToken to derive
+    // usedDigitalCard. checkinIds: null means no registration row was found;
+    // an array (possibly empty) means a registration was found with that
+    // many control_checkins.
+    __mockRegistration: (checkinIds: string[] | null) => {
+      queryBuilder.maybeSingle.mockResolvedValueOnce({
+        data:
+          checkinIds === null
+            ? null
+            : { id: 'reg-1', control_checkins: checkinIds.map((id) => ({ id })) },
+        error: null,
+      })
+    },
+    __mockRegistrationLookupError: () => {
+      queryBuilder.maybeSingle.mockResolvedValueOnce({
+        data: null,
+        error: { message: 'registration lookup failed' },
       })
     },
   }
@@ -101,6 +125,8 @@ const mockModule = await vi.importMock<{
   __mockResultFound: (result: unknown) => void
   __mockResultNotFound: () => void
   __mockUpdateSuccess: () => void
+  __mockRegistration: (checkinIds: string[] | null) => void
+  __mockRegistrationLookupError: () => void
 }>('@/lib/supabase-server')
 
 describe('getResultByToken', () => {
@@ -198,6 +224,74 @@ describe('getResultByToken', () => {
 
     expect(result.success).toBe(true)
     expect(result.data?.canSubmit).toBe(false)
+  })
+
+  const baseResultRow = {
+    id: 'result-1',
+    event_id: 'event-1',
+    rider_id: 'rider-1',
+    status: 'pending',
+    finish_time: null,
+    gpx_url: null,
+    gpx_file_path: null,
+    control_card_front_path: null,
+    control_card_back_path: null,
+    rider_notes: null,
+    submitted_at: null,
+    events: {
+      id: 'event-1',
+      name: 'Test Event',
+      event_date: '2025-06-15',
+      distance_km: 200,
+      status: 'completed',
+      chapters: { name: 'Toronto', slug: 'toronto' },
+    },
+    riders: {
+      id: 'rider-1',
+      first_name: 'John',
+      last_name: 'Doe',
+      email: 'john@example.com',
+    },
+  }
+
+  it('sets usedDigitalCard=true when the registration has a control check-in', async () => {
+    mockModule.__mockResultFound(baseResultRow)
+    mockModule.__mockRegistration(['checkin-1'])
+
+    const result = await getResultByToken('valid-token')
+
+    expect(result.success).toBe(true)
+    expect(result.data?.usedDigitalCard).toBe(true)
+  })
+
+  it('sets usedDigitalCard=false when the registration has no check-ins', async () => {
+    mockModule.__mockResultFound(baseResultRow)
+    mockModule.__mockRegistration([])
+
+    const result = await getResultByToken('valid-token')
+
+    expect(result.success).toBe(true)
+    expect(result.data?.usedDigitalCard).toBe(false)
+  })
+
+  it('sets usedDigitalCard=false when there is no registration row', async () => {
+    mockModule.__mockResultFound(baseResultRow)
+    mockModule.__mockRegistration(null)
+
+    const result = await getResultByToken('valid-token')
+
+    expect(result.success).toBe(true)
+    expect(result.data?.usedDigitalCard).toBe(false)
+  })
+
+  it('sets usedDigitalCard=false and still succeeds when the check-in lookup errors', async () => {
+    mockModule.__mockResultFound(baseResultRow)
+    mockModule.__mockRegistrationLookupError()
+
+    const result = await getResultByToken('valid-token')
+
+    expect(result.success).toBe(true)
+    expect(result.data?.usedDigitalCard).toBe(false)
   })
 })
 

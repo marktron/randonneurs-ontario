@@ -601,53 +601,57 @@ export function ResultSubmissionForm({ token, initialData }: ResultSubmissionFor
           </div>
         )}
 
-        {/* Control Card Photos - only show if finished and not a populaire */}
-        {status === 'finished' && initialData.eventType !== 'populaire' && (
-          <fieldset
-            className="bg-muted/50 border border-border rounded-lg p-4 space-y-4"
-            disabled={isPending}
-          >
-            <legend className="text-sm font-medium px-1">Control Card Photos</legend>
+        {/* Control Card Photos - only show if finished, not a populaire, and
+            the rider didn't use the digital brevet card (no paper card to
+            photograph in that case) */}
+        {status === 'finished' &&
+          initialData.eventType !== 'populaire' &&
+          !initialData.usedDigitalCard && (
+            <fieldset
+              className="bg-muted/50 border border-border rounded-lg p-4 space-y-4"
+              disabled={isPending}
+            >
+              <legend className="text-sm font-medium px-1">Control Card Photos</legend>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Front of Card</Label>
-                <FileUploadField
-                  inputRef={frontInputRef}
-                  state={controlCardFront}
-                  accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
-                  icon={<ImageIcon className="h-4 w-4" />}
-                  label="Upload front"
-                  disabled={isPending}
-                  onUpload={(file) =>
-                    handleFileUpload(file, 'control_card_front', setControlCardFront)
-                  }
-                  onDelete={() =>
-                    handleFileDelete('control_card_front', setControlCardFront, frontInputRef)
-                  }
-                />
-              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Front of Card</Label>
+                  <FileUploadField
+                    inputRef={frontInputRef}
+                    state={controlCardFront}
+                    accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
+                    icon={<ImageIcon className="h-4 w-4" />}
+                    label="Upload front"
+                    disabled={isPending}
+                    onUpload={(file) =>
+                      handleFileUpload(file, 'control_card_front', setControlCardFront)
+                    }
+                    onDelete={() =>
+                      handleFileDelete('control_card_front', setControlCardFront, frontInputRef)
+                    }
+                  />
+                </div>
 
-              <div className="space-y-2">
-                <Label>Back of Card</Label>
-                <FileUploadField
-                  inputRef={backInputRef}
-                  state={controlCardBack}
-                  accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
-                  icon={<ImageIcon className="h-4 w-4" />}
-                  label="Upload back"
-                  disabled={isPending}
-                  onUpload={(file) =>
-                    handleFileUpload(file, 'control_card_back', setControlCardBack)
-                  }
-                  onDelete={() =>
-                    handleFileDelete('control_card_back', setControlCardBack, backInputRef)
-                  }
-                />
+                <div className="space-y-2">
+                  <Label>Back of Card</Label>
+                  <FileUploadField
+                    inputRef={backInputRef}
+                    state={controlCardBack}
+                    accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
+                    icon={<ImageIcon className="h-4 w-4" />}
+                    label="Upload back"
+                    disabled={isPending}
+                    onUpload={(file) =>
+                      handleFileUpload(file, 'control_card_back', setControlCardBack)
+                    }
+                    onDelete={() =>
+                      handleFileDelete('control_card_back', setControlCardBack, backInputRef)
+                    }
+                  />
+                </div>
               </div>
-            </div>
-          </fieldset>
-        )}
+            </fieldset>
+          )}
 
         {/* Notes */}
         <div className="space-y-2">

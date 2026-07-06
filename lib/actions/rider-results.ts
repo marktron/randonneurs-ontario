@@ -42,6 +42,7 @@ export interface ResultSubmissionData {
   riderNotes: string | null
   submittedAt: string | null
   canSubmit: boolean // false if event is already 'submitted'
+  usedDigitalCard: boolean // true if the rider has any control_checkins for this event
 }
 
 /**
@@ -118,6 +119,31 @@ export async function getResultByToken(token: string): Promise<ActionResult<Resu
   // Check if event allows submissions (not yet submitted to ACP)
   const canSubmit = event.status !== 'submitted'
 
+  // A rider who checked in at any control via the digital brevet card has no
+  // paper card to photograph, so the form should hide that section. Mirrors
+  // the check-in signal used in lib/events/send-result-reminders.ts, but
+  // scoped to this rider's single registration via a nested select. Any
+  // failure here (no registration row, e.g. an admin-created result for an
+  // unregistered rider, or a query error) must not fail the whole action —
+  // it just leaves the photo section visible, which was the prior behavior.
+  let usedDigitalCard = false
+  const { data: registration, error: registrationError } = await supabase
+    .from('registrations')
+    .select('id, control_checkins(id)')
+    .eq('event_id', event.id)
+    .eq('rider_id', rider.id)
+    .maybeSingle()
+
+  if (registrationError) {
+    logError(registrationError, {
+      operation: 'getResultByToken.registrationLookup',
+      context: { eventId: event.id, riderId: rider.id },
+    })
+  } else if (registration) {
+    const typedRegistration = registration as { control_checkins: { id: string }[] | null }
+    usedDigitalCard = (typedRegistration.control_checkins?.length ?? 0) > 0
+  }
+
   return {
     success: true,
     data: {
@@ -141,6 +167,7 @@ export async function getResultByToken(token: string): Promise<ActionResult<Resu
       riderNotes: typedResult.rider_notes,
       submittedAt: typedResult.submitted_at,
       canSubmit,
+      usedDigitalCard,
     },
   }
 }

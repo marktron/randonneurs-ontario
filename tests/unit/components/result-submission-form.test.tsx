@@ -86,6 +86,7 @@ describe('ResultSubmissionForm', () => {
     controlCardBackPath: null,
     riderNotes: null,
     submittedAt: null,
+    usedDigitalCard: false,
   }
 
   const defaultProps = {
@@ -262,6 +263,31 @@ describe('ResultSubmissionForm', () => {
         <ResultSubmissionForm
           token="test-token-123"
           initialData={{ ...mockInitialData, eventType: 'brevet' }}
+        />
+      )
+
+      expect(screen.getByText('Control Card Photos')).toBeInTheDocument()
+    })
+  })
+
+  describe('digital brevet card riders', () => {
+    it('hides control card photos when the rider used the digital card', () => {
+      render(
+        <ResultSubmissionForm
+          token="test-token-123"
+          initialData={{ ...mockInitialData, eventType: 'brevet', usedDigitalCard: true }}
+        />
+      )
+
+      expect(screen.getByLabelText('Finish Time')).toBeInTheDocument()
+      expect(screen.queryByText('Control Card Photos')).not.toBeInTheDocument()
+    })
+
+    it('shows control card photos when the rider did not use the digital card', () => {
+      render(
+        <ResultSubmissionForm
+          token="test-token-123"
+          initialData={{ ...mockInitialData, eventType: 'brevet', usedDigitalCard: false }}
         />
       )
 
