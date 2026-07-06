@@ -170,6 +170,25 @@ beforeEach(() => {
   Object.defineProperty(window, 'isSecureContext', { value: true, configurable: true })
 })
 
+describe('BrevetCard header', () => {
+  it('renders the rider name prominently in a dedicated line', () => {
+    render(<BrevetCard token={TOKEN} initialData={makeData()} />)
+
+    expect(screen.getByText(/brevet card for/i)).toBeInTheDocument()
+    expect(
+      screen.getByText((content) => content.includes('Ada') && content.includes('Lovelace'))
+    ).toBeInTheDocument()
+  })
+
+  it('does not include the rider name in the metadata line', () => {
+    render(<BrevetCard token={TOKEN} initialData={makeData()} />)
+
+    const metadataLine = screen.getByText(/km · .* start/i)
+    expect(metadataLine).not.toHaveTextContent('Ada')
+    expect(metadataLine).not.toHaveTextContent('Lovelace')
+  })
+})
+
 describe('BrevetCard check-in sync', () => {
   it('sends the check-in to the server immediately after tapping Check in', async () => {
     mockCheckIn.mockResolvedValue({

@@ -467,10 +467,15 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
     <div className="content-container pt-12 md:pt-20 max-w-2xl pb-16 space-y-6">
       <header>
         <p className="text-sm text-muted-foreground">{event.chapterName}</p>
-        <h1 className="font-serif text-3xl md:text-4xl tracking-tight">{event.name}</h1>
+        <p className="text-base md:text-lg">
+          Brevet card for{' '}
+          <span className="font-medium">
+            {rider.firstName} {rider.lastName}
+          </span>
+        </p>
+        <h1 className="font-serif text-3xl md:text-4xl tracking-tight mt-2">{event.name}</h1>
         <p className="mt-1 text-muted-foreground">
-          {event.distanceKm} km · {formatControlTime(startsAt)} start · {rider.firstName}{' '}
-          {rider.lastName}
+          {event.distanceKm} km · {formatControlTime(startsAt)} start
         </p>
         <p className="mt-2 text-sm text-muted-foreground tabular-nums">
           {doneCount} of {controls.length} controls
