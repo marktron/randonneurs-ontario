@@ -1,30 +1,24 @@
 'use client'
 
-import { useState, useTransition, useEffect, useRef } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState } from 'react'
 import Link from 'next/link'
-import { Input } from '@/components/ui/input'
-import { Textarea } from '@/components/ui/textarea'
-import { Label } from '@/components/ui/label'
-import { Checkbox } from '@/components/ui/checkbox'
 import { Button } from '@/components/ui/button'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import { registerForEvent, completeRegistrationWithRider } from '@/lib/actions/register'
-import { RiderMatchDialog } from '@/components/rider-match-dialog'
-import type { RiderMatchCandidate } from '@/lib/actions/rider-match'
-import { getUpcomingEventsByEventId, type UpcomingEvent } from '@/lib/actions/rider-results'
-import { format } from 'date-fns'
-import { ArrowRight } from 'lucide-react'
-import { MembershipErrorModal } from '@/components/membership-error-modal'
 import { HoneypotField } from '@/components/honeypot-field'
-import { EmailTypoSuggestion } from '@/components/email-typo-suggestion'
-import { getSavedRegistrationData, saveRegistrationData } from '@/lib/registration-storage'
+import { useRegistrationForm } from '@/hooks/use-registration-form'
+import {
+  RegistrationError,
+  RiderInfoFields,
+  EmergencyContactFields,
+  ShareRegistrationCheckbox,
+  NotesField,
+} from '@/components/registration/registration-fields'
+import {
+  RegistrationSuccess,
+  UpcomingEventsLoading,
+  UpcomingEventsSection,
+} from '@/components/registration/registration-success'
+import { RegistrationDialogs } from '@/components/registration/registration-dialogs'
 
 interface RegistrationFormProps {
   eventId: string
@@ -38,70 +32,15 @@ export function RegistrationForm({
   isPermanent,
   variant = 'card',
 }: RegistrationFormProps) {
-  const router = useRouter()
-  const [isPending, startTransition] = useTransition()
-  const [firstName, setFirstName] = useState('')
-  const [lastName, setLastName] = useState('')
-  const [email, setEmail] = useState('')
-  const [blurredEmail, setBlurredEmail] = useState('')
-  const [phone, setPhone] = useState('')
-  const [shareRegistration, setShareRegistration] = useState(true)
-  const [gender, setGender] = useState<string>('')
-  const [emergencyContactName, setEmergencyContactName] = useState('')
-  const [emergencyContactPhone, setEmergencyContactPhone] = useState('')
-  const [homepageUrl, setHomepageUrl] = useState('')
-  const [error, setError] = useState<string | null>(null)
-  const [success, setSuccess] = useState(false)
-
-  // Membership error state
-  const [membershipErrorVariant, setMembershipErrorVariant] = useState<
-    'no-membership' | 'trial-used' | null
-  >(null)
-
-  // Fuzzy matching state
-  const [matchDialogOpen, setMatchDialogOpen] = useState(false)
-  const [matchCandidates, setMatchCandidates] = useState<RiderMatchCandidate[]>([])
-  const [pendingNotes, setPendingNotes] = useState<string>('')
-
-  // Upcoming events state
-  const [upcomingEvents, setUpcomingEvents] = useState<UpcomingEvent[]>([])
-  const [loadingEvents, setLoadingEvents] = useState(false)
-
-  const errorRef = useRef<HTMLDivElement>(null)
-  const successRef = useRef<HTMLDivElement>(null)
-
-  // Load saved data on mount
-  useEffect(() => {
-    const saved = getSavedRegistrationData()
-    if (saved) {
-      setFirstName(saved.firstName)
-      setLastName(saved.lastName)
-      setEmail(saved.email)
-      setPhone(saved.phone || '')
-      setGender(saved.gender)
-      setShareRegistration(saved.shareRegistration)
-      setEmergencyContactName(saved.emergencyContactName || '')
-      setEmergencyContactPhone(saved.emergencyContactPhone || '')
-    }
-  }, [])
-
-  // Scroll error into view when it appears
-  useEffect(() => {
-    if (error && errorRef.current) {
-      errorRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
-    }
-  }, [error])
-
-  // Move focus to success message when registration completes
-  useEffect(() => {
-    if (success && successRef.current) {
-      successRef.current.focus()
-    }
-  }, [success])
+  const form = useRegistrationForm({
+    upcomingEventsEventId: isPermanent ? undefined : eventId,
+  })
+  const { isPending, startTransition } = form
+  const [pendingNotes, setPendingNotes] = useState('')
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
-    setError(null)
+    form.setError(null)
 
     const formData = new FormData(e.currentTarget)
     const notes = formData.get('notes') as string
@@ -109,117 +48,24 @@ export function RegistrationForm({
     startTransition(async () => {
       const result = await registerForEvent({
         eventId,
-        firstName,
-        lastName,
-        email,
-        phone,
-        gender: gender || undefined,
-        shareRegistration,
+        ...form.riderPayload,
         notes: notes || undefined,
-        emergencyContactName,
-        emergencyContactPhone,
-        homepageUrl,
       })
-
-      if (result.success) {
-        // Save form data to localStorage for next registration
-        saveRegistrationData({
-          firstName,
-          lastName,
-          email,
-          phone,
-          gender,
-          shareRegistration,
-          emergencyContactName,
-          emergencyContactPhone,
-        })
-        setSuccess(true)
-        router.refresh()
-
-        // Fetch upcoming events for non-permanents
-        if (!isPermanent) {
-          setLoadingEvents(true)
-          getUpcomingEventsByEventId(eventId, 3)
-            .then((eventsResult) => {
-              if (eventsResult.success && eventsResult.data) {
-                setUpcomingEvents(eventsResult.data)
-              }
-            })
-            .catch(() => {
-              // Silently fail - the events are a nice-to-have
-            })
-            .finally(() => {
-              setLoadingEvents(false)
-            })
-        }
-      } else if (result.needsRiderMatch && result.matchCandidates) {
-        // Show fuzzy matching dialog
-        setMatchCandidates(result.matchCandidates)
-        setPendingNotes(notes || '')
-        setMatchDialogOpen(true)
-      } else if (result.membershipError) {
-        setMembershipErrorVariant(result.membershipError)
-      } else {
-        setError(result.error || 'Registration failed')
-      }
+      form.handleRegistrationResult(result, {
+        onNeedsMatch: () => setPendingNotes(notes || ''),
+      })
     })
   }
 
-  async function handleRiderSelection(riderId: string | null) {
+  function handleRiderSelection(riderId: string | null) {
     startTransition(async () => {
       const result = await completeRegistrationWithRider({
         eventId,
         selectedRiderId: riderId,
-        firstName,
-        lastName,
-        email,
-        phone,
-        gender: gender || undefined,
-        shareRegistration,
+        ...form.riderPayload,
         notes: pendingNotes || undefined,
-        emergencyContactName,
-        emergencyContactPhone,
-        homepageUrl,
       })
-
-      if (result.success) {
-        setMatchDialogOpen(false)
-        saveRegistrationData({
-          firstName,
-          lastName,
-          email,
-          phone,
-          gender,
-          shareRegistration,
-          emergencyContactName,
-          emergencyContactPhone,
-        })
-        setSuccess(true)
-        router.refresh()
-
-        // Fetch upcoming events for non-permanents
-        if (!isPermanent) {
-          setLoadingEvents(true)
-          getUpcomingEventsByEventId(eventId, 3)
-            .then((eventsResult) => {
-              if (eventsResult.success && eventsResult.data) {
-                setUpcomingEvents(eventsResult.data)
-              }
-            })
-            .catch(() => {
-              // Silently fail - the events are a nice-to-have
-            })
-            .finally(() => {
-              setLoadingEvents(false)
-            })
-        }
-      } else if (result.membershipError) {
-        setMatchDialogOpen(false)
-        setMembershipErrorVariant(result.membershipError)
-      } else {
-        setMatchDialogOpen(false)
-        setError(result.error || 'Registration failed')
-      }
+      form.handleRegistrationResult(result)
     })
   }
 
@@ -228,54 +74,17 @@ export function RegistrationForm({
       ? 'lg:sticky lg:top-24 rounded-2xl border border-border bg-card p-6 md:p-8'
       : undefined
 
-  if (success) {
+  if (form.success) {
     return (
       <div className={wrapperClassName}>
-        <div
-          ref={successRef}
-          tabIndex={-1}
-          role="status"
-          className="text-center py-8"
-          data-testid="registration-success"
-        >
-          <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-green-100 dark:bg-green-900/30 mb-4">
-            <svg
-              className="w-6 h-6 text-green-600 dark:text-green-400"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M5 13l4 4L19 7"
-              />
-            </svg>
-          </div>
-          <h2 className="font-serif text-2xl tracking-tight mb-2">You're registered!</h2>
-          <p className="text-sm text-muted-foreground">See you at the start line.</p>
-        </div>
+        <RegistrationSuccess successRef={form.successRef} title="You're registered!">
+          See you at the start line.
+        </RegistrationSuccess>
 
-        {/* Upcoming Events Section */}
-        {loadingEvents && (
-          <div className="border-t border-border pt-6 mt-6">
-            <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
-              <div className="w-4 h-4 border-2 border-muted-foreground border-t-transparent rounded-full animate-spin" />
-              Loading upcoming events…
-            </div>
-          </div>
-        )}
+        {form.loadingEvents && <UpcomingEventsLoading />}
 
-        {!loadingEvents && upcomingEvents.length > 0 && (
-          <div className="border-t border-border pt-6 mt-6">
-            <h3 className="font-medium text-sm mb-4 text-center">More Upcoming Events</h3>
-            <div className="space-y-3">
-              {upcomingEvents.map((event) => (
-                <UpcomingEventCard key={event.id} event={event} />
-              ))}
-            </div>
-          </div>
+        {!form.loadingEvents && form.upcomingEvents.length > 0 && (
+          <UpcomingEventsSection title="More Upcoming Events" events={form.upcomingEvents} />
         )}
       </div>
     )
@@ -302,201 +111,13 @@ export function RegistrationForm({
       )}
 
       <form className="space-y-5" onSubmit={handleSubmit}>
-        <HoneypotField value={homepageUrl} onChange={setHomepageUrl} />
-        {error && (
-          <div
-            ref={errorRef}
-            role="alert"
-            className="p-3 rounded-lg bg-destructive/10 text-destructive text-sm"
-            data-testid="registration-error"
-          >
-            {error}
-          </div>
-        )}
+        <HoneypotField value={form.homepageUrl} onChange={form.setHomepageUrl} />
+        <RegistrationError form={form} />
+        <RiderInfoFields form={form} />
+        <EmergencyContactFields form={form} />
+        <NotesField disabled={isPending} />
+        <ShareRegistrationCheckbox form={form} />
 
-        {/* Name */}
-        <div className="grid grid-cols-1 min-[400px]:grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <Label htmlFor="firstName">First name</Label>
-            <Input
-              id="firstName"
-              name="firstName"
-              type="text"
-              placeholder="First"
-              required
-              autoComplete="given-name"
-              disabled={isPending}
-              value={firstName}
-              onChange={(e) => setFirstName(e.target.value)}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="lastName">Last name</Label>
-            <Input
-              id="lastName"
-              name="lastName"
-              type="text"
-              placeholder="Last"
-              required
-              autoComplete="family-name"
-              disabled={isPending}
-              value={lastName}
-              onChange={(e) => setLastName(e.target.value)}
-            />
-          </div>
-        </div>
-
-        {/* Email */}
-        <div className="space-y-2">
-          <Label htmlFor="email">Email address</Label>
-          <Input
-            id="email"
-            name="email"
-            type="email"
-            inputMode="email"
-            placeholder="you@example.com"
-            required
-            autoComplete="email"
-            disabled={isPending}
-            value={email}
-            onChange={(e) => {
-              setEmail(e.target.value)
-              setBlurredEmail('')
-            }}
-            onBlur={(e) => setBlurredEmail(e.target.value)}
-          />
-          <EmailTypoSuggestion
-            email={blurredEmail}
-            onAccept={(corrected) => {
-              setEmail(corrected)
-              setBlurredEmail('')
-            }}
-          />
-        </div>
-
-        {/* Cell phone */}
-        <div className="space-y-2">
-          <Label htmlFor="phone">Cell phone</Label>
-          <Input
-            id="phone"
-            name="phone"
-            type="tel"
-            inputMode="tel"
-            placeholder="Phone number"
-            required
-            autoComplete="tel"
-            disabled={isPending}
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-          />
-          <p className="text-xs text-muted-foreground">
-            Used only for urgent ride-day updates, such as weather or safety-related changes.
-          </p>
-        </div>
-
-        {/* Gender */}
-        <div className="space-y-2">
-          <Label htmlFor="gender">
-            Gender
-            <span className="text-muted-foreground font-normal ml-1">(optional)</span>
-          </Label>
-          <Select
-            key={gender || 'empty'}
-            value={gender}
-            onValueChange={setGender}
-            disabled={isPending}
-          >
-            <SelectTrigger id="gender" className="w-full">
-              <SelectValue placeholder="Select…" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="M">Male</SelectItem>
-              <SelectItem value="F">Female</SelectItem>
-              <SelectItem value="X">Non-binary / Other</SelectItem>
-            </SelectContent>
-          </Select>
-          <p className="text-xs text-muted-foreground">
-            Audax Club Parisien uses this for ridership statistics.
-          </p>
-        </div>
-
-        {/* Emergency Contact */}
-        <div className="bg-muted/50 border border-border rounded-lg p-4 space-y-3">
-          <p className="text-sm font-medium">Emergency contact</p>
-          <div className="grid grid-cols-1 min-[400px]:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="emergencyContactName">Name</Label>
-              <Input
-                id="emergencyContactName"
-                name="emergencyContactName"
-                type="text"
-                placeholder="Name"
-                required
-                autoComplete="off"
-                disabled={isPending}
-                value={emergencyContactName}
-                onChange={(e) => setEmergencyContactName(e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="emergencyContactPhone">Phone</Label>
-              <Input
-                id="emergencyContactPhone"
-                name="emergencyContactPhone"
-                type="tel"
-                inputMode="tel"
-                placeholder="Phone number"
-                required
-                autoComplete="off"
-                disabled={isPending}
-                value={emergencyContactPhone}
-                onChange={(e) => setEmergencyContactPhone(e.target.value)}
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Notes */}
-        <div className="space-y-2">
-          <Label htmlFor="notes">
-            Notes for the organizer
-            <span className="text-muted-foreground font-normal ml-1">(optional)</span>
-          </Label>
-          <Textarea
-            id="notes"
-            name="notes"
-            placeholder="Any special requirements or information…"
-            rows={3}
-            disabled={isPending}
-          />
-        </div>
-
-        {/* Share Registration */}
-        <div className="flex items-start gap-3">
-          <Checkbox
-            checked={shareRegistration}
-            onCheckedChange={(checked) => setShareRegistration(checked === true)}
-            className="mt-1"
-            disabled={isPending}
-            aria-label="Appear on the registered riders list"
-          />
-          {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- checkbox is keyboard-accessible via aria-label */}
-          <div
-            className="space-y-1 cursor-pointer"
-            onClick={() => {
-              if (!isPending) setShareRegistration((v) => !v)
-            }}
-          >
-            <span className="text-sm font-medium leading-none">
-              Appear on the registered riders list
-            </span>
-            <p className="text-xs text-muted-foreground">
-              Allow other riders to see you're signed up. Results always include all riders.
-            </p>
-          </div>
-        </div>
-
-        {/* Submit */}
         <Button
           type="submit"
           className="w-full h-12"
@@ -508,55 +129,7 @@ export function RegistrationForm({
         </Button>
       </form>
 
-      <RiderMatchDialog
-        open={matchDialogOpen}
-        onOpenChange={setMatchDialogOpen}
-        candidates={matchCandidates}
-        submittedFirstName={firstName}
-        submittedLastName={lastName}
-        onSelectRider={(riderId) => handleRiderSelection(riderId)}
-        onCreateNew={() => handleRiderSelection(null)}
-        isPending={isPending}
-      />
-
-      <MembershipErrorModal
-        open={membershipErrorVariant !== null}
-        onClose={() => setMembershipErrorVariant(null)}
-        variant={membershipErrorVariant || 'no-membership'}
-      />
-    </div>
-  )
-}
-
-interface UpcomingEventCardProps {
-  event: UpcomingEvent
-}
-
-function UpcomingEventCard({ event }: UpcomingEventCardProps) {
-  return (
-    <div className="flex items-center gap-4 p-3 rounded-lg border border-border bg-muted/30">
-      <div className="flex-shrink-0 text-center w-14">
-        <div className="text-xs text-muted-foreground uppercase">
-          {format(new Date(event.date + 'T00:00:00'), 'MMM')}
-        </div>
-        <div className="text-lg font-medium tabular-nums">
-          {format(new Date(event.date + 'T00:00:00'), 'd')}
-        </div>
-      </div>
-      <div className="flex-1 min-w-0">
-        <div className="font-medium text-sm truncate">{event.name}</div>
-        <div className="text-xs text-muted-foreground mt-0.5 tabular-nums">{event.distance} km</div>
-        {event.startLocation && (
-          <div className="text-xs text-muted-foreground truncate">{event.startLocation}</div>
-        )}
-      </div>
-      <Link
-        href={`/register/${event.slug}`}
-        className="flex-shrink-0 inline-flex items-center gap-1 text-sm text-primary hover:underline"
-      >
-        Register
-        <ArrowRight className="h-3.5 w-3.5" />
-      </Link>
+      <RegistrationDialogs form={form} onSelectRider={handleRiderSelection} />
     </div>
   )
 }
