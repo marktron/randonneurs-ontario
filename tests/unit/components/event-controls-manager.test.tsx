@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import { EventControlsManager } from '@/components/admin/event-controls-manager'
 import type { AdminEventControl } from '@/lib/actions/event-controls'
 
@@ -84,5 +84,49 @@ describe('EventControlsManager mount auto-load', () => {
     // Give any (unexpected) effect a chance to fire.
     await Promise.resolve()
     expect(mockImportEventControlsFromRwgps).not.toHaveBeenCalled()
+  })
+})
+
+describe('EventControlsManager mobile card layout', () => {
+  it('stacks control rows into labelled cards on mobile', () => {
+    const { container } = render(
+      <EventControlsManager
+        eventId="event-1"
+        initialControls={[makeSaved({ name: 'Start', checkinCount: 3 })]}
+        hasRwgpsRoute={false}
+      />
+    )
+
+    const thead = container.querySelector('thead')!
+    expect(thead.className).toContain('hidden')
+    expect(thead.className).toContain('sm:table-header-group')
+
+    const row = controlNameInputs()[0].closest('tr')!
+    expect(row.className).toContain('block')
+    expect(row.className).toContain('sm:table-row')
+
+    for (const label of ['Name', 'Km', 'Latitude', 'Longitude', 'Radius (m)', 'Notes']) {
+      const el = within(row).getByText(label)
+      expect(el.className).toContain('sm:hidden')
+    }
+
+    // Check-ins line is present because this control has recorded check-ins
+    const checkinsCell = within(row).getByText('Check-ins').closest('td')!
+    expect(checkinsCell.className).toContain('flex')
+  })
+
+  it('omits the check-ins line from the mobile card when a control has none', () => {
+    render(
+      <EventControlsManager
+        eventId="event-1"
+        initialControls={[makeSaved({ name: 'Start', checkinCount: 0 })]}
+        hasRwgpsRoute={false}
+      />
+    )
+
+    const row = controlNameInputs()[0].closest('tr')!
+    const checkinsCell = within(row).getByText('Check-ins').closest('td')!
+    expect(checkinsCell.className).toContain('hidden')
+    expect(checkinsCell.className).toContain('sm:table-cell')
   })
 })

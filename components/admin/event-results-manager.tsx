@@ -67,7 +67,7 @@ import {
   revalidateMembership,
   type ResultStatus,
 } from '@/lib/actions/results'
-import { formatFinishTime, buildParticipantMailtoUrl, buildRiderInfoText } from '@/lib/utils'
+import { cn, formatFinishTime, buildParticipantMailtoUrl, buildRiderInfoText } from '@/lib/utils'
 import { SubmitResultsButton } from './submit-results-button'
 import { AddRiderDialog } from './add-rider-dialog'
 import { toast } from 'sonner'
@@ -162,6 +162,9 @@ interface EventResultsManagerProps {
   results: Result[]
   firstTimeRiderIds: string[]
 }
+
+// Mobile-only field label for the stacked card layout (< sm)
+const MOBILE_LABEL = 'w-16 shrink-0 text-xs font-medium text-muted-foreground sm:hidden'
 
 const STATUS_OPTIONS: { value: ResultStatus; label: string }[] = [
   { value: 'pending', label: '—' },
@@ -289,6 +292,14 @@ function RiderRow({
   const isFleche = eventType === 'fleche'
 
   const riderName = `${participant.firstName} ${participant.lastName}`
+  const hasEvidence = !!(
+    result &&
+    (result.gpx_url ||
+      result.gpx_file_path ||
+      result.control_card_front_path ||
+      result.control_card_back_path)
+  )
+  const hasNotes = !!(participant.registrationNotes || result?.rider_notes)
 
   const flashSaved = useCallback(() => {
     setShowSaved(true)
@@ -423,8 +434,14 @@ function RiderRow({
   }
 
   return (
-    <TableRow className={isPending ? 'opacity-60' : undefined}>
-      <TableCell className="font-medium">
+    <TableRow
+      className={cn(
+        // Stacked card on mobile, regular table row from sm up
+        'relative block space-y-2 p-4 sm:table-row sm:space-y-0 sm:p-0',
+        isPending && 'opacity-60'
+      )}
+    >
+      <TableCell className="block whitespace-normal break-words p-0 pr-20 font-medium sm:table-cell sm:p-3 sm:pr-3">
         <div>
           <div className="flex items-center flex-wrap gap-1">
             <Link href={`/admin/riders/${participant.riderId}`} className="hover:underline">
@@ -525,7 +542,8 @@ function RiderRow({
           )}
         </div>
       </TableCell>
-      <TableCell>
+      <TableCell className="flex items-center gap-3 p-0 sm:table-cell sm:p-3">
+        <span className={MOBILE_LABEL}>Status</span>
         <Select
           value={localStatus}
           onValueChange={(v) => handleStatusChange(v as ResultStatus)}
@@ -543,7 +561,15 @@ function RiderRow({
           </SelectContent>
         </Select>
       </TableCell>
-      <TableCell>
+      <TableCell
+        className={cn(
+          // The time input is disabled unless the status is "finished", so hide
+          // it in the mobile card until it becomes editable
+          'items-center gap-3 p-0 sm:table-cell sm:p-3',
+          localStatus === 'finished' ? 'flex' : 'hidden'
+        )}
+      >
+        <span className={MOBILE_LABEL}>Time</span>
         <Input
           type="text"
           placeholder="HH:MM"
@@ -557,7 +583,8 @@ function RiderRow({
       </TableCell>
       {isFleche && (
         <>
-          <TableCell>
+          <TableCell className="flex items-center gap-3 p-0 sm:table-cell sm:p-3">
+            <span className={MOBILE_LABEL}>Team</span>
             <Input
               type="text"
               placeholder="Team name"
@@ -569,7 +596,8 @@ function RiderRow({
               className="w-[140px] h-8"
             />
           </TableCell>
-          <TableCell>
+          <TableCell className="flex items-center gap-3 p-0 sm:table-cell sm:p-3">
+            <span className={MOBILE_LABEL}>Distance</span>
             <Input
               type="text"
               placeholder="km"
@@ -583,13 +611,16 @@ function RiderRow({
           </TableCell>
         </>
       )}
-      <TableCell>
+      <TableCell
+        className={cn(
+          // Nothing to show or act on without evidence — omit from the mobile card
+          'items-center gap-3 p-0 sm:table-cell sm:p-3',
+          hasEvidence ? 'flex' : 'hidden'
+        )}
+      >
+        <span className={MOBILE_LABEL}>Evidence</span>
         {/* Evidence - Strava/GPX links, Control Card thumbnails */}
-        {result &&
-        (result.gpx_url ||
-          result.gpx_file_path ||
-          result.control_card_front_path ||
-          result.control_card_back_path) ? (
+        {result && hasEvidence ? (
           <div className="flex items-center gap-1.5">
             {result.gpx_url && (
               <a
@@ -654,13 +685,22 @@ function RiderRow({
           <span className="text-xs text-muted-foreground">—</span>
         )}
       </TableCell>
-      <TableCell className="max-w-[300px] whitespace-normal break-words">
-        {participant.registrationNotes && (
-          <p className="text-muted-foreground">{participant.registrationNotes}</p>
+      <TableCell
+        className={cn(
+          // Full card width on mobile so long notes wrap comfortably
+          'items-start gap-3 whitespace-normal break-words p-0 sm:table-cell sm:max-w-[300px] sm:p-3',
+          hasNotes ? 'flex' : 'hidden'
         )}
-        {result?.rider_notes && <p className="text-muted-foreground">{result.rider_notes}</p>}
+      >
+        <span className={cn(MOBILE_LABEL, 'pt-0.5')}>Note</span>
+        <div className="min-w-0 flex-1 space-y-1">
+          {participant.registrationNotes && (
+            <p className="text-muted-foreground">{participant.registrationNotes}</p>
+          )}
+          {result?.rider_notes && <p className="text-muted-foreground">{result.rider_notes}</p>}
+        </div>
       </TableCell>
-      <TableCell>
+      <TableCell className="absolute top-4 right-4 block p-0 sm:static sm:table-cell sm:p-3">
         <div className="flex items-center gap-1">
           {isPending ? (
             <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
@@ -936,8 +976,8 @@ export function EventResultsManager({
           </p>
         ) : (
           <div className="rounded-md border">
-            <Table>
-              <TableHeader>
+            <Table className="block sm:table">
+              <TableHeader className="hidden sm:table-header-group">
                 <TableRow>
                   <TableHead>Rider</TableHead>
                   <TableHead>Status</TableHead>
@@ -949,7 +989,7 @@ export function EventResultsManager({
                   <TableHead className="w-[50px]"></TableHead>
                 </TableRow>
               </TableHeader>
-              <TableBody>
+              <TableBody className="block sm:table-row-group">
                 {sortedParticipants.map((participant) => (
                   <RiderRow
                     key={participant.id}
@@ -985,24 +1025,30 @@ export function EventResultsManager({
                 Cancelled ({allCancelled.length})
               </h3>
               <div className="rounded-md border">
-                <Table>
-                  <TableHeader>
+                <Table className="block sm:table">
+                  <TableHeader className="hidden sm:table-header-group">
                     <TableRow>
                       <TableHead>Rider</TableHead>
                       <TableHead>Email</TableHead>
                       <TableHead>Cancelled</TableHead>
                     </TableRow>
                   </TableHeader>
-                  <TableBody>
+                  <TableBody className="block sm:table-row-group">
                     {allCancelled.map((reg) => (
-                      <TableRow key={reg.id} className="text-muted-foreground">
-                        <TableCell>
+                      <TableRow
+                        key={reg.id}
+                        className="block p-4 text-muted-foreground sm:table-row sm:p-0"
+                      >
+                        <TableCell className="block p-0 sm:table-cell sm:p-3">
                           {reg.riders
                             ? `${reg.riders.first_name} ${reg.riders.last_name}`
                             : 'Unknown rider'}
                         </TableCell>
-                        <TableCell>{reg.riders?.email ?? '—'}</TableCell>
-                        <TableCell>
+                        <TableCell className="block whitespace-normal break-words p-0 text-xs sm:table-cell sm:p-3 sm:text-sm">
+                          {reg.riders?.email ?? '—'}
+                        </TableCell>
+                        <TableCell className="block p-0 text-xs sm:table-cell sm:p-3 sm:text-sm">
+                          <span className="sm:hidden">Cancelled </span>
                           {reg.cancelled_at
                             ? new Date(reg.cancelled_at).toLocaleDateString('en-CA', {
                                 month: 'short',

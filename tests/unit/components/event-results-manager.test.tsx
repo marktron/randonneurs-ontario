@@ -253,6 +253,111 @@ describe('EventResultsManager — flèche distance flooring', () => {
   })
 })
 
+describe('EventResultsManager — mobile card layout', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  const finishedResult: Result = {
+    id: 'result-mobile',
+    rider_id: 'rider-mobile',
+    finish_time: '10:30:00',
+    status: 'finished',
+    team_name: null,
+    distance_km: 200,
+    note: null,
+    gpx_url: 'https://www.strava.com/activities/123',
+    gpx_file_path: null,
+    control_card_front_path: null,
+    control_card_back_path: null,
+    rider_notes: 'Great ride, thanks to the volunteers!',
+    submitted_at: '2026-05-16T00:00:00Z',
+    submission_token: null,
+    riders: {
+      id: 'rider-mobile',
+      first_name: 'Mona',
+      last_name: 'Mobile',
+      email: 'mona@example.com',
+    },
+  }
+
+  it('renders mobile-only field labels for the stacked card layout', () => {
+    render(
+      <EventResultsManager
+        {...baseProps}
+        registrations={[
+          makeRegistration({ riderId: 'rider-mobile', firstName: 'Mona', lastName: 'Mobile' }),
+        ]}
+        results={[finishedResult]}
+        firstTimeRiderIds={[]}
+      />
+    )
+
+    const row = screen.getByText('Mona Mobile').closest('tr')!
+    for (const label of ['Status', 'Time', 'Evidence', 'Note']) {
+      const el = within(row).getByText(label)
+      expect(el.className).toContain('sm:hidden')
+    }
+    expect(within(row).getByText('Great ride, thanks to the volunteers!')).toBeTruthy()
+  })
+
+  it('hides empty Time, Evidence, and Note cells from the mobile card but keeps them on desktop', () => {
+    render(
+      <EventResultsManager
+        {...baseProps}
+        registrations={[
+          makeRegistration({ riderId: 'rider-empty', firstName: 'Edna', lastName: 'Empty' }),
+        ]}
+        firstTimeRiderIds={[]}
+      />
+    )
+
+    const row = screen.getByText('Edna Empty').closest('tr')!
+    const timeCell = within(row).getByPlaceholderText('HH:MM').closest('td')!
+    const evidenceCell = within(row).getByText('Evidence').closest('td')!
+    const noteCell = within(row).getByText('Note').closest('td')!
+
+    for (const cell of [timeCell, evidenceCell, noteCell]) {
+      expect(cell.className).toContain('hidden')
+      expect(cell.className).toContain('sm:table-cell')
+    }
+  })
+
+  it('shows the Time cell in the mobile card once the rider is marked finished', () => {
+    render(
+      <EventResultsManager
+        {...baseProps}
+        registrations={[
+          makeRegistration({ riderId: 'rider-mobile', firstName: 'Mona', lastName: 'Mobile' }),
+        ]}
+        results={[finishedResult]}
+        firstTimeRiderIds={[]}
+      />
+    )
+
+    const row = screen.getByText('Mona Mobile').closest('tr')!
+    const timeCell = within(row).getByPlaceholderText('HH:MM').closest('td')!
+    expect(timeCell.className).toContain('flex')
+    expect(timeCell.className).not.toContain('hidden')
+  })
+
+  it('hides the column header row on mobile', () => {
+    const { container } = render(
+      <EventResultsManager
+        {...baseProps}
+        registrations={[
+          makeRegistration({ riderId: 'rider-1', firstName: 'Alex', lastName: 'Andrews' }),
+        ]}
+        firstTimeRiderIds={[]}
+      />
+    )
+
+    const thead = container.querySelector('thead')!
+    expect(thead.className).toContain('hidden')
+    expect(thead.className).toContain('sm:table-header-group')
+  })
+})
+
 describe('EventResultsManager — rider phone', () => {
   beforeEach(() => {
     vi.clearAllMocks()

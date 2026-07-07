@@ -393,3 +393,33 @@ describe('formatCheckinDistanceLabel', () => {
     expect(formatCheckinDistanceLabel(1000, null)).toBe('GPS fix recorded 1.0 km from the control')
   })
 })
+
+describe('EventCheckinsGrid mobile card layout', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('stacks rider rows into cards with a labelled line per control', () => {
+    render(
+      <EventCheckinsGrid
+        eventId="event-1"
+        eventSubmitted={false}
+        controls={controls}
+        riders={[makeRider({ checkins: [makeCheckin({})] })]}
+      />
+    )
+
+    const row = screen.getByText('Ada Lovelace').closest('tr')!
+    expect(row.className).toContain('block')
+    expect(row.className).toContain('sm:table-row')
+
+    const thead = row.closest('table')!.querySelector('thead')!
+    expect(thead.className).toContain('hidden')
+    expect(thead.className).toContain('sm:table-header-group')
+
+    // Each control cell carries a mobile-only label with the control name and distance
+    const startLabel = screen.getByText('Start · 0 km')
+    expect(startLabel.className).toContain('sm:hidden')
+    expect(screen.getByText('Control 2 · 100 km')).toBeTruthy()
+  })
+})

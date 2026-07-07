@@ -29,6 +29,7 @@ import {
   type AdminCheckinGridRider,
 } from '@/lib/actions/control-checkins'
 import type { CheckinFlags } from '@/lib/brevet-card'
+import { cn } from '@/lib/utils'
 import { formatControlTime } from '@/lib/brmTimes'
 import { toast } from 'sonner'
 import Link from 'next/link'
@@ -141,8 +142,8 @@ export function EventCheckinsGrid({
         </p>
       ) : (
         <div className="overflow-x-auto border rounded-md">
-          <Table>
-            <TableHeader>
+          <Table className="block sm:table">
+            <TableHeader className="hidden sm:table-header-group">
               <TableRow>
                 <TableHead className="min-w-[160px] sticky left-0 bg-background">Rider</TableHead>
                 {controls.map((control) => (
@@ -155,7 +156,7 @@ export function EventCheckinsGrid({
                 ))}
               </TableRow>
             </TableHeader>
-            <TableBody>
+            <TableBody className="block sm:table-row-group">
               {riders.map((rider) => (
                 <RiderRow
                   key={rider.registrationId}
@@ -211,8 +212,8 @@ const RiderRow = memo(function RiderRow({
   }, [rider.checkins])
 
   return (
-    <TableRow>
-      <TableCell className="font-medium sticky left-0 bg-background">
+    <TableRow className="block p-4 sm:table-row sm:p-0">
+      <TableCell className="sticky left-0 block bg-background p-0 pb-1 font-medium sm:table-cell sm:p-3 sm:pb-3">
         <div className="flex items-center gap-1.5">
           <span>{rider.riderName}</span>
           {rider.managementToken && (
@@ -235,16 +236,23 @@ const RiderRow = memo(function RiderRow({
         return (
           <TableCell
             key={control.id}
-            className={eventSubmitted ? '' : 'cursor-pointer hover:bg-muted/50'}
+            className={cn(
+              // One labelled line per control in the mobile card; regular cell from sm up
+              'flex items-baseline justify-between gap-3 p-0 py-1 sm:table-cell sm:p-3',
+              !eventSubmitted && 'cursor-pointer hover:bg-muted/50'
+            )}
             onClick={() => onOpenCell(rider, control, checkin)}
           >
+            <span className="text-xs text-muted-foreground sm:hidden">
+              {control.name} · {control.distanceKm} km
+            </span>
             {checkin ? (
               <div className="space-y-1">
                 <div className="tabular-nums">
                   {formatControlTime(new Date(checkin.checkedInAt))}
                 </div>
                 {activeFlags.length > 0 && (
-                  <div className="flex flex-wrap gap-1">
+                  <div className="flex flex-wrap justify-end gap-1 sm:justify-start">
                     {activeFlags.map(({ key, label, title }) => (
                       <Badge
                         key={key}
