@@ -25,18 +25,8 @@ import {
 } from '@/lib/actions/rider-results'
 import { createClient as createSupabaseBrowserClient } from '@/lib/supabase-browser'
 import { compressImageForUpload } from '@/lib/image-compression'
-import {
-  Upload,
-  X,
-  FileText,
-  Image as ImageIcon,
-  ExternalLink,
-  Clock,
-  ArrowRight,
-  Route,
-} from 'lucide-react'
+import { Upload, X, FileText, Image as ImageIcon, ExternalLink, Clock, Route } from 'lucide-react'
 import { format } from 'date-fns'
-import Link from 'next/link'
 import {
   calculateElapsedMinutes,
   formatElapsedForDisplay,
@@ -44,6 +34,11 @@ import {
   getAcpTimeLimitMinutes,
   getFinishDayOptions,
 } from '@/lib/events/finish-time'
+import {
+  RegistrationSuccess,
+  UpcomingEventsLoading,
+  UpcomingEventsSection,
+} from '@/components/registration/registration-success'
 
 interface ResultSubmissionFormProps {
   token: string
@@ -340,63 +335,28 @@ export function ResultSubmissionForm({ token, initialData }: ResultSubmissionFor
   if (success) {
     return (
       <div className="rounded-2xl border border-border bg-card p-6 md:p-8">
-        <div className="text-center py-8">
-          <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-green-100 dark:bg-green-900/30 mb-4">
-            <svg
-              className="w-6 h-6 text-green-600 dark:text-green-400"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M5 13l4 4L19 7"
-              />
-            </svg>
-          </div>
-          <h2 className="font-serif text-2xl tracking-tight mb-2">Result Submitted!</h2>
-          <p className="text-sm text-muted-foreground">
-            Thank you for submitting your result.
-            <br />
-            Your chapter VP will review and submit to ACP.
-          </p>
-        </div>
+        <RegistrationSuccess title="Result Submitted!">
+          Thank you for submitting your result.
+          <br />
+          Your chapter VP will review and submit to ACP.
+        </RegistrationSuccess>
 
-        {/* Upcoming Events Section */}
-        {loadingEvents && (
-          <div className="border-t border-border pt-6 mt-6">
-            <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
-              <div className="w-4 h-4 border-2 border-muted-foreground border-t-transparent rounded-full animate-spin" />
-              Loading upcoming events…
-            </div>
-          </div>
-        )}
+        {loadingEvents && <UpcomingEventsLoading />}
 
         {!loadingEvents && upcomingEvents.length > 0 && (
-          <div className="border-t border-border pt-6 mt-6">
-            <h3 className="font-medium text-sm mb-4 text-center">Your Upcoming Events</h3>
-            <div className="space-y-3">
-              {upcomingEvents.map((event) => (
-                <UpcomingEventCard key={event.id} event={event} isRegistered={true} />
-              ))}
-            </div>
-          </div>
+          <UpcomingEventsSection
+            title="Your Upcoming Events"
+            events={upcomingEvents}
+            isRegistered
+          />
         )}
 
         {!loadingEvents && upcomingEvents.length === 0 && suggestedEvents.length > 0 && (
-          <div className="border-t border-border pt-6 mt-6">
-            <h3 className="font-medium text-sm mb-1 text-center">Ready for Your Next Ride?</h3>
-            <p className="text-xs text-muted-foreground mb-4 text-center">
-              Here are some upcoming events in {initialData.chapterName}
-            </p>
-            <div className="space-y-3">
-              {suggestedEvents.map((event) => (
-                <UpcomingEventCard key={event.id} event={event} isRegistered={false} />
-              ))}
-            </div>
-          </div>
+          <UpcomingEventsSection
+            title="Ready for Your Next Ride?"
+            description={`Here are some upcoming events in ${initialData.chapterName}`}
+            events={suggestedEvents}
+          />
         )}
       </div>
     )
@@ -864,11 +824,6 @@ function FileUploadField({
   )
 }
 
-interface UpcomingEventCardProps {
-  event: UpcomingEvent
-  isRegistered: boolean
-}
-
 interface DecodedInitialFinish {
   clockTime: string
   dayOffset: number
@@ -907,33 +862,4 @@ function decodeInitialFinish(
   const cm = minOnDay % 60
   const clockTime = `${String(ch).padStart(2, '0')}:${String(cm).padStart(2, '0')}`
   return { clockTime, dayOffset, elapsedHours, elapsedMinutes }
-}
-
-function UpcomingEventCard({ event, isRegistered }: UpcomingEventCardProps) {
-  return (
-    <div className="flex items-center gap-4 p-3 rounded-lg border border-border bg-muted/30">
-      <div className="flex-shrink-0 text-center w-14">
-        <div className="text-xs text-muted-foreground uppercase">
-          {format(new Date(event.date + 'T00:00:00'), 'MMM')}
-        </div>
-        <div className="text-lg font-medium tabular-nums">
-          {format(new Date(event.date + 'T00:00:00'), 'd')}
-        </div>
-      </div>
-      <div className="flex-1 min-w-0">
-        <div className="font-medium text-sm truncate">{event.name}</div>
-        <div className="text-xs text-muted-foreground mt-0.5 tabular-nums">{event.distance} km</div>
-        {event.startLocation && (
-          <div className="text-xs text-muted-foreground truncate">{event.startLocation}</div>
-        )}
-      </div>
-      <Link
-        href={`/register/${event.slug}`}
-        className="flex-shrink-0 inline-flex items-center gap-1 text-sm text-primary hover:underline"
-      >
-        {isRegistered ? 'Details' : 'Register'}
-        <ArrowRight className="h-3.5 w-3.5" />
-      </Link>
-    </div>
-  )
 }
