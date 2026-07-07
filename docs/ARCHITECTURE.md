@@ -43,6 +43,7 @@ randonneurs-ontario/
 │
 ├── components/               # React components
 │   ├── admin/                # Admin-specific components
+│   ├── registration/         # Shared registration form building blocks (docs/registration-forms.md)
 │   ├── ui/                   # shadcn/ui primitive components
 │   └── *.tsx                 # Page-level components
 │
@@ -52,6 +53,7 @@ randonneurs-ontario/
 │   ├── email/                # Email templates and sending
 │   ├── auth/                 # Authentication utilities
 │   ├── supabase*.ts          # Database client configurations
+│   ├── registration-storage.ts # Shared `ro-registration` localStorage record (docs/registration-forms.md)
 │   └── *.ts                  # Utility functions
 │
 ├── types/                    # TypeScript type definitions
@@ -66,6 +68,7 @@ randonneurs-ontario/
 │   └── navigation.json       # Site navigation structure
 │
 ├── hooks/                    # React custom hooks
+│   └── use-registration-form.ts  # Shared registration form state (docs/registration-forms.md)
 ├── public/                   # Static assets (images)
 └── docs/                     # Project documentation
 ```
