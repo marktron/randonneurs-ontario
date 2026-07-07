@@ -33,37 +33,7 @@ import type { RiderMatchCandidate } from '@/lib/actions/rider-match'
 import type { ActiveRoute } from '@/lib/data/routes'
 import { HoneypotField } from '@/components/honeypot-field'
 import { EmailTypoSuggestion } from '@/components/email-typo-suggestion'
-
-const STORAGE_KEY = 'ro-registration'
-
-interface SavedRegistrationData {
-  firstName: string
-  lastName: string
-  email: string
-  phone: string
-  gender: string
-  shareRegistration: boolean
-  emergencyContactName: string
-  emergencyContactPhone: string
-}
-
-function getSavedData(): SavedRegistrationData | null {
-  if (typeof window === 'undefined') return null
-  try {
-    const saved = localStorage.getItem(STORAGE_KEY)
-    return saved ? JSON.parse(saved) : null
-  } catch {
-    return null
-  }
-}
-
-function saveData(data: SavedRegistrationData): void {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
-  } catch {
-    // Ignore storage errors
-  }
-}
+import { getSavedRegistrationData, saveRegistrationData } from '@/lib/registration-storage'
 
 const TORONTO_TZ = 'America/Toronto'
 
@@ -154,7 +124,7 @@ export function PermanentRegistrationForm({ routes }: PermanentRegistrationFormP
 
   // Load saved data on mount
   useEffect(() => {
-    const saved = getSavedData()
+    const saved = getSavedRegistrationData()
     if (saved) {
       setFirstName(saved.firstName)
       setLastName(saved.lastName)
@@ -221,7 +191,7 @@ export function PermanentRegistrationForm({ routes }: PermanentRegistrationFormP
 
       if (result.success) {
         // Save form data to localStorage for next registration
-        saveData({
+        saveRegistrationData({
           firstName,
           lastName,
           email,
@@ -265,7 +235,7 @@ export function PermanentRegistrationForm({ routes }: PermanentRegistrationFormP
 
       if (result.success) {
         setMatchDialogOpen(false)
-        saveData({
+        saveRegistrationData({
           firstName,
           lastName,
           email,

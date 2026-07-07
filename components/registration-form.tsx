@@ -24,37 +24,7 @@ import { ArrowRight } from 'lucide-react'
 import { MembershipErrorModal } from '@/components/membership-error-modal'
 import { HoneypotField } from '@/components/honeypot-field'
 import { EmailTypoSuggestion } from '@/components/email-typo-suggestion'
-
-const STORAGE_KEY = 'ro-registration'
-
-interface SavedRegistrationData {
-  firstName: string
-  lastName: string
-  email: string
-  phone: string
-  gender: string
-  shareRegistration: boolean
-  emergencyContactName: string
-  emergencyContactPhone: string
-}
-
-function getSavedData(): SavedRegistrationData | null {
-  if (typeof window === 'undefined') return null
-  try {
-    const saved = localStorage.getItem(STORAGE_KEY)
-    return saved ? JSON.parse(saved) : null
-  } catch {
-    return null
-  }
-}
-
-function saveData(data: SavedRegistrationData): void {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
-  } catch {
-    // Ignore storage errors
-  }
-}
+import { getSavedRegistrationData, saveRegistrationData } from '@/lib/registration-storage'
 
 interface RegistrationFormProps {
   eventId: string
@@ -102,7 +72,7 @@ export function RegistrationForm({
 
   // Load saved data on mount
   useEffect(() => {
-    const saved = getSavedData()
+    const saved = getSavedRegistrationData()
     if (saved) {
       setFirstName(saved.firstName)
       setLastName(saved.lastName)
@@ -153,7 +123,7 @@ export function RegistrationForm({
 
       if (result.success) {
         // Save form data to localStorage for next registration
-        saveData({
+        saveRegistrationData({
           firstName,
           lastName,
           email,
@@ -214,7 +184,7 @@ export function RegistrationForm({
 
       if (result.success) {
         setMatchDialogOpen(false)
-        saveData({
+        saveRegistrationData({
           firstName,
           lastName,
           email,
