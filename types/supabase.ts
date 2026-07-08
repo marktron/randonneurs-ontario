@@ -465,6 +465,8 @@ export type Database = {
           is_team_captain: boolean | null
           management_token: string | null
           notes: string | null
+          pre_ride_date: string | null
+          pre_ride_start_time: string | null
           registered_at: string | null
           rider_id: string
           share_registration: boolean | null
@@ -478,6 +480,8 @@ export type Database = {
           is_team_captain?: boolean | null
           management_token?: string | null
           notes?: string | null
+          pre_ride_date?: string | null
+          pre_ride_start_time?: string | null
           registered_at?: string | null
           rider_id: string
           share_registration?: boolean | null
@@ -491,6 +495,8 @@ export type Database = {
           is_team_captain?: boolean | null
           management_token?: string | null
           notes?: string | null
+          pre_ride_date?: string | null
+          pre_ride_start_time?: string | null
           registered_at?: string | null
           rider_id?: string
           share_registration?: boolean | null
