@@ -45,6 +45,7 @@ import { Loader2, Plus } from 'lucide-react'
 interface PreRideManagerProps {
   riders: AdminCheckinGridRider[]
   eventStartTime: string | null
+  eventScheduled: boolean
 }
 
 type DialogState = { mode: 'add' } | { mode: 'edit'; rider: AdminCheckinGridRider } | null
@@ -68,7 +69,7 @@ function formatPreRideLabel(date: string, time: string | null): string {
   return `${formattedDate} · ${formattedTime}`
 }
 
-export function PreRideManager({ riders, eventStartTime }: PreRideManagerProps) {
+export function PreRideManager({ riders, eventStartTime, eventScheduled }: PreRideManagerProps) {
   const router = useRouter()
   const [dialogState, setDialogState] = useState<DialogState>(null)
   const [selectedRegistrationId, setSelectedRegistrationId] = useState('')
@@ -122,7 +123,11 @@ export function PreRideManager({ riders, eventStartTime }: PreRideManagerProps) 
             control-cards generator with the custom start.
           </p>
         </div>
-        <Button variant="outline" onClick={openAdd} disabled={availableRiders.length === 0}>
+        <Button
+          variant="outline"
+          onClick={openAdd}
+          disabled={availableRiders.length === 0 || !eventScheduled}
+        >
           <Plus className="h-4 w-4 mr-2" />
           Add pre-rider
         </Button>
@@ -149,7 +154,12 @@ export function PreRideManager({ riders, eventStartTime }: PreRideManagerProps) 
                   {formatPreRideLabel(rider.preRideDate!, rider.preRideStartTime)}
                 </TableCell>
                 <TableCell>
-                  <Button variant="outline" size="sm" onClick={() => openEdit(rider)}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => openEdit(rider)}
+                    disabled={!eventScheduled}
+                  >
                     Edit
                   </Button>
                 </TableCell>

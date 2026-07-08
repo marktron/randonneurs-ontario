@@ -33,6 +33,10 @@ const IDS = {
   regRegular: '00000000-921d-4000-a000-000000000009',
   regTarget: '00000000-921d-4000-a000-00000000000a',
   regCancelled: '00000000-921d-4000-a000-00000000000b',
+  eventFleche: '00000000-921d-4000-a000-00000000000c',
+  eventCompleted: '00000000-921d-4000-a000-00000000000d',
+  regFleche: '00000000-921d-4000-a000-00000000000e',
+  regCompleted: '00000000-921d-4000-a000-00000000000f',
 }
 
 const EMAILS = {
@@ -75,13 +79,21 @@ function torontoNowParts(offsetMs: number): { date: string; time: string } {
 }
 
 async function cleanup(supabase: ReturnType<typeof getTestSupabase>) {
-  const regIds = [IDS.regPre, IDS.regRegular, IDS.regTarget, IDS.regCancelled]
+  const regIds = [
+    IDS.regPre,
+    IDS.regRegular,
+    IDS.regTarget,
+    IDS.regCancelled,
+    IDS.regFleche,
+    IDS.regCompleted,
+  ]
   const riderIds = [IDS.riderPre, IDS.riderRegular, IDS.riderTarget, IDS.riderCancelled]
+  const eventIds = [IDS.event, IDS.eventFleche, IDS.eventCompleted]
   await supabase.from('control_checkins').delete().in('registration_id', regIds)
-  await supabase.from('results').delete().eq('event_id', IDS.event)
-  await supabase.from('event_controls').delete().eq('event_id', IDS.event)
-  await supabase.from('registrations').delete().eq('event_id', IDS.event)
-  await supabase.from('events').delete().eq('id', IDS.event)
+  await supabase.from('results').delete().in('event_id', eventIds)
+  await supabase.from('event_controls').delete().in('event_id', eventIds)
+  await supabase.from('registrations').delete().in('event_id', eventIds)
+  await supabase.from('events').delete().in('id', eventIds)
   // Also by natural key: the slug embeds a relative date, so leftovers from
   // an interrupted run on another day have our id but a different slug.
   await supabase.from('events').delete().ilike('slug', `${EVENT_SLUG_PREFIX}%`)
@@ -153,8 +165,30 @@ describe('digital brevet card pre-rides (real DB)', () => {
           start_time: '08:00',
           status: 'scheduled',
         },
+        {
+          id: IDS.eventFleche,
+          slug: `${EVENT_SLUG_PREFIX}fleche-${daysFromNow(3)}`,
+          chapter_id: TORONTO_CHAPTER_ID,
+          name: 'IntTest Pre-Ride Fleche',
+          event_type: 'fleche',
+          distance_km: 360,
+          event_date: daysFromNow(3),
+          start_time: '08:00',
+          status: 'scheduled',
+        },
+        {
+          id: IDS.eventCompleted,
+          slug: `${EVENT_SLUG_PREFIX}completed-${daysFromNow(-3)}`,
+          chapter_id: TORONTO_CHAPTER_ID,
+          name: 'IntTest Pre-Ride Completed Brevet',
+          event_type: 'brevet',
+          distance_km: 200,
+          event_date: daysFromNow(-3),
+          start_time: '08:00',
+          status: 'completed',
+        },
       ]),
-      'insert event'
+      'insert events'
     )
 
     await checked(
@@ -216,6 +250,22 @@ describe('digital brevet card pre-rides (real DB)', () => {
           event_id: IDS.event,
           rider_id: IDS.riderCancelled,
           status: 'cancelled',
+          pre_ride_date: null,
+          pre_ride_start_time: null,
+        },
+        {
+          id: IDS.regFleche,
+          event_id: IDS.eventFleche,
+          rider_id: IDS.riderTarget,
+          status: 'registered',
+          pre_ride_date: null,
+          pre_ride_start_time: null,
+        },
+        {
+          id: IDS.regCompleted,
+          event_id: IDS.eventCompleted,
+          rider_id: IDS.riderTarget,
+          status: 'registered',
           pre_ride_date: null,
           pre_ride_start_time: null,
         },
@@ -431,6 +481,7 @@ describe('digital brevet card pre-rides (real DB)', () => {
         preRideStartTime: '07:00',
       })
       expect(badDate.success).toBe(false)
+      expect(badDate.error).toContain('YYYY-MM-DD')
 
       const badTime = await setPreRideStart({
         registrationId: IDS.regTarget,
@@ -438,6 +489,7 @@ describe('digital brevet card pre-rides (real DB)', () => {
         preRideStartTime: '7am',
       })
       expect(badTime.success).toBe(false)
+      expect(badTime.error).toContain('HH:MM')
 
       const halfSet = await setPreRideStart({
         registrationId: IDS.regTarget,
@@ -445,6 +497,65 @@ describe('digital brevet card pre-rides (real DB)', () => {
         preRideStartTime: null,
       })
       expect(halfSet.success).toBe(false)
+      expect(halfSet.error).toContain('HH:MM')
+
+      const { data: afterRejections } = await supabase
+        .from('registrations')
+        .select('pre_ride_date, pre_ride_start_time')
+        .eq('id', IDS.regTarget)
+        .single()
+      expect(afterRejections!.pre_ride_date).toBeNull()
+      expect(afterRejections!.pre_ride_start_time).toBeNull()
+    })
+
+    it('rejects out-of-range calendar dates and times', async () => {
+      const badMonth = await setPreRideStart({
+        registrationId: IDS.regTarget,
+        preRideDate: '2026-13-01',
+        preRideStartTime: '07:00',
+      })
+      expect(badMonth.success).toBe(false)
+      expect(badMonth.error).toContain('YYYY-MM-DD')
+
+      const badDay = await setPreRideStart({
+        registrationId: IDS.regTarget,
+        preRideDate: '2026-02-31',
+        preRideStartTime: '07:00',
+      })
+      expect(badDay.success).toBe(false)
+      expect(badDay.error).toContain('YYYY-MM-DD')
+
+      const badHour = await setPreRideStart({
+        registrationId: IDS.regTarget,
+        preRideDate: daysFromNow(1),
+        preRideStartTime: '25:00',
+      })
+      expect(badHour.success).toBe(false)
+      expect(badHour.error).toContain('HH:MM')
+
+      const badMinute = await setPreRideStart({
+        registrationId: IDS.regTarget,
+        preRideDate: daysFromNow(1),
+        preRideStartTime: '08:61',
+      })
+      expect(badMinute.success).toBe(false)
+      expect(badMinute.error).toContain('HH:MM')
+
+      // A valid leap day proves the calendar check isn't overzealous.
+      const leapDay = await setPreRideStart({
+        registrationId: IDS.regTarget,
+        preRideDate: '2028-02-29',
+        preRideStartTime: '07:00',
+      })
+      expect(leapDay.success).toBe(true)
+
+      const { data: afterLeapDay } = await supabase
+        .from('registrations')
+        .select('pre_ride_date, pre_ride_start_time')
+        .eq('id', IDS.regTarget)
+        .single()
+      expect(afterLeapDay!.pre_ride_date).toBe('2028-02-29')
+      expect(String(afterLeapDay!.pre_ride_start_time)).toMatch(/^07:00/)
     })
 
     it('rejects cancelled registrations', async () => {
@@ -455,6 +566,26 @@ describe('digital brevet card pre-rides (real DB)', () => {
       })
       expect(result.success).toBe(false)
       expect(result.error).toContain('active registrations')
+    })
+
+    it('rejects registrations for event types without a digital brevet card', async () => {
+      const result = await setPreRideStart({
+        registrationId: IDS.regFleche,
+        preRideDate: daysFromNow(1),
+        preRideStartTime: '07:00',
+      })
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('digital brevet card')
+    })
+
+    it('rejects registrations on a non-scheduled event', async () => {
+      const result = await setPreRideStart({
+        registrationId: IDS.regCompleted,
+        preRideDate: daysFromNow(1),
+        preRideStartTime: '07:00',
+      })
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('scheduled')
     })
   })
 })

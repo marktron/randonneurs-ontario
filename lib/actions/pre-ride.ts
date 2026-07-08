@@ -17,7 +17,22 @@ import type { ActionResult } from '@/types/actions'
 import type { RegistrationUpdate } from '@/types/queries'
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
-const TIME_RE = /^\d{2}:\d{2}$/
+const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/
+
+/**
+ * DATE_RE only checks shape (four digits, two digits, two digits) — it
+ * accepts calendar nonsense like 2026-13-45. Confirm the value is a real
+ * calendar date by round-tripping it through Date and comparing the parts
+ * back out (Date normalizes overflow — e.g. Feb 31 → Mar 3 — instead of
+ * rejecting it, so an equality check catches what the constructor won't).
+ */
+function isValidCalendarDate(value: string): boolean {
+  const match = DATE_RE.exec(value)
+  if (!match) return false
+  const [year, month, day] = value.split('-').map(Number)
+  const date = new Date(year, month - 1, day)
+  return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day
+}
 
 export async function setPreRideStart(input: {
   registrationId: string
@@ -31,7 +46,7 @@ export async function setPreRideStart(input: {
 
     const clearing = input.preRideDate === null && input.preRideStartTime === null
     if (!clearing) {
-      if (!input.preRideDate || !DATE_RE.test(input.preRideDate)) {
+      if (!input.preRideDate || !isValidCalendarDate(input.preRideDate)) {
         return { success: false, error: 'Pre-ride date must be YYYY-MM-DD' }
       }
       if (!input.preRideStartTime || !TIME_RE.test(input.preRideStartTime)) {
