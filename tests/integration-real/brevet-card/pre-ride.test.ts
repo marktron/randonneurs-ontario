@@ -3,6 +3,7 @@ import { getTestSupabase, checked } from '../helpers/supabase'
 import { TORONTO_CHAPTER_ID, daysFromNow } from '../registration/helpers'
 import { resetRateLimitStores } from '@/lib/rate-limit'
 import { checkInAtControl, getBrevetCardByToken } from '@/lib/actions/brevet-card'
+import { getEventCheckinsForAdmin } from '@/lib/actions/control-checkins'
 
 // Admin actions (Tasks 4–5) run with no auth session, and audit_logs.admin_id
 // has a NOT NULL FK to admins(id) — mock both so the actions run against the
@@ -349,6 +350,43 @@ describe('digital brevet card pre-rides (real DB)', () => {
       // ~2 h elapsed since the pre-ride start. Had the code used the event
       // start (3 days in the future) this would clamp to 00:00:00.
       expect(String(resultRows![0].finish_time)).toMatch(/^02:0[0-2]/)
+    })
+  })
+
+  describe('admin check-in grid with a pre-ride start', () => {
+    it('flags identical check-in times per rider start', async () => {
+      const twoHoursAgo = new Date(Date.now() - TWO_HOURS_MS).toISOString()
+      // Insert directly: the same wall-clock tap for both riders.
+      await checked(
+        supabase.from('control_checkins').insert([
+          {
+            control_id: IDS.control1,
+            registration_id: IDS.regPre,
+            checked_in_at: twoHoursAgo,
+            method: 'manual',
+          },
+          {
+            control_id: IDS.control1,
+            registration_id: IDS.regRegular,
+            checked_in_at: twoHoursAgo,
+            method: 'manual',
+          },
+        ]),
+        'insert grid checkins'
+      )
+
+      const result = await getEventCheckinsForAdmin(IDS.event)
+      expect(result.success).toBe(true)
+      const byReg = new Map(result.data!.map((r) => [r.registrationId, r]))
+
+      const preRider = byReg.get(IDS.regPre)!
+      expect(preRider.preRideDate).not.toBeNull()
+      expect(preRider.checkins[0].flags.early).toBe(false)
+
+      const regular = byReg.get(IDS.regRegular)!
+      expect(regular.preRideDate).toBeNull()
+      // Same timestamp, but their window opens with the event in 3 days.
+      expect(regular.checkins[0].flags.early).toBe(true)
     })
   })
 })
