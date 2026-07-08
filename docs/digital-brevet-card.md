@@ -635,3 +635,64 @@ printed control card.
   is encoded. Rows added by hand in the print form carry no coordinates until
   an admin sets them in the digital brevet card manager; such controls still
   work (riders check in without GPS, flagged `no gps`).
+
+## 17. Pre-rides
+
+Organizers occasionally approve a **pre-ride**: a rider scouts the course ahead of the
+scheduled event with their own start date and time. Approval happens out-of-band
+(email/phone); recording it in the system _is_ the approval — there is no request/approve
+state machine.
+
+### Model
+
+Two nullable columns on `registrations` (migration `20260708120000_add_pre_ride_start.sql`):
+
+- `pre_ride_date DATE`
+- `pre_ride_start_time TIME`
+
+A CHECK constraint (`registrations_pre_ride_both_or_neither`) requires both set or both
+null. The pure resolver `resolveRiderStart(event, registration)` (`lib/brevet-card.ts`)
+returns the pre-ride start when set, otherwise the event start. It replaces direct
+`computeEventStart(event...)` calls at the three per-rider call sites:
+
+1. `getBrevetCardByToken` — card display and control windows.
+2. `checkInAtControl` — acceptance window, backdate floor, finish elapsed time.
+3. `getEventCheckinsForAdmin` — early/late flags are computed per registration, so a
+   pre-rider's on-schedule check-ins are not flagged "early" against the event start.
+
+Everything downstream (flags, undo windows, finish pre-fill) takes the computed start as
+input and needed no changes. There is deliberately **no policy validation** on the chosen
+datetime — admins are trusted on how far ahead the pre-ride runs.
+
+### Admin UI
+
+The "Pre-Rides" section on the Digital Brevet Card admin page
+(`/admin/events/[id]/brevet-card`, `components/admin/pre-ride-manager.tsx`) sets or clears
+the override via `setPreRideStart` (`lib/actions/pre-ride.ts`), which audit-logs every
+change. Guards: registration must be `registered`, event type card-capable, event still
+`scheduled`. The check-in grid's column headers still show the _event-level_ windows; the
+per-cell flags are per-rider.
+
+### What pre-riders see
+
+- Their card header shows their own start time plus a "Pre-ride" badge; control open/close
+  times and the pre-event banner all follow the pre-ride start.
+- `/registration/manage/[token]` shows the pre-ride date/time with a "Pre-ride" badge.
+
+### Emails and results (no changes needed)
+
+- The finish email is check-in-driven (`handleFinishIfFinalControl`) and fires when the
+  pre-rider checks in at the final control — with an elapsed time computed from the
+  pre-ride start.
+- The completion cron (`/api/cron/complete-events`) still fires at the _event's_ closing
+  time, but `createPendingResultsAndSendEmails` skips riders with an existing result row —
+  a pre-rider who finished on the card gets no redundant email. A pre-rider who never
+  records a finish gets their "submit your results" email when the main event closes
+  (accepted trade-off; they can submit early via their manage link at any time).
+- Results/season stay keyed to the event's `event_date` — pre-rides are days ahead, never
+  a different season.
+
+### Printed control cards
+
+No changes: `/control-cards` (and the admin variant) already accepts an arbitrary
+`eventDate`/`startTime`, so a pre-ride's paper card is just a different query string.
