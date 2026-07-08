@@ -29,6 +29,8 @@ describe('RegistrationManage', () => {
     cancelled_at: null,
     management_token: 'test-token-123',
     is_team_captain: false,
+    pre_ride_date: null,
+    pre_ride_start_time: null,
   }
 
   const baseEvent = {

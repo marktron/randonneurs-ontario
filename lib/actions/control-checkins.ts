@@ -10,7 +10,7 @@ import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { requireAdmin } from '@/lib/auth/get-admin'
 import { logAuditEvent } from '@/lib/audit-log'
 import {
-  computeEventStart,
+  resolveRiderStart,
   computeControlWindow,
   deriveCheckinFlags,
   type CheckinFlags,
@@ -45,6 +45,9 @@ export interface AdminCheckinGridRider {
   riderName: string
   /** Capability token for the rider-facing digital card (/card/[token]); null if unset. */
   managementToken: string | null
+  /** Approved pre-ride start override, if any (YYYY-MM-DD / HH:MM:SS). */
+  preRideDate: string | null
+  preRideStartTime: string | null
   checkins: AdminCheckin[]
 }
 
@@ -83,7 +86,9 @@ export async function getEventCheckinsForAdmin(
       supabase.from('event_controls').select('id, distance_km, radius_m').eq('event_id', eventId),
       supabase
         .from('registrations')
-        .select('id, rider_id, management_token, riders (first_name, last_name)')
+        .select(
+          'id, rider_id, management_token, pre_ride_date, pre_ride_start_time, riders (first_name, last_name)'
+        )
         .eq('event_id', eventId)
         .eq('status', 'registered')
         .order('registered_at', { ascending: true }),
@@ -113,6 +118,8 @@ export async function getEventCheckinsForAdmin(
       id: string
       rider_id: string
       management_token: string | null
+      pre_ride_date: string | null
+      pre_ride_start_time: string | null
       riders: { first_name: string; last_name: string } | null
     }[]
 
@@ -125,6 +132,8 @@ export async function getEventCheckinsForAdmin(
           riderId: reg.rider_id,
           riderName: reg.riders ? `${reg.riders.first_name} ${reg.riders.last_name}` : 'Unknown',
           managementToken: reg.management_token,
+          preRideDate: reg.pre_ride_date,
+          preRideStartTime: reg.pre_ride_start_time,
           checkins: [],
         }))
       )
@@ -162,14 +171,22 @@ export async function getEventCheckinsForAdmin(
       note: string | null
     }[]
 
-    const eventStart = computeEventStart(typedEvent.event_date, typedEvent.start_time)
+    const startByRegistration = new Map(
+      registrations.map((reg) => [reg.id, resolveRiderStart(typedEvent, reg)])
+    )
     const controlById = new Map(controls.map((c) => [c.id, c]))
     const byRegistration = new Map<string, AdminCheckin[]>()
 
     for (const checkin of checkins) {
       const control = controlById.get(checkin.control_id)
       if (!control) continue
-      const window = computeControlWindow(eventStart, control.distance_km, typedEvent.distance_km)
+      // Check-ins from registrations outside the grid (e.g. cancelled) have no
+      // entry in startByRegistration — the registrations query above only
+      // selects `status = 'registered'` rows, so their check-ins are skipped
+      // here too.
+      const riderStart = startByRegistration.get(checkin.registration_id)
+      if (!riderStart) continue
+      const window = computeControlWindow(riderStart, control.distance_km, typedEvent.distance_km)
       const entry: AdminCheckin = {
         id: checkin.id,
         controlId: checkin.control_id,
@@ -195,6 +212,8 @@ export async function getEventCheckinsForAdmin(
         riderId: reg.rider_id,
         riderName: reg.riders ? `${reg.riders.first_name} ${reg.riders.last_name}` : 'Unknown',
         managementToken: reg.management_token,
+        preRideDate: reg.pre_ride_date,
+        preRideStartTime: reg.pre_ride_start_time,
         checkins: byRegistration.get(reg.id) || [],
       }))
     )

@@ -62,6 +62,8 @@ function makeRider(overrides: Partial<AdminCheckinGridRider>): AdminCheckinGridR
     riderId: 'rider-1',
     riderName: 'Ada Lovelace',
     managementToken: 'tok-abc',
+    preRideDate: null,
+    preRideStartTime: null,
     checkins: [],
     ...overrides,
   }

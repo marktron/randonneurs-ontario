@@ -20,6 +20,13 @@ Self-service registration management via token-based capability URLs. Riders can
 | Event scheduled, after start time, registered  | `createEarlyResult` mints a pending row, then redirects to `/results/submit/[token]` |
 | Event completed/submitted, no result yet       | Same as above — `createEarlyResult` is idempotent and handles missing-row recovery   |
 
+### Pre-rides
+
+If an admin has recorded an approved pre-ride start on the registration
+(`pre_ride_date`/`pre_ride_start_time`), the manage page shows the pre-ride date and time
+with a "Pre-ride" badge in place of the event's scheduled start, and the rider's digital
+brevet card runs entirely off that start. See `docs/digital-brevet-card.md` §17.
+
 ## Token sharing
 
 When results are created (by cron or early submission), the registration's `management_token` value is copied to the result's `submission_token`. This means the same link works throughout the lifecycle, and is also the URL encoded in the brevet card "Submit Your Results" QR code:

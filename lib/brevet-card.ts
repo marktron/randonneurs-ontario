@@ -45,6 +45,32 @@ export function computeEventStart(eventDate: string, startTime: string | null): 
   return createTorontoDate(year, month - 1, day, hours, minutes)
 }
 
+/**
+ * Per-registration pre-ride override columns. The DB CHECK
+ * `registrations_pre_ride_both_or_neither` guarantees both set or both null.
+ */
+export interface PreRideStart {
+  pre_ride_date: string | null
+  pre_ride_start_time: string | null
+}
+
+/**
+ * The start Date this rider's card runs on: the registration's approved
+ * pre-ride start when set, otherwise the event's scheduled start. Every
+ * control window, the check-in acceptance window, and the finish elapsed
+ * time derive from this — same single-source-of-truth rule as
+ * `computeEventStart`.
+ */
+export function resolveRiderStart(
+  event: { event_date: string; start_time: string | null },
+  registration: PreRideStart
+): Date {
+  if (registration.pre_ride_date != null) {
+    return computeEventStart(registration.pre_ride_date, registration.pre_ride_start_time)
+  }
+  return computeEventStart(event.event_date, event.start_time)
+}
+
 /** Check-ins accepted from this long before the event start. */
 export const CHECKIN_WINDOW_BEFORE_START_MS = 2 * 60 * 60 * 1000
 /** Check-ins accepted until this long after the ACP time limit expires. */

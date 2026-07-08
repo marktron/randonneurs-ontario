@@ -27,6 +27,8 @@ interface RegistrationManageProps {
     cancelled_at: string | null
     management_token: string
     is_team_captain: boolean
+    pre_ride_date: string | null
+    pre_ride_start_time: string | null
   }
   event: {
     id: string
@@ -64,7 +66,11 @@ export function RegistrationManage({
 
   const riderName = `${rider.first_name} ${rider.last_name}`
   const rideName = formatRideName(event.name, event.distance_km)
-  const formattedDate = format(parseISO(event.event_date), 'EEEE, MMMM d, yyyy')
+  const isPreRide = registration.pre_ride_date != null
+  const formattedDate = format(
+    parseISO(registration.pre_ride_date ?? event.event_date),
+    'EEEE, MMMM d, yyyy'
+  )
 
   function formatTime(timeStr: string | null): string {
     if (!timeStr) return 'TBD'
@@ -145,10 +151,15 @@ export function RegistrationManage({
           <div className="flex items-center gap-2 text-muted-foreground">
             <CalendarDays className="h-4 w-4 shrink-0" />
             <span>{formattedDate}</span>
+            {isPreRide && (
+              <span className="inline-flex items-center rounded-full border border-border px-2 py-0.5 text-xs font-medium text-foreground">
+                Pre-ride
+              </span>
+            )}
           </div>
           <div className="flex items-center gap-2 text-muted-foreground">
             <Clock className="h-4 w-4 shrink-0" />
-            <span>{formatTime(event.start_time)}</span>
+            <span>{formatTime(registration.pre_ride_start_time ?? event.start_time)}</span>
           </div>
           {event.start_location && (
             <div className="flex items-center gap-2 text-muted-foreground">

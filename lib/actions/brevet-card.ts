@@ -15,7 +15,7 @@ import { createActionResult, handleActionError, handleSupabaseError, logError } 
 import { isRateLimited } from '@/lib/rate-limit'
 import { haversineMeters } from '@/lib/geo'
 import {
-  computeEventStart,
+  resolveRiderStart,
   computeControlWindow,
   computeElapsedHm,
   deriveCheckinFlags,
@@ -99,6 +99,8 @@ export interface BrevetCardData {
   registration: {
     id: string
     status: string | null
+    /** True when this registration has an approved pre-ride start. */
+    isPreRide: boolean
   }
   event: {
     id: string
@@ -110,7 +112,7 @@ export interface BrevetCardData {
     startTime: string | null
     distanceKm: number
     chapterName: string | null
-    /** ISO timestamp of the event start in real time. */
+    /** ISO timestamp of this rider's start (the pre-ride start when set). */
     startsAt: string
   }
   rider: {
@@ -125,6 +127,8 @@ interface RegistrationWithEvent {
   id: string
   status: string | null
   rider_id: string
+  pre_ride_date: string | null
+  pre_ride_start_time: string | null
   events: {
     id: string
     slug: string
@@ -158,7 +162,7 @@ export async function getBrevetCardByToken(token: string): Promise<BrevetCardDat
     .from('registrations')
     .select(
       `
-      id, status, rider_id,
+      id, status, rider_id, pre_ride_date, pre_ride_start_time,
       events!inner (
         id, slug, name, status, event_type, event_date, start_time, distance_km,
         chapters (name, slug)
@@ -227,13 +231,14 @@ export async function getBrevetCardByToken(token: string): Promise<BrevetCardDat
     distance_to_control_m: number | null
   }[]
 
-  const eventStart = computeEventStart(event.event_date, event.start_time)
+  const eventStart = resolveRiderStart(event, reg)
   const controlById = new Map(controls.map((c) => [c.id, c]))
 
   return {
     registration: {
       id: reg.id,
       status: reg.status,
+      isPreRide: reg.pre_ride_date != null,
     },
     event: {
       id: event.id,
@@ -360,7 +365,7 @@ export async function checkInAtControl(token: string, input: CheckinInput): Prom
       .from('registrations')
       .select(
         `
-        id, status, rider_id,
+        id, status, rider_id, pre_ride_date, pre_ride_start_time,
         events!inner (id, slug, name, status, event_type, event_date, start_time, distance_km, chapters (name, slug)),
         riders!inner (first_name, last_name, email)
       `
@@ -391,7 +396,7 @@ export async function checkInAtControl(token: string, input: CheckinInput): Prom
       return { success: false, error: 'Results for this event have already been submitted' }
     }
 
-    const eventStart = computeEventStart(event.event_date, event.start_time)
+    const eventStart = resolveRiderStart(event, reg)
 
     if (!isWithinCheckinAcceptanceWindow(eventStart, event.distance_km)) {
       return {
