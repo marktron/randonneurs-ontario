@@ -99,7 +99,7 @@ export default async function BrevetCardAdminPage({ params }: BrevetCardAdminPag
         riders={riders}
       />
 
-      <PreRideManager riders={riders} />
+      <PreRideManager riders={riders} eventStartTime={typedEvent.start_time} />
     </div>
   )
 }

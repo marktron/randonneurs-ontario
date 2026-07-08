@@ -37,9 +37,10 @@ import { Loader2 } from 'lucide-react'
 
 interface PreRideManagerProps {
   riders: AdminCheckinGridRider[]
+  eventStartTime: string | null
 }
 
-export function PreRideManager({ riders }: PreRideManagerProps) {
+export function PreRideManager({ riders, eventStartTime }: PreRideManagerProps) {
   const router = useRouter()
   const [editing, setEditing] = useState<AdminCheckinGridRider | null>(null)
   const [date, setDate] = useState('')
@@ -49,7 +50,7 @@ export function PreRideManager({ riders }: PreRideManagerProps) {
   function openFor(rider: AdminCheckinGridRider) {
     setEditing(rider)
     setDate(rider.preRideDate ?? '')
-    setTime(rider.preRideStartTime?.slice(0, 5) ?? '')
+    setTime(rider.preRideStartTime?.slice(0, 5) ?? eventStartTime?.slice(0, 5) ?? '')
   }
 
   function save(clear: boolean) {
@@ -116,10 +117,9 @@ export function PreRideManager({ riders }: PreRideManagerProps) {
       <Dialog open={editing !== null} onOpenChange={(open) => !open && setEditing(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Pre-ride start</DialogTitle>
+            <DialogTitle>{editing?.riderName} pre-ride</DialogTitle>
             <DialogDescription>
-              {editing?.riderName} — set the approved start date and time for this rider&apos;s
-              pre-ride. Clearing puts them back on the event schedule.
+              Set the approved start date and time for this rider&apos;s pre-ride.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 sm:grid-cols-2">
@@ -143,11 +143,19 @@ export function PreRideManager({ riders }: PreRideManagerProps) {
             </div>
           </div>
           <DialogFooter>
-            {editing?.preRideDate && (
-              <Button variant="destructive" onClick={() => save(true)} disabled={isPending}>
-                Clear pre-ride
-              </Button>
-            )}
+            <Button
+              variant="outline"
+              onClick={() => {
+                if (editing?.preRideDate) {
+                  save(true)
+                } else {
+                  setEditing(null)
+                }
+              }}
+              disabled={isPending}
+            >
+              Cancel pre-ride
+            </Button>
             <Button onClick={() => save(false)} disabled={isPending || !date || !time}>
               {isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               Save
