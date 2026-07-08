@@ -62,7 +62,9 @@ export default async function BrevetCardAdminPage({ params }: BrevetCardAdminPag
   })
 
   return (
-    <div className="space-y-8">
+    // Data-heavy admin page: cap width per style guide (§Page widths); the
+    // controls editor and check-ins grid scroll horizontally inside it.
+    <div className="max-w-6xl space-y-8">
       <div>
         <Link
           href={`/admin/events/${typedEvent.id}`}
