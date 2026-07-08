@@ -137,6 +137,8 @@ function makeRegistration() {
     id: 'reg-1',
     status: 'registered',
     rider_id: 'rider-1',
+    pre_ride_date: null,
+    pre_ride_start_time: null,
     events: {
       id: 'evt-1',
       slug: 'test-200',

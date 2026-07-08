@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeAll, afterAll, afterEach } from 'vitest
 import { getTestSupabase, checked } from '../helpers/supabase'
 import { TORONTO_CHAPTER_ID, daysFromNow } from '../registration/helpers'
 import { resetRateLimitStores } from '@/lib/rate-limit'
+import { checkInAtControl, getBrevetCardByToken } from '@/lib/actions/brevet-card'
 
 // Admin actions (Tasks 4–5) run with no auth session, and audit_logs.admin_id
 // has a NOT NULL FK to admins(id) — mock both so the actions run against the
@@ -97,9 +98,7 @@ describe('digital brevet card pre-rides (real DB)', () => {
   // (a future start clamps elapsed to 0:00).
   const preRideStart = torontoNowParts(-TWO_HOURS_MS)
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- consumed by Task 3's tests
   let preToken: string
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- consumed by Task 3's tests
   let regularToken: string
 
   beforeAll(async () => {
@@ -281,6 +280,75 @@ describe('digital brevet card pre-rides (real DB)', () => {
         .update({ pre_ride_date: null, pre_ride_start_time: null })
         .eq('id', IDS.regTarget)
       expect(clearError).toBeNull()
+    })
+  })
+
+  describe('rider card with a pre-ride start', () => {
+    it('computes startsAt and control windows from the pre-ride start', async () => {
+      const card = await getBrevetCardByToken(preToken)
+      expect(card).not.toBeNull()
+      expect(card!.registration.isPreRide).toBe(true)
+      // startsAt ≈ two hours ago (minute precision from the seed).
+      const startsAtMs = new Date(card!.event.startsAt).getTime()
+      expect(Math.abs(startsAtMs - (Date.now() - TWO_HOURS_MS))).toBeLessThan(5 * 60 * 1000)
+      // The 0 km control opened at the pre-ride start — in the past, not in 3 days.
+      const control1 = card!.controls.find((c) => c.id === IDS.control1)!
+      expect(new Date(control1.opensAt).getTime()).toBeLessThan(Date.now())
+    })
+
+    it('leaves regular riders on the event schedule', async () => {
+      const card = await getBrevetCardByToken(regularToken)
+      expect(card).not.toBeNull()
+      expect(card!.registration.isPreRide).toBe(false)
+      // Their 0 km control opens at the scheduled start, ~3 days from now.
+      const control1 = card!.controls.find((c) => c.id === IDS.control1)!
+      expect(new Date(control1.opensAt).getTime()).toBeGreaterThan(Date.now())
+    })
+
+    it('accepts a pre-rider check-in days before the scheduled start', async () => {
+      const result = await checkInAtControl(preToken, {
+        controlId: IDS.control1,
+        // Tapped right at the pre-ride start (backdated two hours, allowed:
+        // the acceptance window opens 2 h before the rider's start).
+        checkedInAt: new Date(Date.now() - TWO_HOURS_MS).toISOString(),
+        lat: CONTROL_LAT,
+        lng: CONTROL_LNG,
+        accuracyM: 10,
+      })
+      expect(result.success).toBe(true)
+      expect(result.data?.checkin.flags.early).toBe(false)
+      expect(result.data?.checkin.flags.late).toBe(false)
+    })
+
+    it('still rejects a regular rider before the event window opens', async () => {
+      const result = await checkInAtControl(regularToken, {
+        controlId: IDS.control1,
+        checkedInAt: new Date().toISOString(),
+        lat: CONTROL_LAT,
+        lng: CONTROL_LNG,
+        accuracyM: 10,
+      })
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('only accepted around the event')
+    })
+
+    it('computes the finish time from the pre-ride start', async () => {
+      const result = await checkInAtControl(preToken, {
+        controlId: IDS.control2,
+        checkedInAt: new Date().toISOString(),
+      })
+      expect(result.success).toBe(true)
+
+      const { data: resultRows } = await supabase
+        .from('results')
+        .select('status, finish_time')
+        .eq('event_id', IDS.event)
+        .eq('rider_id', IDS.riderPre)
+      expect(resultRows).toHaveLength(1)
+      expect(resultRows![0].status).toBe('finished')
+      // ~2 h elapsed since the pre-ride start. Had the code used the event
+      // start (3 days in the future) this would clamp to 00:00:00.
+      expect(String(resultRows![0].finish_time)).toMatch(/^02:0[0-2]/)
     })
   })
 })

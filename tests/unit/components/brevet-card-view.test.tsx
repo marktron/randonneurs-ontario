@@ -108,7 +108,7 @@ function makeData(): BrevetCardData {
   // Started an hour ago so the check-in window is open.
   const startsAt = new Date(Date.now() - 60 * 60 * 1000)
   return {
-    registration: { id: 'reg-1', status: 'registered' },
+    registration: { id: 'reg-1', status: 'registered', isPreRide: false },
     event: {
       id: 'evt-1',
       slug: 'test-200',
