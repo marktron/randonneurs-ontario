@@ -66,7 +66,7 @@ export function RegistrationManage({
 
   const riderName = `${rider.first_name} ${rider.last_name}`
   const rideName = formatRideName(event.name, event.distance_km)
-  const isPreRide = registration.pre_ride_date !== null
+  const isPreRide = registration.pre_ride_date != null
   const formattedDate = format(
     parseISO(registration.pre_ride_date ?? event.event_date),
     'EEEE, MMMM d, yyyy'

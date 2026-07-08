@@ -238,7 +238,7 @@ export async function getBrevetCardByToken(token: string): Promise<BrevetCardDat
     registration: {
       id: reg.id,
       status: reg.status,
-      isPreRide: reg.pre_ride_date !== null,
+      isPreRide: reg.pre_ride_date != null,
     },
     event: {
       id: event.id,

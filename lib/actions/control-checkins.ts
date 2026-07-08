@@ -180,8 +180,10 @@ export async function getEventCheckinsForAdmin(
     for (const checkin of checkins) {
       const control = controlById.get(checkin.control_id)
       if (!control) continue
-      // Check-ins from registrations outside the grid (e.g. cancelled) were
-      // already dropped at render time; skip them here too.
+      // Check-ins from registrations outside the grid (e.g. cancelled) have no
+      // entry in startByRegistration — the registrations query above only
+      // selects `status = 'registered'` rows, so their check-ins are skipped
+      // here too.
       const riderStart = startByRegistration.get(checkin.registration_id)
       if (!riderStart) continue
       const window = computeControlWindow(riderStart, control.distance_km, typedEvent.distance_km)

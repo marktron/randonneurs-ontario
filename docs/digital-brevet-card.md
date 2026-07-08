@@ -688,7 +688,9 @@ per-cell flags are per-rider.
   time, but `createPendingResultsAndSendEmails` skips riders with an existing result row —
   a pre-rider who finished on the card gets no redundant email. A pre-rider who never
   records a finish gets their "submit your results" email when the main event closes
-  (accepted trade-off; they can submit early via their manage link at any time).
+  (accepted trade-off; `/registration/manage/[token]` gates early submission on the
+  event's _scheduled_ start, not the pre-ride start, so they can submit once the
+  scheduled event has started, or an organizer can enter the result for them).
 - Results/season stay keyed to the event's `event_date` — pre-rides are days ahead, never
   a different season.
 

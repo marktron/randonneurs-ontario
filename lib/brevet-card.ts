@@ -65,7 +65,7 @@ export function resolveRiderStart(
   event: { event_date: string; start_time: string | null },
   registration: PreRideStart
 ): Date {
-  if (registration.pre_ride_date !== null) {
+  if (registration.pre_ride_date != null) {
     return computeEventStart(registration.pre_ride_date, registration.pre_ride_start_time)
   }
   return computeEventStart(event.event_date, event.start_time)
