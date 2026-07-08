@@ -32,12 +32,32 @@ import {
 } from '@/components/ui/dialog'
 import { setPreRideStart } from '@/lib/actions/pre-ride'
 import type { AdminCheckinGridRider } from '@/lib/actions/control-checkins'
+import { parseLocalDate } from '@/lib/utils'
 import { toast } from 'sonner'
 import { Loader2 } from 'lucide-react'
 
 interface PreRideManagerProps {
   riders: AdminCheckinGridRider[]
   eventStartTime: string | null
+}
+
+function formatPreRideLabel(date: string, time: string | null): string {
+  const formattedDate = parseLocalDate(date).toLocaleDateString('en-CA', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  })
+
+  if (!time) return formattedDate
+
+  const [hours, minutes] = time.split(':')
+  const hour = parseInt(hours, 10)
+  const ampm = hour >= 12 ? 'PM' : 'AM'
+  const hour12 = hour % 12 || 12
+  const formattedTime = `${hour12}:${minutes} ${ampm}`
+
+  return `${formattedDate} · ${formattedTime}`
 }
 
 export function PreRideManager({ riders, eventStartTime }: PreRideManagerProps) {
@@ -98,7 +118,7 @@ export function PreRideManager({ riders, eventStartTime }: PreRideManagerProps) 
               <TableCell>
                 {rider.preRideDate ? (
                   <Badge variant="outline">
-                    {rider.preRideDate} · {rider.preRideStartTime?.slice(0, 5)}
+                    {formatPreRideLabel(rider.preRideDate, rider.preRideStartTime)}
                   </Badge>
                 ) : (
                   <span className="text-muted-foreground">—</span>
