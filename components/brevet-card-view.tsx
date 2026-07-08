@@ -117,7 +117,7 @@ interface BrevetCardProps {
 }
 
 export function BrevetCard({ token, initialData }: BrevetCardProps) {
-  const { event, rider, controls } = initialData
+  const { event, rider, controls, registration } = initialData
 
   const [checkins, setCheckins] = useState<Map<string, CardCheckin>>(
     () => new Map(initialData.checkins.map((c) => [c.controlId, c]))
@@ -476,6 +476,11 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
         <h1 className="font-serif text-3xl md:text-4xl tracking-tight mt-2">{event.name}</h1>
         <p className="mt-1 text-muted-foreground">
           {event.distanceKm} km · {formatControlTime(startsAt)} start
+          {registration.isPreRide && (
+            <span className="ml-2 inline-flex items-center rounded-full border border-border px-2 py-0.5 text-xs font-medium align-middle">
+              Pre-ride
+            </span>
+          )}
         </p>
         <p className="mt-2 text-sm text-muted-foreground tabular-nums">
           {doneCount} of {controls.length} controls

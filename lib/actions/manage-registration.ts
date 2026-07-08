@@ -21,6 +21,8 @@ export interface RegistrationManagementData {
     cancelled_at: string | null
     management_token: string
     is_team_captain: boolean
+    pre_ride_date: string | null
+    pre_ride_start_time: string | null
   }
   event: {
     id: string
@@ -59,6 +61,7 @@ export async function getRegistrationByToken(
     .select(
       `
       id, status, cancelled_at, management_token, is_team_captain,
+      pre_ride_date, pre_ride_start_time,
       events!inner (
         id, slug, status, name, event_date, start_time,
         start_location, distance_km, event_type,
@@ -81,6 +84,8 @@ export async function getRegistrationByToken(
     cancelled_at: string | null
     management_token: string
     is_team_captain: boolean
+    pre_ride_date: string | null
+    pre_ride_start_time: string | null
     events: {
       id: string
       slug: string
@@ -125,6 +130,8 @@ export async function getRegistrationByToken(
       cancelled_at: reg.cancelled_at,
       management_token: reg.management_token,
       is_team_captain: reg.is_team_captain,
+      pre_ride_date: reg.pre_ride_date,
+      pre_ride_start_time: reg.pre_ride_start_time,
     },
     event: {
       id: reg.events.id,
