@@ -4,6 +4,7 @@ import { TORONTO_CHAPTER_ID, daysFromNow } from '../registration/helpers'
 import { resetRateLimitStores } from '@/lib/rate-limit'
 import { checkInAtControl, getBrevetCardByToken } from '@/lib/actions/brevet-card'
 import { getEventCheckinsForAdmin } from '@/lib/actions/control-checkins'
+import { setPreRideStart } from '@/lib/actions/pre-ride'
 
 // Admin actions (Tasks 4–5) run with no auth session, and audit_logs.admin_id
 // has a NOT NULL FK to admins(id) — mock both so the actions run against the
@@ -387,6 +388,73 @@ describe('digital brevet card pre-rides (real DB)', () => {
       expect(regular.preRideDate).toBeNull()
       // Same timestamp, but their window opens with the event in 3 days.
       expect(regular.checkins[0].flags.early).toBe(true)
+    })
+  })
+
+  describe('setPreRideStart', () => {
+    it('sets and clears a pre-ride start', async () => {
+      const set = await setPreRideStart({
+        registrationId: IDS.regTarget,
+        preRideDate: daysFromNow(1),
+        preRideStartTime: '07:00',
+      })
+      expect(set.success).toBe(true)
+
+      const { data: afterSet } = await supabase
+        .from('registrations')
+        .select('pre_ride_date, pre_ride_start_time')
+        .eq('id', IDS.regTarget)
+        .single()
+      expect(afterSet!.pre_ride_date).toBe(daysFromNow(1))
+      expect(String(afterSet!.pre_ride_start_time)).toMatch(/^07:00/)
+
+      const clear = await setPreRideStart({
+        registrationId: IDS.regTarget,
+        preRideDate: null,
+        preRideStartTime: null,
+      })
+      expect(clear.success).toBe(true)
+
+      const { data: afterClear } = await supabase
+        .from('registrations')
+        .select('pre_ride_date, pre_ride_start_time')
+        .eq('id', IDS.regTarget)
+        .single()
+      expect(afterClear!.pre_ride_date).toBeNull()
+      expect(afterClear!.pre_ride_start_time).toBeNull()
+    })
+
+    it('rejects malformed dates and times', async () => {
+      const badDate = await setPreRideStart({
+        registrationId: IDS.regTarget,
+        preRideDate: 'next tuesday',
+        preRideStartTime: '07:00',
+      })
+      expect(badDate.success).toBe(false)
+
+      const badTime = await setPreRideStart({
+        registrationId: IDS.regTarget,
+        preRideDate: daysFromNow(1),
+        preRideStartTime: '7am',
+      })
+      expect(badTime.success).toBe(false)
+
+      const halfSet = await setPreRideStart({
+        registrationId: IDS.regTarget,
+        preRideDate: daysFromNow(1),
+        preRideStartTime: null,
+      })
+      expect(halfSet.success).toBe(false)
+    })
+
+    it('rejects cancelled registrations', async () => {
+      const result = await setPreRideStart({
+        registrationId: IDS.regCancelled,
+        preRideDate: daysFromNow(1),
+        preRideStartTime: '07:00',
+      })
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('active registrations')
     })
   })
 })
