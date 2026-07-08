@@ -13,7 +13,6 @@ import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Badge } from '@/components/ui/badge'
 import {
   Table,
   TableBody,
@@ -117,9 +116,7 @@ export function PreRideManager({ riders, eventStartTime }: PreRideManagerProps) 
               <TableCell>{rider.riderName}</TableCell>
               <TableCell>
                 {rider.preRideDate ? (
-                  <Badge variant="outline">
-                    {formatPreRideLabel(rider.preRideDate, rider.preRideStartTime)}
-                  </Badge>
+                  formatPreRideLabel(rider.preRideDate, rider.preRideStartTime)
                 ) : (
                   <span className="text-muted-foreground">—</span>
                 )}
