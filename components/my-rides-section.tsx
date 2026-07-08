@@ -3,8 +3,8 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { getMyUpcomingRides, type MyUpcomingRide } from '@/lib/actions/my-rides'
+import { getSavedRegistrationData } from '@/lib/registration-storage'
 
-const STORAGE_KEY = 'ro-registration'
 const MAX_COLLAPSED = 3
 
 function formatDate(dateString: string): { month: string; day: string } {
@@ -20,23 +20,16 @@ export function MyRidesSection() {
   const [expanded, setExpanded] = useState(false)
 
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY)
-      if (!saved) return
+    const data = getSavedRegistrationData()
+    if (!data?.email) return
 
-      const data = JSON.parse(saved)
-      if (!data?.email) return
+    setFirstName(data.firstName || '')
 
-      setFirstName(data.firstName || '')
-
-      getMyUpcomingRides(data.email).then((result) => {
-        if (result.success && result.data && result.data.length > 0) {
-          setRides(result.data)
-        }
-      })
-    } catch {
-      // Corrupted localStorage — render nothing
-    }
+    getMyUpcomingRides(data.email).then((result) => {
+      if (result.success && result.data && result.data.length > 0) {
+        setRides(result.data)
+      }
+    })
   }, [])
 
   if (!rides || rides.length === 0) return null

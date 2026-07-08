@@ -19,6 +19,7 @@ import {
 import { Plus, Trash2, Printer, GripVertical, Download, Loader2, ChevronDown } from 'lucide-react'
 import type { ActiveRouteWithRwgps } from '@/lib/data/routes'
 import { fetchRwgpsControls, fetchRwgpsRoute, parseRwgpsRouteRef } from '@/lib/rwgps'
+import { getSavedRegistrationData } from '@/lib/registration-storage'
 
 interface ControlInput {
   id: string
@@ -32,21 +33,12 @@ interface RiderInput {
   lastName: string
 }
 
-const STORAGE_KEY = 'ro-registration'
-
 function getSavedRiderData(): { firstName: string; lastName: string } | null {
-  if (typeof window === 'undefined') return null
-  try {
-    const saved = localStorage.getItem(STORAGE_KEY)
-    if (!saved) return null
-    const data = JSON.parse(saved)
-    if (data.firstName || data.lastName) {
-      return { firstName: data.firstName || '', lastName: data.lastName || '' }
-    }
-    return null
-  } catch {
-    return null
+  const data = getSavedRegistrationData()
+  if (data && (data.firstName || data.lastName)) {
+    return { firstName: data.firstName || '', lastName: data.lastName || '' }
   }
+  return null
 }
 
 interface ControlCardFormProps {

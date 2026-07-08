@@ -1,13 +1,10 @@
 'use client'
 
-import { useState, useTransition, useEffect, useMemo, useRef } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useMemo } from 'react'
 import { ChevronDownIcon } from 'lucide-react'
 import { format, addDays, isBefore } from 'date-fns'
 import { Input } from '@/components/ui/input'
-import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
-import { Checkbox } from '@/components/ui/checkbox'
 import { Button } from '@/components/ui/button'
 import { Calendar } from '@/components/ui/calendar'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -27,43 +24,18 @@ import {
   CommandList,
 } from '@/components/ui/command'
 import { registerForPermanent, completeRegistrationWithRider } from '@/lib/actions/register'
-import { RiderMatchDialog } from '@/components/rider-match-dialog'
-import { MembershipErrorModal } from '@/components/membership-error-modal'
-import type { RiderMatchCandidate } from '@/lib/actions/rider-match'
 import type { ActiveRoute } from '@/lib/data/routes'
 import { HoneypotField } from '@/components/honeypot-field'
-import { EmailTypoSuggestion } from '@/components/email-typo-suggestion'
-
-const STORAGE_KEY = 'ro-registration'
-
-interface SavedRegistrationData {
-  firstName: string
-  lastName: string
-  email: string
-  phone: string
-  gender: string
-  shareRegistration: boolean
-  emergencyContactName: string
-  emergencyContactPhone: string
-}
-
-function getSavedData(): SavedRegistrationData | null {
-  if (typeof window === 'undefined') return null
-  try {
-    const saved = localStorage.getItem(STORAGE_KEY)
-    return saved ? JSON.parse(saved) : null
-  } catch {
-    return null
-  }
-}
-
-function saveData(data: SavedRegistrationData): void {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
-  } catch {
-    // Ignore storage errors
-  }
-}
+import { useRegistrationForm } from '@/hooks/use-registration-form'
+import {
+  RegistrationError,
+  RiderInfoFields,
+  EmergencyContactFields,
+  ShareRegistrationCheckbox,
+  NotesField,
+} from '@/components/registration/registration-fields'
+import { RegistrationSuccess } from '@/components/registration/registration-success'
+import { RegistrationDialogs } from '@/components/registration/registration-dialogs'
 
 const TORONTO_TZ = 'America/Toronto'
 
@@ -96,8 +68,8 @@ interface PermanentRegistrationFormProps {
 }
 
 export function PermanentRegistrationForm({ routes }: PermanentRegistrationFormProps) {
-  const router = useRouter()
-  const [isPending, startTransition] = useTransition()
+  const form = useRegistrationForm()
+  const { isPending, startTransition } = form
 
   // Route/schedule fields
   const [routeId, setRouteId] = useState<string>('')
@@ -107,36 +79,10 @@ export function PermanentRegistrationForm({ routes }: PermanentRegistrationFormP
   const [startTime, setStartTime] = useState<string>('08:00')
   const [startLocation, setStartLocation] = useState<string>('')
   const [direction, setDirection] = useState<'as_posted' | 'reversed'>('as_posted')
-
-  // Rider fields
-  const [firstName, setFirstName] = useState('')
-  const [lastName, setLastName] = useState('')
-  const [email, setEmail] = useState('')
-  const [blurredEmail, setBlurredEmail] = useState('')
-  const [phone, setPhone] = useState('')
-  const [shareRegistration, setShareRegistration] = useState(true)
-  const [gender, setGender] = useState<string>('')
-  const [emergencyContactName, setEmergencyContactName] = useState('')
-  const [emergencyContactPhone, setEmergencyContactPhone] = useState('')
   const [notes, setNotes] = useState('')
-  const [homepageUrl, setHomepageUrl] = useState('')
 
-  // UI state
-  const [error, setError] = useState<string | null>(null)
-  const [success, setSuccess] = useState(false)
-
-  // Membership error state
-  const [membershipErrorVariant, setMembershipErrorVariant] = useState<
-    'no-membership' | 'trial-used' | null
-  >(null)
-
-  // Fuzzy matching state
-  const [matchDialogOpen, setMatchDialogOpen] = useState(false)
-  const [matchCandidates, setMatchCandidates] = useState<RiderMatchCandidate[]>([])
+  // Fuzzy matching context: the event created before the rider match was needed
   const [pendingEventId, setPendingEventId] = useState<string>('')
-
-  const errorRef = useRef<HTMLDivElement>(null)
-  const successRef = useRef<HTMLDivElement>(null)
 
   // Group routes by chapter
   const routesByChapter = useMemo(() => {
@@ -152,48 +98,19 @@ export function PermanentRegistrationForm({ routes }: PermanentRegistrationFormP
     return Object.entries(grouped).sort(([a], [b]) => a.localeCompare(b))
   }, [routes])
 
-  // Load saved data on mount
-  useEffect(() => {
-    const saved = getSavedData()
-    if (saved) {
-      setFirstName(saved.firstName)
-      setLastName(saved.lastName)
-      setEmail(saved.email)
-      setPhone(saved.phone || '')
-      setGender(saved.gender)
-      setShareRegistration(saved.shareRegistration)
-      setEmergencyContactName(saved.emergencyContactName || '')
-      setEmergencyContactPhone(saved.emergencyContactPhone || '')
-    }
-  }, [])
-
-  // Scroll error into view when it appears
-  useEffect(() => {
-    if (error && errorRef.current) {
-      errorRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
-    }
-  }, [error])
-
-  // Move focus to success message when registration completes
-  useEffect(() => {
-    if (success && successRef.current) {
-      successRef.current.focus()
-    }
-  }, [success])
-
   const selectedRoute = routes.find((r) => r.id === routeId)
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
-    setError(null)
+    form.setError(null)
 
     if (!routeId) {
-      setError('Please select a route')
+      form.setError('Please select a route')
       return
     }
 
     if (!eventDate) {
-      setError('Please select a date')
+      form.setError('Please select a date')
       return
     }
 
@@ -207,117 +124,35 @@ export function PermanentRegistrationForm({ routes }: PermanentRegistrationFormP
         startTime,
         startLocation: startLocation.trim(),
         direction,
-        firstName,
-        lastName,
-        email,
-        phone,
-        gender: gender || undefined,
-        shareRegistration,
+        ...form.riderPayload,
         notes: notes || undefined,
-        emergencyContactName,
-        emergencyContactPhone,
-        homepageUrl,
       })
-
-      if (result.success) {
-        // Save form data to localStorage for next registration
-        saveData({
-          firstName,
-          lastName,
-          email,
-          phone,
-          gender,
-          shareRegistration,
-          emergencyContactName,
-          emergencyContactPhone,
-        })
-        setSuccess(true)
-        router.refresh()
-      } else if (result.needsRiderMatch && result.matchCandidates && result.pendingData) {
-        // Show fuzzy matching dialog
-        setMatchCandidates(result.matchCandidates)
-        setPendingEventId(result.pendingData.eventId)
-        setMatchDialogOpen(true)
-      } else if (result.membershipError) {
-        setMembershipErrorVariant(result.membershipError)
-      } else {
-        setError(result.error || 'Registration failed')
-      }
+      form.handleRegistrationResult(result, {
+        onNeedsMatch: (r) => {
+          if (r.pendingData) setPendingEventId(r.pendingData.eventId)
+        },
+      })
     })
   }
 
-  async function handleRiderSelection(riderId: string | null) {
+  function handleRiderSelection(riderId: string | null) {
     startTransition(async () => {
       const result = await completeRegistrationWithRider({
         eventId: pendingEventId,
         selectedRiderId: riderId,
-        firstName,
-        lastName,
-        email,
-        phone,
-        gender: gender || undefined,
-        shareRegistration,
+        ...form.riderPayload,
         notes: notes || undefined,
-        emergencyContactName,
-        emergencyContactPhone,
-        homepageUrl,
       })
-
-      if (result.success) {
-        setMatchDialogOpen(false)
-        saveData({
-          firstName,
-          lastName,
-          email,
-          phone,
-          gender,
-          shareRegistration,
-          emergencyContactName,
-          emergencyContactPhone,
-        })
-        setSuccess(true)
-        router.refresh()
-      } else if (result.membershipError) {
-        setMatchDialogOpen(false)
-        setMembershipErrorVariant(result.membershipError)
-      } else {
-        setMatchDialogOpen(false)
-        setError(result.error || 'Registration failed')
-      }
+      form.handleRegistrationResult(result)
     })
   }
 
-  if (success) {
+  if (form.success) {
     return (
       <div className="rounded-2xl border border-border bg-card p-6 md:p-8">
-        <div
-          ref={successRef}
-          tabIndex={-1}
-          role="status"
-          className="text-center py-8"
-          data-testid="registration-success"
-        >
-          <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-green-100 dark:bg-green-900/30 mb-4">
-            <svg
-              className="w-6 h-6 text-green-600 dark:text-green-400"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M5 13l4 4L19 7"
-              />
-            </svg>
-          </div>
-          <h2 className="font-serif text-2xl mb-2">You&apos;re registered!</h2>
-          <p className="text-sm text-muted-foreground">
-            Your permanent ride has been scheduled. You&apos;ll receive a confirmation email
-            shortly.
-          </p>
-        </div>
+        <RegistrationSuccess successRef={form.successRef} title="You're registered!">
+          Your permanent ride has been scheduled. You&apos;ll receive a confirmation email shortly.
+        </RegistrationSuccess>
       </div>
     )
   }
@@ -327,17 +162,8 @@ export function PermanentRegistrationForm({ routes }: PermanentRegistrationFormP
       <h2 className="font-serif text-2xl mb-6">Schedule Your Ride</h2>
 
       <form className="space-y-6" onSubmit={handleSubmit}>
-        <HoneypotField value={homepageUrl} onChange={setHomepageUrl} />
-        {error && (
-          <div
-            ref={errorRef}
-            role="alert"
-            className="p-3 rounded-lg bg-destructive/10 text-destructive text-sm"
-            data-testid="registration-error"
-          >
-            {error}
-          </div>
-        )}
+        <HoneypotField value={form.homepageUrl} onChange={form.setHomepageUrl} />
+        <RegistrationError form={form} />
 
         {/* Route Selection Section */}
         <div className="space-y-5">
@@ -497,189 +323,10 @@ export function PermanentRegistrationForm({ routes }: PermanentRegistrationFormP
             Your Information
           </h3>
 
-          {/* Name */}
-          <div className="grid grid-cols-1 min-[400px]:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="firstName">First name</Label>
-              <Input
-                id="firstName"
-                name="firstName"
-                type="text"
-                placeholder="First"
-                required
-                autoComplete="given-name"
-                disabled={isPending}
-                value={firstName}
-                onChange={(e) => setFirstName(e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="lastName">Last name</Label>
-              <Input
-                id="lastName"
-                name="lastName"
-                type="text"
-                placeholder="Last"
-                required
-                autoComplete="family-name"
-                disabled={isPending}
-                value={lastName}
-                onChange={(e) => setLastName(e.target.value)}
-              />
-            </div>
-          </div>
-
-          {/* Email */}
-          <div className="space-y-2">
-            <Label htmlFor="email">Email address</Label>
-            <Input
-              id="email"
-              name="email"
-              type="email"
-              inputMode="email"
-              placeholder="you@example.com"
-              required
-              autoComplete="email"
-              disabled={isPending}
-              value={email}
-              onChange={(e) => {
-                setEmail(e.target.value)
-                setBlurredEmail('')
-              }}
-              onBlur={(e) => setBlurredEmail(e.target.value)}
-            />
-            <EmailTypoSuggestion
-              email={blurredEmail}
-              onAccept={(corrected) => {
-                setEmail(corrected)
-                setBlurredEmail('')
-              }}
-            />
-          </div>
-
-          {/* Cell phone */}
-          <div className="space-y-2">
-            <Label htmlFor="phone">Cell phone</Label>
-            <Input
-              id="phone"
-              name="phone"
-              type="tel"
-              inputMode="tel"
-              placeholder="Phone number"
-              required
-              autoComplete="tel"
-              disabled={isPending}
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-            />
-            <p className="text-xs text-muted-foreground">
-              Used only for urgent ride-day updates, such as weather or safety-related changes.
-            </p>
-          </div>
-
-          {/* Gender */}
-          <div className="space-y-2">
-            <Label htmlFor="gender">
-              Gender
-              <span className="text-muted-foreground font-normal ml-1">(optional)</span>
-            </Label>
-            <Select
-              key={gender || 'empty'}
-              value={gender}
-              onValueChange={setGender}
-              disabled={isPending}
-            >
-              <SelectTrigger id="gender" className="w-full">
-                <SelectValue placeholder="Select…" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="M">Male</SelectItem>
-                <SelectItem value="F">Female</SelectItem>
-                <SelectItem value="X">Non-binary / Other</SelectItem>
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-muted-foreground">
-              Audax Club Parisien uses this for ridership statistics.
-            </p>
-          </div>
-
-          {/* Share Registration */}
-          <div className="flex items-start gap-3">
-            <Checkbox
-              checked={shareRegistration}
-              onCheckedChange={(checked) => setShareRegistration(checked === true)}
-              className="mt-1"
-              disabled={isPending}
-              aria-label="Appear on the registered riders list"
-            />
-            {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- checkbox is keyboard-accessible via aria-label */}
-            <div
-              className="space-y-1 cursor-pointer"
-              onClick={() => {
-                if (!isPending) setShareRegistration((v) => !v)
-              }}
-            >
-              <span className="text-sm font-medium leading-none">
-                Appear on the registered riders list
-              </span>
-              <p className="text-xs text-muted-foreground">
-                Allow other riders to see you're signed up. Results always include all riders.
-              </p>
-            </div>
-          </div>
-
-          {/* Emergency Contact */}
-          <div className="bg-muted/50 border border-border rounded-lg p-4 space-y-3">
-            <p className="text-sm font-medium">Emergency contact</p>
-            <div className="grid grid-cols-1 min-[400px]:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="emergencyContactName">Name</Label>
-                <Input
-                  id="emergencyContactName"
-                  name="emergencyContactName"
-                  type="text"
-                  placeholder="Name"
-                  required
-                  autoComplete="off"
-                  disabled={isPending}
-                  value={emergencyContactName}
-                  onChange={(e) => setEmergencyContactName(e.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="emergencyContactPhone">Phone</Label>
-                <Input
-                  id="emergencyContactPhone"
-                  name="emergencyContactPhone"
-                  type="tel"
-                  inputMode="tel"
-                  placeholder="Phone number"
-                  required
-                  autoComplete="off"
-                  disabled={isPending}
-                  value={emergencyContactPhone}
-                  onChange={(e) => setEmergencyContactPhone(e.target.value)}
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Notes */}
-          <div className="space-y-2">
-            <Label htmlFor="notes">
-              Notes for the organizer
-              <span className="text-muted-foreground font-normal ml-1">(optional)</span>
-            </Label>
-            <Textarea
-              id="notes"
-              name="notes"
-              placeholder="Any special requirements or information…"
-              rows={3}
-              disabled={isPending}
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-            />
-          </div>
+          <RiderInfoFields form={form} />
+          <ShareRegistrationCheckbox form={form} />
+          <EmergencyContactFields form={form} />
+          <NotesField disabled={isPending} value={notes} onChange={setNotes} />
         </div>
 
         {/* Submit */}
@@ -694,22 +341,7 @@ export function PermanentRegistrationForm({ routes }: PermanentRegistrationFormP
         </Button>
       </form>
 
-      <RiderMatchDialog
-        open={matchDialogOpen}
-        onOpenChange={setMatchDialogOpen}
-        candidates={matchCandidates}
-        submittedFirstName={firstName}
-        submittedLastName={lastName}
-        onSelectRider={(riderId) => handleRiderSelection(riderId)}
-        onCreateNew={() => handleRiderSelection(null)}
-        isPending={isPending}
-      />
-
-      <MembershipErrorModal
-        open={membershipErrorVariant !== null}
-        onClose={() => setMembershipErrorVariant(null)}
-        variant={membershipErrorVariant || 'no-membership'}
-      />
+      <RegistrationDialogs form={form} onSelectRider={handleRiderSelection} />
     </div>
   )
 }
