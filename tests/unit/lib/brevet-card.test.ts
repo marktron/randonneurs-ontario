@@ -14,6 +14,7 @@ import {
   hasAnyFlag,
   isDigitalCardEventType,
   isWithinCheckinAcceptanceWindow,
+  resolveRiderStart,
   type CheckinFlags,
   type WrongControlCandidate,
 } from '@/lib/brevet-card'
@@ -336,5 +337,40 @@ describe('computeElapsedHm', () => {
   it('clamps a finish before the start (clock skew) to 0:00', () => {
     const start = new Date('2026-07-04T06:00:00Z')
     expect(computeElapsedHm(start, new Date('2026-07-04T05:59:00Z'))).toBe('0:00')
+  })
+})
+
+describe('resolveRiderStart', () => {
+  const event = { event_date: '2026-08-01', start_time: '08:00' }
+
+  it('uses the event start when no pre-ride is set', () => {
+    const start = resolveRiderStart(event, { pre_ride_date: null, pre_ride_start_time: null })
+    expect(start.getTime()).toBe(computeEventStart('2026-08-01', '08:00').getTime())
+  })
+
+  it('prefers the pre-ride start when set', () => {
+    const start = resolveRiderStart(event, {
+      pre_ride_date: '2026-07-28',
+      pre_ride_start_time: '06:30',
+    })
+    expect(start.getTime()).toBe(computeEventStart('2026-07-28', '06:30').getTime())
+  })
+
+  it('never mixes the pre-ride date with the event time', () => {
+    // The DB CHECK makes date-without-time unrepresentable, but the resolver
+    // must not silently borrow event.start_time if it ever sees one.
+    const start = resolveRiderStart(event, {
+      pre_ride_date: '2026-07-28',
+      pre_ride_start_time: null,
+    })
+    expect(start.getTime()).toBe(computeEventStart('2026-07-28', null).getTime())
+  })
+
+  it('handles TIME values with seconds (HH:MM:SS from Postgres)', () => {
+    const start = resolveRiderStart(event, {
+      pre_ride_date: '2026-07-28',
+      pre_ride_start_time: '06:30:00',
+    })
+    expect(start.getTime()).toBe(computeEventStart('2026-07-28', '06:30').getTime())
   })
 })
