@@ -9,6 +9,7 @@ import { getEventControlsForAdmin } from '@/lib/actions/event-controls'
 import { getEventCheckinsForAdmin } from '@/lib/actions/control-checkins'
 import { EventControlsManager } from '@/components/admin/event-controls-manager'
 import { EventCheckinsGrid, type GridControl } from '@/components/admin/event-checkins-grid'
+import { PreRideManager } from '@/components/admin/pre-ride-manager'
 
 interface BrevetCardAdminPageProps {
   params: Promise<{ id: string }>
@@ -97,6 +98,8 @@ export default async function BrevetCardAdminPage({ params }: BrevetCardAdminPag
         controls={gridControls}
         riders={riders}
       />
+
+      <PreRideManager riders={riders} />
     </div>
   )
 }
