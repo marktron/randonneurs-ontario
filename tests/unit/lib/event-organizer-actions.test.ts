@@ -106,7 +106,7 @@ vi.mock('@/lib/auth/get-admin', () => ({
   requireAdmin: () => mockRequireAdmin(),
 }))
 
-const mockLogAuditEvent = vi.fn(async (..._args: unknown[]) => undefined)
+const mockLogAuditEvent = vi.fn(async () => undefined)
 vi.mock('@/lib/audit-log', () => ({
   logAuditEvent: (...args: unknown[]) => mockLogAuditEvent(...args),
 }))
