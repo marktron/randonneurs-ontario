@@ -108,7 +108,7 @@ vi.mock('@/lib/auth/get-admin', () => ({
 
 const mockLogAuditEvent = vi.fn(async () => undefined)
 vi.mock('@/lib/audit-log', () => ({
-  logAuditEvent: (...args: unknown[]) => mockLogAuditEvent(...args),
+  logAuditEvent: () => mockLogAuditEvent(),
 }))
 
 import { getChapterOrganizerDefaults } from '@/lib/actions/event-organizer'
