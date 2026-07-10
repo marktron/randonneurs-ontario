@@ -111,7 +111,7 @@ vi.mock('@/lib/audit-log', () => ({
   logAuditEvent: () => mockLogAuditEvent(),
 }))
 
-import { getChapterOrganizerDefaults } from '@/lib/actions/event-organizer'
+import { getChapterOrganizerDefaults, saveEventOrganizer } from '@/lib/actions/event-organizer'
 
 function resetAll() {
   vi.clearAllMocks()
@@ -148,5 +148,44 @@ describe('getChapterOrganizerDefaults', () => {
     tables.admins = { selectResponse: { data: [], error: null } }
     const result = await getChapterOrganizerDefaults('chapter-1')
     expect(result).toEqual({ name: '', phone: '', email: '' })
+  })
+})
+
+describe('saveEventOrganizer', () => {
+  beforeEach(resetAll)
+
+  it('persists trimmed organizer fields to the event', async () => {
+    tables.events = { updateResponse: { data: null, error: null } }
+    const result = await saveEventOrganizer('event-1', {
+      name: '  Mark Allen ',
+      phone: ' 416-555-0101 ',
+      email: ' vp@example.ca ',
+    })
+    expect(result.success).toBe(true)
+    const call = fromCalls.find((c) => c.table === 'events' && c.ops.includes('update'))
+    expect(call?.updatePayload).toEqual({
+      organizer_name: 'Mark Allen',
+      organizer_phone: '416-555-0101',
+      organizer_email: 'vp@example.ca',
+    })
+    expect(mockLogAuditEvent).toHaveBeenCalledTimes(1)
+  })
+
+  it('stores empty fields as null', async () => {
+    tables.events = { updateResponse: { data: null, error: null } }
+    const result = await saveEventOrganizer('event-1', { name: '', phone: '   ', email: '' })
+    expect(result.success).toBe(true)
+    const call = fromCalls.find((c) => c.table === 'events' && c.ops.includes('update'))
+    expect(call?.updatePayload).toEqual({
+      organizer_name: null,
+      organizer_phone: null,
+      organizer_email: null,
+    })
+  })
+
+  it('rejects when not an admin', async () => {
+    mockRequireAdmin.mockRejectedValueOnce(new Error('Unauthorized'))
+    const result = await saveEventOrganizer('event-1', { name: 'X', phone: '', email: '' })
+    expect(result.success).toBe(false)
   })
 })
