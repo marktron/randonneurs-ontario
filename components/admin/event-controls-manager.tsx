@@ -133,7 +133,7 @@ export function EventControlsManager({
           lat: control.lat === null ? '' : String(control.lat),
           lng: control.lng === null ? '' : String(control.lng),
           radiusM: String(DEFAULT_CONTROL_RADIUS_M),
-          notes: '',
+          notes: control.notes ?? '',
           checkinCount: 0,
         }))
       )

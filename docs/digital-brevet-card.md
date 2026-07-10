@@ -426,6 +426,10 @@ Card" button on the event admin page instead of two).
   the event's route; reversed permanents get order + distances flipped with
   coordinates kept. Results land in an editable table (name, km, lat/lng,
   radius, notes) — nothing is saved until the admin hits Save.
+- **POI notes.** A control POI's RWGPS `description` field is imported into
+  the control's `notes` (trimmed; blank descriptions and course-point controls
+  import as no note). Notes render on the rider's digital card under each
+  control but are intentionally omitted from the printed control card.
 - **Auto-load when empty.** When the event has no saved controls yet and its
   route has an `rwgps_id`, the manager runs that same RWGPS import
   automatically on mount, so the table is prefilled for review instead of

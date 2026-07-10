@@ -50,6 +50,8 @@ export interface ImportedControl {
   distanceKm: number
   lat: number | null
   lng: number | null
+  /** POI description from RWGPS, pre-filled into the control's notes. */
+  notes: string | null
 }
 
 // ============================================================================
@@ -337,6 +339,7 @@ export async function importEventControlsFromRwgps(
       distanceKm: parseFloat(c.distance),
       lat: c.lat,
       lng: c.lng,
+      notes: c.notes,
     }))
 
     // Reversed permanents ride the route backwards: reverse the order and
