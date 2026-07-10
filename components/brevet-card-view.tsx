@@ -39,7 +39,7 @@ import {
   type WrongControlCandidate,
   type WrongControlDecision,
 } from '@/lib/brevet-card'
-import { CheckCircle2, CloudOff, Loader2, MapPin } from 'lucide-react'
+import { CheckCircle2, CloudOff, Loader2, Mail, MapPin, Phone } from 'lucide-react'
 import { BoldLabelText } from '@/components/bold-label-text'
 import { REGULATIONS_TEXT, EVENT_INFO_TEXT } from '@/types/control-card'
 
@@ -622,22 +622,38 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
       </p>
 
       {(event.organizer.name || event.organizer.phone || event.organizer.email) && (
-        <div className="border rounded-md p-4 space-y-1">
-          <p className="text-xs uppercase tracking-wide text-muted-foreground">Ride Organizer</p>
-          {event.organizer.name && <p className="font-medium">{event.organizer.name}</p>}
-          {event.organizer.phone && (
-            <p className="text-sm">
-              <a className="underline underline-offset-2" href={`tel:${event.organizer.phone}`}>
-                {event.organizer.phone}
-              </a>
-            </p>
+        <div className="rounded-lg border bg-muted/40 p-5">
+          <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
+            Ride Organizer
+          </p>
+          {event.organizer.name && (
+            <p className="mt-1.5 text-lg font-semibold leading-tight">{event.organizer.name}</p>
           )}
-          {event.organizer.email && (
-            <p className="text-sm">
-              <a className="underline underline-offset-2" href={`mailto:${event.organizer.email}`}>
-                {event.organizer.email}
-              </a>
-            </p>
+          {(event.organizer.phone || event.organizer.email) && (
+            <div className="mt-3 flex flex-col gap-2 text-sm">
+              {event.organizer.phone && (
+                <a
+                  href={`tel:${event.organizer.phone}`}
+                  className="group inline-flex w-fit items-center gap-2.5 py-0.5 transition-colors hover:text-primary"
+                >
+                  <Phone className="h-4 w-4 shrink-0 text-muted-foreground transition-colors group-hover:text-primary" />
+                  <span className="tabular-nums underline decoration-border underline-offset-4 transition-colors group-hover:decoration-primary">
+                    {event.organizer.phone}
+                  </span>
+                </a>
+              )}
+              {event.organizer.email && (
+                <a
+                  href={`mailto:${event.organizer.email}`}
+                  className="group inline-flex w-fit items-center gap-2.5 py-0.5 transition-colors hover:text-primary"
+                >
+                  <Mail className="h-4 w-4 shrink-0 text-muted-foreground transition-colors group-hover:text-primary" />
+                  <span className="break-all underline decoration-border underline-offset-4 transition-colors group-hover:decoration-primary">
+                    {event.organizer.email}
+                  </span>
+                </a>
+              )}
+            </div>
           )}
         </div>
       )}
