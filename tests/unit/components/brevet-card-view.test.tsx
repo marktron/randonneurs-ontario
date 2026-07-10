@@ -120,6 +120,7 @@ function makeData(): BrevetCardData {
       distanceKm: 200,
       chapterName: 'Toronto',
       startsAt: startsAt.toISOString(),
+      organizer: { name: null, phone: null, email: null },
     },
     rider: { firstName: 'Ada', lastName: 'Lovelace' },
     controls: [

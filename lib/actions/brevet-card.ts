@@ -114,6 +114,11 @@ export interface BrevetCardData {
     chapterName: string | null
     /** ISO timestamp of this rider's start (the pre-ride start when set). */
     startsAt: string
+    organizer: {
+      name: string | null
+      phone: string | null
+      email: string | null
+    }
   }
   rider: {
     firstName: string
@@ -138,6 +143,9 @@ interface RegistrationWithEvent {
     event_date: string
     start_time: string | null
     distance_km: number
+    organizer_name: string | null
+    organizer_phone: string | null
+    organizer_email: string | null
     chapters: { name: string; slug: string } | null
   }
   riders: { first_name: string; last_name: string; email: string | null }
@@ -165,6 +173,7 @@ export async function getBrevetCardByToken(token: string): Promise<BrevetCardDat
       id, status, rider_id, pre_ride_date, pre_ride_start_time,
       events!inner (
         id, slug, name, status, event_type, event_date, start_time, distance_km,
+        organizer_name, organizer_phone, organizer_email,
         chapters (name, slug)
       ),
       riders!inner (first_name, last_name, email)
@@ -251,6 +260,11 @@ export async function getBrevetCardByToken(token: string): Promise<BrevetCardDat
       distanceKm: event.distance_km,
       chapterName: event.chapters?.name || null,
       startsAt: eventStart.toISOString(),
+      organizer: {
+        name: event.organizer_name,
+        phone: event.organizer_phone,
+        email: event.organizer_email,
+      },
     },
     rider: {
       firstName: reg.riders.first_name,
