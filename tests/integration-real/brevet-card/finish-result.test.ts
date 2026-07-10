@@ -175,8 +175,8 @@ describe('digital brevet card finish flow (real DB)', () => {
     expect(typed.finish_time).not.toBeNull()
     expect(typed.submission_token).toBe(token)
     expect(typed.submitted_at).toBeNull()
-    // SES is unconfigured locally so no real email is sent, but the
-    // single-send claim still runs and stamps this column.
+    // The suite stubs sendEmail (see setup.ts) so no real email is sent, but
+    // the single-send claim still runs and stamps this column.
     expect(typed.finish_email_sent_at).not.toBeNull()
   })
 

@@ -16,6 +16,22 @@ if (typeof globalThis.WebSocket === 'undefined') {
   ;(globalThis as unknown as { WebSocket: typeof WebSocket }).WebSocket = WebSocket
 }
 
+// Never send real email during the real-DB suite. `.env.local` may carry AWS
+// SES credentials plus SES_OVERRIDE_RECIPIENT, which would otherwise route a
+// real message to that inbox for every finish/registration flow these tests
+// exercise. `sendEmail` is the single outbound choke point for all email
+// modules, so stubbing it here silences every flow. The DB-side single-send
+// claim (finish_email_sent_at) is stamped before the send, so those
+// assertions still hold; keep isEmailConfigured/fromEmail real so the code
+// path up to the send runs unchanged.
+vi.mock('@/lib/email/ses', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/email/ses')>('@/lib/email/ses')
+  return {
+    ...actual,
+    sendEmail: vi.fn(async () => {}),
+  }
+})
+
 // Mock Next.js cache module (pass-through, no caching in tests)
 vi.mock('next/cache', () => ({
   revalidatePath: vi.fn(),
