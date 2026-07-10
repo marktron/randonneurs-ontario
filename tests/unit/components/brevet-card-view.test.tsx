@@ -120,6 +120,7 @@ function makeData(): BrevetCardData {
       distanceKm: 200,
       chapterName: 'Toronto',
       startsAt: startsAt.toISOString(),
+      organizer: { name: null, phone: null, email: null },
     },
     rider: { firstName: 'Ada', lastName: 'Lovelace' },
     controls: [
@@ -720,5 +721,35 @@ describe('BrevetCard undo', () => {
     })
     expect(screen.getByRole('button', { name: /^check in$/i })).toBeInTheDocument()
     expect(screen.queryByText(/waiting to sync/i)).not.toBeInTheDocument()
+  })
+})
+
+describe('organizer + fine print', () => {
+  it('renders the organizer block when contact is set', () => {
+    const data = makeData()
+    data.event.organizer = { name: 'Mark Allen', phone: '416-555-0101', email: 'vp@example.ca' }
+    render(<BrevetCard token={TOKEN} initialData={data} />)
+    expect(screen.getByText('Ride Organizer')).toBeTruthy()
+    expect(screen.getByText('Mark Allen')).toBeTruthy()
+    expect(screen.getByRole('link', { name: '416-555-0101' }).getAttribute('href')).toBe(
+      'tel:416-555-0101'
+    )
+    expect(screen.getByRole('link', { name: 'vp@example.ca' }).getAttribute('href')).toBe(
+      'mailto:vp@example.ca'
+    )
+  })
+
+  it('omits the organizer block when no contact is set', () => {
+    const data = makeData()
+    data.event.organizer = { name: null, phone: null, email: null }
+    render(<BrevetCard token={TOKEN} initialData={data} />)
+    expect(screen.queryByText('Ride Organizer')).toBeNull()
+  })
+
+  it('renders the regulations fine print', () => {
+    render(<BrevetCard token={TOKEN} initialData={makeData()} />)
+    expect(screen.getByText(/REGULATIONS:/)).toBeTruthy()
+    expect(screen.getByText(/Les Randonneurs Mondiaux/)).toBeTruthy()
+    expect(screen.getByText(/Emergency Services: 911/)).toBeTruthy()
   })
 })

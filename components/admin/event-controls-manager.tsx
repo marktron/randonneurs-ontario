@@ -28,6 +28,7 @@ import {
   type AdminEventControl,
   type EventControlInput,
 } from '@/lib/actions/event-controls'
+import { saveEventOrganizer, type OrganizerContact } from '@/lib/actions/event-organizer'
 import { DEFAULT_CONTROL_RADIUS_M } from '@/lib/brevet-card'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
@@ -50,6 +51,7 @@ interface EventControlsManagerProps {
   eventId: string
   initialControls: AdminEventControl[]
   hasRwgpsRoute: boolean
+  initialOrganizer: OrganizerContact
 }
 
 // Mobile-only field label for the stacked card layout (< sm)
@@ -79,12 +81,30 @@ export function EventControlsManager({
   eventId,
   initialControls,
   hasRwgpsRoute,
+  initialOrganizer,
 }: EventControlsManagerProps) {
   const router = useRouter()
   const [rows, setRows] = useState<ControlRow[]>(() => initialControls.map(toRow))
   const [isPending, startTransition] = useTransition()
   const [isImporting, setIsImporting] = useState(false)
   const [confirmSaveOpen, setConfirmSaveOpen] = useState(false)
+  const [organizer, setOrganizer] = useState<OrganizerContact>(initialOrganizer)
+  const [isSavingOrganizer, setIsSavingOrganizer] = useState(false)
+
+  const handleSaveOrganizer = async () => {
+    setIsSavingOrganizer(true)
+    try {
+      const result = await saveEventOrganizer(eventId, organizer)
+      if (result.success) {
+        toast.success('Ride organizer saved')
+        router.refresh()
+      } else {
+        toast.error(result.error || 'Failed to save organizer')
+      }
+    } finally {
+      setIsSavingOrganizer(false)
+    }
+  }
 
   const existingWithCheckins = initialControls.filter((c) => c.checkinCount > 0)
   const keptIds = new Set(rows.filter((r) => r.id).map((r) => r.id!))
@@ -380,6 +400,59 @@ export function EventControlsManager({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <div className="space-y-3 border rounded-md p-4">
+        <div>
+          <h2 className="text-xl font-semibold">Ride organizer</h2>
+          <p className="text-sm text-muted-foreground">
+            Shown to riders on the digital brevet card. Prefilled from the chapter VP — edit for
+            this event&apos;s organizer.
+          </p>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-3">
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-muted-foreground" htmlFor="organizer-name">
+              Name
+            </label>
+            <Input
+              id="organizer-name"
+              value={organizer.name}
+              onChange={(e) => setOrganizer((o) => ({ ...o, name: e.target.value }))}
+              placeholder="Organizer name"
+            />
+          </div>
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-muted-foreground" htmlFor="organizer-phone">
+              Phone
+            </label>
+            <Input
+              id="organizer-phone"
+              value={organizer.phone}
+              onChange={(e) => setOrganizer((o) => ({ ...o, phone: e.target.value }))}
+              placeholder="416-555-0101"
+            />
+          </div>
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-muted-foreground" htmlFor="organizer-email">
+              Email
+            </label>
+            <Input
+              id="organizer-email"
+              value={organizer.email}
+              onChange={(e) => setOrganizer((o) => ({ ...o, email: e.target.value }))}
+              placeholder="name@example.ca"
+            />
+          </div>
+        </div>
+        <Button variant="outline" onClick={handleSaveOrganizer} disabled={isSavingOrganizer}>
+          {isSavingOrganizer ? (
+            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+          ) : (
+            <Save className="h-4 w-4 mr-2" />
+          )}
+          Save organizer
+        </Button>
+      </div>
     </div>
   )
 }

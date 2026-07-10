@@ -4,22 +4,7 @@ import { useEffect } from 'react'
 import type { ControlPoint, CardRider, OrganizerInfo, CardEvent } from '@/types/control-card'
 import { REGULATIONS_TEXT, EVENT_INFO_TEXT } from '@/types/control-card'
 import { QRCodeSVG } from 'qrcode.react'
-
-// Helper to render text with bold label (text before first colon)
-function BoldLabelText({ text }: { text: string }) {
-  const colonIndex = text.indexOf(':')
-  if (colonIndex === -1) return <>{text}</>
-
-  const label = text.substring(0, colonIndex + 1)
-  const content = text.substring(colonIndex + 1)
-
-  return (
-    <>
-      <strong>{label}</strong>
-      {content}
-    </>
-  )
-}
+import { BoldLabelText } from '@/components/bold-label-text'
 
 interface ControlCardsPrintProps {
   event: CardEvent

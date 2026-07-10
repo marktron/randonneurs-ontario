@@ -28,6 +28,9 @@ export const mockEvents: Event[] = [
     registration_closes_at: null,
     erw_event_id: null,
     erw_canonical_url: null,
+    organizer_name: null,
+    organizer_phone: null,
+    organizer_email: null,
   },
   {
     id: 'event-2',
@@ -52,6 +55,9 @@ export const mockEvents: Event[] = [
     registration_closes_at: null,
     erw_event_id: null,
     erw_canonical_url: null,
+    organizer_name: null,
+    organizer_phone: null,
+    organizer_email: null,
   },
 ]
 
@@ -78,4 +84,7 @@ export const mockPermanentEvent: Event = {
   registration_closes_at: null,
   erw_event_id: null,
   erw_canonical_url: null,
+  organizer_name: null,
+  organizer_phone: null,
+  organizer_email: null,
 }

@@ -40,6 +40,8 @@ import {
   type WrongControlDecision,
 } from '@/lib/brevet-card'
 import { CheckCircle2, CloudOff, Loader2, MapPin } from 'lucide-react'
+import { BoldLabelText } from '@/components/bold-label-text'
+import { REGULATIONS_TEXT, EVENT_INFO_TEXT } from '@/types/control-card'
 
 const OUTBOX_RETRY_INTERVAL_MS = 45 * 1000
 const GEOLOCATION_TIMEOUT_MS = 12 * 1000
@@ -618,6 +620,48 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
         as usual. Check-ins recorded offline sync automatically; if this page won&apos;t load at a
         control, your paper card is the backup.
       </p>
+
+      {(event.organizer.name || event.organizer.phone || event.organizer.email) && (
+        <div className="border rounded-md p-4 space-y-1">
+          <p className="text-xs uppercase tracking-wide text-muted-foreground">Ride Organizer</p>
+          {event.organizer.name && <p className="font-medium">{event.organizer.name}</p>}
+          {event.organizer.phone && (
+            <p className="text-sm">
+              <a className="underline underline-offset-2" href={`tel:${event.organizer.phone}`}>
+                {event.organizer.phone}
+              </a>
+            </p>
+          )}
+          {event.organizer.email && (
+            <p className="text-sm">
+              <a className="underline underline-offset-2" href={`mailto:${event.organizer.email}`}>
+                {event.organizer.email}
+              </a>
+            </p>
+          )}
+        </div>
+      )}
+
+      <div className="space-y-2 text-xs text-muted-foreground">
+        <p>
+          <BoldLabelText text={REGULATIONS_TEXT.regulations} />
+        </p>
+        <p className="font-medium">{REGULATIONS_TEXT.sagWagon}</p>
+        <p>
+          <BoldLabelText text={REGULATIONS_TEXT.controlCard} />
+        </p>
+        <p>
+          <BoldLabelText text={REGULATIONS_TEXT.conduct} />
+        </p>
+        <p>
+          <BoldLabelText text={REGULATIONS_TEXT.cycle} />
+        </p>
+        <p>
+          <BoldLabelText text={REGULATIONS_TEXT.assistance} />
+        </p>
+        <p>{EVENT_INFO_TEXT.preamble}</p>
+        <p className="font-medium">{EVENT_INFO_TEXT.emergency}</p>
+      </div>
 
       <AlertDialog
         open={manualControl !== null}
