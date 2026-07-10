@@ -6,13 +6,19 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import { EventControlsManager } from '@/components/admin/event-controls-manager'
 import type { AdminEventControl } from '@/lib/actions/event-controls'
+import type { OrganizerContact } from '@/lib/actions/event-organizer'
 
 const mockSaveEventControls = vi.fn()
 const mockImportEventControlsFromRwgps = vi.fn()
+const mockSaveEventOrganizer = vi.fn()
 
 vi.mock('@/lib/actions/event-controls', () => ({
   saveEventControls: (...args: unknown[]) => mockSaveEventControls(...args),
   importEventControlsFromRwgps: (...args: unknown[]) => mockImportEventControlsFromRwgps(...args),
+}))
+
+vi.mock('@/lib/actions/event-organizer', () => ({
+  saveEventOrganizer: (...args: unknown[]) => mockSaveEventOrganizer(...args),
 }))
 
 vi.mock('sonner', () => ({
@@ -47,16 +53,26 @@ function controlNameInputs(): HTMLInputElement[] {
   return screen.getAllByPlaceholderText('Control name') as HTMLInputElement[]
 }
 
+const emptyOrganizer: OrganizerContact = { name: '', phone: '', email: '' }
+
 beforeEach(() => {
   mockSaveEventControls.mockReset().mockResolvedValue({ success: true })
   mockImportEventControlsFromRwgps.mockReset().mockResolvedValue({ success: true, data: [] })
+  mockSaveEventOrganizer.mockReset().mockResolvedValue({ success: true })
 })
 
 describe('EventControlsManager mount auto-load', () => {
   it('auto-imports from RWGPS on mount when there are no controls and a route is linked', async () => {
     mockImportEventControlsFromRwgps.mockResolvedValue({ success: true, data: importedTwo })
 
-    render(<EventControlsManager eventId="event-1" initialControls={[]} hasRwgpsRoute={true} />)
+    render(
+      <EventControlsManager
+        eventId="event-1"
+        initialControls={[]}
+        hasRwgpsRoute={true}
+        initialOrganizer={emptyOrganizer}
+      />
+    )
 
     await waitFor(() => expect(mockImportEventControlsFromRwgps).toHaveBeenCalledWith('event-1'))
     // Imported rows populate the (unsaved) table for review.
@@ -71,6 +87,7 @@ describe('EventControlsManager mount auto-load', () => {
         eventId="event-1"
         initialControls={[makeSaved({ name: 'Start' })]}
         hasRwgpsRoute={true}
+        initialOrganizer={emptyOrganizer}
       />
     )
 
@@ -79,7 +96,14 @@ describe('EventControlsManager mount auto-load', () => {
   })
 
   it('does not auto-import when the event has no RWGPS route', async () => {
-    render(<EventControlsManager eventId="event-1" initialControls={[]} hasRwgpsRoute={false} />)
+    render(
+      <EventControlsManager
+        eventId="event-1"
+        initialControls={[]}
+        hasRwgpsRoute={false}
+        initialOrganizer={emptyOrganizer}
+      />
+    )
 
     // Give any (unexpected) effect a chance to fire.
     await Promise.resolve()
@@ -94,6 +118,7 @@ describe('EventControlsManager mobile card layout', () => {
         eventId="event-1"
         initialControls={[makeSaved({ name: 'Start', checkinCount: 3 })]}
         hasRwgpsRoute={false}
+        initialOrganizer={emptyOrganizer}
       />
     )
 
@@ -121,6 +146,7 @@ describe('EventControlsManager mobile card layout', () => {
         eventId="event-1"
         initialControls={[makeSaved({ name: 'Start', checkinCount: 0 })]}
         hasRwgpsRoute={false}
+        initialOrganizer={emptyOrganizer}
       />
     )
 

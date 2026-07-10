@@ -6,6 +6,7 @@ import { ChevronLeft } from 'lucide-react'
 import { formatControlTime } from '@/lib/brmTimes'
 import { computeEventStart, computeControlWindow, isDigitalCardEventType } from '@/lib/brevet-card'
 import { getEventControlsForAdmin } from '@/lib/actions/event-controls'
+import { getChapterOrganizerDefaults, type OrganizerContact } from '@/lib/actions/event-organizer'
 import { getEventCheckinsForAdmin } from '@/lib/actions/control-checkins'
 import { EventControlsManager } from '@/components/admin/event-controls-manager'
 import { EventCheckinsGrid, type GridControl } from '@/components/admin/event-checkins-grid'
@@ -21,7 +22,9 @@ export default async function BrevetCardAdminPage({ params }: BrevetCardAdminPag
 
   const { data: event } = await getSupabaseAdmin()
     .from('events')
-    .select('id, name, event_date, start_time, distance_km, event_type, status, routes (rwgps_id)')
+    .select(
+      'id, name, event_date, start_time, distance_km, event_type, status, chapter_id, organizer_name, organizer_phone, organizer_email, routes (rwgps_id)'
+    )
     .eq('id', id)
     .single()
 
@@ -37,6 +40,10 @@ export default async function BrevetCardAdminPage({ params }: BrevetCardAdminPag
     distance_km: number
     event_type: string | null
     status: string | null
+    chapter_id: string
+    organizer_name: string | null
+    organizer_phone: string | null
+    organizer_email: string | null
     routes: { rwgps_id: string | null } | null
   }
 
@@ -47,6 +54,18 @@ export default async function BrevetCardAdminPage({ params }: BrevetCardAdminPag
 
   const controls = controlsResult.success && controlsResult.data ? controlsResult.data : []
   const riders = checkinsResult.success && checkinsResult.data ? checkinsResult.data : []
+
+  const hasStoredOrganizer =
+    typedEvent.organizer_name !== null ||
+    typedEvent.organizer_phone !== null ||
+    typedEvent.organizer_email !== null
+  const initialOrganizer: OrganizerContact = hasStoredOrganizer
+    ? {
+        name: typedEvent.organizer_name ?? '',
+        phone: typedEvent.organizer_phone ?? '',
+        email: typedEvent.organizer_email ?? '',
+      }
+    : await getChapterOrganizerDefaults(typedEvent.chapter_id)
 
   const eventStart = computeEventStart(typedEvent.event_date, typedEvent.start_time)
   const gridControls: GridControl[] = controls.map((control) => {
@@ -90,6 +109,7 @@ export default async function BrevetCardAdminPage({ params }: BrevetCardAdminPag
         eventId={typedEvent.id}
         initialControls={controls}
         hasRwgpsRoute={Boolean(typedEvent.routes?.rwgps_id)}
+        initialOrganizer={initialOrganizer}
       />
 
       <EventCheckinsGrid
