@@ -13,6 +13,12 @@ export interface ParsedControl {
 export interface ParsedControlWithCoords extends ParsedControl {
   lat: number | null
   lng: number | null
+  /**
+   * Free-text note for the control, taken from the RWGPS POI `description`
+   * field. Shown on the digital brevet card (never on the printed card).
+   * Null for course-point controls, which carry no description.
+   */
+  notes: string | null
 }
 
 type Source = 'course' | 'poi-control' | 'poi-terminus'
@@ -34,6 +40,7 @@ interface InternalControl {
   source: Source
   lat: number | null
   lng: number | null
+  notes: string | null
 }
 
 // POI types that should be imported as controls. `start` and `finish` are
@@ -58,6 +65,7 @@ interface RwgpsPoi {
   lat?: number
   lng?: number
   poi_type_name?: string
+  description?: string
 }
 
 interface RwgpsTrackPoint {
@@ -172,6 +180,7 @@ function parseCoursePointControls(route: RwgpsRoute): InternalControl[] {
         source: 'course',
         lat,
         lng,
+        notes: null,
       }
     })
 }
@@ -294,6 +303,7 @@ function parsePoiControls(route: RwgpsRoute): InternalControl[] {
       source,
       lat: poi.lat,
       lng: poi.lng,
+      notes: poi.description?.trim() || null,
     })
   }
   return result
@@ -348,6 +358,7 @@ export function extractControlsWithCoords(route: RwgpsRoute): ParsedControlWithC
     distance: c.distanceKm.toFixed(1),
     lat: c.lat,
     lng: c.lng,
+    notes: c.notes,
   }))
 }
 

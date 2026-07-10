@@ -117,7 +117,15 @@ vi.mock('@/lib/actions/event-mutability', () => ({
 const mockFetchRwgpsControls = vi.fn(
   async (
     _rwgpsId: string
-  ): Promise<{ name: string; distance: string; lat: number | null; lng: number | null }[]> => []
+  ): Promise<
+    {
+      name: string
+      distance: string
+      lat: number | null
+      lng: number | null
+      notes: string | null
+    }[]
+  > => []
 )
 vi.mock('@/lib/rwgps', () => ({
   fetchRwgpsControlsWithCoords: (rwgpsId: string) => mockFetchRwgpsControls(rwgpsId),
@@ -554,9 +562,9 @@ describe('importEventControlsFromRwgps', () => {
   it('returns parsed controls in route order for a forward event', async () => {
     setupEvent('Test 200')
     mockFetchRwgpsControls.mockResolvedValue([
-      { name: 'Start', distance: '0.0', lat: 43.6, lng: -79.4 },
-      { name: 'Mid', distance: '98.7', lat: 44.0, lng: -79.0 },
-      { name: 'Finish', distance: '200.0', lat: null, lng: null },
+      { name: 'Start', distance: '0.0', lat: 43.6, lng: -79.4, notes: 'Sign in here' },
+      { name: 'Mid', distance: '98.7', lat: 44.0, lng: -79.0, notes: null },
+      { name: 'Finish', distance: '200.0', lat: null, lng: null, notes: null },
     ])
 
     const result = await importEventControlsFromRwgps('event-1')
@@ -564,18 +572,18 @@ describe('importEventControlsFromRwgps', () => {
     expect(result.success).toBe(true)
     expect(mockFetchRwgpsControls).toHaveBeenCalledWith('12345')
     expect(result.data).toEqual([
-      { name: 'Start', distanceKm: 0, lat: 43.6, lng: -79.4 },
-      { name: 'Mid', distanceKm: 98.7, lat: 44.0, lng: -79.0 },
-      { name: 'Finish', distanceKm: 200, lat: null, lng: null },
+      { name: 'Start', distanceKm: 0, lat: 43.6, lng: -79.4, notes: 'Sign in here' },
+      { name: 'Mid', distanceKm: 98.7, lat: 44.0, lng: -79.0, notes: null },
+      { name: 'Finish', distanceKm: 200, lat: null, lng: null, notes: null },
     ])
   })
 
   it('reverses control order and flips distances for a reversed event, keeping coordinates', async () => {
     setupEvent('Test 200 (Reversed)', 200)
     mockFetchRwgpsControls.mockResolvedValue([
-      { name: 'Start', distance: '0.0', lat: 43.6, lng: -79.4 },
-      { name: 'Mid', distance: '49.9', lat: 44.0, lng: -79.0 },
-      { name: 'Finish', distance: '200.0', lat: 45.0, lng: -78.0 },
+      { name: 'Start', distance: '0.0', lat: 43.6, lng: -79.4, notes: 'Depart A&W' },
+      { name: 'Mid', distance: '49.9', lat: 44.0, lng: -79.0, notes: null },
+      { name: 'Finish', distance: '200.0', lat: 45.0, lng: -78.0, notes: 'Final control' },
     ])
 
     const result = await importEventControlsFromRwgps('event-1')
@@ -583,10 +591,10 @@ describe('importEventControlsFromRwgps', () => {
     expect(result.success).toBe(true)
     expect(result.data).toEqual([
       // Order reversed; distance flipped to (total - original), rounded to
-      // 0.1 km; each control keeps its physical coordinates.
-      { name: 'Finish', distanceKm: 0, lat: 45.0, lng: -78.0 },
-      { name: 'Mid', distanceKm: 150.1, lat: 44.0, lng: -79.0 },
-      { name: 'Start', distanceKm: 200, lat: 43.6, lng: -79.4 },
+      // 0.1 km; each control keeps its physical coordinates and notes.
+      { name: 'Finish', distanceKm: 0, lat: 45.0, lng: -78.0, notes: 'Final control' },
+      { name: 'Mid', distanceKm: 150.1, lat: 44.0, lng: -79.0, notes: null },
+      { name: 'Start', distanceKm: 200, lat: 43.6, lng: -79.4, notes: 'Depart A&W' },
     ])
   })
 

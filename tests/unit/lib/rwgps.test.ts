@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import {
   cleanControlName,
   extractControls,
+  extractControlsWithCoords,
   fetchRwgpsControls,
   fetchRwgpsRoute,
   parseRwgpsRouteRef,
@@ -291,6 +292,65 @@ describe('extractControls', () => {
       ],
     })
     expect(result).toEqual([{ name: 'Good', distance: '10.0' }])
+  })
+})
+
+describe('extractControlsWithCoords notes', () => {
+  it("carries a control POI's description into notes", () => {
+    const result = extractControlsWithCoords({
+      track_points: trackPoints,
+      points_of_interest: [
+        {
+          name: 'CTL Tim Hortons',
+          lat: 43.05,
+          lng: -81.0,
+          poi_type_name: 'control',
+          description: 'Get your card signed at the counter.',
+        },
+      ],
+    })
+    expect(result).toEqual([
+      {
+        name: 'Tim Hortons',
+        distance: '5.0',
+        lat: 43.05,
+        lng: -81.0,
+        notes: 'Get your card signed at the counter.',
+      },
+    ])
+  })
+
+  it('trims description whitespace and treats an empty description as null notes', () => {
+    const result = extractControlsWithCoords({
+      track_points: trackPoints,
+      points_of_interest: [
+        {
+          name: 'CTL Trimmed',
+          lat: 43.05,
+          lng: -81.0,
+          poi_type_name: 'control',
+          description: '  spaced out  ',
+        },
+        {
+          name: 'CTL Blank',
+          lat: 43.1,
+          lng: -81.0,
+          poi_type_name: 'control',
+          description: '   ',
+        },
+      ],
+    })
+    expect(result).toEqual([
+      { name: 'Trimmed', distance: '5.0', lat: 43.05, lng: -81.0, notes: 'spaced out' },
+      { name: 'Blank', distance: '10.0', lat: 43.1, lng: -81.0, notes: null },
+    ])
+  })
+
+  it('sets notes to null for course-point controls (no description field)', () => {
+    const result = extractControlsWithCoords({
+      course_points: [{ n: 'CTL Start', d: 0, t: 'Control' }],
+    })
+    expect(result).toEqual([{ name: 'Start', distance: '0.0', lat: null, lng: null, notes: null }])
   })
 })
 
