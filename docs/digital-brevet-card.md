@@ -217,6 +217,11 @@ Design notes:
   it via the manage page). See "Finish flow: result pre-fill & track
   follow-up" below for what happens to the result row and email at that
   moment.
+- Beneath the check-ins (and any finish banner), the card shows the event's
+  **ride organizer** contact — name, and phone/email as `tel:`/`mailto:`
+  links — when the admin has set one; hidden entirely otherwise. See §9 for
+  where that's set, and "Regulations fine print" below for the static block
+  shown under it.
 
 ### Finish flow: result pre-fill & track follow-up
 
@@ -348,6 +353,16 @@ as `isFinalControl` — `finish-result.ts` never queries `event_controls`.
   double-email every pending rider; failing the whole run closed avoids
   that.
 
+### Regulations fine print
+
+Below the ride organizer block, the card renders the same regulations text
+that appears on the printed control card: the `REGULATIONS_TEXT` /
+`EVENT_INFO_TEXT` constants (`types/control-card.ts`), rendered through the
+shared `BoldLabelText` helper (`components/bold-label-text.tsx`) that the
+printed card also uses. It's sourced from one place so the two can't drift,
+and there's no per-event override — unlike the organizer contact, this block
+never changes between events.
+
 ### Server actions: `lib/actions/brevet-card.ts` (`'use server'`)
 
 - `getBrevetCardByToken(token)` — registration + event + controls +
@@ -442,6 +457,28 @@ Card" button on the event admin page instead of two).
   rows are the single source of truth for control points. The printed
   control-cards form (`app/admin/events/[id]/control-cards`) prefills from
   them, so controls are defined once. See §16.
+
+### Ride organizer
+
+- Below the controls table, a **Ride organizer** panel (Name / Phone / Email
+  - Save) sets the contact riders see on their digital card. Persisted on
+    the event itself: nullable `organizer_name`, `organizer_phone`,
+    `organizer_email` columns on `events` (migration
+    `20260710120000_add_event_organizer.sql`).
+- `saveEventOrganizer(eventId, organizer)`
+  (`lib/actions/event-organizer.ts`) requires an admin session, trims each
+  field (empty → `NULL`), writes the three columns, and audit-logs the
+  update.
+- **Prefill.** If the event already has a stored organizer, the form loads
+  it. Otherwise `getChapterOrganizerDefaults(chapterId)` seeds it from the
+  chapter's earliest `chapter_admin` row (in practice, the chapter VP) —
+  empty strings if the chapter has none. Prefill is only a starting point:
+  saving writes the event's own record, so a later change to the chapter
+  admin roster doesn't retroactively change an already-set event.
+- Shown on the rider card beneath the check-ins (see §7). The **printed**
+  control card is unaffected — it still takes the organizer name typed in
+  by the logged-in admin at print time, not this stored field (the digital
+  card has no admin session to draw that from).
 
 ### Live grid (bottom section)
 
@@ -566,6 +603,7 @@ Each step lands as its own commit; the branch stays shippable throughout.
 | Rider actions           | `lib/actions/brevet-card.ts` — `getBrevetCardByToken`, `checkInAtControl`, `undoCheckin` (both also decide `isFinalControl` for the finish flow, folded into an existing query)                                                                                                                                                                                                                                                                                                                    |
 | Finish pre-fill & email | `lib/events/finish-result.ts` — `handleFinishIfFinalControl`, `revertFinishIfFinalControl`; `lib/email/send-ride-complete-email.ts` + `lib/email/send-result-submission-email.ts` (share send scaffolding via `lib/email/send-result-flow-email.ts`) + `buildRideCompleteEmail` template; `results.finish_email_sent_at` (migration `20260705120000_add_finish_email_sent_at.sql`) and `results.prefilled_at` (migration `20260705130000_add_prefilled_at.sql`) columns                            |
 | Admin controls actions  | `lib/actions/event-controls.ts` — CRUD + RWGPS import                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| Ride organizer          | `lib/actions/event-organizer.ts` — `getChapterOrganizerDefaults`, `saveEventOrganizer`; `events.organizer_name/phone/email` columns (migration `20260710120000_add_event_organizer.sql`); admin panel in `components/admin/event-controls-manager.tsx`. See §9, §7.                                                                                                                                                                                                                                |
 | Shared controls (print) | `components/admin/control-cards-form.tsx` prefills/saves back `event_controls`; matching + drift helpers in `lib/controlPoints.ts` (`matchImportedControls`, `controlsInSync`). See §16.                                                                                                                                                                                                                                                                                                           |
 | Admin check-in actions  | `lib/actions/control-checkins.ts` — grid read, set/delete corrections                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | RWGPS coordinates       | `lib/rwgps.ts` — `extractControlsWithCoords`, `fetchRwgpsControlsWithCoords`                                                                                                                                                                                                                                                                                                                                                                                                                       |
