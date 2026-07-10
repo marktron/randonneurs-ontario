@@ -149,6 +149,11 @@ describe('getChapterOrganizerDefaults', () => {
     const result = await getChapterOrganizerDefaults('chapter-1')
     expect(result).toEqual({ name: '', phone: '', email: '' })
   })
+
+  it('throws when not an admin', async () => {
+    mockRequireAdmin.mockRejectedValueOnce(new Error('Unauthorized'))
+    await expect(getChapterOrganizerDefaults('chapter-1')).rejects.toThrow('Unauthorized')
+  })
 })
 
 describe('saveEventOrganizer', () => {
@@ -187,5 +192,6 @@ describe('saveEventOrganizer', () => {
     mockRequireAdmin.mockRejectedValueOnce(new Error('Unauthorized'))
     const result = await saveEventOrganizer('event-1', { name: 'X', phone: '', email: '' })
     expect(result.success).toBe(false)
+    expect(fromCalls.find((c) => c.table === 'events' && c.ops.includes('update'))).toBeUndefined()
   })
 })

@@ -24,6 +24,7 @@ export interface OrganizerContact {
  * strings (never throws) when the chapter has no chapter_admin.
  */
 export async function getChapterOrganizerDefaults(chapterId: string): Promise<OrganizerContact> {
+  await requireAdmin()
   const empty = { name: '', phone: '', email: '' }
   if (!chapterId) return empty
 
