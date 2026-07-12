@@ -622,7 +622,7 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
                   data-testid="control-stamp"
                   aria-hidden="true"
                   className={cn(
-                    'pointer-events-none select-none absolute right-4 top-9 mix-blend-multiply dark:mix-blend-screen',
+                    'pointer-events-none select-none absolute right-4 top-9 bottom-0 flex items-center mix-blend-multiply dark:mix-blend-screen',
                     sessionCheckins.has(control.id) &&
                       'animate-stamp-down motion-reduce:animate-none'
                   )}
