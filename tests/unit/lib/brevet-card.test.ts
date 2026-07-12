@@ -439,6 +439,6 @@ describe('stampOffset', () => {
         JSON.stringify(stampOffset(id))
       )
     )
-    expect(offsets.size).toBeGreaterThanOrEqual(1)
+    expect(offsets.size).toBeGreaterThanOrEqual(3)
   })
 })

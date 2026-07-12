@@ -305,20 +305,22 @@ export function stampRotation(controlId: string): number {
 
 /**
  * Deterministic per-control position jitter for the check-in stamp, in
- * whole pixels: dx in [-4, 4], dy in [-3, 3]. Uses independent slices of
- * the same djb2 hash as stampRotation so a control's tilt and offset are
- * uncorrelated — hand stamps don't land in the same spot every time.
- * Same hydration-safety rules as stampRotation: never random at render.
+ * whole pixels: dx in [-4, 4], dy in [-3, 3]. Uses a reverse-iterated djb2
+ * hash, independent of stampRotation's forward hash, so a control's tilt and
+ * offset are uncorrelated — hand stamps don't land in the same spot every
+ * time. Same hydration-safety rules as stampRotation: never random at render.
  */
 export function stampOffset(controlId: string): { dx: number; dy: number } {
+  // djb2 over the REVERSED id: ids differing only in a trailing character
+  // (sequential fixtures, similar slugs) diverge in the first iteration,
+  // so the difference multiplies through every bit — independent of
+  // stampRotation's forward hash, which confines such deltas to low bits.
   let hash = 5381
-  for (let i = 0; i < controlId.length; i++) {
+  for (let i = controlId.length - 1; i >= 0; i--) {
     hash = (hash * 33) ^ controlId.charCodeAt(i)
   }
   const h = hash >>> 0
-  // stampRotation consumes h % 1601; take higher-order slices here so the
-  // offset doesn't track the rotation.
-  const dx = (Math.floor(h / 1601) % 9) - 4 // [-4, 4]
-  const dy = (Math.floor(h / (1601 * 9)) % 7) - 3 // [-3, 3]
+  const dx = (h % 9) - 4 // [-4, 4]
+  const dy = (Math.floor(h / 9) % 7) - 3 // [-3, 3]
   return { dx, dy }
 }
