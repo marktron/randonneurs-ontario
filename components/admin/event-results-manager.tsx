@@ -43,6 +43,7 @@ import {
   Clipboard,
   ClipboardCheck,
   Link2,
+  Stamp,
 } from 'lucide-react'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import {
@@ -70,6 +71,8 @@ import {
 import { cn, formatFinishTime, buildParticipantMailtoUrl, buildRiderInfoText } from '@/lib/utils'
 import { SubmitResultsButton } from './submit-results-button'
 import { AddRiderDialog } from './add-rider-dialog'
+import { CheckinEvidenceDialog } from './checkin-evidence-dialog'
+import type { CheckinEvidence, CheckinEvidenceControl } from '@/lib/checkin-evidence'
 import { toast } from 'sonner'
 
 interface Registration {
@@ -161,6 +164,8 @@ interface EventResultsManagerProps {
   cancelledRegistrations: CancelledRegistration[]
   results: Result[]
   firstTimeRiderIds: string[]
+  /** riderId → per-control digital check-ins; riders with none are absent. */
+  checkinEvidence?: CheckinEvidence
 }
 
 // Mobile-only field label for the stacked card layout (< sm)
@@ -185,6 +190,7 @@ interface RiderRowProps {
   distanceKm: number
   registrationId: string | null
   isFirstTimeRider: boolean
+  checkinControls: CheckinEvidenceControl[] | null
   onRegistrationCancelled: (
     registrationId: string,
     riderName: string,
@@ -275,6 +281,7 @@ function RiderRow({
   distanceKm,
   registrationId,
   isFirstTimeRider,
+  checkinControls,
   onRegistrationCancelled,
 }: RiderRowProps) {
   const [isPending, startTransition] = useTransition()
@@ -289,16 +296,19 @@ function RiderRow({
     result?.distance_km?.toString() ?? distanceKm.toString()
   )
   const [showSaved, setShowSaved] = useState(false)
+  const [showCheckins, setShowCheckins] = useState(false)
   const isFleche = eventType === 'fleche'
 
   const riderName = `${participant.firstName} ${participant.lastName}`
-  const hasEvidence = !!(
-    result &&
-    (result.gpx_url ||
-      result.gpx_file_path ||
-      result.control_card_front_path ||
-      result.control_card_back_path)
-  )
+  const hasCheckins = !!checkinControls && checkinControls.length > 0
+  const hasEvidence =
+    !!(
+      result &&
+      (result.gpx_url ||
+        result.gpx_file_path ||
+        result.control_card_front_path ||
+        result.control_card_back_path)
+    ) || hasCheckins
   const hasNotes = !!(participant.registrationNotes || result?.rider_notes)
 
   const flashSaved = useCallback(() => {
@@ -619,10 +629,10 @@ function RiderRow({
         )}
       >
         <span className={MOBILE_LABEL}>Evidence</span>
-        {/* Evidence - Strava/GPX links, Control Card thumbnails */}
-        {result && hasEvidence ? (
+        {/* Evidence - Strava/GPX links, Control Card thumbnails, digital check-ins */}
+        {hasEvidence ? (
           <div className="flex items-center gap-1.5">
-            {result.gpx_url && (
+            {result?.gpx_url && (
               <a
                 href={result.gpx_url}
                 target="_blank"
@@ -633,7 +643,7 @@ function RiderRow({
                 <Globe className="h-5 w-5" />
               </a>
             )}
-            {result.gpx_file_path && (
+            {result?.gpx_file_path && (
               <a
                 href={`${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/rider-submissions/${result.gpx_file_path}`}
                 target="_blank"
@@ -644,7 +654,7 @@ function RiderRow({
                 <FileText className="h-4 w-4" />
               </a>
             )}
-            {result.control_card_front_path && (
+            {result?.control_card_front_path && (
               <a
                 href={`${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/rider-submissions/${result.control_card_front_path}`}
                 target="_blank"
@@ -662,7 +672,7 @@ function RiderRow({
                 />
               </a>
             )}
-            {result.control_card_back_path && (
+            {result?.control_card_back_path && (
               <a
                 href={`${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/rider-submissions/${result.control_card_back_path}`}
                 target="_blank"
@@ -680,9 +690,28 @@ function RiderRow({
                 />
               </a>
             )}
+            {hasCheckins && (
+              <button
+                type="button"
+                onClick={() => setShowCheckins(true)}
+                title="View digital check-ins"
+                className="text-muted-foreground hover:text-primary"
+              >
+                <Stamp className="h-5 w-5" />
+              </button>
+            )}
           </div>
         ) : (
           <span className="text-xs text-muted-foreground">—</span>
+        )}
+        {hasCheckins && checkinControls && (
+          <CheckinEvidenceDialog
+            riderName={riderName}
+            eventId={eventId}
+            controls={checkinControls}
+            open={showCheckins}
+            onOpenChange={setShowCheckins}
+          />
         )}
       </TableCell>
       <TableCell
@@ -803,6 +832,7 @@ export function EventResultsManager({
   cancelledRegistrations: initialCancelledRegistrations,
   results,
   firstTimeRiderIds,
+  checkinEvidence = {},
 }: EventResultsManagerProps) {
   const isFleche = eventType === 'fleche'
   const firstTimeRiderIdSet = new Set(firstTimeRiderIds)
@@ -1002,6 +1032,7 @@ export function EventResultsManager({
                     distanceKm={distanceKm}
                     registrationId={participant.hasRegistration ? participant.id : null}
                     isFirstTimeRider={firstTimeRiderIdSet.has(participant.riderId)}
+                    checkinControls={checkinEvidence[participant.riderId] ?? null}
                     onRegistrationCancelled={handleRegistrationCancelled}
                   />
                 ))}

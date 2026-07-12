@@ -4,8 +4,10 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, within, fireEvent, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { EventResultsManager } from '@/components/admin/event-results-manager'
 import { updateResult } from '@/lib/actions/results'
+import type { CheckinEvidence } from '@/lib/checkin-evidence'
 
 // Mock server actions used by the rider rows so the component renders cleanly
 vi.mock('@/lib/actions/results', () => ({
@@ -390,5 +392,91 @@ describe('EventResultsManager — rider phone', () => {
 
     const row = screen.getByText('Quinn Quiet').closest('tr')!
     expect(within(row).queryByText(/tel:/)).toBeNull()
+  })
+})
+
+describe('EventResultsManager — check-in evidence', () => {
+  const NO_FLAGS = {
+    outOfRadius: false,
+    noGps: false,
+    early: false,
+    late: false,
+    lateSync: false,
+  }
+
+  const evidence: CheckinEvidence = {
+    'rider-1': [
+      {
+        name: 'Start',
+        distanceKm: 0,
+        checkin: {
+          checkedInAt: '2026-05-15T12:00:00Z',
+          method: 'gps',
+          flags: NO_FLAGS,
+          distanceToControlM: 40,
+          accuracyM: 12,
+          note: null,
+        },
+      },
+      { name: 'Finish', distanceKm: 200, checkin: null },
+    ],
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('shows the stamp for a rider with check-ins even without a result row', () => {
+    const registration = makeRegistration({
+      riderId: 'rider-1',
+      firstName: 'Anne',
+      lastName: 'Rider',
+    })
+    render(
+      <EventResultsManager
+        {...baseProps}
+        registrations={[registration]}
+        firstTimeRiderIds={[]}
+        checkinEvidence={evidence}
+      />
+    )
+    expect(screen.getByTitle('View digital check-ins')).toBeTruthy()
+  })
+
+  it('shows no stamp for a rider without check-ins', () => {
+    const registration = makeRegistration({
+      riderId: 'rider-2',
+      firstName: 'Bob',
+      lastName: 'Nocard',
+    })
+    render(
+      <EventResultsManager
+        {...baseProps}
+        registrations={[registration]}
+        firstTimeRiderIds={[]}
+        checkinEvidence={evidence}
+      />
+    )
+    expect(screen.queryByTitle('View digital check-ins')).toBeNull()
+  })
+
+  it('opens the check-in dialog on click', async () => {
+    const user = userEvent.setup()
+    const registration = makeRegistration({
+      riderId: 'rider-1',
+      firstName: 'Anne',
+      lastName: 'Rider',
+    })
+    render(
+      <EventResultsManager
+        {...baseProps}
+        registrations={[registration]}
+        firstTimeRiderIds={[]}
+        checkinEvidence={evidence}
+      />
+    )
+    await user.click(screen.getByTitle('View digital check-ins'))
+    expect(screen.getByText('Digital card check-ins')).toBeTruthy()
+    expect(screen.getByText('Start — 0 km')).toBeTruthy()
   })
 })

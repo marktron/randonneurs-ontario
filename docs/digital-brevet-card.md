@@ -480,6 +480,17 @@ Card" button on the event admin page instead of two).
   by the logged-in admin at print time, not this stored field (the digital
   card has no admin session to draw that from).
 
+### Check-in evidence in the results table
+
+On the admin event page, riders with at least one digital check-in show a
+stamp icon in the results table's **Evidence** column — including riders
+with no result row yet (e.g. an abandon with no DNF entered). Clicking it
+opens a read-only summary: one row per control with the check-in time
+(Toronto), method badge for manual/admin entries, warning badges (early,
+late, radius, no gps, late sync), GPS distance to the control, and any
+note. Corrections are not made here — the dialog links to the Digital
+Cards grid, which owns editing.
+
 ### Live grid (bottom section)
 
 - Riders (rows) × controls (columns); cells show time + flag badges
@@ -606,6 +617,7 @@ Each step lands as its own commit; the branch stays shippable throughout.
 | Ride organizer          | `lib/actions/event-organizer.ts` — `getChapterOrganizerDefaults`, `saveEventOrganizer`; `events.organizer_name/phone/email` columns (migration `20260710120000_add_event_organizer.sql`); admin panel in `components/admin/event-controls-manager.tsx`. See §9, §7.                                                                                                                                                                                                                                |
 | Shared controls (print) | `components/admin/control-cards-form.tsx` prefills/saves back `event_controls`; matching + drift helpers in `lib/controlPoints.ts` (`matchImportedControls`, `controlsInSync`). See §16.                                                                                                                                                                                                                                                                                                           |
 | Admin check-in actions  | `lib/actions/control-checkins.ts` — grid read, set/delete corrections                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| Check-in evidence modal | `lib/checkin-evidence.ts` — shared check-in labels and evidence join helper; `components/admin/checkin-evidence-dialog.tsx` — read-only evidence dialog on admin event page. See §9.                                                                                                                                                                                                                                                                                                               |
 | RWGPS coordinates       | `lib/rwgps.ts` — `extractControlsWithCoords`, `fetchRwgpsControlsWithCoords`                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | Rider page              | `app/card/[token]/page.tsx` + `components/brevet-card-view.tsx` (outbox lives here)                                                                                                                                                                                                                                                                                                                                                                                                                |
 | Admin page              | `app/admin/events/[id]/brevet-card/page.tsx` + `components/admin/event-controls-manager.tsx` + `components/admin/event-checkins-grid.tsx` + `components/admin/checkin-map.tsx` (correction-dialog map)                                                                                                                                                                                                                                                                                             |
