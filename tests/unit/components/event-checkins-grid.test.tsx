@@ -5,11 +5,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import {
-  EventCheckinsGrid,
-  formatCheckinDistanceLabel,
-  type GridControl,
-} from '@/components/admin/event-checkins-grid'
+import { EventCheckinsGrid, type GridControl } from '@/components/admin/event-checkins-grid'
+import { formatCheckinDistanceLabel } from '@/lib/checkin-evidence'
 import type { AdminCheckin, AdminCheckinGridRider } from '@/lib/actions/control-checkins'
 import { toast } from 'sonner'
 

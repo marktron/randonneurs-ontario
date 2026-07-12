@@ -28,7 +28,7 @@ import {
   type AdminCheckin,
   type AdminCheckinGridRider,
 } from '@/lib/actions/control-checkins'
-import type { CheckinFlags } from '@/lib/brevet-card'
+import { FLAG_LABELS, formatCheckinDistanceLabel } from '@/lib/checkin-evidence'
 import { cn } from '@/lib/utils'
 import { formatControlTime } from '@/lib/brmTimes'
 import { toast } from 'sonner'
@@ -47,40 +47,12 @@ export interface GridControl {
   radiusM: number
 }
 
-/**
- * Formats the "GPS fix recorded X from the control" caption shown in the
- * correction dialog: metres under 1 km ("320 m"), one-decimal km at/above
- * ("2.4 km"), with accuracy appended when known.
- */
-export function formatCheckinDistanceLabel(
-  distanceToControlM: number,
-  accuracyM: number | null
-): string {
-  const distanceLabel =
-    distanceToControlM < 1000
-      ? `${Math.round(distanceToControlM)} m`
-      : `${(distanceToControlM / 1000).toFixed(1)} km`
-  const accuracyLabel =
-    accuracyM != null && Number.isFinite(accuracyM) && accuracyM > 0
-      ? ` (±${Math.round(accuracyM)} m accuracy)`
-      : ''
-  return `GPS fix recorded ${distanceLabel} from the control${accuracyLabel}`
-}
-
 interface EventCheckinsGridProps {
   eventId: string
   eventSubmitted: boolean
   controls: GridControl[]
   riders: AdminCheckinGridRider[]
 }
-
-const FLAG_LABELS: Array<{ key: keyof CheckinFlags; label: string; title: string }> = [
-  { key: 'outOfRadius', label: 'radius', title: 'GPS fix was outside the control radius' },
-  { key: 'noGps', label: 'no gps', title: 'Checked in without a GPS fix' },
-  { key: 'early', label: 'early', title: 'Before the control opened' },
-  { key: 'late', label: 'late', title: 'After the control closed' },
-  { key: 'lateSync', label: 'late sync', title: 'Synced well after the tap (offline outbox)' },
-]
 
 /** ISO → value usable in a datetime-local input, in the browser's timezone. */
 function isoToLocalInputValue(iso: string): string {
