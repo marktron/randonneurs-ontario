@@ -572,9 +572,9 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
                       now !== null &&
                       now - new Date(checkin.receivedAt).getTime() < RIDER_UNDO_WINDOW_MS && (
                         <Button
-                          variant="outline"
+                          variant="secondary"
                           size="sm"
-                          className="relative z-10 mt-1.5 h-8 px-3 text-xs text-muted-foreground"
+                          className="relative z-10 mt-1.5 h-8 border border-border px-3 text-xs"
                           disabled={undoingControlId === control.id}
                           onClick={() => handleUndo(control)}
                         >
@@ -589,9 +589,9 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
                       Waiting to sync
                     </p>
                     <Button
-                      variant="outline"
+                      variant="secondary"
                       size="sm"
-                      className="relative z-10 mt-1.5 h-8 px-3 text-xs text-muted-foreground"
+                      className="relative z-10 mt-1.5 h-8 border border-border px-3 text-xs"
                       onClick={() => handleUndo(control)}
                     >
                       Undo
