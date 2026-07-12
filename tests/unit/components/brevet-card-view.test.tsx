@@ -775,7 +775,12 @@ describe('check-in stamp', () => {
     const img = stamp.querySelector('img')!
     expect(img.getAttribute('src')).toBe('/stamp-green.svg')
     expect(img.getAttribute('alt')).toBe('')
-    expect(img.style.transform).toMatch(/^rotate\(-?[\d.]+deg\)$/)
+    expect(img.style.transform).toMatch(/^translate\(-?\d+px, -?\d+px\) rotate\(-?[\d.]+deg\)$/)
+    // Overlap layout: the stamp is absolutely positioned so the notes text
+    // flows full-width under it, and blends like ink (screen in dark mode).
+    expect(stamp.className).toContain('absolute')
+    expect(stamp.className).toContain('mix-blend-multiply')
+    expect(stamp.className).toContain('dark:mix-blend-screen')
   })
 
   it('shows no stamp for a control without a check-in', () => {

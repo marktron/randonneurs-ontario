@@ -203,10 +203,11 @@ Design notes:
   exactly like a paper card with an odd time written on it. (Blocking would
   strand riders on edge cases and clock skew.)
 - **Check-in stamp effect**: Checked-in controls are marked with a faded
-  green club-logo stamp (`public/stamp-green.svg`), tilted a few degrees
-  per control — seeded
-  deterministically from the control id so the server render and the
-  hydrated client agree — like a hand-stamped paper card. Fresh check-ins
+  green club-logo stamp (`public/stamp-green.svg`), overlapping the row text
+  like ink (multiply-blended in light mode, screen in dark), tilted and
+  nudged a few degrees/pixels per control — both seeded deterministically
+  from the control id so the server render and the hydrated client agree —
+  like a hand-stamped paper card. Fresh check-ins
   "thunk" in with a 300 ms scale/fade (suppressed under
   `prefers-reduced-motion`); queued offline check-ins are stamped
   immediately, before the server confirms. The stamp is decorative

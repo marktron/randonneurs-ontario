@@ -36,6 +36,7 @@ import {
   RIDER_UNDO_WINDOW_MS,
   detectWrongControl,
   formatDistanceKm,
+  stampOffset,
   stampRotation,
   type WrongControlCandidate,
   type WrongControlDecision,
@@ -523,9 +524,16 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
           const queued = !checkin && queuedControlIds.has(control.id)
           const isNext = control.id === nextControlId
           const isLocating = locatingControlId === control.id
+          const stamped = !!(checkin || queued)
 
           return (
-            <li key={control.id} className="p-4 flex items-start justify-between gap-4">
+            <li
+              key={control.id}
+              className={cn(
+                'relative p-4 flex items-start justify-between gap-4',
+                stamped && 'min-h-36'
+              )}
+            >
               <div className="min-w-0">
                 <p className="font-medium">
                   {control.name}
@@ -605,29 +613,31 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
                     Check in
                   </Button>
                 )}
-
-                {(checkin || queued) && (
-                  <span
-                    data-testid="control-stamp"
-                    aria-hidden="true"
-                    className={cn(
-                      'pointer-events-none -mt-1 block select-none',
-                      sessionCheckins.has(control.id) &&
-                        'animate-stamp-down motion-reduce:animate-none'
-                    )}
-                  >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src="/stamp-green.svg"
-                      alt=""
-                      width={144}
-                      height={99}
-                      className="inline-block w-36"
-                      style={{ transform: `rotate(${stampRotation(control.id)}deg)` }}
-                    />
-                  </span>
-                )}
               </div>
+
+              {stamped && (
+                <span
+                  data-testid="control-stamp"
+                  aria-hidden="true"
+                  className={cn(
+                    'pointer-events-none select-none absolute right-4 top-9 mix-blend-multiply dark:mix-blend-screen',
+                    sessionCheckins.has(control.id) &&
+                      'animate-stamp-down motion-reduce:animate-none'
+                  )}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src="/stamp-green.svg"
+                    alt=""
+                    width={128}
+                    height={88}
+                    className="w-32 max-w-none"
+                    style={{
+                      transform: `translate(${stampOffset(control.id).dx}px, ${stampOffset(control.id).dy}px) rotate(${stampRotation(control.id)}deg)`,
+                    }}
+                  />
+                </span>
+              )}
             </li>
           )
         })}

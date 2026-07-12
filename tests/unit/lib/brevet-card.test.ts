@@ -432,8 +432,8 @@ describe('stampOffset', () => {
   })
 
   it('is not perfectly correlated with rotation across ids', () => {
-    // Different hash slices: ids with distinct rotations should not all
-    // share one offset. (Loose check — collisions are legal.)
+    // Independent reverse-iterated hash: similar ids must not all share one
+    // offset. (Loose check — collisions are legal.)
     const offsets = new Set(
       ['ctrl-1', 'ctrl-2', 'ctrl-3', 'ctrl-4', 'ctrl-5', 'ctrl-6'].map((id) =>
         JSON.stringify(stampOffset(id))
