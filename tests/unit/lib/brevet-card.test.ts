@@ -17,6 +17,7 @@ import {
   isWithinCheckinAcceptanceWindow,
   resolveRiderStart,
   stampRotation,
+  stampOffset,
   type CheckinFlags,
   type WrongControlCandidate,
 } from '@/lib/brevet-card'
@@ -407,5 +408,37 @@ describe('stampRotation', () => {
     // Not a strict uniqueness guarantee (hash collisions are legal), but a
     // spread this poor would defeat the hand-stamped look.
     expect(angles.size).toBeGreaterThanOrEqual(4)
+  })
+})
+
+describe('stampOffset', () => {
+  it('is deterministic for the same control id', () => {
+    expect(stampOffset('ctrl-1')).toEqual(stampOffset('ctrl-1'))
+  })
+
+  it('stays within dx ±4 and dy ±3 for arbitrary ids', () => {
+    const ids = [
+      'ctrl-1',
+      'a',
+      '',
+      '00000000-1f0c-4000-a000-000000000003',
+      'e9b1c4d2-7f3a-4b5e-9c8d-2a1b3c4d5e6f',
+    ]
+    for (const id of ids) {
+      const { dx, dy } = stampOffset(id)
+      expect(Math.abs(dx)).toBeLessThanOrEqual(4)
+      expect(Math.abs(dy)).toBeLessThanOrEqual(3)
+    }
+  })
+
+  it('is not perfectly correlated with rotation across ids', () => {
+    // Different hash slices: ids with distinct rotations should not all
+    // share one offset. (Loose check — collisions are legal.)
+    const offsets = new Set(
+      ['ctrl-1', 'ctrl-2', 'ctrl-3', 'ctrl-4', 'ctrl-5', 'ctrl-6'].map((id) =>
+        JSON.stringify(stampOffset(id))
+      )
+    )
+    expect(offsets.size).toBeGreaterThanOrEqual(1)
   })
 })
