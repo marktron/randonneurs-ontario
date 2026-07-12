@@ -87,7 +87,7 @@ export function Hero({ images }: HeroProps) {
                     alt={image.alt}
                     fill
                     className="object-cover editorial-image"
-                    priority={index === 0}
+                    priority={index === startIndex}
                     sizes="100vw"
                   />
                 </div>
