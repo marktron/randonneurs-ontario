@@ -4,6 +4,7 @@ import {
   CHECKIN_WINDOW_BEFORE_START_MS,
   LATE_SYNC_THRESHOLD_MS,
   RIDER_UNDO_WINDOW_MS,
+  STAMP_MAX_ROTATION_DEG,
   computeControlWindow,
   computeElapsedHm,
   computeEventStart,
@@ -15,6 +16,7 @@ import {
   isDigitalCardEventType,
   isWithinCheckinAcceptanceWindow,
   resolveRiderStart,
+  stampRotation,
   type CheckinFlags,
   type WrongControlCandidate,
 } from '@/lib/brevet-card'
@@ -372,5 +374,38 @@ describe('resolveRiderStart', () => {
       pre_ride_start_time: '06:30:00',
     })
     expect(start.getTime()).toBe(computeEventStart('2026-07-28', '06:30').getTime())
+  })
+})
+
+describe('stampRotation', () => {
+  it('is deterministic for the same control id', () => {
+    expect(stampRotation('ctrl-1')).toBe(stampRotation('ctrl-1'))
+    expect(stampRotation('00000000-1f0c-4000-a000-000000000003')).toBe(
+      stampRotation('00000000-1f0c-4000-a000-000000000003')
+    )
+  })
+
+  it('stays within ±STAMP_MAX_ROTATION_DEG for arbitrary ids', () => {
+    const ids = [
+      'ctrl-1',
+      'ctrl-2',
+      'a',
+      '',
+      '00000000-1f0c-4000-a000-000000000003',
+      'e9b1c4d2-7f3a-4b5e-9c8d-2a1b3c4d5e6f',
+    ]
+    for (const id of ids) {
+      const angle = stampRotation(id)
+      expect(Math.abs(angle)).toBeLessThanOrEqual(STAMP_MAX_ROTATION_DEG)
+    }
+  })
+
+  it('spreads different ids across different angles', () => {
+    const angles = new Set(
+      ['ctrl-1', 'ctrl-2', 'ctrl-3', 'ctrl-4', 'ctrl-5', 'ctrl-6'].map(stampRotation)
+    )
+    // Not a strict uniqueness guarantee (hash collisions are legal), but a
+    // spread this poor would defeat the hand-stamped look.
+    expect(angles.size).toBeGreaterThanOrEqual(4)
   })
 })

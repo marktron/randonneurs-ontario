@@ -277,3 +277,28 @@ export function computeElapsedHm(start: Date, end: Date): string {
   const totalMinutes = Math.max(0, Math.floor((end.getTime() - start.getTime()) / 60_000))
   return formatElapsedForSubmission(totalMinutes)
 }
+
+// ============================================================================
+// Stamp effect (rider card)
+// ============================================================================
+
+/** Maximum tilt, in degrees, of the check-in stamp on the rider card. */
+export const STAMP_MAX_ROTATION_DEG = 8
+
+/**
+ * Deterministic per-control tilt for the check-in stamp, in
+ * [-STAMP_MAX_ROTATION_DEG, STAMP_MAX_ROTATION_DEG] with 0.1° granularity.
+ * Seeded from the control id — NOT random at render time — so the
+ * server-rendered card and the hydrated client agree (this component has a
+ * hydration-mismatch history; see formatControlTime's h23 note), and the
+ * card looks the same on every load, like a real stamped card.
+ */
+export function stampRotation(controlId: string): number {
+  // djb2-xor string hash — cheap and stable.
+  let hash = 5381
+  for (let i = 0; i < controlId.length; i++) {
+    hash = (hash * 33) ^ controlId.charCodeAt(i)
+  }
+  const normalized = (hash >>> 0) % 1601 // 0..1600
+  return ((normalized - 800) / 800) * STAMP_MAX_ROTATION_DEG
+}
