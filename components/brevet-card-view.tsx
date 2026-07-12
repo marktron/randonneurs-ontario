@@ -562,41 +562,43 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
 
               <div className="shrink-0 text-right">
                 {checkin ? (
-                  <div className="flex flex-col items-end">
-                    <p className="inline-flex items-center gap-1.5 text-sm font-medium tabular-nums">
-                      <CheckCircle2 className="h-4 w-4 text-green-600" />
-                      {formatControlTime(new Date(checkin.checkedInAt))}
-                    </p>
+                  <p className="relative z-10 inline-flex items-center gap-1.5 text-sm font-medium tabular-nums">
+                    <CheckCircle2 className="h-4 w-4 text-green-600" />
+                    {formatControlTime(new Date(checkin.checkedInAt))}
                     {checkin.method !== 'admin' &&
                       event.status !== 'submitted' &&
                       now !== null &&
                       now - new Date(checkin.receivedAt).getTime() < RIDER_UNDO_WINDOW_MS && (
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          className="relative z-10 mt-1.5 h-8 border border-border px-3 text-xs"
-                          disabled={undoingControlId === control.id}
-                          onClick={() => handleUndo(control)}
-                        >
-                          {undoingControlId === control.id ? 'Undoing…' : 'Undo'}
-                        </Button>
+                        <>
+                          <span aria-hidden="true" className="font-normal text-muted-foreground/50">
+                            ·
+                          </span>
+                          <button
+                            type="button"
+                            className="-my-2 py-2 font-normal text-muted-foreground underline decoration-muted-foreground/40 underline-offset-2 hover:text-foreground disabled:opacity-50"
+                            disabled={undoingControlId === control.id}
+                            onClick={() => handleUndo(control)}
+                          >
+                            {undoingControlId === control.id ? 'Undoing…' : 'Undo'}
+                          </button>
+                        </>
                       )}
-                  </div>
+                  </p>
                 ) : queued ? (
-                  <div className="flex flex-col items-end">
-                    <p className="inline-flex items-center gap-1.5 text-sm text-muted-foreground">
-                      <CloudOff className="h-4 w-4" />
-                      Waiting to sync
-                    </p>
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      className="relative z-10 mt-1.5 h-8 border border-border px-3 text-xs"
+                  <p className="relative z-10 inline-flex items-center gap-1.5 text-sm text-muted-foreground">
+                    <CloudOff className="h-4 w-4" />
+                    Waiting to sync
+                    <span aria-hidden="true" className="text-muted-foreground/50">
+                      ·
+                    </span>
+                    <button
+                      type="button"
+                      className="-my-2 py-2 underline decoration-muted-foreground/40 underline-offset-2 hover:text-foreground"
                       onClick={() => handleUndo(control)}
                     >
                       Undo
-                    </Button>
-                  </div>
+                    </button>
+                  </p>
                 ) : (
                   <Button
                     size="lg"
