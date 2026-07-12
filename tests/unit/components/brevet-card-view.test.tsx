@@ -753,3 +753,56 @@ describe('organizer + fine print', () => {
     expect(screen.getByText(/Emergency Services: 911/)).toBeTruthy()
   })
 })
+
+describe('check-in stamp', () => {
+  it('renders a static (non-animated) stamp for a check-in present in initial data', () => {
+    const data = makeData()
+    data.checkins = [
+      {
+        controlId: 'ctrl-1',
+        checkedInAt: new Date().toISOString(),
+        receivedAt: new Date().toISOString(),
+        method: 'gps',
+        distanceToControlM: 12,
+        flags: NO_FLAGS,
+      },
+    ]
+    render(<BrevetCard token={TOKEN} initialData={data} />)
+
+    const stamp = screen.getByTestId('control-stamp')
+    expect(stamp.getAttribute('aria-hidden')).toBe('true')
+    expect(stamp.className).not.toContain('animate-stamp-down')
+    const img = stamp.querySelector('img')!
+    expect(img.getAttribute('src')).toBe('/stamp-green.svg')
+    expect(img.getAttribute('alt')).toBe('')
+    expect(img.style.transform).toMatch(/^rotate\(-?[\d.]+deg\)$/)
+  })
+
+  it('shows no stamp for a control without a check-in', () => {
+    render(<BrevetCard token={TOKEN} initialData={makeData()} />)
+    expect(screen.queryByTestId('control-stamp')).toBeNull()
+  })
+
+  it('stamps with the thunk animation on a fresh check-in this session', async () => {
+    mockCheckIn.mockResolvedValue(checkinOk('ctrl-1'))
+    render(<BrevetCard token={TOKEN} initialData={makeData()} />)
+
+    fireEvent.click(screen.getByRole('button', { name: /check in/i }))
+
+    const stamp = await screen.findByTestId('control-stamp')
+    expect(stamp.className).toContain('animate-stamp-down')
+    expect(stamp.className).toContain('motion-reduce:animate-none')
+  })
+
+  it('stamps a queued offline check-in before the server confirms', async () => {
+    // Server never resolves — the entry stays in the outbox ("Waiting to sync").
+    mockCheckIn.mockReturnValue(new Promise(() => {}))
+    render(<BrevetCard token={TOKEN} initialData={makeData()} />)
+
+    fireEvent.click(screen.getByRole('button', { name: /check in/i }))
+
+    const stamp = await screen.findByTestId('control-stamp')
+    expect(stamp).toBeTruthy()
+    expect(await screen.findByText(/waiting to sync/i)).toBeTruthy()
+  })
+})

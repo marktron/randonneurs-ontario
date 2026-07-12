@@ -49,6 +49,21 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
+@theme {
+  --animate-stamp-down: stamp-down 300ms ease-out both;
+
+  @keyframes stamp-down {
+    from {
+      transform: scale(1.4);
+      opacity: 0;
+    }
+    to {
+      transform: scale(1);
+      opacity: 1;
+    }
+  }
+}
+
 :root {
   --background: oklch(1 0 0);
   --foreground: oklch(37.1% 0 0);
