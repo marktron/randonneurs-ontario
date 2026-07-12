@@ -562,8 +562,8 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
 
               <div className="shrink-0 text-right">
                 {checkin ? (
-                  <p className="relative z-10 inline-flex items-center gap-1.5 text-sm font-medium tabular-nums">
-                    <CheckCircle2 className="h-4 w-4 text-green-600" />
+                  <p className="relative z-10 inline-flex items-baseline gap-1.5 text-sm font-medium tabular-nums">
+                    <CheckCircle2 className="h-4 w-4 self-center text-green-600" />
                     {formatControlTime(new Date(checkin.checkedInAt))}
                     {checkin.method !== 'admin' &&
                       event.status !== 'submitted' &&
@@ -585,8 +585,8 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
                       )}
                   </p>
                 ) : queued ? (
-                  <p className="relative z-10 inline-flex items-center gap-1.5 text-sm text-muted-foreground">
-                    <CloudOff className="h-4 w-4" />
+                  <p className="relative z-10 inline-flex items-baseline gap-1.5 text-sm text-muted-foreground">
+                    <CloudOff className="h-4 w-4 self-center" />
                     Waiting to sync
                     <span aria-hidden="true" className="text-muted-foreground/50">
                       ·
