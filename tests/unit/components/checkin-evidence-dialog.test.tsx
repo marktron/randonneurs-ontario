@@ -84,7 +84,7 @@ describe('CheckinEvidenceDialog', () => {
 
   it('shows the GPS distance caption and the note when present', () => {
     renderDialog()
-    expect(screen.getByText('GPS fix recorded 40 m from the control (±12 m accuracy)')).toBeTruthy()
+    expect(screen.getByText('40 m from control (±12 m)')).toBeTruthy()
     expect(screen.getByText('Entered by organizer')).toBeTruthy()
   })
 

@@ -16,6 +16,16 @@ export const FLAG_LABELS: Array<{ key: keyof CheckinFlags; label: string; title:
   { key: 'lateSync', label: 'late sync', title: 'Synced well after the tap (offline outbox)' },
 ]
 
+function formatDistanceMetres(distanceToControlM: number): string {
+  return distanceToControlM < 1000
+    ? `${Math.round(distanceToControlM)} m`
+    : `${(distanceToControlM / 1000).toFixed(1)} km`
+}
+
+function hasUsableAccuracy(accuracyM: number | null): accuracyM is number {
+  return accuracyM != null && Number.isFinite(accuracyM) && accuracyM > 0
+}
+
 /**
  * Formats the "GPS fix recorded X from the control" caption shown in the
  * correction dialog: metres under 1 km ("320 m"), one-decimal km at/above
@@ -25,15 +35,23 @@ export function formatCheckinDistanceLabel(
   distanceToControlM: number,
   accuracyM: number | null
 ): string {
-  const distanceLabel =
-    distanceToControlM < 1000
-      ? `${Math.round(distanceToControlM)} m`
-      : `${(distanceToControlM / 1000).toFixed(1)} km`
-  const accuracyLabel =
-    accuracyM != null && Number.isFinite(accuracyM) && accuracyM > 0
-      ? ` (±${Math.round(accuracyM)} m accuracy)`
-      : ''
+  const distanceLabel = formatDistanceMetres(distanceToControlM)
+  const accuracyLabel = hasUsableAccuracy(accuracyM)
+    ? ` (±${Math.round(accuracyM)} m accuracy)`
+    : ''
   return `GPS fix recorded ${distanceLabel} from the control${accuracyLabel}`
+}
+
+/**
+ * Compact per-row variant for the evidence dialog, where the caption
+ * repeats for every control: "29.0 km from control (±35 m)".
+ */
+export function formatCheckinDistanceCompact(
+  distanceToControlM: number,
+  accuracyM: number | null
+): string {
+  const accuracyLabel = hasUsableAccuracy(accuracyM) ? ` (±${Math.round(accuracyM)} m)` : ''
+  return `${formatDistanceMetres(distanceToControlM)} from control${accuracyLabel}`
 }
 
 export interface CheckinEvidenceCheckin {

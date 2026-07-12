@@ -14,7 +14,7 @@ import { formatControlTime } from '@/lib/brmTimes'
 import { cn } from '@/lib/utils'
 import {
   FLAG_LABELS,
-  formatCheckinDistanceLabel,
+  formatCheckinDistanceCompact,
   type CheckinEvidenceControl,
 } from '@/lib/checkin-evidence'
 
@@ -80,7 +80,7 @@ export function CheckinEvidenceDialog({
                 )}
                 {checkin?.distanceToControlM != null && (
                   <p className="mt-1 text-xs text-muted-foreground">
-                    {formatCheckinDistanceLabel(checkin.distanceToControlM, checkin.accuracyM)}
+                    {formatCheckinDistanceCompact(checkin.distanceToControlM, checkin.accuracyM)}
                   </p>
                 )}
                 {checkin?.note && (

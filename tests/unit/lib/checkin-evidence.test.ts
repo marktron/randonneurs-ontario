@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildCheckinEvidence } from '@/lib/checkin-evidence'
+import { buildCheckinEvidence, formatCheckinDistanceCompact } from '@/lib/checkin-evidence'
 import type { AdminCheckinGridRider } from '@/lib/actions/control-checkins'
 import type { CheckinFlags } from '@/lib/brevet-card'
 
@@ -82,5 +82,20 @@ describe('buildCheckinEvidence', () => {
   it('returns an empty map when there are no controls', () => {
     const rider = makeRider({ riderId: 'r1', checkins: [makeCheckin('c1')] })
     expect(buildCheckinEvidence([], [rider])).toEqual({})
+  })
+})
+
+describe('formatCheckinDistanceCompact', () => {
+  it('formats metres under 1 km', () => {
+    expect(formatCheckinDistanceCompact(320, null)).toBe('320 m from control')
+  })
+
+  it('formats km at/above 1 km with accuracy', () => {
+    expect(formatCheckinDistanceCompact(29040, 35)).toBe('29.0 km from control (±35 m)')
+  })
+
+  it('omits accuracy when zero or not finite', () => {
+    expect(formatCheckinDistanceCompact(320, 0)).toBe('320 m from control')
+    expect(formatCheckinDistanceCompact(320, Number.NaN)).toBe('320 m from control')
   })
 })
