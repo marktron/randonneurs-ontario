@@ -4,7 +4,7 @@ import { getFirstTimeRiderIds } from '@/lib/data/first-time-riders'
 import { parseLocalDate } from '@/lib/utils'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
-import { ChevronLeft, FileText, Pencil, Calendar, Clock, Users, Smartphone } from 'lucide-react'
+import { ChevronLeft, FileText, Pencil, Calendar, Clock, Users, Stamp } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { EventResultsManager } from '@/components/admin/event-results-manager'
 import { EventStatusSelect } from '@/components/admin/event-status-select'
@@ -185,13 +185,13 @@ export default async function EventDetailPage({ params, searchParams }: EventPag
           <Button variant="outline" asChild>
             <Link href={`/admin/events/${event.id}/control-cards`}>
               <FileText className="h-4 w-4 mr-2" />
-              Control Cards
+              Paper Cards
             </Link>
           </Button>
           <Button variant="outline" asChild>
             <Link href={`/admin/events/${event.id}/brevet-card`}>
-              <Smartphone className="h-4 w-4 mr-2" />
-              Digital Card
+              <Stamp className="h-4 w-4 mr-2" />
+              Digital Cards
             </Link>
           </Button>
           {event.status === 'completed' && (

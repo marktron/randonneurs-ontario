@@ -16,7 +16,7 @@ import {
 import { cancelRegistration } from '@/lib/actions/manage-registration'
 import { formatRideName } from '@/lib/events/format'
 import { format, parseISO } from 'date-fns'
-import { CalendarDays, MapPin, Clock, Smartphone, XCircle } from 'lucide-react'
+import { CalendarDays, MapPin, Clock, Stamp, XCircle } from 'lucide-react'
 import Link from 'next/link'
 
 interface RegistrationManageProps {
@@ -191,7 +191,7 @@ export function RegistrationManage({
             </div>
             <Button asChild variant="outline" className="w-full sm:w-auto h-12">
               <Link href={`/card/${token}`}>
-                <Smartphone className="h-4 w-4 mr-2" />
+                <Stamp className="h-4 w-4 mr-2" />
                 Open your brevet card
               </Link>
             </Button>

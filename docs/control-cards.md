@@ -285,7 +285,7 @@ _(These are the end-user-facing notes from the previous version of this doc. Ret
 
 ### Generating control cards
 
-Navigate to **Admin > Events > [Event] > Control Cards**.
+Navigate to **Admin > Events > [Event] > Paper Cards**.
 
 Control points can be added in two ways:
 

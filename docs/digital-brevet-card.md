@@ -614,7 +614,7 @@ Each step lands as its own commit; the branch stays shippable throughout.
 
 ### Organizer how-to
 
-1. Open the event in the admin and click **Digital Card**.
+1. Open the event in the admin and click **Digital Cards**.
 2. Click **Import from RWGPS** (or add rows manually), review names,
    distances, and coordinates, then **Save controls**. Controls without
    coordinates still work — riders just check in without GPS (flagged).
