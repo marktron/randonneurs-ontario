@@ -152,9 +152,10 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
   // block a check-in from sending.
   const outboxRef = useRef<OutboxEntry[]>([])
   // Controls checked in during THIS session animate their stamp; stamps from
-  // initialData render statically. A ref (not state): it never needs to
-  // trigger a render by itself — enqueueCheckin always causes one right after.
-  const sessionCheckinsRef = useRef<Set<string>>(new Set())
+  // initialData render statically. State (not a ref): it is read during
+  // render, and the repo's react-hooks/refs rule forbids render-time ref
+  // reads.
+  const [sessionCheckins, setSessionCheckins] = useState<Set<string>>(new Set())
 
   /**
    * Update the outbox ref *synchronously*, then mirror it into localStorage
@@ -249,7 +250,7 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
   const enqueueCheckin = useCallback(
     (entry: OutboxEntry) => {
       setErrorMessage(null)
-      sessionCheckinsRef.current.add(entry.controlId)
+      setSessionCheckins((prev) => new Set(prev).add(entry.controlId))
       persistOutbox((prev) => [...prev.filter((e) => e.controlId !== entry.controlId), entry])
       // Fire-and-forget: the UI shows "queued" until the server confirms.
       void flushOutbox()
@@ -517,10 +518,6 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
       )}
 
       <ol className="divide-y border rounded-md">
-        {/* eslint-disable-next-line react-hooks/refs -- the stamp reads
-            sessionCheckinsRef during render deliberately: the set is only
-            mutated in enqueueCheckin, which always triggers a re-render right
-            after, and it is empty on the first render (hydration-safe). */}
         {controls.map((control) => {
           const checkin = checkins.get(control.id)
           const queued = !checkin && queuedControlIds.has(control.id)
@@ -615,7 +612,7 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
                     aria-hidden="true"
                     className={cn(
                       'pointer-events-none -mt-1 block select-none',
-                      sessionCheckinsRef.current.has(control.id) &&
+                      sessionCheckins.has(control.id) &&
                         'animate-stamp-down motion-reduce:animate-none'
                     )}
                   >
