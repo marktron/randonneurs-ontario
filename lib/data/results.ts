@@ -277,6 +277,14 @@ const getChapterResultsInner = cache(
       )
     }
 
+    // DNS results are internal bookkeeping — hide them from public pages
+    // (they remain visible in the admin, which queries results directly).
+    for (const event of events) {
+      if (event.public_results) {
+        event.public_results = event.public_results.filter((r) => r.status !== 'dns')
+      }
+    }
+
     // Collect all result IDs to check for First Brevet awards
     const allResultIds: string[] = []
     for (const event of events) {
@@ -618,6 +626,9 @@ const getRiderResultsInner = cache(async (slug: string): Promise<RiderYearResult
     const event = result.events
 
     if (!event) continue
+
+    // DNS results are internal bookkeeping — hide them from the public rider page
+    if (result.status === 'dns') continue
 
     // Get chapter URL slug from the database chapter slug
     const dbChapterSlug = event.chapters?.slug

@@ -308,6 +308,61 @@ describe('Fleche team grouping', () => {
     expect(teams[1].teamName).toBe('Unknown Team')
   })
 
+  it('excludes DNS riders from team grouping', async () => {
+    const mockFlecheEvent = {
+      id: 'fleche-dns',
+      name: 'Ontario Fleche',
+      event_date: '2025-04-26',
+      distance_km: 360,
+      event_type: 'fleche',
+      routes: null,
+      public_results: [
+        {
+          id: 'r1',
+          finish_time: null,
+          status: 'finished',
+          team_name: 'Team Alpha',
+          distance_km: 412,
+          rider_slug: 'alice',
+          first_name: 'Alice',
+          last_name: 'Anderson',
+        },
+        {
+          id: 'r2',
+          finish_time: null,
+          status: 'dns',
+          team_name: 'Team Alpha',
+          distance_km: 412,
+          rider_slug: 'bob',
+          first_name: 'Bob',
+          last_name: 'Brown',
+        },
+        {
+          id: 'r3',
+          finish_time: null,
+          status: 'dns',
+          team_name: 'Team Ghost',
+          distance_km: 380,
+          rider_slug: 'carol',
+          first_name: 'Carol',
+          last_name: 'Clark',
+        },
+      ],
+    }
+
+    mockModule.__mockEventsFound([mockFlecheEvent])
+    mockModule.__mockEventsFound([])
+
+    const results = await getChapterResults('fleche', 2025)
+
+    expect(results).toHaveLength(1)
+    const teams = results[0].teams!
+    // Team Ghost had only a DNS rider, so it should not appear at all
+    expect(teams).toHaveLength(1)
+    expect(teams[0].teamName).toBe('Team Alpha')
+    expect(teams[0].riders.map((r) => r.slug)).toEqual(['alice'])
+  })
+
   it('does not create teams for non-fleche events', async () => {
     const mockBrevetEvent = {
       id: 'brevet-1',

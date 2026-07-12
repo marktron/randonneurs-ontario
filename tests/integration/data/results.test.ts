@@ -466,6 +466,97 @@ describe('getChapterResults', () => {
     expect(bobNorider?.isCompletedDevilWeek).toBe(false)
   })
 
+  it('excludes DNS results from public rider lists', async () => {
+    const mockEvents = [
+      {
+        id: 'event-dns-1',
+        name: 'Spring Brevet',
+        event_date: '2025-05-01',
+        distance_km: 200,
+        event_type: 'brevet',
+        start_location: null,
+        routes: { slug: 'spring-200' },
+        public_results: [
+          {
+            id: 'result-finished',
+            finish_time: '10:00',
+            status: 'finished',
+            team_name: null,
+            distance_km: null,
+            rider_slug: 'jane-finisher',
+            first_name: 'Jane',
+            last_name: 'Finisher',
+          },
+          {
+            id: 'result-dns',
+            finish_time: null,
+            status: 'dns',
+            team_name: null,
+            distance_km: null,
+            rider_slug: 'bob-noshow',
+            first_name: 'Bob',
+            last_name: 'Noshow',
+          },
+          {
+            id: 'result-dnf',
+            finish_time: null,
+            status: 'dnf',
+            team_name: null,
+            distance_km: null,
+            rider_slug: 'dana-dnf',
+            first_name: 'Dana',
+            last_name: 'Dnf',
+          },
+        ],
+      },
+    ]
+
+    mockModule.__mockEventsFound(mockEvents)
+    // Awards queries (First Brevet, Devil Week)
+    mockModule.__mockEventsFound([])
+    mockModule.__mockEventsFound([])
+
+    const result = await getChapterResults('toronto', 2025)
+
+    expect(result).toHaveLength(1)
+    const slugs = result[0].riders.map((r) => r.slug)
+    expect(slugs).toContain('jane-finisher')
+    expect(slugs).toContain('dana-dnf')
+    expect(slugs).not.toContain('bob-noshow')
+  })
+
+  it('skips events whose only results are DNS', async () => {
+    const mockEvents = [
+      {
+        id: 'event-all-dns',
+        name: 'Ghost Brevet',
+        event_date: '2025-06-01',
+        distance_km: 300,
+        event_type: 'brevet',
+        start_location: null,
+        routes: { slug: 'ghost-300' },
+        public_results: [
+          {
+            id: 'result-dns-only',
+            finish_time: null,
+            status: 'dns',
+            team_name: null,
+            distance_km: null,
+            rider_slug: 'bob-noshow',
+            first_name: 'Bob',
+            last_name: 'Noshow',
+          },
+        ],
+      },
+    ]
+
+    mockModule.__mockEventsFound(mockEvents)
+
+    const result = await getChapterResults('toronto', 2025)
+
+    expect(result).toEqual([])
+  })
+
   it('converts db chapter slug to URL slug for routeChapterSlug', async () => {
     const mockEvents = [
       {
@@ -705,6 +796,97 @@ describe('getRiderResults', () => {
     expect(result[0].results[0].distanceKm).toBe(412)
     // Total distance should also use the result's distance
     expect(result[0].totalDistanceKm).toBe(412)
+  })
+
+  it('excludes DNS results from the rider results page', async () => {
+    const mockRider = { id: 'rider-1' }
+
+    const mockResults = [
+      {
+        id: 'result-finished',
+        finish_time: '13:30',
+        status: 'finished',
+        note: null,
+        season: 2025,
+        events: {
+          name: 'Spring 200',
+          event_date: '2025-05-15',
+          distance_km: 200,
+          event_type: 'brevet',
+          chapters: { slug: 'toronto' },
+        },
+        result_awards: [],
+      },
+      {
+        id: 'result-dns',
+        finish_time: null,
+        status: 'dns',
+        note: null,
+        season: 2025,
+        events: {
+          name: 'Fall 300',
+          event_date: '2025-10-15',
+          distance_km: 300,
+          event_type: 'brevet',
+          chapters: { slug: 'toronto' },
+        },
+        result_awards: [],
+      },
+    ]
+
+    mockModule.__mockRiderFound(mockRider)
+    mockModule.__mockEventsFound(mockResults)
+
+    const result = await getRiderResults('john-doe')
+
+    expect(result).toHaveLength(1)
+    expect(result[0].results).toHaveLength(1)
+    expect(result[0].results[0].eventName).toBe('Spring 200')
+  })
+
+  it('omits years whose only results are DNS', async () => {
+    const mockRider = { id: 'rider-1' }
+
+    const mockResults = [
+      {
+        id: 'result-2025',
+        finish_time: '13:30',
+        status: 'finished',
+        note: null,
+        season: 2025,
+        events: {
+          name: 'Spring 200',
+          event_date: '2025-05-15',
+          distance_km: 200,
+          event_type: 'brevet',
+          chapters: { slug: 'toronto' },
+        },
+        result_awards: [],
+      },
+      {
+        id: 'result-2024-dns',
+        finish_time: null,
+        status: 'dns',
+        note: null,
+        season: 2024,
+        events: {
+          name: 'Fall 300',
+          event_date: '2024-10-15',
+          distance_km: 300,
+          event_type: 'brevet',
+          chapters: { slug: 'toronto' },
+        },
+        result_awards: [],
+      },
+    ]
+
+    mockModule.__mockRiderFound(mockRider)
+    mockModule.__mockEventsFound(mockResults)
+
+    const result = await getRiderResults('john-doe')
+
+    expect(result).toHaveLength(1)
+    expect(result[0].year).toBe(2025)
   })
 
   it('calculates completed count and total distance', async () => {

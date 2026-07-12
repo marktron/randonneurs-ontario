@@ -134,6 +134,13 @@ export async function getRiderResults(riderSlug: string)
 export async function getAvailableYears(): Promise<number[]>
 ```
 
+**DNS results are excluded from public output.** Both `getChapterResults` and
+`getRiderResults` filter out results with `status = 'dns'` before transforming —
+DNS is internal bookkeeping (who registered but never started) and is not shown
+on the public results or rider pages. An event or fleche team whose only results
+are DNS is omitted entirely, as is a rider-page year. DNS rows remain visible in
+the admin, which queries the `results` table directly.
+
 ### lib/data/routes.ts
 
 ```typescript
