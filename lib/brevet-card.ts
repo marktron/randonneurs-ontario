@@ -287,7 +287,7 @@ export const STAMP_MAX_ROTATION_DEG = 8
 
 /**
  * Deterministic per-control tilt for the check-in stamp, in
- * [-STAMP_MAX_ROTATION_DEG, STAMP_MAX_ROTATION_DEG] with 0.1° granularity.
+ * [-STAMP_MAX_ROTATION_DEG, STAMP_MAX_ROTATION_DEG] with 0.01° granularity.
  * Seeded from the control id — NOT random at render time — so the
  * server-rendered card and the hydrated client agree (this component has a
  * hydration-mismatch history; see formatControlTime's h23 note), and the

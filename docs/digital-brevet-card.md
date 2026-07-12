@@ -202,8 +202,9 @@ Design notes:
   device records reality; flags mark early/late and organizers adjudicate,
   exactly like a paper card with an odd time written on it. (Blocking would
   strand riders on edge cases and clock skew.)
-- **Check-in stamp effect**: Checked-in controls are marked with a faded green club-logo stamp
-  (`public/stamp-green.svg`), tilted a few degrees per control — seeded
+- **Check-in stamp effect**: Checked-in controls are marked with a faded
+  green club-logo stamp (`public/stamp-green.svg`), tilted a few degrees
+  per control — seeded
   deterministically from the control id so the server render and the
   hydrated client agree — like a hand-stamped paper card. Fresh check-ins
   "thunk" in with a 300 ms scale/fade (suppressed under
