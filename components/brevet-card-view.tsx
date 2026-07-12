@@ -36,12 +36,15 @@ import {
   RIDER_UNDO_WINDOW_MS,
   detectWrongControl,
   formatDistanceKm,
+  stampOffset,
+  stampRotation,
   type WrongControlCandidate,
   type WrongControlDecision,
 } from '@/lib/brevet-card'
 import { CheckCircle2, CloudOff, Loader2, Mail, MapPin, Phone } from 'lucide-react'
 import { BoldLabelText } from '@/components/bold-label-text'
 import { REGULATIONS_TEXT, EVENT_INFO_TEXT } from '@/types/control-card'
+import { cn } from '@/lib/utils'
 
 const OUTBOX_RETRY_INTERVAL_MS = 45 * 1000
 const GEOLOCATION_TIMEOUT_MS = 12 * 1000
@@ -149,6 +152,11 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
   // for page reloads: writes can throw (quota, private mode) and must never
   // block a check-in from sending.
   const outboxRef = useRef<OutboxEntry[]>([])
+  // Controls checked in during THIS session animate their stamp; stamps from
+  // initialData render statically. State (not a ref): it is read during
+  // render, and the repo's react-hooks/refs rule forbids render-time ref
+  // reads.
+  const [sessionCheckins, setSessionCheckins] = useState<Set<string>>(new Set())
 
   /**
    * Update the outbox ref *synchronously*, then mirror it into localStorage
@@ -243,6 +251,7 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
   const enqueueCheckin = useCallback(
     (entry: OutboxEntry) => {
       setErrorMessage(null)
+      setSessionCheckins((prev) => new Set(prev).add(entry.controlId))
       persistOutbox((prev) => [...prev.filter((e) => e.controlId !== entry.controlId), entry])
       // Fire-and-forget: the UI shows "queued" until the server confirms.
       void flushOutbox()
@@ -515,9 +524,16 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
           const queued = !checkin && queuedControlIds.has(control.id)
           const isNext = control.id === nextControlId
           const isLocating = locatingControlId === control.id
+          const stamped = !!(checkin || queued)
 
           return (
-            <li key={control.id} className="p-4 flex items-start justify-between gap-4">
+            <li
+              key={control.id}
+              className={cn(
+                'relative p-4 flex items-start justify-between gap-4',
+                stamped && 'min-h-36'
+              )}
+            >
               <div className="min-w-0">
                 <p className="font-medium">
                   {control.name}
@@ -546,41 +562,43 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
 
               <div className="shrink-0 text-right">
                 {checkin ? (
-                  <div className="flex flex-col items-end">
-                    <p className="inline-flex items-center gap-1.5 text-sm font-medium tabular-nums">
-                      <CheckCircle2 className="h-4 w-4 text-green-600" />
-                      {formatControlTime(new Date(checkin.checkedInAt))}
-                    </p>
+                  <p className="relative z-10 inline-flex items-baseline gap-1.5 text-sm font-medium tabular-nums">
+                    <CheckCircle2 className="h-4 w-4 self-center text-green-600" />
+                    {formatControlTime(new Date(checkin.checkedInAt))}
                     {checkin.method !== 'admin' &&
                       event.status !== 'submitted' &&
                       now !== null &&
                       now - new Date(checkin.receivedAt).getTime() < RIDER_UNDO_WINDOW_MS && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="mt-1 h-auto px-2 py-1 text-xs text-muted-foreground"
-                          disabled={undoingControlId === control.id}
-                          onClick={() => handleUndo(control)}
-                        >
-                          {undoingControlId === control.id ? 'Undoing…' : 'Undo'}
-                        </Button>
+                        <>
+                          <span aria-hidden="true" className="font-normal text-muted-foreground/50">
+                            ·
+                          </span>
+                          <button
+                            type="button"
+                            className="-my-2 py-2 font-normal text-muted-foreground underline decoration-muted-foreground/40 underline-offset-2 hover:text-foreground disabled:opacity-50"
+                            disabled={undoingControlId === control.id}
+                            onClick={() => handleUndo(control)}
+                          >
+                            {undoingControlId === control.id ? 'Undoing…' : 'Undo'}
+                          </button>
+                        </>
                       )}
-                  </div>
+                  </p>
                 ) : queued ? (
-                  <div className="flex flex-col items-end">
-                    <p className="inline-flex items-center gap-1.5 text-sm text-muted-foreground">
-                      <CloudOff className="h-4 w-4" />
-                      Waiting to sync
-                    </p>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="mt-1 h-auto px-2 py-1 text-xs text-muted-foreground"
+                  <p className="relative z-10 inline-flex items-baseline gap-1.5 text-sm text-muted-foreground">
+                    <CloudOff className="h-4 w-4 self-center" />
+                    Waiting to sync
+                    <span aria-hidden="true" className="text-muted-foreground/50">
+                      ·
+                    </span>
+                    <button
+                      type="button"
+                      className="-my-2 py-2 underline decoration-muted-foreground/40 underline-offset-2 hover:text-foreground"
                       onClick={() => handleUndo(control)}
                     >
                       Undo
-                    </Button>
-                  </div>
+                    </button>
+                  </p>
                 ) : (
                   <Button
                     size="lg"
@@ -598,6 +616,30 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
                   </Button>
                 )}
               </div>
+
+              {stamped && (
+                <span
+                  data-testid="control-stamp"
+                  aria-hidden="true"
+                  className={cn(
+                    'pointer-events-none select-none absolute right-4 top-9 bottom-0 flex items-center mix-blend-multiply dark:mix-blend-screen',
+                    sessionCheckins.has(control.id) &&
+                      'animate-stamp-down motion-reduce:animate-none'
+                  )}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src="/stamp-green.svg"
+                    alt=""
+                    width={128}
+                    height={88}
+                    className="w-32 max-w-none"
+                    style={{
+                      transform: `translate(${stampOffset(control.id).dx}px, ${stampOffset(control.id).dy}px) rotate(${stampRotation(control.id)}deg)`,
+                    }}
+                  />
+                </span>
+              )}
             </li>
           )
         })}

@@ -277,3 +277,50 @@ export function computeElapsedHm(start: Date, end: Date): string {
   const totalMinutes = Math.max(0, Math.floor((end.getTime() - start.getTime()) / 60_000))
   return formatElapsedForSubmission(totalMinutes)
 }
+
+// ============================================================================
+// Stamp effect (rider card)
+// ============================================================================
+
+/** Maximum tilt, in degrees, of the check-in stamp on the rider card. */
+export const STAMP_MAX_ROTATION_DEG = 8
+
+/**
+ * Deterministic per-control tilt for the check-in stamp, in
+ * [-STAMP_MAX_ROTATION_DEG, STAMP_MAX_ROTATION_DEG] with 0.01° granularity.
+ * Seeded from the control id — NOT random at render time — so the
+ * server-rendered card and the hydrated client agree (this component has a
+ * hydration-mismatch history; see formatControlTime's h23 note), and the
+ * card looks the same on every load, like a real stamped card.
+ */
+export function stampRotation(controlId: string): number {
+  // djb2-xor string hash — cheap and stable.
+  let hash = 5381
+  for (let i = 0; i < controlId.length; i++) {
+    hash = (hash * 33) ^ controlId.charCodeAt(i)
+  }
+  const normalized = (hash >>> 0) % 1601 // 0..1600
+  return ((normalized - 800) / 800) * STAMP_MAX_ROTATION_DEG
+}
+
+/**
+ * Deterministic per-control position jitter for the check-in stamp, in
+ * whole pixels: dx in [-4, 4], dy in [-3, 3]. Uses a reverse-iterated djb2
+ * hash, independent of stampRotation's forward hash, so a control's tilt and
+ * offset are uncorrelated — hand stamps don't land in the same spot every
+ * time. Same hydration-safety rules as stampRotation: never random at render.
+ */
+export function stampOffset(controlId: string): { dx: number; dy: number } {
+  // djb2 over the REVERSED id: ids differing only in a trailing character
+  // (sequential fixtures, similar slugs) diverge in the first iteration,
+  // so the difference multiplies through every bit — independent of
+  // stampRotation's forward hash, which confines such deltas to low bits.
+  let hash = 5381
+  for (let i = controlId.length - 1; i >= 0; i--) {
+    hash = (hash * 33) ^ controlId.charCodeAt(i)
+  }
+  const h = hash >>> 0
+  const dx = (h % 9) - 4 // [-4, 4]
+  const dy = (Math.floor(h / 9) % 7) - 3 // [-3, 3]
+  return { dx, dy }
+}
