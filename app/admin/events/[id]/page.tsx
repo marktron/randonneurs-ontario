@@ -10,6 +10,9 @@ import { EventResultsManager } from '@/components/admin/event-results-manager'
 import { EventStatusSelect } from '@/components/admin/event-status-select'
 import { EventDeleteButton } from '@/components/admin/event-delete-button'
 import { SendResultRemindersButton } from '@/components/admin/send-result-reminders-button'
+import { getEventCheckinsForAdmin } from '@/lib/actions/control-checkins'
+import { getEventControlsForAdmin } from '@/lib/actions/event-controls'
+import { buildCheckinEvidence } from '@/lib/checkin-evidence'
 import type { EventStatus } from '@/lib/actions/events'
 import type {
   EventDetailForAdmin,
@@ -133,16 +136,24 @@ export default async function EventDetailPage({ params, searchParams }: EventPag
   await requireAdmin()
   const backUrl = buildBackUrl(search.from_season, search.from_chapter, search.from_when)
 
-  const [event, registrations, cancelledRegistrations, results] = await Promise.all([
-    getEventDetails(id),
-    getRegistrations(id),
-    getCancelledRegistrations(id),
-    getResults(id),
-  ])
+  const [event, registrations, cancelledRegistrations, results, controlsResult, checkinsResult] =
+    await Promise.all([
+      getEventDetails(id),
+      getRegistrations(id),
+      getCancelledRegistrations(id),
+      getResults(id),
+      getEventControlsForAdmin(id),
+      getEventCheckinsForAdmin(id),
+    ])
 
   if (!event) {
     notFound()
   }
+
+  const checkinEvidence = buildCheckinEvidence(
+    controlsResult.success && controlsResult.data ? controlsResult.data : [],
+    checkinsResult.success && checkinsResult.data ? checkinsResult.data : []
+  )
 
   const participantRiderIds = Array.from(
     new Set([...registrations.map((r) => r.rider_id), ...results.map((r) => r.rider_id)])
@@ -263,6 +274,7 @@ export default async function EventDetailPage({ params, searchParams }: EventPag
         cancelledRegistrations={cancelledRegistrations}
         results={results}
         firstTimeRiderIds={firstTimeRiderIds}
+        checkinEvidence={checkinEvidence}
       />
     </div>
   )

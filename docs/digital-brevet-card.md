@@ -480,6 +480,17 @@ Card" button on the event admin page instead of two).
   by the logged-in admin at print time, not this stored field (the digital
   card has no admin session to draw that from).
 
+### Check-in evidence in the results table
+
+On the admin event page, riders with at least one digital check-in show a
+stamp icon in the results table's **Evidence** column — including riders
+with no result row yet (e.g. an abandon with no DNF entered). Clicking it
+opens a read-only summary: one row per control with the check-in time
+(Toronto), method badge for manual/admin entries, warning badges (early,
+late, radius, no gps, late sync), GPS distance to the control, and any
+note. Corrections are not made here — the dialog links to the Digital
+Cards grid, which owns editing.
+
 ### Live grid (bottom section)
 
 - Riders (rows) × controls (columns); cells show time + flag badges
