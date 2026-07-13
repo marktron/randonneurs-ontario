@@ -366,24 +366,35 @@ body:has(.control-cards-print) {
 }
 
 /* Typography tiers for long events. back-normal (≤12 controls) keeps the
-   default sizes; compact (13–18) and dense (19–21) shrink the control text
-   so 5–7 rows fit per column while leaving room to write in each cell. */
+   default sizes; compact (13–18), dense (19–21), and ultra (22–24) shrink
+   the control text so 5–8 rows fit per column while leaving room to write
+   in each cell. The ultra tier also renders open/close on one line (see
+   CardBack) and lowers the row floor: 8 × 0.6in = 4.8in would overflow
+   the ~4.6in of column height available for rows. */
 .back-compact .control-name,
-.back-dense .control-name {
+.back-dense .control-name,
+.back-ultra .control-name {
   font-size: 9pt;
 }
 
 .back-compact .control-distance,
 .back-compact .control-times,
 .back-dense .control-distance,
-.back-dense .control-times {
+.back-dense .control-times,
+.back-ultra .control-distance,
+.back-ultra .control-times {
   font-size: 7.5pt;
   line-height: 1.2;
 }
 
-.back-dense .control-distance {
+.back-dense .control-distance,
+.back-ultra .control-distance {
   margin-top: 0.01in;
   margin-bottom: 0.01in;
+}
+
+.back-ultra .control-row {
+  min-height: 0.5in;
 }
 
 /* Error panel shown instead of cards when a print URL carries more controls

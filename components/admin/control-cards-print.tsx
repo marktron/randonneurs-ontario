@@ -355,7 +355,7 @@ function CardBack({
   const riderName =
     rider?.firstName || rider?.lastName ? `${rider.firstName} ${rider.lastName}`.trim() : ''
   // Fill each column completely before moving to the next. Rows per column
-  // and typography tier scale with the control count (up to 3 × 7 = 21).
+  // and typography tier scale with the control count (up to 3 × 8 = 24).
   const { rowsPerColumn, tier } = backCardLayout(controls.length)
   const column1 = controls.slice(0, rowsPerColumn)
   const column2 = controls.slice(rowsPerColumn, rowsPerColumn * 2)
@@ -416,9 +416,17 @@ function CardBack({
                 <div className="control-name">{control.name}</div>
                 <div className="control-distance">{control.distance} km</div>
                 <div className="control-times">
-                  Open: {control.openTime}
-                  <br />
-                  Close: {control.closeTime}
+                  {tier === 'ultra' ? (
+                    <>
+                      {control.openTime} - {control.closeTime}
+                    </>
+                  ) : (
+                    <>
+                      Open: {control.openTime}
+                      <br />
+                      Close: {control.closeTime}
+                    </>
+                  )}
                 </div>
               </div>
               <div className="time-cell"></div>

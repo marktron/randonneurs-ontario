@@ -354,24 +354,24 @@ function manySaved(n: number): AdminEventControl[] {
 }
 
 describe('ControlCardsForm control-count cap', () => {
-  it('disables Generate and explains when controls exceed 21', () => {
-    renderForm({ savedControls: manySaved(22) })
+  it('disables Generate and explains when controls exceed 24', () => {
+    renderForm({ savedControls: manySaved(25) })
     const link = screen.getByRole('link', { name: /Generate/i })
     expect((link.getAttribute('class') || '').split(/\s+/)).toContain('pointer-events-none')
     expect(link.getAttribute('href')).toBe('#')
-    expect(screen.getByText(/22 controls — printed cards support at most 21/i)).toBeTruthy()
+    expect(screen.getByText(/25 controls — printed cards support at most 24/i)).toBeTruthy()
   })
 
-  it('allows exactly 21 controls', () => {
-    renderForm({ savedControls: manySaved(21) })
+  it('allows exactly 24 controls', () => {
+    renderForm({ savedControls: manySaved(24) })
     const link = screen.getByRole('link', { name: /Generate/i })
     expect((link.getAttribute('class') || '').split(/\s+/)).not.toContain('pointer-events-none')
     expect(link.getAttribute('href')).toContain('/control-cards/print?')
-    expect(screen.queryByText(/printed cards support at most 21/i)).toBeNull()
+    expect(screen.queryByText(/printed cards support at most 24/i)).toBeNull()
   })
 
   it('does not stack the generic validity hint on top of the cap message', () => {
-    renderForm({ savedControls: manySaved(22) })
+    renderForm({ savedControls: manySaved(25) })
     expect(
       screen.queryByText(/Please fill in all organizer details and control points/i)
     ).toBeNull()

@@ -68,58 +68,58 @@ function generateLink() {
 }
 
 describe('ControlCardForm control-count cap', () => {
-  it('shows the cap message once controls exceed 21, even with no route/date picked', async () => {
+  it('shows the cap message once controls exceed 24, even with no route/date picked', async () => {
     const user = userEvent.setup()
     render(<ControlCardForm routes={[]} />)
 
-    // Seeded with Start + Finish (2 rows); 20 clicks → 22 rows.
+    // Seeded with Start + Finish (2 rows); 23 clicks → 25 rows.
     const addControl = screen.getByRole('button', { name: /Add Control/i })
-    for (let i = 0; i < 20; i++) {
+    for (let i = 0; i < 23; i++) {
       await user.click(addControl)
     }
 
-    expect(screen.getByText(/22 controls — printed cards support at most 21/i)).toBeTruthy()
+    expect(screen.getByText(/25 controls — printed cards support at most 24/i)).toBeTruthy()
     const link = screen.getByRole('link', { name: /Generate Control Cards/i })
     expect((link.getAttribute('class') || '').split(/\s+/)).toContain('pointer-events-none')
   })
 
-  it('clears the cap message at exactly 21 controls', async () => {
+  it('clears the cap message at exactly 24 controls', async () => {
     const user = userEvent.setup()
     render(<ControlCardForm routes={[]} />)
 
     const addControl = screen.getByRole('button', { name: /Add Control/i })
-    for (let i = 0; i < 19; i++) {
-      await user.click(addControl) // 2 seeded + 19 = 21
+    for (let i = 0; i < 22; i++) {
+      await user.click(addControl) // 2 seeded + 22 = 24
     }
 
-    expect(screen.queryByText(/printed cards support at most 21/i)).toBeNull()
+    expect(screen.queryByText(/printed cards support at most 24/i)).toBeNull()
   })
 
-  it('disables Generate at 22 controls even when the rest of the form is otherwise valid', async () => {
+  it('disables Generate at 25 controls even when the rest of the form is otherwise valid', async () => {
     const user = userEvent.setup()
     await buildValidForm(user)
 
-    // 2 seeded + 20 filled additions = 22, one over the cap.
-    for (let i = 0; i < 20; i++) {
+    // 2 seeded + 23 filled additions = 25, one over the cap.
+    for (let i = 0; i < 23; i++) {
       await addFilledControl(user, i)
     }
 
     const link = generateLink()
     expect((link.getAttribute('class') || '').split(/\s+/)).toContain('pointer-events-none')
     expect(link.getAttribute('href')).toBe('#')
-  }, 15000)
+  }, 20000)
 
-  it('enables Generate at exactly 21 controls when the rest of the form is valid', async () => {
+  it('enables Generate at exactly 24 controls when the rest of the form is valid', async () => {
     const user = userEvent.setup()
     await buildValidForm(user)
 
-    // 2 seeded + 19 filled additions = 21, exactly at the cap.
-    for (let i = 0; i < 19; i++) {
+    // 2 seeded + 22 filled additions = 24, exactly at the cap.
+    for (let i = 0; i < 22; i++) {
       await addFilledControl(user, i)
     }
 
     const link = generateLink()
     expect((link.getAttribute('class') || '').split(/\s+/)).not.toContain('pointer-events-none')
     expect(link.getAttribute('href')).toContain('/control-cards/print?')
-  }, 15000)
+  }, 20000)
 })
