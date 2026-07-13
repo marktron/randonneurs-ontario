@@ -395,6 +395,18 @@ body:has(.control-cards-print) {
 
 .back-ultra .control-row {
   min-height: 0.5in;
+  /* Content-based sizing (vs the global flex-basis 0): a row with a wrapped
+     2-line name grows to hold it, taking the slack from single-line rows,
+     so long names can't bleed across row borders at 8 rows per column. */
+  flex: 1 1 auto;
+}
+
+/* Ultra merges Time + Signature into a single Validation column at 1/3 of
+   the width: the name cell doubles so long control names wrap to 1–2 lines
+   instead of overflowing the 8-row grid. */
+.back-ultra .control-header,
+.back-ultra .control-row {
+  grid-template-columns: 2fr 1fr;
 }
 
 /* Error panel shown instead of cards when a print URL carries more controls

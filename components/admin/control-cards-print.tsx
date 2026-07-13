@@ -404,10 +404,18 @@ function CardBack({
             </div>
           )}
 
+          {/* Ultra merges Time + Signature into one third-width Validation
+              column so long control names keep a usable name cell. */}
           <div className="control-header">
             <div>Control</div>
-            <div>Time</div>
-            <div>Signature</div>
+            {tier === 'ultra' ? (
+              <div>Validation</div>
+            ) : (
+              <>
+                <div>Time</div>
+                <div>Signature</div>
+              </>
+            )}
           </div>
 
           {columnControls.map((control) => (
@@ -429,8 +437,14 @@ function CardBack({
                   )}
                 </div>
               </div>
-              <div className="time-cell"></div>
-              <div className="signature-cell"></div>
+              {tier === 'ultra' ? (
+                <div className="signature-cell"></div>
+              ) : (
+                <>
+                  <div className="time-cell"></div>
+                  <div className="signature-cell"></div>
+                </>
+              )}
             </div>
           ))}
         </div>
