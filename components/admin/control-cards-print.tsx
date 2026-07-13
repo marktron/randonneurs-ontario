@@ -5,6 +5,7 @@ import type { ControlPoint, CardRider, OrganizerInfo, CardEvent } from '@/types/
 import { REGULATIONS_TEXT, EVENT_INFO_TEXT } from '@/types/control-card'
 import { QRCodeSVG } from 'qrcode.react'
 import { BoldLabelText } from '@/components/bold-label-text'
+import { backCardLayout, MAX_CARD_CONTROLS } from '@/lib/controlPoints'
 
 interface ControlCardsPrintProps {
   event: CardEvent
@@ -68,6 +69,24 @@ function ControlCardsPrintContent({
   formattedDate,
   rwgpsUrl,
 }: ControlCardsPrintProps) {
+  // Backstop for deep links / stale URLs: never print a truncated card.
+  // The forms block Generate above the cap, so normal flows never hit this.
+  if (controls.length > MAX_CARD_CONTROLS) {
+    return (
+      <div className="control-cards-print">
+        <div className="card-overflow-error">
+          <div style={{ fontWeight: 700, fontSize: '14pt', marginBottom: '0.15in' }}>
+            Too many controls to print
+          </div>
+          <p>
+            This card lists {controls.length} controls, but printed control cards support at most{' '}
+            {MAX_CARD_CONTROLS}. Merge or remove controls in the form, then generate again.
+          </p>
+        </div>
+      </div>
+    )
+  }
+
   // Pair riders (2 per page), adding empty rider if odd number
   const riderPairs: (CardRider | null)[][] = []
   for (let i = 0; i < riders.length; i += 2) {
@@ -335,14 +354,15 @@ function CardBack({
 }) {
   const riderName =
     rider?.firstName || rider?.lastName ? `${rider.firstName} ${rider.lastName}`.trim() : ''
-  // Fill each column completely before moving to the next
-  const maxPerColumn = 4
-  const column1 = controls.slice(0, maxPerColumn)
-  const column2 = controls.slice(maxPerColumn, maxPerColumn * 2)
-  const column3 = controls.slice(maxPerColumn * 2, maxPerColumn * 3)
+  // Fill each column completely before moving to the next. Rows per column
+  // and typography tier scale with the control count (up to 3 × 7 = 21).
+  const { rowsPerColumn, tier } = backCardLayout(controls.length)
+  const column1 = controls.slice(0, rowsPerColumn)
+  const column2 = controls.slice(rowsPerColumn, rowsPerColumn * 2)
+  const column3 = controls.slice(rowsPerColumn * 2, rowsPerColumn * 3)
 
   return (
-    <div className="card-half">
+    <div className={`card-half back-${tier}`}>
       {[column1, column2, column3].map((columnControls, colIndex) => (
         <div key={colIndex} className="card-column back-column">
           {/* Header only on first column or if it's the start of controls */}
@@ -385,7 +405,7 @@ function CardBack({
           )}
 
           <div className="control-header">
-            <div>Control Location</div>
+            <div>Control</div>
             <div>Time</div>
             <div>Signature</div>
           </div>

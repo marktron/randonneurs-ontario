@@ -319,7 +319,10 @@ body:has(.control-cards-print) {
 .control-row {
   display: grid;
   grid-template-columns: 1fr 0.6in 0.85fr;
-  min-height: 1in;
+  /* Rows share the column height equally at any control count, instead of
+     a fixed 1in that wasted the space below row 4 and overflowed above 12. */
+  flex: 1 1 0;
+  min-height: 0.6in;
   border-bottom: 1px solid #d9d9d9;
 }
 
@@ -360,4 +363,37 @@ body:has(.control-cards-print) {
 .back-column {
   display: flex;
   flex-direction: column;
+}
+
+/* Typography tiers for long events. back-normal (≤12 controls) keeps the
+   default sizes; compact (13–18) and dense (19–21) shrink the control text
+   so 5–7 rows fit per column while leaving room to write in each cell. */
+.back-compact .control-name,
+.back-dense .control-name {
+  font-size: 9pt;
+}
+
+.back-compact .control-distance,
+.back-compact .control-times,
+.back-dense .control-distance,
+.back-dense .control-times {
+  font-size: 7.5pt;
+  line-height: 1.2;
+}
+
+.back-dense .control-distance {
+  margin-top: 0.01in;
+  margin-bottom: 0.01in;
+}
+
+/* Error panel shown instead of cards when a print URL carries more controls
+   than the card can hold. Visible in both screen and print media on purpose:
+   if someone prints it anyway, they get the explanation, not a broken card. */
+.card-overflow-error {
+  margin: 1in 0.75in;
+  padding: 0.3in;
+  border: 2px solid #b91c1c;
+  color: #b91c1c;
+  font-size: 11pt;
+  line-height: 1.5;
 }

@@ -4,6 +4,8 @@ import {
   isReversedEvent,
   matchImportedControls,
   controlsInSync,
+  backCardLayout,
+  MAX_CARD_CONTROLS,
 } from '@/lib/controlPoints'
 
 describe('reverseControls', () => {
@@ -227,5 +229,39 @@ describe('controlsInSync', () => {
       { name: 'Finish', distanceKm: 200.0 },
     ]
     expect(controlsInSync(rows, saved)).toBe(true)
+  })
+})
+
+describe('backCardLayout', () => {
+  it('exports a cap of 21', () => {
+    expect(MAX_CARD_CONTROLS).toBe(21)
+  })
+
+  it('uses the normal 4-row tier up to 12 controls', () => {
+    expect(backCardLayout(2)).toEqual({ rowsPerColumn: 4, tier: 'normal' })
+    expect(backCardLayout(12)).toEqual({ rowsPerColumn: 4, tier: 'normal' })
+  })
+
+  it('never drops below 4 rows per column for tiny cards', () => {
+    // ceil(2/3) = 1, but the grid keeps its 4-row shape.
+    expect(backCardLayout(0).rowsPerColumn).toBe(4)
+    expect(backCardLayout(3).rowsPerColumn).toBe(4)
+  })
+
+  it('switches to compact at 13 controls', () => {
+    expect(backCardLayout(13)).toEqual({ rowsPerColumn: 5, tier: 'compact' })
+    expect(backCardLayout(15)).toEqual({ rowsPerColumn: 5, tier: 'compact' })
+    expect(backCardLayout(16)).toEqual({ rowsPerColumn: 6, tier: 'compact' })
+    expect(backCardLayout(18)).toEqual({ rowsPerColumn: 6, tier: 'compact' })
+  })
+
+  it('switches to dense at 19 controls', () => {
+    expect(backCardLayout(19)).toEqual({ rowsPerColumn: 7, tier: 'dense' })
+    expect(backCardLayout(21)).toEqual({ rowsPerColumn: 7, tier: 'dense' })
+  })
+
+  it('clamps above the cap rather than throwing (callers reject >21)', () => {
+    expect(backCardLayout(22)).toEqual({ rowsPerColumn: 7, tier: 'dense' })
+    expect(backCardLayout(40)).toEqual({ rowsPerColumn: 7, tier: 'dense' })
   })
 })
