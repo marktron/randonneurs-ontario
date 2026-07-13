@@ -18,7 +18,12 @@ import {
   AlertTriangle,
 } from 'lucide-react'
 import type { CardRider } from '@/types/control-card'
-import { isReversedEvent, matchImportedControls, controlsInSync } from '@/lib/controlPoints'
+import {
+  isReversedEvent,
+  matchImportedControls,
+  controlsInSync,
+  MAX_CARD_CONTROLS,
+} from '@/lib/controlPoints'
 import {
   saveEventControls,
   getEventControlsForAdmin,
@@ -396,12 +401,15 @@ export function ControlCardsForm({
     saveRows(controls)
   }, [saveRows, controls])
 
+  const tooManyControls = controls.length > MAX_CARD_CONTROLS
+
   const isFormValid =
     organizerName &&
     organizerPhone &&
     organizerEmail &&
     controls.every((c) => c.name && c.distance !== '') &&
-    individualSelectionValid
+    individualSelectionValid &&
+    !tooManyControls
 
   return (
     <div className="space-y-6">
@@ -749,7 +757,13 @@ export function ControlCardsForm({
             Generate {cardCount} Control Card{cardCount === 1 ? '' : 's'}
           </a>
         </Button>
-        {!isFormValid && (
+        {tooManyControls && (
+          <p className="text-sm text-destructive self-center">
+            {controls.length} controls — printed cards support at most {MAX_CARD_CONTROLS}. Merge or
+            remove controls.
+          </p>
+        )}
+        {!isFormValid && !tooManyControls && (
           <p className="text-sm text-muted-foreground self-center">
             Please fill in all organizer details and control points.
           </p>
