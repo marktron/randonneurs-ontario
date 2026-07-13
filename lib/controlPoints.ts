@@ -90,3 +90,24 @@ export function controlsInSync(rows: ControlNameDistance[], saved: ControlNameDi
     return row.name.trim() === s.name.trim() && row.distanceKm === s.distanceKm
   })
 }
+
+/** Maximum controls a printed card back can hold (3 columns × 7 rows). */
+export const MAX_CARD_CONTROLS = 21
+
+export type BackCardTier = 'normal' | 'compact' | 'dense'
+
+/**
+ * Layout for the printed card back: how many control rows each of the 3
+ * columns holds, and which typography tier applies. Rows per column is
+ * ceil(count / 3) clamped to [4, 7]; counts above MAX_CARD_CONTROLS are the
+ * callers' responsibility to reject — this clamps rather than throws.
+ */
+export function backCardLayout(controlCount: number): {
+  rowsPerColumn: number
+  tier: BackCardTier
+} {
+  const rowsPerColumn = Math.min(7, Math.max(4, Math.ceil(controlCount / 3)))
+  const tier: BackCardTier =
+    controlCount <= 12 ? 'normal' : controlCount <= 18 ? 'compact' : 'dense'
+  return { rowsPerColumn, tier }
+}
