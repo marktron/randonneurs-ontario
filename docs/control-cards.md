@@ -153,7 +153,7 @@ By default `computeControlTimes` truncates distances to whole km before computin
 
 - **Letter portrait**, 2 cards per sheet (front on page 1, back on page 2 — designed for double-sided printing).
 - Front: regulations (left), time/signature fields (middle), event + rider + organizer + QR codes (right).
-- Back: up to 24 controls in 3 columns. Rows per column and typography scale with the control count via `backCardLayout()` in `lib/controlPoints.ts`: `normal` ≤12 controls (4 rows/col, full-size text), `compact` 13–18 (5–6 rows/col), `dense` 19–21 (7 rows/col), `ultra` 22–24 (8 rows/col, open/close times on one line like `Sat 17:14 - Sun 21:36`). Rows are `flex: 1` so they share the column height at any count. Beyond `MAX_CARD_CONTROLS` (24) the print page renders an error panel instead of cards — there is no truncation path. Both forms disable Generate above the cap with an inline error.
+- Back: up to 24 controls in 3 columns. Rows per column and typography scale with the control count via `backCardLayout()` in `lib/controlPoints.ts`: `normal` ≤12 controls (4 rows/col, full-size text), `compact` 13–18 (5–6 rows/col), `dense` 19–21 (7 rows/col), `ultra` 22–24 (8 rows/col). The ultra tier renders open/close times on one line (like `Sat 17:14 - Sun 21:36`) and merges the Time and Signature columns into a single **Validation** column at 1/3 of the width, doubling the name cell so long control names (services in brackets, etc.) wrap instead of overflowing; its rows also size to content (`flex-basis: auto`) so a wrapped name takes slack from single-line rows. Other tiers share column height equally (`flex: 1`). Beyond `MAX_CARD_CONTROLS` (24) the print page renders an error panel instead of cards — there is no truncation path. Both forms disable Generate above the cap with an inline error.
 - Print styles live in a static stylesheet at `components/admin/control-cards-print.css`, imported by both print layouts so they end up in `<head>` at parse time. `@page { size: letter portrait; margin: 0 }` plus aggressive overrides to hide any ancestor `nav`, `aside`, `header`, or sidebar (important for the admin flow, where the print page still inherits the admin chrome in the component tree). The chrome-hiding rules are also applied in screen media so the print page reads as a clean preview whether visited directly or via the autoprint popup.
 - Fonts (`Noto Sans` + `Noto Serif`) come from `next/font/google` at the root layout, exposed as `var(--font-sans)` and `var(--font-serif)`. The print stylesheet references those CSS variables.
 - Everything in `.no-print` is hidden during print.
@@ -301,9 +301,10 @@ Control points can be added in two ways:
 
 Printed cards hold at most **24 controls** (3 columns × 8 rows). Cards with 13+
 controls automatically switch to progressively more compact row layouts to fit;
-at 22–24 the open/close times collapse to one line and the write-in cells are
-at their tightest. If an event has more than 24, the Generate button is
-disabled with an inline error — merge adjacent controls or remove
+at 22–24 the open/close times collapse to one line and the separate Time and
+Signature boxes become a single **Validation** box (volunteers write the time
+and sign in the same cell). If an event has more than 24, the Generate button
+is disabled with an inline error — merge adjacent controls or remove
 non-mandatory ones in the form. (The digital brevet card has no such limit;
 this cap is purely about paper space.)
 
