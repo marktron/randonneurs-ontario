@@ -208,9 +208,14 @@ Controls can be encoded two ways in RWGPS, and some routes use both. Both are im
 
 ### POI distance interpolation
 
-Because POIs lack a distance-along-route, `lib/rwgps.ts` interpolates: for each relevant POI it finds the nearest `track_points[]` entry by haversine distance (see `lib/geo.ts`) and uses that track point's `d` as the control's distance. If the nearest track point is more than **500 m** away, the POI is dropped as likely off-route. If the response has no `track_points`, POIs are skipped entirely.
+Because POIs lack a distance-along-route, `lib/rwgps.ts` interpolates against `track_points[]` by haversine distance (see `lib/geo.ts`). Routes can pass the same physical control more than once (loops, out-and-backs, hub-and-spoke designs — the Waffle 1200 passes Chatham five times), so the interpolator finds every **pass**: track points within **500 m** of the POI are clustered, an along-route gap of more than **1 km** between in-range points starts a new cluster, and each cluster contributes its closest point's `d`.
 
-On loop routes the start and finish addresses are the same physical location, which means a POI placed there is equidistant from two track points (one near `d=0`, one near `d=total`). To resolve the ambiguity the interpolator biases `start`-typed POIs toward the lower-`d` candidate and `finish`-typed POIs toward the higher-`d` candidate.
+- A `control`-type POI becomes one control per pass.
+- A `start`-type POI keeps only its **first** pass and a `finish`-type POI only its **last**: on loop routes the same spot is passed at km 0 and km total (and sometimes mid-ride), but an endpoint label marks exactly one visit.
+
+A POI with no track point within 500 m is dropped as likely off-route. If the response has no `track_points`, POIs are skipped entirely.
+
+Pass expansion deliberately over-includes: RWGPS POIs carry no distance, sequence, or visit-count fields, so a route that merely rides past a control's location imports an extra row (e.g. the Waffle 1200 passes its Wheatley control at km 919 without stopping — only km 1145 is real). The organizer deletes such rows while reviewing the import. This is the chosen trade-off: an extra visible row beats silently dropping a real visit (the failure mode this design replaced), and the import matcher always attaches the saved row — with its check-ins — to the closest same-name pass, so the phantom row is the unsaved one.
 
 ### Dedupe
 

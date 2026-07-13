@@ -208,48 +208,50 @@ function poiSourceFor(poiTypeName: string | undefined): Source | null {
   return CONTROL_POI_TYPES[poiTypeName] ?? null
 }
 
-type InterpolationBias = 'start' | 'finish' | 'none'
+// Along-route gap that separates two visits to the same POI. While the route
+// stays within MAX_POI_OFFROUTE_METERS of the POI, successive in-range track
+// points are at most a few dozen meters apart; leaving the radius for more
+// than this much route and returning is a genuine re-pass.
+const PASS_GAP_METERS = 1000
 
 /**
- * Find the track point closest to (lat, lng) and return its cumulative
- * distance along the route.
+ * Find every pass the route makes by (lat, lng): each cluster of in-range
+ * track points (within MAX_POI_OFFROUTE_METERS, split where the along-route
+ * gap exceeds PASS_GAP_METERS) yields its closest point's cumulative
+ * distance. Loop and out-and-back routes visit the same physical control
+ * more than once, and each visit is its own control on the card.
  *
- * On loop/out-and-back routes the same physical location appears twice in
- * track_points (once near `d=0`, once near `d=total`), so a POI placed
- * there can legitimately match either track point. The `bias` argument
- * breaks that ambiguity — for a `start`-typed POI, prefer the start-end
- * candidate; for a `finish`-typed POI, prefer the finish-end.
+ * `trackPoints` must be sorted by cumulative distance.
  */
-function findNearestTrackPointDistanceMeters(
+function findRoutePasses(
   lat: number,
   lng: number,
-  trackPoints: RwgpsTrackPoint[],
-  bias: InterpolationBias = 'none'
-): { distanceMeters: number; offsetMeters: number } | null {
-  let bestDistance: number | null = null
-  let bestOffset = Infinity
+  trackPoints: RwgpsTrackPoint[]
+): { distanceMeters: number; offsetMeters: number }[] {
+  const passes: { distanceMeters: number; offsetMeters: number }[] = []
+  let current: { distanceMeters: number; offsetMeters: number; lastD: number } | null = null
   for (const tp of trackPoints) {
     if (tp.y == null || tp.x == null || tp.d == null) continue
     const offset = haversineMeters(lat, lng, tp.y, tp.x)
-    const isStrictlyCloser = offset < bestOffset
-    const isTie = offset === bestOffset
-    const tieWinsByBias =
-      isTie &&
-      bestDistance != null &&
-      ((bias === 'finish' && tp.d > bestDistance) || (bias === 'start' && tp.d < bestDistance))
-    if (isStrictlyCloser || tieWinsByBias) {
-      bestOffset = offset
-      bestDistance = tp.d
+    if (offset > MAX_POI_OFFROUTE_METERS) continue
+    if (current && tp.d - current.lastD > PASS_GAP_METERS) {
+      passes.push({ distanceMeters: current.distanceMeters, offsetMeters: current.offsetMeters })
+      current = null
+    }
+    if (!current) {
+      current = { distanceMeters: tp.d, offsetMeters: offset, lastD: tp.d }
+    } else {
+      current.lastD = tp.d
+      if (offset < current.offsetMeters) {
+        current.offsetMeters = offset
+        current.distanceMeters = tp.d
+      }
     }
   }
-  if (bestDistance == null) return null
-  return { distanceMeters: bestDistance, offsetMeters: bestOffset }
-}
-
-function biasForPoiType(poiTypeName: string | undefined): InterpolationBias {
-  if (poiTypeName === 'start') return 'start'
-  if (poiTypeName === 'finish') return 'finish'
-  return 'none'
+  if (current) {
+    passes.push({ distanceMeters: current.distanceMeters, offsetMeters: current.offsetMeters })
+  }
+  return passes
 }
 
 function dedupeCoLocatedPois(pois: RwgpsPoi[]): RwgpsPoi[] {
@@ -276,7 +278,7 @@ function dedupeCoLocatedPois(pois: RwgpsPoi[]): RwgpsPoi[] {
 }
 
 function parsePoiControls(route: RwgpsRoute): InternalControl[] {
-  const trackPoints = route.track_points ?? []
+  const trackPoints = [...(route.track_points ?? [])].sort((a, b) => (a.d ?? 0) - (b.d ?? 0))
   if (trackPoints.length === 0) return []
 
   const candidates = (route.points_of_interest ?? []).filter(
@@ -289,22 +291,28 @@ function parsePoiControls(route: RwgpsRoute): InternalControl[] {
     const source = poiSourceFor(poi.poi_type_name)
     if (!source) continue
     if (poi.lat == null || poi.lng == null) continue
-    const match = findNearestTrackPointDistanceMeters(
-      poi.lat,
-      poi.lng,
-      trackPoints,
-      biasForPoiType(poi.poi_type_name)
-    )
-    if (!match) continue
-    if (match.offsetMeters > MAX_POI_OFFROUTE_METERS) continue
-    result.push({
-      name: cleanControlName(poi.name),
-      distanceKm: match.distanceMeters / 1000,
-      source,
-      lat: poi.lat,
-      lng: poi.lng,
-      notes: poi.description?.trim() || null,
-    })
+    const allPasses = findRoutePasses(poi.lat, poi.lng, trackPoints)
+    if (allPasses.length === 0) continue
+    // A control POI is a control at every visit. A start/finish POI marks one
+    // endpoint: on loops the same spot is passed at km 0 and km total (and
+    // sometimes mid-ride), so keep only the first pass for `start` and only
+    // the last for `finish`.
+    const passes =
+      poi.poi_type_name === 'start'
+        ? [allPasses[0]]
+        : poi.poi_type_name === 'finish'
+          ? [allPasses[allPasses.length - 1]]
+          : allPasses
+    for (const pass of passes) {
+      result.push({
+        name: cleanControlName(poi.name),
+        distanceKm: pass.distanceMeters / 1000,
+        source,
+        lat: poi.lat,
+        lng: poi.lng,
+        notes: poi.description?.trim() || null,
+      })
+    }
   }
   return result
 }

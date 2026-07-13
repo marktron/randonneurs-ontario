@@ -40,9 +40,11 @@ const MATCH_DISTANCE_TOLERANCE_KM = 0.1
  * radius, and notes.
  *
  * Returns an array aligned to `imported`: each element is the saved control it
- * matched, or `null` for a genuinely new control. Matching is greedy in two
- * passes — trimmed, case-insensitive name first, then distance within 0.1 km
- * among whatever is still unmatched — and each saved row matches at most once.
+ * matched, or `null` for a genuinely new control. Matching runs in two passes
+ * — trimmed, case-insensitive name first (closest distance wins when a name
+ * repeats, e.g. a control the route passes twice), then distance within
+ * 0.1 km among whatever is still unmatched — and each saved row matches at
+ * most once.
  */
 export function matchImportedControls<S extends ControlNameDistance>(
   imported: ControlNameDistance[],
@@ -52,15 +54,23 @@ export function matchImportedControls<S extends ControlNameDistance>(
   const result: (S | null)[] = new Array(imported.length).fill(null)
   const norm = (s: string) => s.trim().toLowerCase()
 
-  // Pass 1: exact (normalized) name match.
+  // Pass 1: exact (normalized) name match, assigning closest-distance pairs
+  // first so repeated names (multi-pass controls) map to the right visit.
+  const namePairs: { i: number; j: number; delta: number }[] = []
   imported.forEach((imp, i) => {
     const target = norm(imp.name)
-    const idx = saved.findIndex((s, j) => !used[j] && norm(s.name) === target)
-    if (idx !== -1) {
-      used[idx] = true
-      result[i] = saved[idx]
-    }
+    saved.forEach((s, j) => {
+      if (norm(s.name) === target) {
+        namePairs.push({ i, j, delta: Math.abs(s.distanceKm - imp.distanceKm) })
+      }
+    })
   })
+  namePairs.sort((a, b) => a.delta - b.delta)
+  for (const { i, j } of namePairs) {
+    if (result[i] || used[j]) continue
+    used[j] = true
+    result[i] = saved[j]
+  }
 
   // Pass 2: distance match within tolerance, for imported rows still unmatched.
   imported.forEach((imp, i) => {

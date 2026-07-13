@@ -169,6 +169,33 @@ describe('matchImportedControls', () => {
     expect(result[1]?.id).toBe('b')
     expect(result[0]?.id).toBe('a')
   })
+
+  it('attaches a saved row to the closest same-name imported control, not the first', () => {
+    // Multi-pass route: the import now lists Wheatley at both passes, but the
+    // saved row (with its check-ins) belongs to the second pass.
+    const savedWheatley = [{ id: 'w', name: 'Wheatley', distanceKm: 1145.3 }]
+    const imported = [
+      { name: 'Wheatley', distanceKm: 919.5 },
+      { name: 'Wheatley', distanceKm: 1145.4 },
+    ]
+    const result = matchImportedControls(imported, savedWheatley)
+    expect(result[0]).toBeNull()
+    expect(result[1]?.id).toBe('w')
+  })
+
+  it('pairs repeated names one-to-one by nearest distance regardless of order', () => {
+    const savedChatham = [
+      { id: 'c1', name: 'Chatham', distanceKm: 0 },
+      { id: 'c2', name: 'Chatham', distanceKm: 355.8 },
+    ]
+    const imported = [
+      { name: 'Chatham', distanceKm: 355.8 },
+      { name: 'Chatham', distanceKm: 0 },
+    ]
+    const result = matchImportedControls(imported, savedChatham)
+    expect(result[0]?.id).toBe('c2')
+    expect(result[1]?.id).toBe('c1')
+  })
 })
 
 describe('controlsInSync', () => {

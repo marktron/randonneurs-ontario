@@ -283,6 +283,92 @@ describe('extractControls', () => {
     expect(result).toEqual([])
   })
 
+  it('emits one control per route pass when a control POI is visited twice (out-and-back)', () => {
+    // Out-and-back: the route reaches 43.1 and returns, passing 43.05 at
+    // km 5 and again at km 15. One POI there is two controls on the card.
+    const result = extractControls({
+      track_points: [
+        { x: -81.0, y: 43.0, d: 0 },
+        { x: -81.0, y: 43.05, d: 5000 },
+        { x: -81.0, y: 43.1, d: 10_000 },
+        { x: -81.0, y: 43.05, d: 15_000 },
+        { x: -81.0, y: 43.0, d: 20_000 },
+      ],
+      points_of_interest: [
+        { name: 'CTL Midpoint', lat: 43.05, lng: -81.0, poi_type_name: 'control' },
+      ],
+    })
+    expect(result).toEqual([
+      { name: 'Midpoint', distance: '5.0' },
+      { name: 'Midpoint', distance: '15.0' },
+    ])
+  })
+
+  it('emits every pass of a hub control visited at start, middle, and finish', () => {
+    // Cloverleaf route from a hub at 43.0: out north and back, out south and
+    // back. The hub POI is a control at km 0, km 20, and km 40.
+    const result = extractControls({
+      track_points: [
+        { x: -81.0, y: 43.0, d: 0 },
+        { x: -81.0, y: 43.1, d: 10_000 },
+        { x: -81.0, y: 43.0, d: 20_000 },
+        { x: -81.0, y: 42.9, d: 30_000 },
+        { x: -81.0, y: 43.0, d: 40_000 },
+      ],
+      points_of_interest: [
+        { name: 'CTL Hub', lat: 43.0, lng: -81.0, poi_type_name: 'control' },
+        { name: 'CTL North', lat: 43.1, lng: -81.0, poi_type_name: 'control' },
+      ],
+    })
+    expect(result).toEqual([
+      { name: 'Hub', distance: '0.0' },
+      { name: 'North', distance: '10.0' },
+      { name: 'Hub', distance: '20.0' },
+      { name: 'Hub', distance: '40.0' },
+    ])
+  })
+
+  it('keeps a start POI only at its first pass and a finish POI only at its last', () => {
+    // Hub route again, but the POIs are typed start/finish: a start label at
+    // a location revisited mid-ride must not spawn mid-ride controls.
+    const hubTrack = [
+      { x: -81.0, y: 43.0, d: 0 },
+      { x: -81.0, y: 43.1, d: 10_000 },
+      { x: -81.0, y: 43.0, d: 20_000 },
+      { x: -81.0, y: 42.9, d: 30_000 },
+      { x: -81.0, y: 43.0, d: 40_000 },
+    ]
+    const result = extractControls({
+      track_points: hubTrack,
+      points_of_interest: [
+        { name: 'Start: Hub', lat: 43.0, lng: -81.0, poi_type_name: 'start' },
+        { name: 'Finish: Hub', lat: 43.0, lng: -81.0, poi_type_name: 'finish' },
+      ],
+    })
+    expect(result).toEqual([
+      { name: 'Start: Hub', distance: '0.0' },
+      { name: 'Finish: Hub', distance: '40.0' },
+    ])
+  })
+
+  it('treats a tight turnaround just past a control as a single pass', () => {
+    // The route stays within 500 m of the POI through the turnaround, so the
+    // out and back legs are one visit, not two.
+    const result = extractControls({
+      track_points: [
+        { x: -81.0, y: 43.0, d: 0 },
+        { x: -81.0, y: 43.05, d: 5000 },
+        { x: -81.0, y: 43.052, d: 5300 }, // turnaround ~220 m past the control
+        { x: -81.0, y: 43.05, d: 5600 },
+        { x: -81.0, y: 43.0, d: 10_600 },
+      ],
+      points_of_interest: [
+        { name: 'CTL Turnaround', lat: 43.05, lng: -81.0, poi_type_name: 'control' },
+      ],
+    })
+    expect(result).toEqual([{ name: 'Turnaround', distance: '5.0' }])
+  })
+
   it('handles POIs missing lat or lng gracefully', () => {
     const result = extractControls({
       track_points: trackPoints,
