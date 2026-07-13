@@ -260,8 +260,8 @@ describe('controlsInSync', () => {
 })
 
 describe('backCardLayout', () => {
-  it('exports a cap of 21', () => {
-    expect(MAX_CARD_CONTROLS).toBe(21)
+  it('exports a cap of 24', () => {
+    expect(MAX_CARD_CONTROLS).toBe(24)
   })
 
   it('uses the normal 4-row tier up to 12 controls', () => {
@@ -287,8 +287,13 @@ describe('backCardLayout', () => {
     expect(backCardLayout(21)).toEqual({ rowsPerColumn: 7, tier: 'dense' })
   })
 
-  it('clamps above the cap rather than throwing (callers reject >21)', () => {
-    expect(backCardLayout(22)).toEqual({ rowsPerColumn: 7, tier: 'dense' })
-    expect(backCardLayout(40)).toEqual({ rowsPerColumn: 7, tier: 'dense' })
+  it('switches to ultra at 22 controls', () => {
+    expect(backCardLayout(22)).toEqual({ rowsPerColumn: 8, tier: 'ultra' })
+    expect(backCardLayout(24)).toEqual({ rowsPerColumn: 8, tier: 'ultra' })
+  })
+
+  it('clamps above the cap rather than throwing (callers reject >24)', () => {
+    expect(backCardLayout(25)).toEqual({ rowsPerColumn: 8, tier: 'ultra' })
+    expect(backCardLayout(40)).toEqual({ rowsPerColumn: 8, tier: 'ultra' })
   })
 })
