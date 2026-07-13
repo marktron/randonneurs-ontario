@@ -20,6 +20,7 @@ import { Plus, Trash2, Printer, GripVertical, Download, Loader2, ChevronDown } f
 import type { ActiveRouteWithRwgps } from '@/lib/data/routes'
 import { fetchRwgpsControls, fetchRwgpsRoute, parseRwgpsRouteRef } from '@/lib/rwgps'
 import { getSavedRegistrationData } from '@/lib/registration-storage'
+import { MAX_CARD_CONTROLS } from '@/lib/controlPoints'
 
 interface ControlInput {
   id: string
@@ -309,8 +310,13 @@ export function ControlCardForm({ routes, mode = 'picker' }: ControlCardFormProp
     extraBlankCards,
   ])
 
+  const tooManyControls = controls.length > MAX_CARD_CONTROLS
+
   const isFormValid =
-    effectiveRoute && eventDate && controls.every((c) => c.name && c.distance !== '')
+    effectiveRoute &&
+    eventDate &&
+    controls.every((c) => c.name && c.distance !== '') &&
+    !tooManyControls
 
   return (
     <div className="space-y-6">
@@ -728,7 +734,13 @@ export function ControlCardForm({ routes, mode = 'picker' }: ControlCardFormProp
             Generate Control Cards
           </a>
         </Button>
-        {!isFormValid && (
+        {tooManyControls && (
+          <p className="text-sm text-destructive self-center">
+            {controls.length} controls — printed cards support at most {MAX_CARD_CONTROLS}. Merge or
+            remove controls.
+          </p>
+        )}
+        {!isFormValid && !tooManyControls && (
           <p className="text-sm text-muted-foreground self-center">
             {mode === 'rwgps'
               ? 'Load a RideWithGPS route, set a date, and fill in control points.'
