@@ -153,7 +153,7 @@ By default `computeControlTimes` truncates distances to whole km before computin
 
 - **Letter portrait**, 2 cards per sheet (front on page 1, back on page 2 — designed for double-sided printing).
 - Front: regulations (left), time/signature fields (middle), event + rider + organizer + QR codes (right).
-- Back: up to 12 controls arranged in 3 columns of 4, with open/close times and signature cells.
+- Back: up to 21 controls in 3 columns. Rows per column and typography scale with the control count via `backCardLayout()` in `lib/controlPoints.ts`: `normal` ≤12 controls (4 rows/col, full-size text), `compact` 13–18 (5–6 rows/col), `dense` 19–21 (7 rows/col, smallest text). Rows are `flex: 1` so they share the column height at any count. Beyond `MAX_CARD_CONTROLS` (21) the print page renders an error panel instead of cards — there is no truncation path. Both forms disable Generate above the cap with an inline error.
 - Print styles live in a static stylesheet at `components/admin/control-cards-print.css`, imported by both print layouts so they end up in `<head>` at parse time. `@page { size: letter portrait; margin: 0 }` plus aggressive overrides to hide any ancestor `nav`, `aside`, `header`, or sidebar (important for the admin flow, where the print page still inherits the admin chrome in the component tree). The chrome-hiding rules are also applied in screen media so the print page reads as a clean preview whether visited directly or via the autoprint popup.
 - Fonts (`Noto Sans` + `Noto Serif`) come from `next/font/google` at the root layout, exposed as `var(--font-sans)` and `var(--font-serif)`. The print stylesheet references those CSS variables.
 - Everything in `.no-print` is hidden during print.
@@ -291,6 +291,14 @@ Control points can be added in two ways:
 
 1. **Manual entry** — add controls one by one with name and distance (km).
 2. **Import from RWGPS** — if the event has a linked RideWithGPS route, click "Import from RWGPS" to pull in controls automatically. Controls must be marked with type "Control" as course points in the RWGPS route editor.
+
+### Control count limit
+
+Printed cards hold at most **21 controls** (3 columns × 7 rows). Cards with 13+
+controls automatically switch to a more compact row layout to fit. If an event
+has more than 21, the Generate button is disabled with an inline error — merge
+adjacent controls or remove non-mandatory ones in the form. (The digital brevet
+card has no such limit; this cap is purely about paper space.)
 
 ### Rider selection
 
