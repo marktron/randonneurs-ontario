@@ -276,7 +276,11 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
     let cancelled = false
     let status: PermissionStatus | null = null
     const onChange = () => {
-      if (!cancelled && status) setLocationStatus(status.state)
+      if (cancelled || !status) return
+      setLocationStatus(status.state)
+      // A revoked permission invalidates any earlier successful test —
+      // otherwise the card would show "works" and "blocked" side by side.
+      if (status.state !== 'granted') setLocationTest('idle')
     }
     navigator.permissions
       .query({ name: 'geolocation' })

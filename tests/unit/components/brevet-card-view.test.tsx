@@ -1015,6 +1015,24 @@ describe('BrevetCard proactive location check', () => {
     })
   })
 
+  it('clears a stale success note when permission is revoked (change event)', async () => {
+    // Rider tests location successfully, then revokes the site permission in
+    // settings while the tab stays open. The blocked banner must replace the
+    // success note — not render alongside it.
+    const perms = stubPermissions('prompt')
+    stubGeolocation()
+    const user = userEvent.setup()
+    render(<BrevetCard token={TOKEN} initialData={makeData()} />)
+
+    await user.click(await screen.findByRole('button', { name: /test your location/i }))
+    await screen.findByText(/location works on this phone/i)
+
+    act(() => perms.setState('denied'))
+
+    expect(await screen.findByText(/location is blocked for this browser/i)).toBeInTheDocument()
+    expect(screen.queryByText(/location works on this phone/i)).toBeNull()
+  })
+
   it('does not offer the test once a GPS check-in already exists', async () => {
     const perms = stubPermissions('prompt')
     const data = makeData()
