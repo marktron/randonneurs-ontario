@@ -184,6 +184,25 @@ export function hasAnyFlag(flags: CheckinFlags): boolean {
   return flags.outOfRadius || flags.noGps || flags.early || flags.late || flags.lateSync
 }
 
+/**
+ * The time to record for a check-in. Riders gather at the start control
+ * before the gun and tap when they arrive — that tap is their official
+ * start, so it is recorded at the rider's start time, not the tap time.
+ * Applies only to the event's first control and never moves a time
+ * backward; a pre-start tap at any later control keeps the claimed time
+ * (and its read-time `early` flag).
+ */
+export function resolveRecordedCheckinTime(
+  checkedInAt: Date,
+  riderStart: Date,
+  isFirstControl: boolean
+): Date {
+  if (isFirstControl && checkedInAt.getTime() < riderStart.getTime()) {
+    return riderStart
+  }
+  return checkedInAt
+}
+
 // ============================================================================
 // Wrong-control detection (GPS check-ins) & rider undo window
 // ============================================================================
