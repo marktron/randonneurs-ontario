@@ -42,7 +42,7 @@ import {
   type WrongControlDecision,
 } from '@/lib/brevet-card'
 import { detectPlatform, locationFixSteps } from '@/lib/location-help'
-import { CheckCircle2, CloudOff, Loader2, Mail, MapPin, Phone } from 'lucide-react'
+import { CheckCircle2, CloudOff, Loader2, Mail, Map as MapIcon, MapPin, Phone } from 'lucide-react'
 import { BoldLabelText } from '@/components/bold-label-text'
 import { REGULATIONS_TEXT, EVENT_INFO_TEXT } from '@/types/control-card'
 import { cn } from '@/lib/utils'
@@ -849,6 +849,27 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
               )}
             </div>
           )}
+        </div>
+      )}
+
+      {event.rwgpsId && (
+        <div className="rounded-lg border bg-muted/40 p-5">
+          <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
+            Route
+          </p>
+          <div className="mt-3 text-sm">
+            <a
+              href={`https://ridewithgps.com/routes/${event.rwgpsId}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="group inline-flex w-fit items-center gap-2.5 py-0.5 transition-colors hover:text-primary"
+            >
+              <MapIcon className="h-4 w-4 shrink-0 text-muted-foreground transition-colors group-hover:text-primary" />
+              <span className="underline decoration-border underline-offset-4 transition-colors group-hover:decoration-primary">
+                View on RideWithGPS
+              </span>
+            </a>
+          </div>
         </div>
       )}
 
