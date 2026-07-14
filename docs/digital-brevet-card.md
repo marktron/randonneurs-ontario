@@ -244,16 +244,16 @@ Design notes:
   it via the manage page). See "Finish flow: result pre-fill & track
   follow-up" below for what happens to the result row and email at that
   moment.
-- Beneath the check-ins (and any finish banner), the card shows the event's
-  **ride organizer** contact — name, and phone/email as `tel:`/`mailto:`
-  links — when the admin has set one; hidden entirely otherwise. See §9 for
-  where that's set, and "Regulations fine print" below for the static block
-  shown under it.
-- Beneath the organizer box, a **Route** box links to the event's RWGPS
-  route (`https://ridewithgps.com/routes/<rwgps_id>`, opens in a new tab)
-  when the event's route has an RWGPS id; hidden otherwise. It renders
-  independently of the organizer box, so it still shows up when no
-  organizer contact is set.
+- Beneath the check-ins (and any finish banner), the card shows one merged
+  **Ride Organizer** box: name, and phone/email as `tel:`/`mailto:` links,
+  when the admin has set an organizer contact. That same box also carries
+  the event's RWGPS route link
+  (`https://ridewithgps.com/routes/<rwgps_id>`, opens in a new tab) as a
+  third row when the event's route has an RWGPS id. The box renders when
+  either an organizer contact or a linked RWGPS route exists; if no
+  organizer contact is set, its heading falls back to **Route**. See §9 for
+  where the organizer contact is set, and "Regulations fine print" below
+  for the static block shown under it.
 
 ### Location permission help
 

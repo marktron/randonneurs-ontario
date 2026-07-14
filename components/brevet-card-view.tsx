@@ -831,15 +831,20 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
         control, your paper card is the backup.
       </p>
 
-      {(event.organizer.name || event.organizer.phone || event.organizer.email) && (
+      {(event.organizer.name ||
+        event.organizer.phone ||
+        event.organizer.email ||
+        event.rwgpsId) && (
         <div className="rounded-lg border bg-muted/40 p-5">
           <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
-            Ride Organizer
+            {event.organizer.name || event.organizer.phone || event.organizer.email
+              ? 'Ride Organizer'
+              : 'Route'}
           </p>
           {event.organizer.name && (
             <p className="mt-1.5 text-lg font-semibold leading-tight">{event.organizer.name}</p>
           )}
-          {(event.organizer.phone || event.organizer.email) && (
+          {(event.organizer.phone || event.organizer.email || event.rwgpsId) && (
             <div className="mt-3 flex flex-col gap-2 text-sm">
               {event.organizer.phone && (
                 <a
@@ -863,29 +868,21 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
                   </span>
                 </a>
               )}
+              {event.rwgpsId && (
+                <a
+                  href={`https://ridewithgps.com/routes/${event.rwgpsId}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="group inline-flex w-fit items-center gap-2.5 py-0.5 transition-colors hover:text-primary"
+                >
+                  <MapIcon className="h-4 w-4 shrink-0 text-muted-foreground transition-colors group-hover:text-primary" />
+                  <span className="underline decoration-border underline-offset-4 transition-colors group-hover:decoration-primary">
+                    View on RideWithGPS
+                  </span>
+                </a>
+              )}
             </div>
           )}
-        </div>
-      )}
-
-      {event.rwgpsId && (
-        <div className="rounded-lg border bg-muted/40 p-5">
-          <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
-            Route
-          </p>
-          <div className="mt-3 text-sm">
-            <a
-              href={`https://ridewithgps.com/routes/${event.rwgpsId}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="group inline-flex w-fit items-center gap-2.5 py-0.5 transition-colors hover:text-primary"
-            >
-              <MapIcon className="h-4 w-4 shrink-0 text-muted-foreground transition-colors group-hover:text-primary" />
-              <span className="underline decoration-border underline-offset-4 transition-colors group-hover:decoration-primary">
-                View on RideWithGPS
-              </span>
-            </a>
-          </div>
         </div>
       )}
 

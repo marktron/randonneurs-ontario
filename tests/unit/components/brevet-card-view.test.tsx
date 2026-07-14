@@ -1002,6 +1002,24 @@ describe('route link', () => {
     expect(screen.queryByText('Route')).toBeNull()
     expect(screen.queryByRole('link', { name: /view on ridewithgps/i })).toBeNull()
   })
+
+  it('shows the route link inside the Ride Organizer card when both exist', () => {
+    const data = makeData()
+    data.event.organizer = { name: 'Mark Allen', phone: '416-555-0101', email: 'vp@example.ca' }
+    data.event.rwgpsId = '12345678'
+    render(<BrevetCard token={TOKEN} initialData={data} />)
+
+    // One merged card: organizer heading, no separate Route heading.
+    expect(screen.getByText('Ride Organizer')).toBeInTheDocument()
+    expect(screen.queryByText('Route')).toBeNull()
+
+    // The route link sits in the same card as the organizer contacts.
+    const link = screen.getByRole('link', { name: /view on ridewithgps/i })
+    expect(link.getAttribute('href')).toBe('https://ridewithgps.com/routes/12345678')
+    const card = screen.getByText('Ride Organizer').closest('div')!
+    expect(card).toContainElement(link)
+    expect(card).toContainElement(screen.getByRole('link', { name: '416-555-0101' }))
+  })
 })
 
 describe('check-in stamp', () => {
