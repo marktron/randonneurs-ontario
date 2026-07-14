@@ -1009,9 +1009,8 @@ describe('route link', () => {
     data.event.rwgpsId = '12345678'
     render(<BrevetCard token={TOKEN} initialData={data} />)
 
-    // One merged card: organizer heading, no separate Route heading.
+    // One merged card: both the organizer and route sections render.
     expect(screen.getByText('Ride Organizer')).toBeInTheDocument()
-    expect(screen.queryByText('Route')).toBeNull()
 
     // The route link sits in the same card as the organizer contacts.
     const link = screen.getByRole('link', { name: /view on ridewithgps/i })
@@ -1019,6 +1018,10 @@ describe('route link', () => {
     const card = screen.getByText('Ride Organizer').closest('div')!
     expect(card).toContainElement(link)
     expect(card).toContainElement(screen.getByRole('link', { name: '416-555-0101' }))
+
+    // Both labels render inside the one card.
+    expect(screen.getByText('Route')).toBeInTheDocument()
+    expect(card).toContainElement(screen.getByText('Route'))
   })
 })
 
