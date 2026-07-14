@@ -245,15 +245,14 @@ Design notes:
   follow-up" below for what happens to the result row and email at that
   moment.
 - Beneath the check-ins (and any finish banner), the card shows one merged
-  **Ride Organizer** box: name, and phone/email as `tel:`/`mailto:` links,
-  when the admin has set an organizer contact. That same box also carries
-  the event's RWGPS route link
-  (`https://ridewithgps.com/routes/<rwgps_id>`, opens in a new tab) as a
-  third row when the event's route has an RWGPS id. The box renders when
-  either an organizer contact or a linked RWGPS route exists; if no
-  organizer contact is set, its heading falls back to **Route**. See §9 for
-  where the organizer contact is set, and "Regulations fine print" below
-  for the static block shown under it.
+  box containing a **Ride Organizer** section (name, and phone/email as
+  `tel:`/`mailto:` links) and, below it, a labeled **Route** section with
+  the event's RWGPS route link (`https://ridewithgps.com/routes/<rwgps_id>`,
+  opens in a new tab). Each section renders only when its own data exists
+  (an organizer contact, or a linked RWGPS id, respectively), and the box
+  itself renders when either section has data. See §9 for where the
+  organizer contact is set, and "Regulations fine print" below for the
+  static block shown under it.
 
 ### Location permission help
 

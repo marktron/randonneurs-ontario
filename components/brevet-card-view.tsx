@@ -836,39 +836,53 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
         event.organizer.email ||
         event.rwgpsId) && (
         <div className="rounded-lg border bg-muted/40 p-5">
-          <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
-            {event.organizer.name || event.organizer.phone || event.organizer.email
-              ? 'Ride Organizer'
-              : 'Route'}
-          </p>
-          {event.organizer.name && (
-            <p className="mt-1.5 text-lg font-semibold leading-tight">{event.organizer.name}</p>
+          {(event.organizer.name || event.organizer.phone || event.organizer.email) && (
+            <>
+              <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
+                Ride Organizer
+              </p>
+              {event.organizer.name && (
+                <p className="mt-1.5 text-lg font-semibold leading-tight">{event.organizer.name}</p>
+              )}
+              {(event.organizer.phone || event.organizer.email) && (
+                <div className="mt-3 flex flex-col gap-2 text-sm">
+                  {event.organizer.phone && (
+                    <a
+                      href={`tel:${event.organizer.phone}`}
+                      className="group inline-flex w-fit items-center gap-2.5 py-0.5 transition-colors hover:text-primary"
+                    >
+                      <Phone className="h-4 w-4 shrink-0 text-muted-foreground transition-colors group-hover:text-primary" />
+                      <span className="tabular-nums underline decoration-border underline-offset-4 transition-colors group-hover:decoration-primary">
+                        {event.organizer.phone}
+                      </span>
+                    </a>
+                  )}
+                  {event.organizer.email && (
+                    <a
+                      href={`mailto:${event.organizer.email}`}
+                      className="group inline-flex w-fit items-center gap-2.5 py-0.5 transition-colors hover:text-primary"
+                    >
+                      <Mail className="h-4 w-4 shrink-0 text-muted-foreground transition-colors group-hover:text-primary" />
+                      <span className="break-all underline decoration-border underline-offset-4 transition-colors group-hover:decoration-primary">
+                        {event.organizer.email}
+                      </span>
+                    </a>
+                  )}
+                </div>
+              )}
+            </>
           )}
-          {(event.organizer.phone || event.organizer.email || event.rwgpsId) && (
-            <div className="mt-3 flex flex-col gap-2 text-sm">
-              {event.organizer.phone && (
-                <a
-                  href={`tel:${event.organizer.phone}`}
-                  className="group inline-flex w-fit items-center gap-2.5 py-0.5 transition-colors hover:text-primary"
-                >
-                  <Phone className="h-4 w-4 shrink-0 text-muted-foreground transition-colors group-hover:text-primary" />
-                  <span className="tabular-nums underline decoration-border underline-offset-4 transition-colors group-hover:decoration-primary">
-                    {event.organizer.phone}
-                  </span>
-                </a>
-              )}
-              {event.organizer.email && (
-                <a
-                  href={`mailto:${event.organizer.email}`}
-                  className="group inline-flex w-fit items-center gap-2.5 py-0.5 transition-colors hover:text-primary"
-                >
-                  <Mail className="h-4 w-4 shrink-0 text-muted-foreground transition-colors group-hover:text-primary" />
-                  <span className="break-all underline decoration-border underline-offset-4 transition-colors group-hover:decoration-primary">
-                    {event.organizer.email}
-                  </span>
-                </a>
-              )}
-              {event.rwgpsId && (
+          {event.rwgpsId && (
+            <>
+              <p
+                className={cn(
+                  'text-xs font-medium uppercase tracking-widest text-muted-foreground',
+                  (event.organizer.name || event.organizer.phone || event.organizer.email) && 'mt-5'
+                )}
+              >
+                Route
+              </p>
+              <div className="mt-3 text-sm">
                 <a
                   href={`https://ridewithgps.com/routes/${event.rwgpsId}`}
                   target="_blank"
@@ -880,8 +894,8 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
                     View on RideWithGPS
                   </span>
                 </a>
-              )}
-            </div>
+              </div>
+            </>
           )}
         </div>
       )}
