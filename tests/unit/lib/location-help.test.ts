@@ -52,6 +52,7 @@ describe('locationFixSteps', () => {
     const { steps } = locationFixSteps('ios-safari')
     expect(steps.join(' ')).toMatch(/Location Services/)
     expect(steps.join(' ')).toMatch(/Safari Websites/)
+    expect(steps.join(' ')).toMatch(/Website Settings/)
   })
 
   it('iOS Chrome steps point at the Chrome app entry in Location Services', () => {

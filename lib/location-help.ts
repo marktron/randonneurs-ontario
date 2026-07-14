@@ -35,6 +35,7 @@ const FIX_STEPS: Record<LocationPlatform, LocationFixHelp> = {
       'Open the Settings app and go to Privacy & Security, then Location Services.',
       'Make sure Location Services (at the top) is turned on.',
       'Scroll down to Safari Websites and choose "While Using the App".',
+      "If those are already on, tap the aA button in Safari's address bar, choose Website Settings, and set Location to Ask or Allow.",
       'Come back to this page and try again.',
     ],
   },
