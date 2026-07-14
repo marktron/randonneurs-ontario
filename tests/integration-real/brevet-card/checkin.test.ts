@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 import { getTestSupabase, checked } from '../helpers/supabase'
 import { TORONTO_CHAPTER_ID, daysFromNow } from '../registration/helpers'
 import { checkInAtControl, getBrevetCardByToken } from '@/lib/actions/brevet-card'
+import { computeEventStart } from '@/lib/brevet-card'
 import { resetRateLimitStores } from '@/lib/rate-limit'
 
 const IDS = {
@@ -20,7 +21,19 @@ const IDS = {
   regCancelled: '00000000-1b0c-4000-a000-00000000000c',
   regFuture: '00000000-1b0c-4000-a000-00000000000d',
   regFleche: '00000000-1b0c-4000-a000-00000000000e',
+  soonEvent: '00000000-1b0c-4000-a000-00000000000f',
+  controlSoonStart: '00000000-1b0c-4000-a000-000000000010',
+  regSoon: '00000000-1b0c-4000-a000-000000000011',
 }
+
+/**
+ * Offset for the "starts soon" event: 30 minutes from now, inside the
+ * check-in acceptance window (start − 2h) but outside any control's ACP
+ * open window, so a pre-start tap at the first control exercises the clamp.
+ * The existing `futureEvent` (30 days out) is outside the acceptance window
+ * entirely and can't be reused for this.
+ */
+const SOON_EVENT_OFFSET_MS = 30 * 60 * 1000
 
 const RIDER_EMAIL = 'inttest-brevet-card@example.com'
 const RIDER_CANCELLED_EMAIL = 'inttest-brevet-card-cancelled@example.com'
@@ -65,13 +78,19 @@ function getAnonSupabase() {
 }
 
 async function cleanup(supabase: ReturnType<typeof getTestSupabase>) {
-  const eventIds = [IDS.activeEvent, IDS.futureEvent, IDS.flecheEvent]
+  const eventIds = [IDS.activeEvent, IDS.futureEvent, IDS.flecheEvent, IDS.soonEvent]
   // control_checkins and event_controls cascade from events, but delete
   // explicitly so partial seeds from interrupted runs are also removed.
   await supabase
     .from('control_checkins')
     .delete()
-    .in('registration_id', [IDS.regActive, IDS.regCancelled, IDS.regFuture, IDS.regFleche])
+    .in('registration_id', [
+      IDS.regActive,
+      IDS.regCancelled,
+      IDS.regFuture,
+      IDS.regFleche,
+      IDS.regSoon,
+    ])
   await supabase.from('event_controls').delete().in('event_id', eventIds)
   await supabase.from('registrations').delete().in('event_id', eventIds)
   await supabase.from('events').delete().in('id', eventIds)
@@ -89,6 +108,8 @@ describe('digital brevet card check-in (real DB)', () => {
   let cancelledToken: string
   let futureToken: string
   let flecheToken: string
+  let soonToken: string
+  let soonEventStart: Date
 
   beforeAll(async () => {
     await cleanup(supabase)
@@ -115,6 +136,11 @@ describe('digital brevet card check-in (real DB)', () => {
 
     // Event started one hour ago Toronto time — "happening now".
     const started = torontoNowParts(-60 * 60 * 1000)
+    // Event starts 30 minutes from now — inside the check-in acceptance
+    // window but not yet open, so a tap now exercises the first-control
+    // start-time clamp.
+    const soon = torontoNowParts(SOON_EVENT_OFFSET_MS)
+    soonEventStart = computeEventStart(soon.date, soon.time)
     await checked(
       supabase.from('events').insert([
         {
@@ -148,6 +174,17 @@ describe('digital brevet card check-in (real DB)', () => {
           distance_km: 360,
           event_date: started.date,
           start_time: started.time,
+          status: 'scheduled',
+        },
+        {
+          id: IDS.soonEvent,
+          slug: `inttest-brevet-card-soon-${soon.date}`,
+          chapter_id: TORONTO_CHAPTER_ID,
+          name: 'IntTest Brevet Card Soon',
+          event_type: 'brevet',
+          distance_km: 200,
+          event_date: soon.date,
+          start_time: soon.time,
           status: 'scheduled',
         },
       ]),
@@ -204,6 +241,16 @@ describe('digital brevet card check-in (real DB)', () => {
           lng: CONTROL_LNG,
           radius_m: 500,
         },
+        {
+          id: IDS.controlSoonStart,
+          event_id: IDS.soonEvent,
+          position: 1,
+          name: 'Start — Union Station',
+          distance_km: 0,
+          lat: CONTROL_LAT,
+          lng: CONTROL_LNG,
+          radius_m: 500,
+        },
       ]),
       'insert controls'
     )
@@ -234,6 +281,12 @@ describe('digital brevet card check-in (real DB)', () => {
           rider_id: IDS.rider,
           status: 'registered',
         },
+        {
+          id: IDS.regSoon,
+          event_id: IDS.soonEvent,
+          rider_id: IDS.rider,
+          status: 'registered',
+        },
       ]),
       'insert registrations'
     )
@@ -243,7 +296,7 @@ describe('digital brevet card check-in (real DB)', () => {
       supabase
         .from('registrations')
         .select('id, management_token')
-        .in('id', [IDS.regActive, IDS.regCancelled, IDS.regFuture, IDS.regFleche]),
+        .in('id', [IDS.regActive, IDS.regCancelled, IDS.regFuture, IDS.regFleche, IDS.regSoon]),
       'read management tokens'
     )
     const tokenById = new Map(
@@ -253,6 +306,7 @@ describe('digital brevet card check-in (real DB)', () => {
     cancelledToken = tokenById.get(IDS.regCancelled)!
     futureToken = tokenById.get(IDS.regFuture)!
     flecheToken = tokenById.get(IDS.regFleche)!
+    soonToken = tokenById.get(IDS.regSoon)!
   })
 
   afterEach(() => {
@@ -453,5 +507,33 @@ describe('digital brevet card check-in (real DB)', () => {
       'checkins after delete'
     )
     expect((after as unknown[]).length).toBe(0)
+  })
+
+  it('records a pre-start first-control check-in at the event start time (real DB)', async () => {
+    const tapTime = Date.now()
+    const result = await checkInAtControl(soonToken, {
+      controlId: IDS.controlSoonStart,
+      checkedInAt: new Date(tapTime).toISOString(), // tap now — 30 min before the start
+      lat: CONTROL_LAT,
+      lng: CONTROL_LNG,
+      accuracyM: 10,
+    })
+
+    expect(result.success).toBe(true)
+    const { data: row } = await supabase
+      .from('control_checkins')
+      .select('checked_in_at')
+      .eq('registration_id', IDS.regSoon)
+      .eq('control_id', IDS.controlSoonStart)
+      .single()
+
+    // Stored time is exactly the seeded event start (clamped forward past
+    // the tap), not merely "later than the tap" — and the action's response
+    // reflects the stored value.
+    expect(new Date(row!.checked_in_at).getTime()).toBe(soonEventStart.getTime())
+    expect(new Date(row!.checked_in_at).getTime()).toBeGreaterThan(tapTime)
+    expect(new Date(result.data!.checkin.checkedInAt).getTime()).toBe(
+      new Date(row!.checked_in_at).getTime()
+    )
   })
 })

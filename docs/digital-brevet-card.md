@@ -136,6 +136,16 @@ Design notes:
   applied to `method = 'admin'` corrections, whose `received_at` is just
   when the admin typed them in). Computing
   flags at read time keeps ingest dumb and lets us tune thresholds later.
+- **First-control check-ins before the start are recorded at the start,
+  not the tap** (`resolveRecordedCheckinTime` in `lib/brevet-card.ts`,
+  applied server-side in `checkInAtControl` and mirrored client-side —
+  see "Early-window confirm" in §7): riders gather at the start control
+  before the gun, and that tap is their official start. The clamp is
+  scoped to the event's first control (`event_controls.position === 1`,
+  renormalized 1-based on every save) and never moves a time
+  _backward_ — a pre-open tap at any later control keeps the claimed
+  tap time and still reads back with the `early` flag at that control's
+  own window.
 - Controls are **copied per event**, not attached to `routes`: events
   sometimes run routes reversed (`lib/controlPoints.ts`), organizers adjust
   controls per running, and permanents self-schedule.
@@ -197,7 +207,14 @@ Design notes:
   in at a control before it opens (`checked_in_at < opensAt`), a single
   confirm ("⟨name⟩ doesn't open until ⟨time⟩. Check in anyway?") appears
   first. Evaluated against the _final_ target control, so a redirect
-  re-checks. Within/after the window, one-tap stays one-tap.
+  re-checks. Within/after the window, one-tap stays one-tap. At the
+  event's **first control specifically**, a pre-start tap gets its own
+  dialog copy — title "Before the start", body "You're checking in
+  before the start. Your check-in will be recorded at the official
+  start time (⟨time⟩)." — since the recorded time is the start, not the
+  tap (see §6, `resolveRecordedCheckinTime`). The client computes and
+  displays this clamped time before sending, and the server re-clamps
+  independently on receipt regardless of what the client sent.
 - **Timing rules**: check-in is allowed before open and after close — the
   device records reality; flags mark early/late and organizers adjudicate,
   exactly like a paper card with an odd time written on it. (Blocking would
