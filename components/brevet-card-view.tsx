@@ -41,6 +41,7 @@ import {
   type WrongControlCandidate,
   type WrongControlDecision,
 } from '@/lib/brevet-card'
+import { detectPlatform, locationFixSteps } from '@/lib/location-help'
 import { CheckCircle2, CloudOff, Loader2, Mail, MapPin, Phone } from 'lucide-react'
 import { BoldLabelText } from '@/components/bold-label-text'
 import { REGULATIONS_TEXT, EVENT_INFO_TEXT } from '@/types/control-card'
@@ -134,6 +135,7 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
   const [locatingControlId, setLocatingControlId] = useState<string | null>(null)
   const [manualControl, setManualControl] = useState<CardControl | null>(null)
   const [manualReason, setManualReason] = useState('')
+  const [blockedControl, setBlockedControl] = useState<CardControl | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [undoingControlId, setUndoingControlId] = useState<string | null>(null)
   // Wrong-control confirm (GPS only): the fix landed inside another control.
@@ -157,6 +159,14 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
   // render, and the repo's react-hooks/refs rule forbids render-time ref
   // reads.
   const [sessionCheckins, setSessionCheckins] = useState<Set<string>>(new Set())
+
+  // SSR-safe: `navigator` does not exist during renderToString, and the
+  // blocked dialog never renders on the server anyway.
+  const fixHelp = useMemo(
+    () =>
+      locationFixSteps(detectPlatform(typeof navigator === 'undefined' ? '' : navigator.userAgent)),
+    []
+  )
 
   /**
    * Update the outbox ref *synchronously*, then mirror it into localStorage
@@ -344,8 +354,14 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
               checkedInAt: new Date().toISOString(),
             })
           },
-          () => {
+          (error) => {
             setLocatingControlId(null)
+            if (error.code === 1 /* PERMISSION_DENIED */) {
+              // Blocked in settings — fixable, unlike a weak GPS signal. Show
+              // the platform-specific fix instead of the generic manual dialog.
+              setBlockedControl(control)
+              return
+            }
             setManualReason(
               'Your location could not be determined. You can still check in — the organizer will see it was recorded without GPS.'
             )
@@ -744,6 +760,50 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
               }}
             >
               Check in anyway
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={blockedControl !== null}
+        onOpenChange={(open) => !open && setBlockedControl(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Location is blocked</AlertDialogTitle>
+            <AlertDialogDescription>{fixHelp.intro}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <ol className="list-decimal ml-5 space-y-1 text-sm text-muted-foreground">
+            {fixHelp.steps.map((step) => (
+              <li key={step}>{step}</li>
+            ))}
+          </ol>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <Button
+              variant="outline"
+              onClick={() => {
+                const control = blockedControl
+                setBlockedControl(null)
+                if (control) {
+                  enqueueOrConfirmEarly(control, {
+                    controlId: control.id,
+                    checkedInAt: new Date().toISOString(),
+                  })
+                }
+              }}
+            >
+              Check in without GPS
+            </Button>
+            <AlertDialogAction
+              onClick={() => {
+                const control = blockedControl
+                setBlockedControl(null)
+                if (control) handleCheckIn(control)
+              }}
+            >
+              Try again
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

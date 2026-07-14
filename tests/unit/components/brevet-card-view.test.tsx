@@ -160,6 +160,37 @@ function stubGeolocation(lat = 43.65, lng = -79.38) {
   })
 }
 
+/**
+ * Geolocation stub whose first `failures` calls report the given error
+ * code asynchronously, then succeed with a fix (like a rider fixing
+ * settings and retrying).
+ */
+function stubGeolocationError(code: number, failures = Infinity, lat = 43.65, lng = -79.38) {
+  let calls = 0
+  const getCurrentPosition = vi.fn((success: PositionCallback, error?: PositionErrorCallback) => {
+    calls += 1
+    const failing = calls <= failures
+    setTimeout(() => {
+      if (failing) {
+        error?.({
+          code,
+          message: 'stubbed error',
+          PERMISSION_DENIED: 1,
+          POSITION_UNAVAILABLE: 2,
+          TIMEOUT: 3,
+        } as GeolocationPositionError)
+      } else {
+        success({ coords: { latitude: lat, longitude: lng, accuracy: 10 } } as GeolocationPosition)
+      }
+    }, 0)
+  })
+  Object.defineProperty(navigator, 'geolocation', {
+    value: { getCurrentPosition },
+    configurable: true,
+  })
+  return { getCurrentPosition }
+}
+
 beforeEach(() => {
   vi.clearAllMocks()
   window.localStorage.clear()
@@ -433,6 +464,87 @@ describe('BrevetCard geolocation hard failures', () => {
     expect(await screen.findByRole('alertdialog')).toHaveTextContent(/check in without gps/i)
     // The locating spinner must not be stuck on the button.
     expect(screen.getByRole('button', { name: /check in/i })).toBeEnabled()
+  })
+})
+
+describe('BrevetCard permission-denied help', () => {
+  it('shows the blocked-location dialog with fix steps when permission is denied', async () => {
+    stubGeolocationError(1)
+
+    const user = userEvent.setup()
+    render(<BrevetCard token={TOKEN} initialData={makeData()} />)
+
+    await user.click(screen.getByRole('button', { name: /^check in$/i }))
+
+    const dialog = await screen.findByRole('alertdialog')
+    expect(dialog).toHaveTextContent(/location is blocked/i)
+    // happy-dom's UA maps to the generic platform copy.
+    expect(dialog).toHaveTextContent(/allow location for this site/i)
+    expect(within(dialog).getByRole('button', { name: /try again/i })).toBeInTheDocument()
+    expect(
+      within(dialog).getByRole('button', { name: /check in without gps/i })
+    ).toBeInTheDocument()
+    // Nothing recorded until the rider chooses.
+    expect(mockCheckIn).not.toHaveBeenCalled()
+  })
+
+  it('Try again retries the lookup and records a GPS check-in when it succeeds', async () => {
+    // First lookup: denied. Second (after the rider fixes settings): a fix.
+    stubGeolocationError(1, 1)
+    mockCheckIn.mockResolvedValue(checkinOk('ctrl-1'))
+
+    const user = userEvent.setup()
+    render(<BrevetCard token={TOKEN} initialData={makeData()} />)
+
+    await user.click(screen.getByRole('button', { name: /^check in$/i }))
+    const dialog = await screen.findByRole('alertdialog')
+    await user.click(within(dialog).getByRole('button', { name: /try again/i }))
+
+    await waitFor(() => {
+      expect(mockCheckIn).toHaveBeenCalledWith(
+        TOKEN,
+        expect.objectContaining({ controlId: 'ctrl-1', lat: expect.any(Number) })
+      )
+    })
+  })
+
+  it('Check in without GPS records a manual check-in from the blocked dialog', async () => {
+    stubGeolocationError(1)
+    mockCheckIn.mockResolvedValue(checkinOk('ctrl-1', 'manual'))
+
+    const user = userEvent.setup()
+    render(<BrevetCard token={TOKEN} initialData={makeData()} />)
+
+    await user.click(screen.getByRole('button', { name: /^check in$/i }))
+    const dialog = await screen.findByRole('alertdialog')
+    await user.click(within(dialog).getByRole('button', { name: /check in without gps/i }))
+
+    await waitFor(() => {
+      expect(mockCheckIn).toHaveBeenCalledWith(
+        TOKEN,
+        expect.not.objectContaining({ lat: expect.anything() })
+      )
+    })
+    expect(mockCheckIn).toHaveBeenCalledWith(
+      TOKEN,
+      expect.objectContaining({ controlId: 'ctrl-1' })
+    )
+  })
+
+  it('keeps the generic no-GPS dialog for position-unavailable and timeout', async () => {
+    for (const code of [2, 3]) {
+      stubGeolocationError(code)
+
+      const user = userEvent.setup()
+      const { unmount } = render(<BrevetCard token={TOKEN} initialData={makeData()} />)
+
+      await user.click(screen.getByRole('button', { name: /^check in$/i }))
+
+      const dialog = await screen.findByRole('alertdialog')
+      expect(dialog).toHaveTextContent(/could not be determined/i)
+      expect(dialog).not.toHaveTextContent(/location is blocked/i)
+      unmount()
+    }
   })
 })
 
