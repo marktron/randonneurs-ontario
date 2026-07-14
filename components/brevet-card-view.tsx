@@ -41,6 +41,7 @@ import {
   type WrongControlCandidate,
   type WrongControlDecision,
 } from '@/lib/brevet-card'
+import { detectPlatform, locationFixSteps } from '@/lib/location-help'
 import { CheckCircle2, CloudOff, Loader2, Mail, MapPin, Phone } from 'lucide-react'
 import { BoldLabelText } from '@/components/bold-label-text'
 import { REGULATIONS_TEXT, EVENT_INFO_TEXT } from '@/types/control-card'
@@ -134,6 +135,13 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
   const [locatingControlId, setLocatingControlId] = useState<string | null>(null)
   const [manualControl, setManualControl] = useState<CardControl | null>(null)
   const [manualReason, setManualReason] = useState('')
+  const [blockedControl, setBlockedControl] = useState<CardControl | null>(null)
+  // Proactive location-permission surface (see docs/digital-brevet-card.md).
+  // 'unknown' until the mount effect resolves; nothing renders until then.
+  const [locationStatus, setLocationStatus] = useState<'unknown' | 'prompt' | 'granted' | 'denied'>(
+    'unknown'
+  )
+  const [locationTest, setLocationTest] = useState<'idle' | 'testing' | 'ok' | 'no-fix'>('idle')
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [undoingControlId, setUndoingControlId] = useState<string | null>(null)
   // Wrong-control confirm (GPS only): the fix landed inside another control.
@@ -157,6 +165,14 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
   // render, and the repo's react-hooks/refs rule forbids render-time ref
   // reads.
   const [sessionCheckins, setSessionCheckins] = useState<Set<string>>(new Set())
+
+  // SSR-safe: `navigator` does not exist during renderToString, and the
+  // blocked dialog never renders on the server anyway.
+  const fixHelp = useMemo(
+    () =>
+      locationFixSteps(detectPlatform(typeof navigator === 'undefined' ? '' : navigator.userAgent)),
+    []
+  )
 
   /**
    * Update the outbox ref *synchronously*, then mirror it into localStorage
@@ -247,6 +263,42 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
       window.clearInterval(interval)
     }
   }, [token, flushOutbox])
+
+  // Detect a blocked/undecided location permission before the rider needs
+  // it. The Permissions API sees site-level denials; OS-level "Never" often
+  // reports 'prompt', which is why the affordance offers a real test.
+  useEffect(() => {
+    if (!window.isSecureContext || !('geolocation' in navigator)) return
+    if (typeof navigator.permissions?.query !== 'function') {
+      setLocationStatus('prompt')
+      return
+    }
+    let cancelled = false
+    let status: PermissionStatus | null = null
+    const onChange = () => {
+      if (cancelled || !status) return
+      setLocationStatus(status.state)
+      // A revoked permission invalidates any earlier successful test —
+      // otherwise the card would show "works" and "blocked" side by side.
+      if (status.state !== 'granted') setLocationTest('idle')
+    }
+    navigator.permissions
+      .query({ name: 'geolocation' })
+      .then((s) => {
+        if (cancelled) return
+        status = s
+        setLocationStatus(s.state)
+        s.addEventListener('change', onChange)
+      })
+      .catch(() => {
+        // Older Safari quirks: treat as unqueryable, offer the test.
+        if (!cancelled) setLocationStatus('prompt')
+      })
+    return () => {
+      cancelled = true
+      status?.removeEventListener('change', onChange)
+    }
+  }, [])
 
   const enqueueCheckin = useCallback(
     (entry: OutboxEntry) => {
@@ -344,8 +396,20 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
               checkedInAt: new Date().toISOString(),
             })
           },
-          () => {
+          (error) => {
             setLocatingControlId(null)
+            if (error.code === 1 /* PERMISSION_DENIED */) {
+              // Blocked in settings — fixable, unlike a weak GPS signal. Show
+              // the platform-specific fix instead of the generic manual dialog.
+              // Sync the proactive surface too: an earlier successful test can
+              // go stale if the rider revokes permission at the OS level
+              // without a 'change' event firing, and this tap is the first
+              // sign of it (mirrors the test-button code-1 branch below).
+              setLocationStatus('denied')
+              setLocationTest('idle')
+              setBlockedControl(control)
+              return
+            }
             setManualReason(
               'Your location could not be determined. You can still check in — the organizer will see it was recorded without GPS.'
             )
@@ -366,6 +430,29 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
     },
     [resolveGpsCheckin]
   )
+
+  const handleLocationTest = useCallback(() => {
+    setLocationTest('testing')
+    try {
+      navigator.geolocation.getCurrentPosition(
+        () => {
+          setLocationTest('ok')
+          setLocationStatus('granted')
+        },
+        (error) => {
+          if (error.code === 1 /* PERMISSION_DENIED */) {
+            setLocationStatus('denied')
+            setLocationTest('idle')
+          } else {
+            setLocationTest('no-fix')
+          }
+        },
+        { enableHighAccuracy: true, timeout: GEOLOCATION_TIMEOUT_MS, maximumAge: 0 }
+      )
+    } catch {
+      setLocationTest('no-fix')
+    }
+  }, [])
 
   /**
    * Undo a check-in. For a synced check-in, ask the server (which enforces
@@ -442,6 +529,14 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
 
   const queuedControlIds = useMemo(() => new Set(outbox.map((e) => e.controlId)), [outbox])
 
+  // Once a GPS check-in exists, location demonstrably works — stop nudging.
+  const hasGpsEvidence = useMemo(
+    () =>
+      Array.from(checkins.values()).some((c) => c.method === 'gps') ||
+      outbox.some((e) => e.lat !== undefined),
+    [checkins, outbox]
+  )
+
   const nextControlId = useMemo(() => {
     const next = controls.find((c) => !checkins.has(c.id) && !queuedControlIds.has(c.id))
     return next?.id ?? null
@@ -501,6 +596,63 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
       {beforeWindow && (
         <p className="text-sm border rounded-md p-3 bg-muted/50">
           Check-in opens at {formatControlTime(checkinOpensAt)} (two hours before the start).
+        </p>
+      )}
+
+      {locationStatus === 'denied' && (
+        <div className="text-sm border rounded-md p-3 bg-muted/50 space-y-2">
+          <p className="font-medium flex items-center gap-2">
+            <MapPin className="h-4 w-4 shrink-0" />
+            Location is blocked for this browser
+          </p>
+          <p className="text-muted-foreground">
+            Check-ins will be recorded without GPS until it&apos;s fixed. {fixHelp.intro}
+          </p>
+          <ol className="list-decimal ml-5 space-y-1 text-muted-foreground">
+            {fixHelp.steps.map((step) => (
+              <li key={step}>{step}</li>
+            ))}
+          </ol>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={locationTest === 'testing'}
+            onClick={handleLocationTest}
+          >
+            {locationTest === 'testing' ? 'Checking…' : 'Try again'}
+          </Button>
+        </div>
+      )}
+
+      {locationStatus === 'prompt' && !hasGpsEvidence && (
+        <div className="text-sm border rounded-md p-3 bg-muted/50 space-y-2">
+          <p>
+            <MapPin className="inline h-4 w-4 mr-1.5 align-text-bottom" />
+            Check that location works on this phone before your ride — your browser will ask for
+            permission.
+          </p>
+          {locationTest === 'no-fix' && (
+            <p className="text-muted-foreground">
+              Couldn&apos;t get a location fix just now — worth trying again, ideally outdoors.
+            </p>
+          )}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={locationTest === 'testing'}
+            onClick={handleLocationTest}
+          >
+            {locationTest === 'testing' ? 'Checking…' : 'Test your location'}
+          </Button>
+        </div>
+      )}
+
+      {locationTest === 'ok' && (
+        <p className="text-sm border rounded-md p-3 bg-muted/50 flex items-center gap-2">
+          <CheckCircle2 className="h-4 w-4 shrink-0 text-green-600" />
+          Location works on this phone.
         </p>
       )}
 
@@ -744,6 +896,50 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
               }}
             >
               Check in anyway
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={blockedControl !== null}
+        onOpenChange={(open) => !open && setBlockedControl(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Location is blocked</AlertDialogTitle>
+            <AlertDialogDescription>{fixHelp.intro}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <ol className="list-decimal ml-5 space-y-1 text-sm text-muted-foreground">
+            {fixHelp.steps.map((step) => (
+              <li key={step}>{step}</li>
+            ))}
+          </ol>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <Button
+              variant="outline"
+              onClick={() => {
+                const control = blockedControl
+                setBlockedControl(null)
+                if (control) {
+                  enqueueOrConfirmEarly(control, {
+                    controlId: control.id,
+                    checkedInAt: new Date().toISOString(),
+                  })
+                }
+              }}
+            >
+              Check in without GPS
+            </Button>
+            <AlertDialogAction
+              onClick={() => {
+                const control = blockedControl
+                setBlockedControl(null)
+                if (control) handleCheckIn(control)
+              }}
+            >
+              Try again
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

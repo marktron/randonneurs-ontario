@@ -160,6 +160,63 @@ function stubGeolocation(lat = 43.65, lng = -79.38) {
   })
 }
 
+/**
+ * Geolocation stub whose first `failures` calls report the given error
+ * code asynchronously, then succeed with a fix (like a rider fixing
+ * settings and retrying).
+ */
+function stubGeolocationError(code: number, failures = Infinity, lat = 43.65, lng = -79.38) {
+  let calls = 0
+  const getCurrentPosition = vi.fn((success: PositionCallback, error?: PositionErrorCallback) => {
+    calls += 1
+    const failing = calls <= failures
+    setTimeout(() => {
+      if (failing) {
+        error?.({
+          code,
+          message: 'stubbed error',
+          PERMISSION_DENIED: 1,
+          POSITION_UNAVAILABLE: 2,
+          TIMEOUT: 3,
+        } as GeolocationPositionError)
+      } else {
+        success({ coords: { latitude: lat, longitude: lng, accuracy: 10 } } as GeolocationPosition)
+      }
+    }, 0)
+  })
+  Object.defineProperty(navigator, 'geolocation', {
+    value: { getCurrentPosition },
+    configurable: true,
+  })
+  return { getCurrentPosition }
+}
+
+/**
+ * navigator.permissions stub. Returns a controller whose setState() flips
+ * the permission state and fires the 'change' listeners, like a rider
+ * changing OS settings while the page is open.
+ */
+function stubPermissions(state: PermissionState) {
+  const listeners = new Set<() => void>()
+  const status = {
+    state,
+    addEventListener: (_type: string, cb: () => void) => listeners.add(cb),
+    removeEventListener: (_type: string, cb: () => void) => listeners.delete(cb),
+  }
+  const query = vi.fn().mockResolvedValue(status)
+  Object.defineProperty(navigator, 'permissions', {
+    value: { query },
+    configurable: true,
+  })
+  return {
+    query,
+    setState(next: PermissionState) {
+      ;(status as { state: PermissionState }).state = next
+      listeners.forEach((cb) => cb())
+    },
+  }
+}
+
 beforeEach(() => {
   vi.clearAllMocks()
   window.localStorage.clear()
@@ -169,6 +226,9 @@ beforeEach(() => {
   mockUndo.mockResolvedValue({ success: true } as Awaited<ReturnType<typeof undoCheckin>>)
   // happy-dom leaves isSecureContext undefined; real browsers always set it.
   Object.defineProperty(window, 'isSecureContext', { value: true, configurable: true })
+  // Default: Permissions API absent (like older Safari) so unrelated tests
+  // exercise the API-unavailable path without stubbing.
+  Object.defineProperty(navigator, 'permissions', { value: undefined, configurable: true })
 })
 
 describe('BrevetCard header', () => {
@@ -433,6 +493,109 @@ describe('BrevetCard geolocation hard failures', () => {
     expect(await screen.findByRole('alertdialog')).toHaveTextContent(/check in without gps/i)
     // The locating spinner must not be stuck on the button.
     expect(screen.getByRole('button', { name: /check in/i })).toBeEnabled()
+  })
+})
+
+describe('BrevetCard permission-denied help', () => {
+  it('shows the blocked-location dialog with fix steps when permission is denied', async () => {
+    stubGeolocationError(1)
+
+    const user = userEvent.setup()
+    render(<BrevetCard token={TOKEN} initialData={makeData()} />)
+
+    await user.click(screen.getByRole('button', { name: /^check in$/i }))
+
+    const dialog = await screen.findByRole('alertdialog')
+    expect(dialog).toHaveTextContent(/location is blocked/i)
+    // happy-dom's UA maps to the generic platform copy.
+    expect(dialog).toHaveTextContent(/allow location for this site/i)
+    expect(within(dialog).getByRole('button', { name: /try again/i })).toBeInTheDocument()
+    expect(
+      within(dialog).getByRole('button', { name: /check in without gps/i })
+    ).toBeInTheDocument()
+    // Nothing recorded until the rider chooses.
+    expect(mockCheckIn).not.toHaveBeenCalled()
+  })
+
+  it('Try again retries the lookup and records a GPS check-in when it succeeds', async () => {
+    // First lookup: denied. Second (after the rider fixes settings): a fix.
+    stubGeolocationError(1, 1)
+    mockCheckIn.mockResolvedValue(checkinOk('ctrl-1'))
+
+    const user = userEvent.setup()
+    render(<BrevetCard token={TOKEN} initialData={makeData()} />)
+
+    await user.click(screen.getByRole('button', { name: /^check in$/i }))
+    const dialog = await screen.findByRole('alertdialog')
+    await user.click(within(dialog).getByRole('button', { name: /try again/i }))
+
+    await waitFor(() => {
+      expect(mockCheckIn).toHaveBeenCalledWith(
+        TOKEN,
+        expect.objectContaining({ controlId: 'ctrl-1', lat: expect.any(Number) })
+      )
+    })
+  })
+
+  it('Check in without GPS records a manual check-in from the blocked dialog', async () => {
+    stubGeolocationError(1)
+    mockCheckIn.mockResolvedValue(checkinOk('ctrl-1', 'manual'))
+
+    const user = userEvent.setup()
+    render(<BrevetCard token={TOKEN} initialData={makeData()} />)
+
+    await user.click(screen.getByRole('button', { name: /^check in$/i }))
+    const dialog = await screen.findByRole('alertdialog')
+    await user.click(within(dialog).getByRole('button', { name: /check in without gps/i }))
+
+    await waitFor(() => {
+      expect(mockCheckIn).toHaveBeenCalledWith(
+        TOKEN,
+        expect.not.objectContaining({ lat: expect.anything() })
+      )
+    })
+    expect(mockCheckIn).toHaveBeenCalledWith(
+      TOKEN,
+      expect.objectContaining({ controlId: 'ctrl-1' })
+    )
+  })
+
+  it('keeps the generic no-GPS dialog for position-unavailable and timeout', async () => {
+    for (const code of [2, 3]) {
+      stubGeolocationError(code)
+
+      const user = userEvent.setup()
+      const { unmount } = render(<BrevetCard token={TOKEN} initialData={makeData()} />)
+
+      await user.click(screen.getByRole('button', { name: /^check in$/i }))
+
+      const dialog = await screen.findByRole('alertdialog')
+      expect(dialog).toHaveTextContent(/could not be determined/i)
+      expect(dialog).not.toHaveTextContent(/location is blocked/i)
+      unmount()
+    }
+  })
+
+  it('a tap-time denial clears a stale success note and shows the blocked banner', async () => {
+    // Rider tested location successfully earlier (locationStatus 'granted'),
+    // then loses permission at the OS level with no 'change' event firing.
+    // Tapping Check in should surface the same banner-state sync that the
+    // test-button code-1 branch already performs.
+    stubPermissions('prompt')
+    stubGeolocation()
+    const user = userEvent.setup()
+    render(<BrevetCard token={TOKEN} initialData={makeData()} />)
+
+    await user.click(await screen.findByRole('button', { name: /test your location/i }))
+    await screen.findByText(/location works on this phone/i)
+
+    stubGeolocationError(1)
+    await user.click(screen.getByRole('button', { name: /^check in$/i }))
+    const dialog = await screen.findByRole('alertdialog')
+    await user.click(within(dialog).getByRole('button', { name: /cancel/i }))
+
+    expect(screen.queryByText(/location works on this phone/i)).toBeNull()
+    expect(await screen.findByText(/location is blocked for this browser/i)).toBeInTheDocument()
   })
 })
 
@@ -809,5 +972,118 @@ describe('check-in stamp', () => {
     const stamp = await screen.findByTestId('control-stamp')
     expect(stamp).toBeTruthy()
     expect(await screen.findByText(/waiting to sync/i)).toBeTruthy()
+  })
+})
+
+describe('BrevetCard proactive location check', () => {
+  it('shows the blocked banner when the site permission is denied', async () => {
+    stubPermissions('denied')
+    render(<BrevetCard token={TOKEN} initialData={makeData()} />)
+
+    expect(await screen.findByText(/location is blocked for this browser/i)).toBeInTheDocument()
+  })
+
+  it('shows nothing when permission is already granted', async () => {
+    const perms = stubPermissions('granted')
+    render(<BrevetCard token={TOKEN} initialData={makeData()} />)
+
+    await waitFor(() => expect(perms.query).toHaveBeenCalled())
+    expect(screen.queryByText(/location is blocked for this browser/i)).toBeNull()
+    expect(screen.queryByRole('button', { name: /test your location/i })).toBeNull()
+  })
+
+  it('offers Test your location when permission has never been decided', async () => {
+    stubPermissions('prompt')
+    stubGeolocation()
+    const user = userEvent.setup()
+    render(<BrevetCard token={TOKEN} initialData={makeData()} />)
+
+    const testButton = await screen.findByRole('button', { name: /test your location/i })
+    await user.click(testButton)
+
+    expect(await screen.findByText(/location works on this phone/i)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /test your location/i })).toBeNull()
+  })
+
+  it('flips to the blocked banner when the test fails with a permission denial', async () => {
+    // OS-level "Never" can report 'prompt' but deny the actual request —
+    // the test button is the reliable detector.
+    stubPermissions('prompt')
+    stubGeolocationError(1)
+    const user = userEvent.setup()
+    render(<BrevetCard token={TOKEN} initialData={makeData()} />)
+
+    await user.click(await screen.findByRole('button', { name: /test your location/i }))
+
+    expect(await screen.findByText(/location is blocked for this browser/i)).toBeInTheDocument()
+  })
+
+  it('offers the test affordance when the Permissions API is unavailable', async () => {
+    Object.defineProperty(navigator, 'permissions', { value: undefined, configurable: true })
+    render(<BrevetCard token={TOKEN} initialData={makeData()} />)
+
+    expect(await screen.findByRole('button', { name: /test your location/i })).toBeInTheDocument()
+  })
+
+  it('clears the banner live when the rider fixes settings (change event)', async () => {
+    const perms = stubPermissions('denied')
+    render(<BrevetCard token={TOKEN} initialData={makeData()} />)
+    await screen.findByText(/location is blocked for this browser/i)
+
+    act(() => perms.setState('granted'))
+
+    await waitFor(() => {
+      expect(screen.queryByText(/location is blocked for this browser/i)).toBeNull()
+    })
+  })
+
+  it('clears a stale success note when permission is revoked (change event)', async () => {
+    // Rider tests location successfully, then revokes the site permission in
+    // settings while the tab stays open. The blocked banner must replace the
+    // success note — not render alongside it.
+    const perms = stubPermissions('prompt')
+    stubGeolocation()
+    const user = userEvent.setup()
+    render(<BrevetCard token={TOKEN} initialData={makeData()} />)
+
+    await user.click(await screen.findByRole('button', { name: /test your location/i }))
+    await screen.findByText(/location works on this phone/i)
+
+    act(() => perms.setState('denied'))
+
+    expect(await screen.findByText(/location is blocked for this browser/i)).toBeInTheDocument()
+    expect(screen.queryByText(/location works on this phone/i)).toBeNull()
+  })
+
+  it('offers the test affordance when permissions.query rejects', async () => {
+    // Some browsers expose navigator.permissions but reject the query (e.g.
+    // an unsupported descriptor) — the mount effect's .catch should still
+    // land on 'prompt' and offer the test, same as an absent Permissions API.
+    Object.defineProperty(navigator, 'permissions', {
+      value: { query: vi.fn().mockRejectedValue(new Error('nope')) },
+      configurable: true,
+    })
+    render(<BrevetCard token={TOKEN} initialData={makeData()} />)
+
+    expect(await screen.findByRole('button', { name: /test your location/i })).toBeInTheDocument()
+  })
+
+  it('does not offer the test once a GPS check-in already exists', async () => {
+    const perms = stubPermissions('prompt')
+    const data = makeData()
+    data.checkins = [
+      {
+        controlId: 'ctrl-1',
+        checkedInAt: new Date().toISOString(),
+        receivedAt: new Date().toISOString(),
+        method: 'gps',
+        distanceToControlM: 12,
+        flags: NO_FLAGS,
+      },
+    ]
+    render(<BrevetCard token={TOKEN} initialData={data} />)
+
+    await waitFor(() => expect(perms.query).toHaveBeenCalled())
+    expect(screen.queryByRole('button', { name: /test your location/i })).toBeNull()
   })
 })
