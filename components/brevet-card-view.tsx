@@ -401,6 +401,12 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
             if (error.code === 1 /* PERMISSION_DENIED */) {
               // Blocked in settings — fixable, unlike a weak GPS signal. Show
               // the platform-specific fix instead of the generic manual dialog.
+              // Sync the proactive surface too: an earlier successful test can
+              // go stale if the rider revokes permission at the OS level
+              // without a 'change' event firing, and this tap is the first
+              // sign of it (mirrors the test-button code-1 branch below).
+              setLocationStatus('denied')
+              setLocationTest('idle')
               setBlockedControl(control)
               return
             }

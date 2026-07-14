@@ -575,6 +575,28 @@ describe('BrevetCard permission-denied help', () => {
       unmount()
     }
   })
+
+  it('a tap-time denial clears a stale success note and shows the blocked banner', async () => {
+    // Rider tested location successfully earlier (locationStatus 'granted'),
+    // then loses permission at the OS level with no 'change' event firing.
+    // Tapping Check in should surface the same banner-state sync that the
+    // test-button code-1 branch already performs.
+    stubPermissions('prompt')
+    stubGeolocation()
+    const user = userEvent.setup()
+    render(<BrevetCard token={TOKEN} initialData={makeData()} />)
+
+    await user.click(await screen.findByRole('button', { name: /test your location/i }))
+    await screen.findByText(/location works on this phone/i)
+
+    stubGeolocationError(1)
+    await user.click(screen.getByRole('button', { name: /^check in$/i }))
+    const dialog = await screen.findByRole('alertdialog')
+    await user.click(within(dialog).getByRole('button', { name: /cancel/i }))
+
+    expect(screen.queryByText(/location works on this phone/i)).toBeNull()
+    expect(await screen.findByText(/location is blocked for this browser/i)).toBeInTheDocument()
+  })
 })
 
 describe('BrevetCard hydration', () => {
@@ -1031,6 +1053,19 @@ describe('BrevetCard proactive location check', () => {
 
     expect(await screen.findByText(/location is blocked for this browser/i)).toBeInTheDocument()
     expect(screen.queryByText(/location works on this phone/i)).toBeNull()
+  })
+
+  it('offers the test affordance when permissions.query rejects', async () => {
+    // Some browsers expose navigator.permissions but reject the query (e.g.
+    // an unsupported descriptor) — the mount effect's .catch should still
+    // land on 'prompt' and offer the test, same as an absent Permissions API.
+    Object.defineProperty(navigator, 'permissions', {
+      value: { query: vi.fn().mockRejectedValue(new Error('nope')) },
+      configurable: true,
+    })
+    render(<BrevetCard token={TOKEN} initialData={makeData()} />)
+
+    expect(await screen.findByRole('button', { name: /test your location/i })).toBeInTheDocument()
   })
 
   it('does not offer the test once a GPS check-in already exists', async () => {

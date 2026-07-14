@@ -246,9 +246,15 @@ be fixed at home rather than at the start line with the organizer's help.
   chosen from the user agent by `detectPlatform`), a **Try again** action
   (re-runs the same check-in attempt) and a **Check in without GPS** action
   (records `method='manual'`, the same outcome as the ordinary manual
-  dialog). Codes 2/3 (`POSITION_UNAVAILABLE` / `TIMEOUT`) fall through to
-  the existing generic manual dialog unchanged — GPS is failing, not
-  blocked, so there's no settings fix to offer.
+  dialog). It also syncs the proactive surface — setting `locationStatus`
+  to `denied` and resetting `locationTest` to `idle` — so a permission
+  revoked at the OS level without a `change` event firing (no live
+  `PermissionStatus` update) doesn't leave a stale "Location works on this
+  phone" note showing under the blocked dialog; this mirrors what
+  `handleLocationTest`'s own code-1 branch already does. Codes 2/3
+  (`POSITION_UNAVAILABLE` / `TIMEOUT`) fall through to the existing generic
+  manual dialog unchanged — GPS is failing, not blocked, so there's no
+  settings fix to offer.
 - **Proactive.** On mount, in secure contexts only, the card queries
   `navigator.permissions` for `geolocation`. `denied` renders a blocked
   banner above the control list with the same fix steps and a "Try again"
