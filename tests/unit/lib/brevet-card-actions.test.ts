@@ -137,8 +137,8 @@ function makeRegistration() {
     id: 'reg-1',
     status: 'registered',
     rider_id: 'rider-1',
-    pre_ride_date: null,
-    pre_ride_start_time: null,
+    pre_ride_date: null as string | null,
+    pre_ride_start_time: null as string | null,
     events: {
       id: 'evt-1',
       slug: 'test-200',
@@ -392,6 +392,129 @@ describe('checkInAtControl input validation', () => {
     expect(result.success).toBe(true)
     expect(mockHandleFinish).toHaveBeenCalledTimes(1)
     expect(mockHandleFinish.mock.calls[0][0].isFinalControl).toBe(false)
+  })
+})
+
+describe('checkInAtControl first-control start-time clamp', () => {
+  it('records a pre-start first-control check-in at the event start time', async () => {
+    // Event starts 30 minutes from now — inside the 2h acceptance window.
+    const soon = torontoNowParts(30 * 60 * 1000)
+    const reg = makeRegistration()
+    reg.events.event_date = soon.date
+    reg.events.start_time = soon.time
+    tables.registrations = { singleResponse: { data: reg, error: null } }
+    tables.event_controls = {
+      singleResponse: { data: makeControlRow(), error: null }, // position 1, 0 km
+      maybeSingleResponse: { data: { position: 3 }, error: null },
+    }
+    const nowIso = new Date().toISOString()
+    tables.control_checkins = {
+      insertResponse: {
+        data: {
+          control_id: 'ctrl-1',
+          checked_in_at: nowIso,
+          received_at: nowIso,
+          method: 'gps',
+          distance_to_control_m: 0,
+        },
+        error: null,
+      },
+    }
+
+    const result = await checkInAtControl(TOKEN, {
+      controlId: 'ctrl-1',
+      checkedInAt: new Date().toISOString(), // tap: now, before the start
+      lat: 43.65,
+      lng: -79.38,
+      accuracyM: 10,
+    })
+
+    expect(result.success).toBe(true)
+    const insert = fromCalls.find((c) => c.table === 'control_checkins' && c.ops.includes('insert'))
+    const expectedStart = computeEventStart(soon.date, soon.time)
+    expect((insert!.insertPayload as { checked_in_at: string }).checked_in_at).toBe(
+      expectedStart.toISOString()
+    )
+  })
+
+  it('does not clamp a pre-start check-in at a later control', async () => {
+    const soon = torontoNowParts(30 * 60 * 1000)
+    const reg = makeRegistration()
+    reg.events.event_date = soon.date
+    reg.events.start_time = soon.time
+    tables.registrations = { singleResponse: { data: reg, error: null } }
+    tables.event_controls = {
+      singleResponse: {
+        data: { ...makeControlRow(), id: 'ctrl-2', position: 2, distance_km: 100 },
+        error: null,
+      },
+      maybeSingleResponse: { data: { position: 3 }, error: null },
+    }
+    const tap = new Date().toISOString()
+    tables.control_checkins = {
+      insertResponse: {
+        data: {
+          control_id: 'ctrl-2',
+          checked_in_at: tap,
+          received_at: tap,
+          method: 'gps',
+          distance_to_control_m: 0,
+        },
+        error: null,
+      },
+    }
+
+    const result = await checkInAtControl(TOKEN, {
+      controlId: 'ctrl-2',
+      checkedInAt: tap,
+      lat: 43.65,
+      lng: -79.38,
+      accuracyM: 10,
+    })
+
+    expect(result.success).toBe(true)
+    const insert = fromCalls.find((c) => c.table === 'control_checkins' && c.ops.includes('insert'))
+    expect((insert!.insertPayload as { checked_in_at: string }).checked_in_at).toBe(tap)
+  })
+
+  it('clamps a pre-ride first-control check-in to the pre-ride start', async () => {
+    const soon = torontoNowParts(45 * 60 * 1000)
+    const reg = makeRegistration() // event itself started an hour ago
+    reg.pre_ride_date = soon.date
+    reg.pre_ride_start_time = `${soon.time}:00`
+    tables.registrations = { singleResponse: { data: reg, error: null } }
+    tables.event_controls = {
+      singleResponse: { data: makeControlRow(), error: null },
+      maybeSingleResponse: { data: { position: 3 }, error: null },
+    }
+    const nowIso = new Date().toISOString()
+    tables.control_checkins = {
+      insertResponse: {
+        data: {
+          control_id: 'ctrl-1',
+          checked_in_at: nowIso,
+          received_at: nowIso,
+          method: 'gps',
+          distance_to_control_m: 0,
+        },
+        error: null,
+      },
+    }
+
+    const result = await checkInAtControl(TOKEN, {
+      controlId: 'ctrl-1',
+      checkedInAt: new Date().toISOString(),
+      lat: 43.65,
+      lng: -79.38,
+      accuracyM: 10,
+    })
+
+    expect(result.success).toBe(true)
+    const insert = fromCalls.find((c) => c.table === 'control_checkins' && c.ops.includes('insert'))
+    const expectedStart = computeEventStart(soon.date, soon.time)
+    expect((insert!.insertPayload as { checked_in_at: string }).checked_in_at).toBe(
+      expectedStart.toISOString()
+    )
   })
 })
 

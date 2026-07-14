@@ -36,6 +36,7 @@ import {
   RIDER_UNDO_WINDOW_MS,
   detectWrongControl,
   formatDistanceKm,
+  resolveRecordedCheckinTime,
   stampOffset,
   stampRotation,
   type WrongControlCandidate,
@@ -314,16 +315,25 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
   /**
    * Record the check-in, but if the (final, post-redirect) target control
    * hasn't opened yet, confirm first. Applies to every method.
+   *
+   * Same rule the server applies (server re-clamps regardless): a pre-start
+   * tap at the first control records the official start, not the tap time.
    */
   const enqueueOrConfirmEarly = useCallback(
     (control: CardControl, entry: OutboxEntry) => {
+      const recordedAt = resolveRecordedCheckinTime(
+        new Date(entry.checkedInAt),
+        new Date(event.startsAt),
+        control.id === controls[0]?.id
+      )
+      const clamped = { ...entry, checkedInAt: recordedAt.toISOString() }
       if (Date.now() < new Date(control.opensAt).getTime()) {
-        setEarlyConfirm({ control, entry })
+        setEarlyConfirm({ control, entry: clamped })
         return
       }
-      enqueueCheckin(entry)
+      enqueueCheckin(clamped)
     },
-    [enqueueCheckin]
+    [enqueueCheckin, controls, event.startsAt]
   )
 
   /**
@@ -568,6 +578,12 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
     const id = window.setInterval(update, 30 * 1000)
     return () => window.clearInterval(id)
   }, [event.startsAt])
+
+  // The early-confirm entry was clamped iff its time equals the start —
+  // that is exactly the "gathering at the start line" case.
+  const earlyConfirmAtStart =
+    earlyConfirm !== null &&
+    earlyConfirm.entry.checkedInAt === new Date(event.startsAt).toISOString()
 
   return (
     <div className="content-container pt-12 md:pt-20 max-w-2xl pb-16 space-y-6">
@@ -1005,12 +1021,18 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Control not open yet</AlertDialogTitle>
+            <AlertDialogTitle>
+              {earlyConfirmAtStart ? 'Before the start' : 'Control not open yet'}
+            </AlertDialogTitle>
             <AlertDialogDescription>
               {earlyConfirm &&
-                `${earlyConfirm.control.name} doesn't open until ${formatControlTime(
-                  new Date(earlyConfirm.control.opensAt)
-                )}. Check in anyway?`}
+                (earlyConfirmAtStart
+                  ? `You're checking in before the start. Your check-in will be recorded at the official start time (${formatControlTime(
+                      new Date(event.startsAt)
+                    )}).`
+                  : `${earlyConfirm.control.name} doesn't open until ${formatControlTime(
+                      new Date(earlyConfirm.control.opensAt)
+                    )}. Check in anyway?`)}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -1021,7 +1043,7 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
                 setEarlyConfirm(null)
               }}
             >
-              Check in anyway
+              {earlyConfirmAtStart ? 'Check in' : 'Check in anyway'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

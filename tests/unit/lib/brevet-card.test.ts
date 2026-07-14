@@ -15,6 +15,7 @@ import {
   hasAnyFlag,
   isDigitalCardEventType,
   isWithinCheckinAcceptanceWindow,
+  resolveRecordedCheckinTime,
   resolveRiderStart,
   stampRotation,
   stampOffset,
@@ -440,5 +441,28 @@ describe('stampOffset', () => {
       )
     )
     expect(offsets.size).toBeGreaterThanOrEqual(3)
+  })
+})
+
+describe('resolveRecordedCheckinTime', () => {
+  const start = new Date('2026-08-01T12:00:00.000Z')
+
+  it('records a pre-start first-control check-in at the rider start', () => {
+    const tap = new Date(start.getTime() - 25 * 60 * 1000)
+    expect(resolveRecordedCheckinTime(tap, start, true)).toEqual(start)
+  })
+
+  it('keeps the tap time at the first control once the ride has started', () => {
+    const tap = new Date(start.getTime() + 5 * 60 * 1000)
+    expect(resolveRecordedCheckinTime(tap, start, true)).toEqual(tap)
+  })
+
+  it('keeps the tap time exactly at the start (no-op boundary)', () => {
+    expect(resolveRecordedCheckinTime(start, start, true)).toEqual(start)
+  })
+
+  it('never clamps later controls, even before the start', () => {
+    const tap = new Date(start.getTime() - 25 * 60 * 1000)
+    expect(resolveRecordedCheckinTime(tap, start, false)).toEqual(tap)
   })
 })

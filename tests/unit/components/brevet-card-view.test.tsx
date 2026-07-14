@@ -102,6 +102,28 @@ function makeNotOpenData(): BrevetCardData {
   return data
 }
 
+/** One first control (0 km) on an event starting 30 minutes from now. */
+function makePreStartData(): BrevetCardData {
+  const data = makeData()
+  const startsAt = new Date(Date.now() + 30 * 60 * 1000)
+  data.event.startsAt = startsAt.toISOString()
+  data.controls = [
+    {
+      id: 'ctrl-1',
+      position: 1,
+      name: 'Start',
+      distanceKm: 0,
+      lat: 43.65,
+      lng: -79.38,
+      radiusM: 500,
+      notes: null,
+      opensAt: startsAt.toISOString(),
+      closesAt: new Date(startsAt.getTime() + 60 * 60 * 1000).toISOString(),
+    },
+  ]
+  return data
+}
+
 const TOKEN = 'test-token'
 
 function makeData(): BrevetCardData {
@@ -777,6 +799,49 @@ describe('BrevetCard early-window confirm', () => {
         expect.objectContaining({ controlId: 'ctrl-1' })
       )
     })
+  })
+})
+
+describe('BrevetCard pre-start first-control check-in', () => {
+  it('confirms with start-time copy and records the start time, not the tap time', async () => {
+    stubGeolocation(43.65, -79.38)
+    const data = makePreStartData()
+    mockCheckIn.mockResolvedValue(checkinOk('ctrl-1'))
+
+    const user = userEvent.setup()
+    render(<BrevetCard token={TOKEN} initialData={data} />)
+
+    await user.click(screen.getByRole('button', { name: /^check in$/i }))
+
+    const dialog = await screen.findByRole('alertdialog')
+    expect(dialog).toHaveTextContent(/recorded at the official start time/i)
+    expect(dialog).not.toHaveTextContent(/doesn't open until/i)
+    expect(mockCheckIn).not.toHaveBeenCalled()
+
+    await user.click(within(dialog).getByRole('button', { name: /^check in$/i }))
+
+    await waitFor(() => {
+      expect(mockCheckIn).toHaveBeenCalledWith(
+        TOKEN,
+        expect.objectContaining({ controlId: 'ctrl-1', checkedInAt: data.event.startsAt })
+      )
+    })
+  })
+
+  it('keeps the existing copy for a later control that has not opened', async () => {
+    // makeNotOpenData: event started in the past, single control opens later —
+    // the first-control-pre-start branch must not trigger.
+    stubGeolocation(43.65, -79.38)
+    mockCheckIn.mockResolvedValue(checkinOk('ctrl-1'))
+
+    const user = userEvent.setup()
+    render(<BrevetCard token={TOKEN} initialData={makeNotOpenData()} />)
+
+    await user.click(screen.getByRole('button', { name: /^check in$/i }))
+
+    const dialog = await screen.findByRole('alertdialog')
+    expect(dialog).toHaveTextContent(/doesn't open until/i)
+    expect(dialog).not.toHaveTextContent(/official start time/i)
   })
 })
 

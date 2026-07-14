@@ -22,6 +22,7 @@ import {
   getCheckinAcceptanceWindow,
   isDigitalCardEventType,
   isWithinCheckinAcceptanceWindow,
+  resolveRecordedCheckinTime,
   RIDER_UNDO_WINDOW_MS,
   type CheckinFlags,
 } from '@/lib/brevet-card'
@@ -487,6 +488,16 @@ export async function checkInAtControl(token: string, input: CheckinInput): Prom
       { operation: 'checkInAtControl.maxPosition', context: { eventId: event.id } }
     )
 
+    // Riders tap the start control when they arrive, often before the gun.
+    // Record the official start instead of the tap. Positions are
+    // renormalized 1-based on every save (lib/actions/event-controls.ts), so
+    // position 1 is always the first control.
+    const recordedCheckinAt = resolveRecordedCheckinTime(
+      checkedInAt,
+      eventStart,
+      control.position === 1
+    )
+
     // The server derives the method: coordinates present → gps, absent →
     // manual (recorded and flagged for organizer review, never blocked).
     const method: CheckinMethod = hasCoords ? 'gps' : 'manual'
@@ -498,7 +509,7 @@ export async function checkInAtControl(token: string, input: CheckinInput): Prom
     const insertData: ControlCheckinInsert = {
       control_id: control.id,
       registration_id: reg.id,
-      checked_in_at: checkedInAt.toISOString(),
+      checked_in_at: recordedCheckinAt.toISOString(),
       method,
       lat: hasCoords ? input.lat : null,
       lng: hasCoords ? input.lng : null,
