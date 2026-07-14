@@ -191,6 +191,32 @@ function stubGeolocationError(code: number, failures = Infinity, lat = 43.65, ln
   return { getCurrentPosition }
 }
 
+/**
+ * navigator.permissions stub. Returns a controller whose setState() flips
+ * the permission state and fires the 'change' listeners, like a rider
+ * changing OS settings while the page is open.
+ */
+function stubPermissions(state: PermissionState) {
+  const listeners = new Set<() => void>()
+  const status = {
+    state,
+    addEventListener: (_type: string, cb: () => void) => listeners.add(cb),
+    removeEventListener: (_type: string, cb: () => void) => listeners.delete(cb),
+  }
+  const query = vi.fn().mockResolvedValue(status)
+  Object.defineProperty(navigator, 'permissions', {
+    value: { query },
+    configurable: true,
+  })
+  return {
+    query,
+    setState(next: PermissionState) {
+      ;(status as { state: PermissionState }).state = next
+      listeners.forEach((cb) => cb())
+    },
+  }
+}
+
 beforeEach(() => {
   vi.clearAllMocks()
   window.localStorage.clear()
@@ -200,6 +226,9 @@ beforeEach(() => {
   mockUndo.mockResolvedValue({ success: true } as Awaited<ReturnType<typeof undoCheckin>>)
   // happy-dom leaves isSecureContext undefined; real browsers always set it.
   Object.defineProperty(window, 'isSecureContext', { value: true, configurable: true })
+  // Default: Permissions API absent (like older Safari) so unrelated tests
+  // exercise the API-unavailable path without stubbing.
+  Object.defineProperty(navigator, 'permissions', { value: undefined, configurable: true })
 })
 
 describe('BrevetCard header', () => {
@@ -921,5 +950,87 @@ describe('check-in stamp', () => {
     const stamp = await screen.findByTestId('control-stamp')
     expect(stamp).toBeTruthy()
     expect(await screen.findByText(/waiting to sync/i)).toBeTruthy()
+  })
+})
+
+describe('BrevetCard proactive location check', () => {
+  it('shows the blocked banner when the site permission is denied', async () => {
+    stubPermissions('denied')
+    render(<BrevetCard token={TOKEN} initialData={makeData()} />)
+
+    expect(await screen.findByText(/location is blocked for this browser/i)).toBeInTheDocument()
+  })
+
+  it('shows nothing when permission is already granted', async () => {
+    const perms = stubPermissions('granted')
+    render(<BrevetCard token={TOKEN} initialData={makeData()} />)
+
+    await waitFor(() => expect(perms.query).toHaveBeenCalled())
+    expect(screen.queryByText(/location is blocked for this browser/i)).toBeNull()
+    expect(screen.queryByRole('button', { name: /test your location/i })).toBeNull()
+  })
+
+  it('offers Test your location when permission has never been decided', async () => {
+    stubPermissions('prompt')
+    stubGeolocation()
+    const user = userEvent.setup()
+    render(<BrevetCard token={TOKEN} initialData={makeData()} />)
+
+    const testButton = await screen.findByRole('button', { name: /test your location/i })
+    await user.click(testButton)
+
+    expect(await screen.findByText(/location works on this phone/i)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /test your location/i })).toBeNull()
+  })
+
+  it('flips to the blocked banner when the test fails with a permission denial', async () => {
+    // OS-level "Never" can report 'prompt' but deny the actual request —
+    // the test button is the reliable detector.
+    stubPermissions('prompt')
+    stubGeolocationError(1)
+    const user = userEvent.setup()
+    render(<BrevetCard token={TOKEN} initialData={makeData()} />)
+
+    await user.click(await screen.findByRole('button', { name: /test your location/i }))
+
+    expect(await screen.findByText(/location is blocked for this browser/i)).toBeInTheDocument()
+  })
+
+  it('offers the test affordance when the Permissions API is unavailable', async () => {
+    Object.defineProperty(navigator, 'permissions', { value: undefined, configurable: true })
+    render(<BrevetCard token={TOKEN} initialData={makeData()} />)
+
+    expect(await screen.findByRole('button', { name: /test your location/i })).toBeInTheDocument()
+  })
+
+  it('clears the banner live when the rider fixes settings (change event)', async () => {
+    const perms = stubPermissions('denied')
+    render(<BrevetCard token={TOKEN} initialData={makeData()} />)
+    await screen.findByText(/location is blocked for this browser/i)
+
+    act(() => perms.setState('granted'))
+
+    await waitFor(() => {
+      expect(screen.queryByText(/location is blocked for this browser/i)).toBeNull()
+    })
+  })
+
+  it('does not offer the test once a GPS check-in already exists', async () => {
+    const perms = stubPermissions('prompt')
+    const data = makeData()
+    data.checkins = [
+      {
+        controlId: 'ctrl-1',
+        checkedInAt: new Date().toISOString(),
+        receivedAt: new Date().toISOString(),
+        method: 'gps',
+        distanceToControlM: 12,
+        flags: NO_FLAGS,
+      },
+    ]
+    render(<BrevetCard token={TOKEN} initialData={data} />)
+
+    await waitFor(() => expect(perms.query).toHaveBeenCalled())
+    expect(screen.queryByRole('button', { name: /test your location/i })).toBeNull()
   })
 })
