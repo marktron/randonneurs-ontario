@@ -119,6 +119,8 @@ export interface BrevetCardData {
       phone: string | null
       email: string | null
     }
+    /** RWGPS route id for the event's linked route, or null when none. */
+    rwgpsId: string | null
   }
   rider: {
     firstName: string
@@ -147,6 +149,7 @@ interface RegistrationWithEvent {
     organizer_phone: string | null
     organizer_email: string | null
     chapters: { name: string; slug: string } | null
+    routes: { rwgps_id: string | null } | null
   }
   riders: { first_name: string; last_name: string; email: string | null }
 }
@@ -174,6 +177,7 @@ export async function getBrevetCardByToken(token: string): Promise<BrevetCardDat
       events!inner (
         id, slug, name, status, event_type, event_date, start_time, distance_km,
         organizer_name, organizer_phone, organizer_email,
+        routes (rwgps_id),
         chapters (name, slug)
       ),
       riders!inner (first_name, last_name, email)
@@ -265,6 +269,7 @@ export async function getBrevetCardByToken(token: string): Promise<BrevetCardDat
         phone: event.organizer_phone,
         email: event.organizer_email,
       },
+      rwgpsId: event.routes?.rwgps_id ?? null,
     },
     rider: {
       firstName: reg.riders.first_name,

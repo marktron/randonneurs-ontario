@@ -232,6 +232,11 @@ Design notes:
   links — when the admin has set one; hidden entirely otherwise. See §9 for
   where that's set, and "Regulations fine print" below for the static block
   shown under it.
+- Beneath the organizer box, a **Route** box links to the event's RWGPS
+  route (`https://ridewithgps.com/routes/<rwgps_id>`, opens in a new tab)
+  when the event's route has an RWGPS id; hidden otherwise. It renders
+  independently of the organizer box, so it still shows up when no
+  organizer contact is set.
 
 ### Location permission help
 

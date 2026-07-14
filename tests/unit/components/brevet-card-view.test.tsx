@@ -121,6 +121,7 @@ function makeData(): BrevetCardData {
       chapterName: 'Toronto',
       startsAt: startsAt.toISOString(),
       organizer: { name: null, phone: null, email: null },
+      rwgpsId: null,
     },
     rider: { firstName: 'Ada', lastName: 'Lovelace' },
     controls: [
@@ -914,6 +915,27 @@ describe('organizer + fine print', () => {
     expect(screen.getByText(/REGULATIONS:/)).toBeTruthy()
     expect(screen.getByText(/Les Randonneurs Mondiaux/)).toBeTruthy()
     expect(screen.getByText(/Emergency Services: 911/)).toBeTruthy()
+  })
+})
+
+describe('route link', () => {
+  it('links to the RWGPS route beneath the organizer info', () => {
+    const data = makeData()
+    data.event.rwgpsId = '12345678'
+    render(<BrevetCard token={TOKEN} initialData={data} />)
+
+    const link = screen.getByRole('link', { name: /view on ridewithgps/i })
+    expect(link.getAttribute('href')).toBe('https://ridewithgps.com/routes/12345678')
+    expect(link.getAttribute('target')).toBe('_blank')
+    expect(link.getAttribute('rel')).toBe('noopener noreferrer')
+    expect(screen.getByText('Route')).toBeInTheDocument()
+  })
+
+  it('omits the route box when the event has no RWGPS route', () => {
+    render(<BrevetCard token={TOKEN} initialData={makeData()} />)
+
+    expect(screen.queryByText('Route')).toBeNull()
+    expect(screen.queryByRole('link', { name: /view on ridewithgps/i })).toBeNull()
   })
 })
 
