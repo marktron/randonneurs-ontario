@@ -96,9 +96,10 @@ gating shipped). Confidence is **high for anything the real-DB tier touches** an
    _(Note: a `chapter_admin` mutating another chapter's data is **by design** —
    see `docs/SECURITY.md` → "Admin roles" — **not** an authz gap. An earlier draft
    of this audit wrongly flagged it P0; corrected.)_
-2. **The capability-token security test can pass vacuously.**
-   `token-column-security.test.ts` never seeds a token row, so on an empty DB its
-   negative assertions pass whether or not the columns are protected.
+2. **The capability-token security test could pass vacuously** (**fixed this
+   session**). `token-column-security.test.ts` seeded no token row, so on an empty
+   DB its negative assertions passed whether or not the columns were protected. Now
+   seeds known token UUIDs as positive controls (pending a real-DB validation run).
 3. **E2E runs in no CI job** (confirmed: not in `ci.yml`, not in `.husky/`), yet
    ~20 comments across mock-integration and component tests defer real behavior
    "to E2E tests." That behavior is protected **nowhere**. The e2e suite itself
