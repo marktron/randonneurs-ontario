@@ -9,7 +9,29 @@ This document describes the security measures in place and guidelines for mainta
   1. User is authenticated (has valid session)
   2. User exists in the `admins` table
 - **Server actions** use `requireAdmin()` to verify admin access before mutations
-- **Role-based access**: `admin` (full access) and `chapter_admin` (chapter-scoped)
+
+### Admin roles
+
+There are three roles in the `admins` table: `super_admin`, `admin`, and
+`chapter_admin`. The role name records a person's _primary_ affiliation; it is
+**not** a data-access boundary.
+
+- **All three roles have full read/write access to every chapter's data.** This
+  is intentional. Chapter admins routinely help run and administer events for
+  other chapters, so `chapter_admin` is deliberately **not** chapter-scoped for
+  writes. `requireAdmin()` (`lib/auth/get-admin.ts`) grants access to anyone with
+  a row in the `admins` table, and admin writes go through the service-role
+  client (`getSupabaseAdmin()`), which bypasses RLS by design.
+- **`super_admin` is the only elevated role.** It gates user management and other
+  org-wide operations via `isSuperAdmin()` / `isFullAdmin()` (`lib/auth/roles.ts`).
+
+> **Note for auditors:** a `chapter_admin` being able to mutate another chapter's
+> events, routes, results, news, or pages is **expected behaviour, not a
+> vulnerability**. Do not "fix" this by adding chapter-scoping to the write
+> actions. The `is_chapter_admin()` RLS helper in the migrations exists for
+> possible future read-scoping and is not an enforcement gap. The real access
+> boundary is: authenticated + present in the `admins` table (any role) vs.
+> everyone else.
 
 ## Row Level Security (RLS)
 
