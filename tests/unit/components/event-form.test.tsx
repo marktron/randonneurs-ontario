@@ -205,4 +205,30 @@ describe('EventForm', () => {
       expect(screen.getAllByText('Brevet').length).toBeGreaterThan(0)
     })
   })
+
+  describe('current-season brevet confirmation (super_admin)', () => {
+    // Note: driving the full flow — selecting the brevet event type, picking a
+    // current-season date via the Radix Calendar/Popover, and confirming the
+    // dialog — requires Radix interactions that don't work reliably in
+    // happy-dom (see "event type restrictions" and "route selection" above).
+    // The enforcement itself is server-side and covered by
+    // tests/integration/actions/events.test.ts ("current-season brevet rule").
+    // Here we only verify the component accepts the new `isSuperAdmin` prop
+    // and still renders correctly, both with the prop set and left at its
+    // default (false).
+
+    it('renders normally when isSuperAdmin is true', () => {
+      render(<EventForm chapters={mockChapters} routes={mockRoutes} isSuperAdmin />)
+
+      expect(screen.getByLabelText(/event name/i)).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /create event/i })).toBeInTheDocument()
+    })
+
+    it('renders normally when isSuperAdmin is omitted (defaults to false)', () => {
+      render(<EventForm chapters={mockChapters} routes={mockRoutes} />)
+
+      expect(screen.getByLabelText(/event name/i)).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /create event/i })).toBeInTheDocument()
+    })
+  })
 })

@@ -3,6 +3,8 @@
 import { revalidatePath, revalidateTag } from 'next/cache'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { requireAdmin } from '@/lib/auth/get-admin'
+import { getCurrentSeason } from '@/lib/season'
+import { isSuperAdmin } from '@/lib/auth/roles'
 import { sendEmail, fromEmail, isEmailConfigured } from '@/lib/email/ses'
 import { parseLocalDate, createSlug, formatFinishTimeHm } from '@/lib/utils'
 import { getUrlSlugFromDbSlug } from '@/lib/chapter-config'
@@ -94,6 +96,20 @@ export async function createEvent(data: CreateEventData): Promise<ActionResult<{
     // Validate required fields
     if (!name.trim() || !chapterId || !eventDate || !distanceKm) {
       return { success: false, error: 'Missing required fields' }
+    }
+
+    // Only super_admins may create a new brevet dated in the current season
+    // (server-enforced; the form has its own client-side gate as well).
+    const currentSeason = getCurrentSeason()
+    if (
+      eventType === 'brevet' &&
+      Number(eventDate.slice(0, 4)) === currentSeason &&
+      !isSuperAdmin(admin.role)
+    ) {
+      return {
+        success: false,
+        error: `New brevets cannot be created for the ${currentSeason} season`,
+      }
     }
 
     // Generate slug from name, distance, and date

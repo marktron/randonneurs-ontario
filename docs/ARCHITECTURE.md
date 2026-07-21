@@ -280,6 +280,12 @@ Admin roles (three-tier hierarchy):
 - `admin` - Full data management (events, routes, results, news, pages, riders, audit log) but no admin user management
 - `chapter_admin` - Scoped to their chapter only
 
+Creating a brevet dated in the current season requires `super_admin` — enforced
+server-side in `createEvent` (`lib/actions/events.ts`); the admin event form
+shows a confirmation dialog for super_admins and a hard-block modal for
+everyone else. Editing an existing brevet's date, and creating other event
+types (populaire, flèche, permanent) in the current season, is unrestricted.
+
 Admin features:
 
 - Login at `/admin/login`

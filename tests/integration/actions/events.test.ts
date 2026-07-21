@@ -111,6 +111,15 @@ vi.mock('@/lib/auth/get-admin', () => ({
   getAdmin: vi.fn().mockResolvedValue({ id: 'admin-1', email: 'admin@test.com' }),
 }))
 
+// The current season is computed at test-run time so fixtures never hardcode
+// an absolute year that could silently expire (see docs/TESTING.md).
+const CURRENT_SEASON = new Date().getFullYear()
+
+vi.mock('@/lib/season', () => ({
+  getCurrentSeason: vi.fn(() => CURRENT_SEASON),
+  getCurrentSeasonLabel: vi.fn(() => String(CURRENT_SEASON)),
+}))
+
 vi.mock('next/cache', () => ({
   revalidatePath: vi.fn(),
   revalidateTag: vi.fn(),
@@ -177,6 +186,7 @@ import {
   sendResultReminderEmails,
 } from '@/lib/actions/events'
 import { sendResultSubmissionReminders } from '@/lib/events/send-result-reminders'
+import { requireAdmin } from '@/lib/auth/get-admin'
 
 // Access mock internals for test configuration
 const mockModule = await vi.importMock<{
@@ -729,6 +739,128 @@ describe('createEvent', () => {
 
       expect(result.success).toBe(false)
       expect(result.error).toBe('An event with this slug already exists')
+    })
+  })
+
+  describe('current-season brevet rule', () => {
+    it('blocks a regular admin from creating a current-season brevet, without attempting an insert', async () => {
+      vi.mocked(requireAdmin).mockResolvedValueOnce({
+        id: 'admin-1',
+        email: 'admin@test.com',
+        name: 'Test Admin',
+        role: 'admin',
+        chapter_id: null,
+        phone: null,
+        created_at: null,
+        updated_at: null,
+      })
+
+      const result = await createEvent({
+        name: 'Test Brevet',
+        chapterId: 'chapter-1',
+        eventType: 'brevet',
+        distanceKm: 200,
+        eventDate: `${CURRENT_SEASON}-06-15`,
+      })
+
+      expect(result.success).toBe(false)
+      expect(result.error).toMatch(/brevet/i)
+      expect(result.error).toMatch(new RegExp(String(CURRENT_SEASON)))
+
+      const insertCalls = mockModule.__calls.filter(
+        (c) => c.table === 'events' && c.method === 'insert'
+      )
+      expect(insertCalls).toHaveLength(0)
+    })
+
+    it('allows a super_admin to create a current-season brevet', async () => {
+      vi.mocked(requireAdmin).mockResolvedValueOnce({
+        id: 'admin-1',
+        email: 'admin@test.com',
+        name: 'Test Admin',
+        role: 'super_admin',
+        chapter_id: null,
+        phone: null,
+        created_at: null,
+        updated_at: null,
+      })
+      mockModule.__mockInsertSuccess({ id: 'new-event-id' })
+      mockModule.__mockEventFound({ slug: 'toronto' }) // For chapter revalidation
+
+      const result = await createEvent({
+        name: 'Test Brevet',
+        chapterId: 'chapter-1',
+        eventType: 'brevet',
+        distanceKm: 200,
+        eventDate: `${CURRENT_SEASON}-06-15`,
+      })
+
+      expect(result.success).toBe(true)
+
+      const insertCalls = mockModule.__calls.filter(
+        (c) => c.table === 'events' && c.method === 'insert'
+      )
+      expect(insertCalls).toHaveLength(1)
+    })
+
+    it('allows a regular admin to create a current-season populaire', async () => {
+      vi.mocked(requireAdmin).mockResolvedValueOnce({
+        id: 'admin-1',
+        email: 'admin@test.com',
+        name: 'Test Admin',
+        role: 'admin',
+        chapter_id: null,
+        phone: null,
+        created_at: null,
+        updated_at: null,
+      })
+      mockModule.__mockInsertSuccess({ id: 'new-event-id' })
+      mockModule.__mockEventFound({ slug: 'toronto' }) // For chapter revalidation
+
+      const result = await createEvent({
+        name: 'Test Populaire',
+        chapterId: 'chapter-1',
+        eventType: 'populaire',
+        distanceKm: 100,
+        eventDate: `${CURRENT_SEASON}-06-15`,
+      })
+
+      expect(result.success).toBe(true)
+
+      const insertCalls = mockModule.__calls.filter(
+        (c) => c.table === 'events' && c.method === 'insert'
+      )
+      expect(insertCalls).toHaveLength(1)
+    })
+
+    it('allows a regular admin to create a next-season brevet', async () => {
+      vi.mocked(requireAdmin).mockResolvedValueOnce({
+        id: 'admin-1',
+        email: 'admin@test.com',
+        name: 'Test Admin',
+        role: 'admin',
+        chapter_id: null,
+        phone: null,
+        created_at: null,
+        updated_at: null,
+      })
+      mockModule.__mockInsertSuccess({ id: 'new-event-id' })
+      mockModule.__mockEventFound({ slug: 'toronto' }) // For chapter revalidation
+
+      const result = await createEvent({
+        name: 'Test Brevet',
+        chapterId: 'chapter-1',
+        eventType: 'brevet',
+        distanceKm: 200,
+        eventDate: `${CURRENT_SEASON + 1}-06-15`,
+      })
+
+      expect(result.success).toBe(true)
+
+      const insertCalls = mockModule.__calls.filter(
+        (c) => c.table === 'events' && c.method === 'insert'
+      )
+      expect(insertCalls).toHaveLength(1)
     })
   })
 })

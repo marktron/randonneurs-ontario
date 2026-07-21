@@ -67,6 +67,7 @@ interface EventFormProps {
   event?: EventFormData | null
   mode?: 'create' | 'edit'
   headerAction?: React.ReactNode
+  isSuperAdmin?: boolean
 }
 
 // Match the order used in the main site navbar
@@ -86,11 +87,13 @@ export function EventForm({
   event,
   mode = 'create',
   headerAction,
+  isSuperAdmin = false,
 }: EventFormProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
   const [showBrevetRestrictionModal, setShowBrevetRestrictionModal] = useState(false)
+  const [showBrevetConfirmModal, setShowBrevetConfirmModal] = useState(false)
 
   const currentSeason = getCurrentSeasonLabel()
 
@@ -152,42 +155,7 @@ export function EventForm({
     }
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setError(null)
-
-    if (!name.trim()) {
-      setError('Event name is required')
-      return
-    }
-
-    if (!chapterId) {
-      setError('Chapter is required')
-      return
-    }
-
-    if (!eventDate) {
-      setError('Event date is required')
-      return
-    }
-
-    if (!distanceKm || parseFloat(distanceKm) <= 0) {
-      setError('Distance must be greater than 0')
-      return
-    }
-
-    // Check if trying to create a new brevet for the current season
-    if (mode === 'create' && eventType === 'brevet') {
-      const eventYear = eventDate.getFullYear().toString()
-      if (eventYear === currentSeason) {
-        setShowBrevetRestrictionModal(true)
-        return
-      }
-    }
-
-    // Format date as YYYY-MM-DD for the server
-    const formattedDate = format(eventDate, 'yyyy-MM-dd')
-
+  const performSubmit = (formattedDate: string) => {
     startTransition(async () => {
       if (mode === 'edit' && event) {
         const result = await updateEvent(event.id, {
@@ -233,6 +201,49 @@ export function EventForm({
     })
   }
 
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setError(null)
+
+    if (!name.trim()) {
+      setError('Event name is required')
+      return
+    }
+
+    if (!chapterId) {
+      setError('Chapter is required')
+      return
+    }
+
+    if (!eventDate) {
+      setError('Event date is required')
+      return
+    }
+
+    if (!distanceKm || parseFloat(distanceKm) <= 0) {
+      setError('Distance must be greater than 0')
+      return
+    }
+
+    // Check if trying to create a new brevet for the current season
+    if (mode === 'create' && eventType === 'brevet') {
+      const eventYear = eventDate.getFullYear().toString()
+      if (eventYear === currentSeason) {
+        if (isSuperAdmin) {
+          setShowBrevetConfirmModal(true)
+        } else {
+          setShowBrevetRestrictionModal(true)
+        }
+        return
+      }
+    }
+
+    // Format date as YYYY-MM-DD for the server
+    const formattedDate = format(eventDate, 'yyyy-MM-dd')
+
+    performSubmit(formattedDate)
+  }
+
   return (
     <>
       <Dialog open={showBrevetRestrictionModal} onOpenChange={setShowBrevetRestrictionModal}>
@@ -246,6 +257,32 @@ export function EventForm({
           </DialogHeader>
           <DialogFooter>
             <Button onClick={() => setShowBrevetRestrictionModal(false)}>OK</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={showBrevetConfirmModal} onOpenChange={setShowBrevetConfirmModal}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create Brevet for Current Season?</DialogTitle>
+            <DialogDescription>
+              This brevet is dated in the current season ({currentSeason}). Are you sure you want to
+              create it?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowBrevetConfirmModal(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                setShowBrevetConfirmModal(false)
+                if (eventDate) {
+                  performSubmit(format(eventDate, 'yyyy-MM-dd'))
+                }
+              }}
+            >
+              Create Anyway
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -1,4 +1,5 @@
 import { requireAdmin } from '@/lib/auth/get-admin'
+import { isSuperAdmin } from '@/lib/auth/roles'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { getActiveRoutes } from '@/lib/data/routes'
 import dynamic from 'next/dynamic'
@@ -6,15 +7,18 @@ import Link from 'next/link'
 import { ChevronLeft } from 'lucide-react'
 
 // Lazy-load EventForm (complex form component)
-const EventForm = dynamic(() => import('@/components/admin/event-form').then(mod => ({ default: mod.EventForm })), {
-  loading: () => (
-    <div className="space-y-6">
-      <div className="h-10 bg-muted animate-pulse rounded" />
-      <div className="h-10 bg-muted animate-pulse rounded" />
-      <div className="h-32 bg-muted animate-pulse rounded" />
-    </div>
-  ),
-})
+const EventForm = dynamic(
+  () => import('@/components/admin/event-form').then((mod) => ({ default: mod.EventForm })),
+  {
+    loading: () => (
+      <div className="space-y-6">
+        <div className="h-10 bg-muted animate-pulse rounded" />
+        <div className="h-10 bg-muted animate-pulse rounded" />
+        <div className="h-32 bg-muted animate-pulse rounded" />
+      </div>
+    ),
+  }
+)
 
 async function getChapters() {
   const { data } = await getSupabaseAdmin()
@@ -27,10 +31,7 @@ async function getChapters() {
 
 export default async function NewEventPage() {
   const admin = await requireAdmin()
-  const [chapters, routes] = await Promise.all([
-    getChapters(),
-    getActiveRoutes(),
-  ])
+  const [chapters, routes] = await Promise.all([getChapters(), getActiveRoutes()])
 
   return (
     <div className="space-y-6">
@@ -47,6 +48,7 @@ export default async function NewEventPage() {
           chapters={chapters}
           routes={routes}
           defaultChapterId={admin.chapter_id}
+          isSuperAdmin={isSuperAdmin(admin.role)}
         />
       </div>
     </div>
