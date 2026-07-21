@@ -620,6 +620,51 @@ describe('registerForEvent (real DB)', () => {
     expect(sendEmail).toHaveBeenCalledTimes(2)
   })
 
+  it('re-registration regenerates the management token when the cancelled row has none', async () => {
+    searchCCNMembership.mockResolvedValue({
+      found: true,
+      membershipId: 42,
+      type: 'Individual Membership',
+      city: 'Toronto',
+      country: 'Canada',
+    })
+
+    const { registerForEvent } = await import('@/lib/actions/register')
+
+    // Seed a cancelled registration whose token was nulled — cancellations
+    // between 2026-03-18 and 2026-03-27 wiped management_token, and those
+    // rows still exist in production.
+    await checked(
+      supabase.from('registrations').insert({
+        event_id: IDS.scheduledEvent,
+        rider_id: IDS.rider,
+        status: 'cancelled',
+        cancelled_at: new Date().toISOString(),
+        management_token: null,
+      }),
+      'insert cancelled registration without token'
+    )
+
+    const result = await registerForEvent(buildRegistrationData({ eventId: IDS.scheduledEvent }))
+    expect(result.success).toBe(true)
+
+    // The revived row must have a fresh token, not NULL
+    const { data: regAfter } = await supabase
+      .from('registrations')
+      .select('status, cancelled_at, management_token')
+      .eq('event_id', IDS.scheduledEvent)
+      .eq('rider_id', IDS.rider)
+      .single()
+    expect(regAfter?.status).toBe('registered')
+    expect(regAfter?.cancelled_at).toBeNull()
+    expect(regAfter?.management_token).not.toBeNull()
+
+    // The confirmation email must link the fresh token
+    expect(sendEmail).toHaveBeenCalledTimes(1)
+    const emailPayload = sendEmail.mock.calls[0][0] as { managementUrl: string }
+    expect(emailPayload.managementUrl).toContain(regAfter!.management_token)
+  })
+
   it('re-registration after cancellation still blocks true duplicates', async () => {
     searchCCNMembership.mockResolvedValue({
       found: true,

@@ -98,7 +98,27 @@ export async function createRegistrationRecord(
     }
 
     if (updated) {
-      return (updated as { management_token: string }).management_token
+      const existingToken = (updated as { management_token: string | null }).management_token
+      if (existingToken) {
+        return existingToken
+      }
+      // Cancellations between 2026-03-18 and 2026-03-27 nulled management_token,
+      // and those rows persist. Regenerate so the revived registration has a
+      // working manage link.
+      const newToken = crypto.randomUUID()
+      const { error: tokenError } = await supabase
+        .from('registrations')
+        .update({ management_token: newToken })
+        .eq('event_id', eventId)
+        .eq('rider_id', riderId)
+      if (tokenError) {
+        logError(tokenError, {
+          operation: 'createRegistrationRecord.regenerateToken',
+          context: { eventId, riderId, supabaseCode: tokenError.code },
+        })
+        throw new Error('Failed to complete registration')
+      }
+      return newToken
     }
   }
 

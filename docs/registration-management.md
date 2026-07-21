@@ -7,6 +7,7 @@ Self-service registration management via token-based capability URLs. Riders can
 1. When a rider registers, a `management_token` (UUID) is created on their registration record
 2. The confirmation email includes a "Manage registration" link: `/registration/manage/[token]`
 3. This link serves as a smart router throughout the event lifecycle
+4. Cancelling preserves the token (the "cancelled" manage page stays reachable), and re-registering revives the same row with the same token. If the revived row has no token — cancellations between 2026-03-18 and 2026-03-27 nulled it — re-registration generates a fresh one (`createRegistrationRecord` in `lib/actions/registration/finalize.ts`)
 
 ## Management page states
 
