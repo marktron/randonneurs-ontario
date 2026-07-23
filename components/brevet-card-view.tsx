@@ -9,7 +9,7 @@
  * on page load. The server treats duplicate sends as idempotent.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import {
@@ -152,8 +152,11 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
     fix: CheckinFix
   } | null>(null)
   // Early-window confirm (all methods): tapped a control before it opens.
+  // `opensAt` is the non-null window start — leg-tagged controls have no
+  // window (opensAt null) and never trigger this confirm.
   const [earlyConfirm, setEarlyConfirm] = useState<{
     control: CardControl
+    opensAt: string
     entry: OutboxEntry
   } | null>(null)
   const flushInFlight = useRef(false)
@@ -327,8 +330,8 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
         control.id === controls[0]?.id
       )
       const clamped = { ...entry, checkedInAt: recordedAt.toISOString() }
-      if (Date.now() < new Date(control.opensAt).getTime()) {
-        setEarlyConfirm({ control, entry: clamped })
+      if (control.opensAt !== null && Date.now() < new Date(control.opensAt).getTime()) {
+        setEarlyConfirm({ control, opensAt: control.opensAt, entry: clamped })
         return
       }
       enqueueCheckin(clamped)
@@ -687,128 +690,145 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
       )}
 
       <ol className="divide-y border rounded-md">
-        {controls.map((control) => {
+        {controls.map((control, index) => {
           const checkin = checkins.get(control.id)
           const queued = !checkin && queuedControlIds.has(control.id)
           const isNext = control.id === nextControlId
           const isLocating = locatingControlId === control.id
           const stamped = !!(checkin || queued)
+          // Leg heading at each boundary (display-only; collection events).
+          const legHeading =
+            control.legName !== null &&
+            control.legName !== (index > 0 ? controls[index - 1].legName : null)
+              ? control.legName
+              : null
 
           return (
-            <li
-              key={control.id}
-              className={cn(
-                'relative p-4 flex items-start justify-between gap-4',
-                stamped && 'min-h-36'
+            <Fragment key={control.id}>
+              {legHeading && (
+                <li className="px-4 py-2 bg-muted/50 text-sm font-medium text-muted-foreground">
+                  {legHeading}
+                </li>
               )}
-            >
-              <div className="min-w-0">
-                <p className="font-medium">
-                  {control.name}
-                  <span className="ml-2 text-sm text-muted-foreground tabular-nums">
-                    {control.distanceKm} km
-                  </span>
-                </p>
-                <p className="text-sm text-muted-foreground tabular-nums">
-                  {formatControlTime(new Date(control.opensAt))} –{' '}
-                  {formatControlTime(new Date(control.closesAt))}
-                </p>
-                {control.notes && (
-                  <p className="text-sm text-muted-foreground mt-1">{control.notes}</p>
+              <li
+                className={cn(
+                  'relative p-4 flex items-start justify-between gap-4',
+                  stamped && 'min-h-36'
                 )}
-                {checkin?.flags.outOfRadius && (
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Recorded outside the control radius — the organizer will review it.
-                  </p>
-                )}
-                {checkin?.flags.noGps && (
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Recorded without GPS — the organizer will review it.
-                  </p>
-                )}
-              </div>
-
-              <div className="shrink-0 text-right">
-                {checkin ? (
-                  <p className="relative z-10 inline-flex items-baseline gap-1.5 text-sm font-medium tabular-nums">
-                    <CheckCircle2 className="h-4 w-4 self-center text-green-600" />
-                    {formatControlTime(new Date(checkin.checkedInAt))}
-                    {checkin.method !== 'admin' &&
-                      event.status !== 'submitted' &&
-                      now !== null &&
-                      now - new Date(checkin.receivedAt).getTime() < RIDER_UNDO_WINDOW_MS && (
-                        <>
-                          <span aria-hidden="true" className="font-normal text-muted-foreground/50">
-                            ·
-                          </span>
-                          <button
-                            type="button"
-                            className="-my-2 py-2 font-normal text-muted-foreground underline decoration-muted-foreground/40 underline-offset-2 hover:text-foreground disabled:opacity-50"
-                            disabled={undoingControlId === control.id}
-                            onClick={() => handleUndo(control)}
-                          >
-                            {undoingControlId === control.id ? 'Undoing…' : 'Undo'}
-                          </button>
-                        </>
-                      )}
-                  </p>
-                ) : queued ? (
-                  <p className="relative z-10 inline-flex items-baseline gap-1.5 text-sm text-muted-foreground">
-                    <CloudOff className="h-4 w-4 self-center" />
-                    Waiting to sync
-                    <span aria-hidden="true" className="text-muted-foreground/50">
-                      ·
+              >
+                <div className="min-w-0">
+                  <p className="font-medium">
+                    {control.name}
+                    <span className="ml-2 text-sm text-muted-foreground tabular-nums">
+                      {control.distanceKm} km
                     </span>
-                    <button
-                      type="button"
-                      className="-my-2 py-2 underline decoration-muted-foreground/40 underline-offset-2 hover:text-foreground"
-                      onClick={() => handleUndo(control)}
-                    >
-                      Undo
-                    </button>
                   </p>
-                ) : (
-                  <Button
-                    size="lg"
-                    variant={isNext ? 'default' : 'outline'}
-                    className="h-12"
-                    disabled={isLocating || beforeWindow}
-                    onClick={() => handleCheckIn(control)}
-                  >
-                    {isLocating ? (
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    ) : (
-                      <MapPin className="h-4 w-4 mr-2" />
-                    )}
-                    Check in
-                  </Button>
-                )}
-              </div>
-
-              {stamped && (
-                <span
-                  data-testid="control-stamp"
-                  aria-hidden="true"
-                  className={cn(
-                    'pointer-events-none select-none absolute right-4 top-9 bottom-0 flex items-center mix-blend-multiply dark:mix-blend-screen',
-                    sessionCheckins.has(control.id) &&
-                      'animate-stamp-down motion-reduce:animate-none'
+                  {control.opensAt !== null && control.closesAt !== null && (
+                    <p className="text-sm text-muted-foreground tabular-nums">
+                      {formatControlTime(new Date(control.opensAt))} –{' '}
+                      {formatControlTime(new Date(control.closesAt))}
+                    </p>
                   )}
-                >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src="/stamp-green.svg"
-                    alt=""
-                    width={128}
-                    height={88}
-                    className="w-32 max-w-none"
-                    style={{
-                      transform: `translate(${stampOffset(control.id).dx}px, ${stampOffset(control.id).dy}px) rotate(${stampRotation(control.id)}deg)`,
-                    }}
-                  />
-                </span>
-              )}
-            </li>
+                  {control.notes && (
+                    <p className="text-sm text-muted-foreground mt-1">{control.notes}</p>
+                  )}
+                  {checkin?.flags.outOfRadius && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Recorded outside the control radius — the organizer will review it.
+                    </p>
+                  )}
+                  {checkin?.flags.noGps && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Recorded without GPS — the organizer will review it.
+                    </p>
+                  )}
+                </div>
+
+                <div className="shrink-0 text-right">
+                  {checkin ? (
+                    <p className="relative z-10 inline-flex items-baseline gap-1.5 text-sm font-medium tabular-nums">
+                      <CheckCircle2 className="h-4 w-4 self-center text-green-600" />
+                      {formatControlTime(new Date(checkin.checkedInAt))}
+                      {checkin.method !== 'admin' &&
+                        event.status !== 'submitted' &&
+                        now !== null &&
+                        now - new Date(checkin.receivedAt).getTime() < RIDER_UNDO_WINDOW_MS && (
+                          <>
+                            <span
+                              aria-hidden="true"
+                              className="font-normal text-muted-foreground/50"
+                            >
+                              ·
+                            </span>
+                            <button
+                              type="button"
+                              className="-my-2 py-2 font-normal text-muted-foreground underline decoration-muted-foreground/40 underline-offset-2 hover:text-foreground disabled:opacity-50"
+                              disabled={undoingControlId === control.id}
+                              onClick={() => handleUndo(control)}
+                            >
+                              {undoingControlId === control.id ? 'Undoing…' : 'Undo'}
+                            </button>
+                          </>
+                        )}
+                    </p>
+                  ) : queued ? (
+                    <p className="relative z-10 inline-flex items-baseline gap-1.5 text-sm text-muted-foreground">
+                      <CloudOff className="h-4 w-4 self-center" />
+                      Waiting to sync
+                      <span aria-hidden="true" className="text-muted-foreground/50">
+                        ·
+                      </span>
+                      <button
+                        type="button"
+                        className="-my-2 py-2 underline decoration-muted-foreground/40 underline-offset-2 hover:text-foreground"
+                        onClick={() => handleUndo(control)}
+                      >
+                        Undo
+                      </button>
+                    </p>
+                  ) : (
+                    <Button
+                      size="lg"
+                      variant={isNext ? 'default' : 'outline'}
+                      className="h-12"
+                      disabled={isLocating || beforeWindow}
+                      onClick={() => handleCheckIn(control)}
+                    >
+                      {isLocating ? (
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      ) : (
+                        <MapPin className="h-4 w-4 mr-2" />
+                      )}
+                      Check in
+                    </Button>
+                  )}
+                </div>
+
+                {stamped && (
+                  <span
+                    data-testid="control-stamp"
+                    aria-hidden="true"
+                    className={cn(
+                      'pointer-events-none select-none absolute right-4 top-9 bottom-0 flex items-center mix-blend-multiply dark:mix-blend-screen',
+                      sessionCheckins.has(control.id) &&
+                        'animate-stamp-down motion-reduce:animate-none'
+                    )}
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src="/stamp-green.svg"
+                      alt=""
+                      width={128}
+                      height={88}
+                      className="w-32 max-w-none"
+                      style={{
+                        transform: `translate(${stampOffset(control.id).dx}px, ${stampOffset(control.id).dy}px) rotate(${stampRotation(control.id)}deg)`,
+                      }}
+                    />
+                  </span>
+                )}
+              </li>
+            </Fragment>
           )
         })}
       </ol>
@@ -1042,7 +1062,7 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
                       new Date(event.startsAt)
                     )}).`
                   : `${earlyConfirm.control.name} doesn't open until ${formatControlTime(
-                      new Date(earlyConfirm.control.opensAt)
+                      new Date(earlyConfirm.opensAt)
                     )}. Check in anyway?`)}
             </AlertDialogDescription>
           </AlertDialogHeader>

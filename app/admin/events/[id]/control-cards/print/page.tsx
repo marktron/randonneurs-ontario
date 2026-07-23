@@ -11,7 +11,14 @@ import {
   formatCardDate,
   createTorontoDate,
 } from '@/lib/brmTimes'
-import type { ControlPoint, CardRider, OrganizerInfo, CardEvent } from '@/types/control-card'
+import { buildCardLegsFromRows, type ControlRowForLegs } from '@/lib/controlPoints'
+import type {
+  ControlPoint,
+  CardRider,
+  OrganizerInfo,
+  CardEvent,
+  CardLeg,
+} from '@/types/control-card'
 import type { EventForControlCards, RegistrationForControlCardsWithToken } from '@/types/queries'
 
 interface ControlInput {
@@ -59,6 +66,34 @@ async function getRegistrations(eventId: string): Promise<RegistrationForControl
   return (data as RegistrationForControlCardsWithToken[]) ?? []
 }
 
+/**
+ * Stored digital-card controls, position-ordered with their leg tags. Leg
+ * events print from these rows — the DB is the source of truth at print
+ * time; a leg control list is far too large for the print URL (~14 KB
+ * request-line cap on Vercel).
+ */
+async function getStoredControlRows(eventId: string): Promise<ControlRowForLegs[]> {
+  const { data } = await getSupabaseAdmin()
+    .from('event_controls')
+    .select('name, distance_km, leg_rwgps_id, leg_name')
+    .eq('event_id', eventId)
+    .order('position', { ascending: true })
+
+  const rows = (data ?? []) as {
+    name: string
+    distance_km: number
+    leg_rwgps_id: string | null
+    leg_name: string | null
+  }[]
+
+  return rows.map((row) => ({
+    name: row.name,
+    distanceKm: row.distance_km,
+    legRwgpsId: row.leg_rwgps_id,
+    legName: row.leg_name,
+  }))
+}
+
 interface PrintPageProps {
   params: Promise<{ id: string }>
   searchParams: Promise<{
@@ -77,7 +112,11 @@ export default async function PrintPage({ params, searchParams }: PrintPageProps
 
   await requireAdmin()
 
-  const [event, registrations] = await Promise.all([getEventDetails(id), getRegistrations(id)])
+  const [event, registrations, storedControlRows] = await Promise.all([
+    getEventDetails(id),
+    getRegistrations(id),
+    getStoredControlRows(id),
+  ])
 
   if (!event) {
     notFound()
@@ -110,23 +149,34 @@ export default async function PrintPage({ params, searchParams }: PrintPageProps
   // Get nominal distance for BRM calculations
   const nominalDistance = getNominalDistance(event.distance_km)
 
-  // Calculate control times
-  const controls: ControlPoint[] = controlInputs.map((input, index) => {
-    const { openAt, closeAt } = computeControlTimes(
-      startDate,
-      input.distance,
-      nominalDistance,
-      event.distance_km
-    )
+  // Collection events: one CardLeg per stored leg, built from the DB rows
+  // (the form omits the `controls` param for leg events — the saved
+  // event_controls rows are the source of truth at print time). Leg cards
+  // never print open/close times (the overall event limit governs), and
+  // distances are per-leg (each leg restarts at 0). Null unless every
+  // stored row is leg-tagged — single-route events fall through to the
+  // unchanged query-param flow below.
+  const legs: CardLeg[] | undefined = buildCardLegsFromRows(storedControlRows) ?? undefined
 
-    return {
-      id: `control-${index}`,
-      name: input.name,
-      distance: input.distance,
-      openTime: formatControlTime(openAt),
-      closeTime: formatControlTime(closeAt),
-    }
-  })
+  // Single-route events: unchanged BRM open/close computation.
+  const controls: ControlPoint[] = legs
+    ? []
+    : controlInputs.map((input, index) => {
+        const { openAt, closeAt } = computeControlTimes(
+          startDate,
+          input.distance,
+          nominalDistance,
+          event.distance_km
+        )
+
+        return {
+          id: `control-${index}`,
+          name: input.name,
+          distance: input.distance,
+          openTime: formatControlTime(openAt),
+          closeTime: formatControlTime(closeAt),
+        }
+      })
 
   // Calculate total allowable time
   const { closeMin } = computeControlTimes(
@@ -200,6 +250,7 @@ export default async function PrintPage({ params, searchParams }: PrintPageProps
       totalAllowableTime={{ hours: totalHours, minutes: totalMinutes }}
       formattedDate={formatCardDate(startDate)}
       rwgpsUrl={rwgpsUrl}
+      legs={legs}
     />
   )
 }

@@ -6,6 +6,9 @@ import {
   controlsInSync,
   backCardLayout,
   MAX_CARD_CONTROLS,
+  groupControlsByLeg,
+  expandRiderLegCards,
+  buildCardLegsFromRows,
 } from '@/lib/controlPoints'
 
 describe('reverseControls', () => {
@@ -295,5 +298,110 @@ describe('backCardLayout', () => {
   it('clamps above the cap rather than throwing (callers reject >24)', () => {
     expect(backCardLayout(25)).toEqual({ rowsPerColumn: 8, tier: 'ultra' })
     expect(backCardLayout(40)).toEqual({ rowsPerColumn: 8, tier: 'ultra' })
+  })
+})
+
+describe('groupControlsByLeg', () => {
+  it('groups fully-tagged controls in first-appearance order', () => {
+    const controls = [
+      { name: 'A1', legRwgpsId: '101', legName: 'Leg 1: A' },
+      { name: 'A2', legRwgpsId: '101', legName: 'Leg 1: A' },
+      { name: 'B1', legRwgpsId: '102', legName: 'Leg 2: B' },
+    ]
+    expect(groupControlsByLeg(controls)).toEqual([
+      { legRwgpsId: '101', legName: 'Leg 1: A', controls: [controls[0], controls[1]] },
+      { legRwgpsId: '102', legName: 'Leg 2: B', controls: [controls[2]] },
+    ])
+  })
+
+  it('returns null for untagged controls (single-route card)', () => {
+    expect(groupControlsByLeg([{ name: 'Start' }, { name: 'Finish' }])).toBeNull()
+    expect(groupControlsByLeg([{ name: 'Start', legRwgpsId: null, legName: null }])).toBeNull()
+  })
+
+  it('returns null for a mixed list (any untagged row falls back to single-route)', () => {
+    expect(
+      groupControlsByLeg([
+        { name: 'A1', legRwgpsId: '101', legName: 'Leg 1: A' },
+        { name: 'Stray' },
+      ])
+    ).toBeNull()
+  })
+
+  it('returns null for an empty list', () => {
+    expect(groupControlsByLeg([])).toBeNull()
+  })
+})
+
+describe('buildCardLegsFromRows', () => {
+  const rows = [
+    { name: 'L1 Start', distanceKm: 0, legRwgpsId: '101', legName: 'Leg 1: A' },
+    { name: 'L1 Mid', distanceKm: 100.4, legRwgpsId: '101', legName: 'Leg 1: A' },
+    { name: 'L1 Finish', distanceKm: 205.3, legRwgpsId: '101', legName: 'Leg 1: A' },
+    { name: 'L2 Start', distanceKm: 0, legRwgpsId: '102', legName: 'Leg 2: B' },
+    { name: 'L2 Finish', distanceKm: 302.1, legRwgpsId: '102', legName: 'Leg 2: B' },
+  ]
+
+  it('groups position-ordered rows into CardLegs in first-appearance order', () => {
+    const legs = buildCardLegsFromRows(rows)!
+    expect(legs.map((l) => l.legRwgpsId)).toEqual(['101', '102'])
+    expect(legs.map((l) => l.legName)).toEqual(['Leg 1: A', 'Leg 2: B'])
+    expect(legs[0].controls.map((c) => c.name)).toEqual(['L1 Start', 'L1 Mid', 'L1 Finish'])
+    expect(legs[1].controls.map((c) => c.name)).toEqual(['L2 Start', 'L2 Finish'])
+  })
+
+  it('sets per-leg distance to the max control distance and maps distances through', () => {
+    const legs = buildCardLegsFromRows(rows)!
+    expect(legs[0].distanceKm).toBe(205.3)
+    expect(legs[1].distanceKm).toBe(302.1)
+    expect(legs[0].controls.map((c) => c.distance)).toEqual([0, 100.4, 205.3])
+  })
+
+  it('builds the RWGPS url from the leg id and stable per-leg control ids', () => {
+    const legs = buildCardLegsFromRows(rows)!
+    expect(legs[0].rwgpsUrl).toBe('https://ridewithgps.com/routes/101')
+    expect(legs[1].rwgpsUrl).toBe('https://ridewithgps.com/routes/102')
+    expect(legs[0].controls.map((c) => c.id)).toEqual([
+      'leg-0-control-0',
+      'leg-0-control-1',
+      'leg-0-control-2',
+    ])
+    expect(legs[1].controls.map((c) => c.id)).toEqual(['leg-1-control-0', 'leg-1-control-1'])
+  })
+
+  it('never sets open/close times on leg controls (the event limit governs)', () => {
+    const legs = buildCardLegsFromRows(rows)!
+    for (const control of legs.flatMap((l) => l.controls)) {
+      expect(control.openTime).toBeUndefined()
+      expect(control.closeTime).toBeUndefined()
+    }
+  })
+
+  it('returns null for untagged, mixed, or empty rows (single-route card)', () => {
+    expect(
+      buildCardLegsFromRows([{ name: 'Start', distanceKm: 0, legRwgpsId: null, legName: null }])
+    ).toBeNull()
+    expect(
+      buildCardLegsFromRows([
+        rows[0],
+        { name: 'Untagged', distanceKm: 50, legRwgpsId: null, legName: null },
+      ])
+    ).toBeNull()
+    expect(buildCardLegsFromRows([])).toBeNull()
+  })
+})
+
+describe('expandRiderLegCards', () => {
+  it('expands rider-major: all of rider 1 legs before rider 2', () => {
+    expect(expandRiderLegCards(['r1', 'r2'], ['l1', 'l2'])).toEqual([
+      { rider: 'r1', leg: 'l1' },
+      { rider: 'r1', leg: 'l2' },
+      { rider: 'r2', leg: 'l1' },
+      { rider: 'r2', leg: 'l2' },
+    ])
+  })
+
+  it('returns empty for no riders', () => {
+    expect(expandRiderLegCards([], ['l1'])).toEqual([])
   })
 })

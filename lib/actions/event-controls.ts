@@ -11,7 +11,7 @@ import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { requireAdmin } from '@/lib/auth/get-admin'
 import { assertEventMutable } from '@/lib/actions/event-mutability'
 import { logAuditEvent } from '@/lib/audit-log'
-import { fetchRwgpsControlsWithCoords } from '@/lib/rwgps'
+import { fetchRwgpsControlsWithCoords, fetchRwgpsCollection } from '@/lib/rwgps'
 import { isReversedEvent } from '@/lib/controlPoints'
 import { handleActionError, handleSupabaseError, createActionResult } from '@/lib/errors'
 import type { ActionResult } from '@/types/actions'
@@ -30,6 +30,10 @@ export interface AdminEventControl {
   lng: number | null
   radiusM: number
   notes: string | null
+  /** RWGPS route id of the collection leg this control belongs to; null = single-route. */
+  legRwgpsId: string | null
+  /** Display heading for the leg (e.g. "Leg 3: CCE 200 - Gravenhurst"); null = single-route. */
+  legName: string | null
   /** Number of rider check-ins recorded against this control. */
   checkinCount: number
 }
@@ -43,6 +47,8 @@ export interface EventControlInput {
   lng: number | null
   radiusM: number
   notes?: string | null
+  legRwgpsId?: string | null // optional so existing callers compile unchanged
+  legName?: string | null
 }
 
 export interface ImportedControl {
@@ -52,6 +58,10 @@ export interface ImportedControl {
   lng: number | null
   /** POI description from RWGPS, pre-filled into the control's notes. */
   notes: string | null
+  /** RWGPS route id of the collection leg this control came from; null on single-route imports. */
+  legRwgpsId: string | null
+  /** Display heading for the leg (e.g. "Leg 3: CCE 200 - Gravenhurst"); null on single-route imports. */
+  legName: string | null
 }
 
 // ============================================================================
@@ -67,7 +77,7 @@ export async function getEventControlsForAdmin(
 
     const { data: controls, error } = await supabase
       .from('event_controls')
-      .select('id, position, name, distance_km, lat, lng, radius_m, notes')
+      .select('id, position, name, distance_km, lat, lng, radius_m, notes, leg_rwgps_id, leg_name')
       .eq('event_id', eventId)
       .order('position', { ascending: true })
 
@@ -88,6 +98,8 @@ export async function getEventControlsForAdmin(
       lng: number | null
       radius_m: number
       notes: string | null
+      leg_rwgps_id: string | null
+      leg_name: string | null
     }[]
 
     // Check-in counts per control (drives the "this will delete check-ins"
@@ -116,6 +128,8 @@ export async function getEventControlsForAdmin(
         lng: row.lng,
         radiusM: row.radius_m,
         notes: row.notes,
+        legRwgpsId: row.leg_rwgps_id,
+        legName: row.leg_name,
         checkinCount: counts.get(row.id) || 0,
       }))
     )
@@ -165,6 +179,14 @@ export async function saveEventControls(
       if (hasLng && (control.lng! < -180 || control.lng! > 180)) {
         return { success: false, error: `Invalid longitude for "${control.name}"` }
       }
+      const hasLegId = control.legRwgpsId != null && control.legRwgpsId !== ''
+      const hasLegName = control.legName != null && control.legName.trim() !== ''
+      if (hasLegId !== hasLegName) {
+        return {
+          success: false,
+          error: `Control "${control.name}" needs both a leg and a leg name (or neither)`,
+        }
+      }
     }
 
     // Once results are submitted, controls are frozen too: deleting a
@@ -206,7 +228,23 @@ export async function saveEventControls(
     // into kept rows (upserted by id) and new rows (inserted without id).
     // Only ids that belong to this event (existingIds) go down the upsert
     // path, so a stray id can never overwrite another event's control.
-    const ordered = [...controls].sort((a, b) => a.distanceKm - b.distanceKm)
+    // Group rows by leg (null = the single-route group) in first-appearance
+    // order, sort within each leg by distance, then assign positions
+    // sequentially across legs — `position` keeps ordering controls globally.
+    // For untagged rows this is exactly the old global distance sort.
+    const legOrder: (string | null)[] = []
+    const rowsByLeg = new Map<string | null, EventControlInput[]>()
+    for (const control of controls) {
+      const key = control.legRwgpsId || null
+      if (!rowsByLeg.has(key)) {
+        rowsByLeg.set(key, [])
+        legOrder.push(key)
+      }
+      rowsByLeg.get(key)!.push(control)
+    }
+    const ordered = legOrder.flatMap((key) =>
+      [...rowsByLeg.get(key)!].sort((a, b) => a.distanceKm - b.distanceKm)
+    )
     const keptRows: EventControlInsert[] = []
     const newRows: EventControlInsert[] = []
     for (const [i, control] of ordered.entries()) {
@@ -219,6 +257,8 @@ export async function saveEventControls(
         lng: control.lng,
         radius_m: Math.round(control.radiusM),
         notes: control.notes?.trim() || null,
+        leg_rwgps_id: control.legRwgpsId || null,
+        leg_name: control.legName?.trim() || null,
       }
       if (control.id && existingIds.has(control.id)) {
         keptRows.push({ ...row, id: control.id })
@@ -340,6 +380,8 @@ export async function importEventControlsFromRwgps(
       lat: c.lat,
       lng: c.lng,
       notes: c.notes,
+      legRwgpsId: null,
+      legName: null,
     }))
 
     // Reversed permanents ride the route backwards: reverse the order and
@@ -364,6 +406,158 @@ export async function importEventControlsFromRwgps(
       error,
       { operation: 'importEventControlsFromRwgps' },
       'Failed to import controls from RideWithGPS'
+    )
+  }
+}
+
+// ============================================================================
+// Collection import (per-leg control cards; see docs/rwgps-collections.md)
+// ============================================================================
+
+export interface CollectionLeg {
+  /** Member route's RWGPS route id, as text (matches event_controls.leg_rwgps_id). */
+  legRwgpsId: string
+  name: string
+  distanceKm: number
+}
+
+/** Load the event's collection reference, or an error result. */
+async function getEventCollectionId(
+  eventId: string
+): Promise<{ collectionId: string } | { error: string }> {
+  const supabase = getSupabaseAdmin()
+  const { data: event, error: eventError } = await supabase
+    .from('events')
+    .select('id, routes (rwgps_collection_id)')
+    .eq('id', eventId)
+    .single()
+
+  if (eventError || !event) {
+    return { error: 'Event not found' }
+  }
+  const collectionId = (event as { routes: { rwgps_collection_id: string | null } | null }).routes
+    ?.rwgps_collection_id
+  if (!collectionId) {
+    return { error: "This event's route has no RideWithGPS collection" }
+  }
+  return { collectionId }
+}
+
+/**
+ * Member routes ("legs") of the event's RWGPS collection, natural-sorted by
+ * name (fetchRwgpsCollection guarantees the order). Drives the leg-selection
+ * checkboxes in the Event Controls manager.
+ */
+export async function getEventCollectionLegs(
+  eventId: string
+): Promise<ActionResult<CollectionLeg[]>> {
+  try {
+    await requireAdmin()
+
+    const ref = await getEventCollectionId(eventId)
+    if ('error' in ref) {
+      return { success: false, error: ref.error }
+    }
+
+    const collection = await fetchRwgpsCollection(ref.collectionId)
+    if (!collection) {
+      return {
+        success: false,
+        error: 'Failed to load the RWGPS collection. Check RWGPS credentials and try again.',
+      }
+    }
+
+    return createActionResult(
+      collection.routes.map((route) => ({
+        legRwgpsId: String(route.id),
+        name: route.name,
+        distanceKm: Math.round(route.distanceKm * 10) / 10,
+      }))
+    )
+  } catch (error) {
+    return handleActionError(
+      error,
+      { operation: 'getEventCollectionLegs' },
+      'Failed to load the RWGPS collection'
+    )
+  }
+}
+
+/**
+ * Fetch controls for every selected leg of the event's collection and return
+ * them leg-major (collection natural-sort order restricted to the selection),
+ * tagged `legRwgpsId` + `legName` (the member route's name verbatim — RWGPS
+ * route names already carry the organizer's numbering, e.g.
+ * "Leg 3: CCE 200 - Gravenhurst"). All-or-nothing: any leg that fails to
+ * fetch or parses zero controls aborts the whole import with a leg-specific
+ * message. Nothing is saved here — like the single-route import, the admin
+ * reviews and hits Save.
+ */
+export async function importEventControlsFromRwgpsCollection(
+  eventId: string,
+  selectedLegIds: string[]
+): Promise<ActionResult<ImportedControl[]>> {
+  try {
+    await requireAdmin()
+
+    if (selectedLegIds.length === 0) {
+      return { success: false, error: 'Select at least one leg to import' }
+    }
+
+    const ref = await getEventCollectionId(eventId)
+    if ('error' in ref) {
+      return { success: false, error: ref.error }
+    }
+
+    const collection = await fetchRwgpsCollection(ref.collectionId)
+    if (!collection) {
+      return {
+        success: false,
+        error: 'Failed to load the RWGPS collection. Check RWGPS credentials and try again.',
+      }
+    }
+
+    // Selected legs in the collection's natural-sorted order — never the
+    // order the ids arrived in.
+    const selected = new Set(selectedLegIds)
+    const legs = collection.routes.filter((route) => selected.has(String(route.id)))
+    if (legs.length !== selected.size) {
+      return {
+        success: false,
+        error: 'Some selected legs are no longer in the collection — reload and try again',
+      }
+    }
+
+    const controls: ImportedControl[] = []
+    for (const leg of legs) {
+      const legName = leg.name
+      let parsed
+      try {
+        parsed = await fetchRwgpsControlsWithCoords(String(leg.id))
+      } catch (error) {
+        // All-or-nothing: surface the leg that failed and write nothing.
+        const message = error instanceof Error ? error.message : 'Failed to fetch route'
+        return { success: false, error: `${legName} — ${message}` }
+      }
+      for (const c of parsed) {
+        controls.push({
+          name: c.name,
+          distanceKm: parseFloat(c.distance),
+          lat: c.lat,
+          lng: c.lng,
+          notes: c.notes,
+          legRwgpsId: String(leg.id),
+          legName,
+        })
+      }
+    }
+
+    return createActionResult(controls)
+  } catch (error) {
+    return handleActionError(
+      error,
+      { operation: 'importEventControlsFromRwgpsCollection' },
+      'Failed to import controls from the RWGPS collection'
     )
   }
 }

@@ -83,7 +83,10 @@ export async function getEventCheckinsForAdmin(
       { data: controlRows, error: controlsError },
       { data: registrationRows, error: registrationsError },
     ] = await Promise.all([
-      supabase.from('event_controls').select('id, distance_km, radius_m').eq('event_id', eventId),
+      supabase
+        .from('event_controls')
+        .select('id, distance_km, radius_m, leg_name')
+        .eq('event_id', eventId),
       supabase
         .from('registrations')
         .select(
@@ -113,6 +116,7 @@ export async function getEventCheckinsForAdmin(
       id: string
       distance_km: number
       radius_m: number
+      leg_name: string | null
     }[]
     const registrations = (registrationRows || []) as {
       id: string
@@ -186,7 +190,12 @@ export async function getEventCheckinsForAdmin(
       // here too.
       const riderStart = startByRegistration.get(checkin.registration_id)
       if (!riderStart) continue
-      const window = computeControlWindow(riderStart, control.distance_km, typedEvent.distance_km)
+      // Leg-tagged controls have no per-control window (per-leg distances
+      // restart at 0) — early/late flags are never derived for them.
+      const window =
+        control.leg_name !== null
+          ? null
+          : computeControlWindow(riderStart, control.distance_km, typedEvent.distance_km)
       const entry: AdminCheckin = {
         id: checkin.id,
         controlId: checkin.control_id,

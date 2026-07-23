@@ -40,8 +40,11 @@ export interface GridControl {
   id: string
   name: string
   distanceKm: number
-  /** Preformatted Toronto-time window, e.g. "Sat 08:00 – Sat 11:30". */
-  windowLabel: string
+  /**
+   * Preformatted Toronto-time window, e.g. "Sat 08:00 – Sat 11:30".
+   * Null for leg-tagged controls, which have no per-control window.
+   */
+  windowLabel: string | null
   lat: number | null
   lng: number | null
   radiusM: number
@@ -122,7 +125,8 @@ export function EventCheckinsGrid({
                   <TableHead key={control.id} className="min-w-[130px]">
                     <div className="font-medium">{control.name}</div>
                     <div className="text-xs font-normal text-muted-foreground tabular-nums">
-                      {control.distanceKm} km · {control.windowLabel}
+                      {control.distanceKm} km
+                      {control.windowLabel !== null && ` · ${control.windowLabel}`}
                     </div>
                   </TableHead>
                 ))}

@@ -328,10 +328,14 @@ describe('digital brevet card check-in (real DB)', () => {
       'Mid Control (no coords)',
       'Finish Control',
     ])
-    // Start control opens at the event start (0 km).
+    // Start control opens at the event start (0 km). Single-route controls
+    // always carry a window (opensAt/closesAt are only null for leg-tagged
+    // collection controls).
     expect(card!.controls[0].opensAt).toBe(card!.event.startsAt)
-    expect(new Date(card!.controls[2].closesAt).getTime()).toBeGreaterThan(
-      new Date(card!.controls[2].opensAt).getTime()
+    expect(card!.controls[2].opensAt).not.toBeNull()
+    expect(card!.controls[2].closesAt).not.toBeNull()
+    expect(new Date(card!.controls[2].closesAt!).getTime()).toBeGreaterThan(
+      new Date(card!.controls[2].opensAt!).getTime()
     )
   })
 

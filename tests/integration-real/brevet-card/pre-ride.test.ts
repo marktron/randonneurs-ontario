@@ -343,9 +343,11 @@ describe('digital brevet card pre-rides (real DB)', () => {
       // startsAt ≈ two hours ago (minute precision from the seed).
       const startsAtMs = new Date(card!.event.startsAt).getTime()
       expect(Math.abs(startsAtMs - (Date.now() - TWO_HOURS_MS))).toBeLessThan(5 * 60 * 1000)
-      // The 0 km control opened at the pre-ride start — in the past, not in 3 days.
+      // The 0 km control opened at the pre-ride start — in the past, not in
+      // 3 days. (Single-route control: opensAt is always non-null.)
       const control1 = card!.controls.find((c) => c.id === IDS.control1)!
-      expect(new Date(control1.opensAt).getTime()).toBeLessThan(Date.now())
+      expect(control1.opensAt).not.toBeNull()
+      expect(new Date(control1.opensAt!).getTime()).toBeLessThan(Date.now())
     })
 
     it('leaves regular riders on the event schedule', async () => {
@@ -354,7 +356,8 @@ describe('digital brevet card pre-rides (real DB)', () => {
       expect(card!.registration.isPreRide).toBe(false)
       // Their 0 km control opens at the scheduled start, ~3 days from now.
       const control1 = card!.controls.find((c) => c.id === IDS.control1)!
-      expect(new Date(control1.opensAt).getTime()).toBeGreaterThan(Date.now())
+      expect(control1.opensAt).not.toBeNull()
+      expect(new Date(control1.opensAt!).getTime()).toBeGreaterThan(Date.now())
     })
 
     it('accepts a pre-rider check-in days before the scheduled start', async () => {

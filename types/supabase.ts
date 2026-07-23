@@ -244,6 +244,8 @@ export type Database = {
           event_id: string
           id: string
           lat: number | null
+          leg_name: string | null
+          leg_rwgps_id: string | null
           lng: number | null
           name: string
           notes: string | null
@@ -257,6 +259,8 @@ export type Database = {
           event_id: string
           id?: string
           lat?: number | null
+          leg_name?: string | null
+          leg_rwgps_id?: string | null
           lng?: number | null
           name: string
           notes?: string | null
@@ -270,6 +274,8 @@ export type Database = {
           event_id?: string
           id?: string
           lat?: number | null
+          leg_name?: string | null
+          leg_rwgps_id?: string | null
           lng?: number | null
           name?: string
           notes?: string | null

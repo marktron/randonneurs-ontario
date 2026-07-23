@@ -23,7 +23,7 @@ export default async function BrevetCardAdminPage({ params }: BrevetCardAdminPag
   const { data: event } = await getSupabaseAdmin()
     .from('events')
     .select(
-      'id, name, event_date, start_time, distance_km, event_type, status, chapter_id, organizer_name, organizer_phone, organizer_email, routes (rwgps_id)'
+      'id, name, event_date, start_time, distance_km, event_type, status, chapter_id, organizer_name, organizer_phone, organizer_email, routes (rwgps_id, rwgps_collection_id)'
     )
     .eq('id', id)
     .single()
@@ -44,7 +44,7 @@ export default async function BrevetCardAdminPage({ params }: BrevetCardAdminPag
     organizer_name: string | null
     organizer_phone: string | null
     organizer_email: string | null
-    routes: { rwgps_id: string | null } | null
+    routes: { rwgps_id: string | null; rwgps_collection_id: string | null } | null
   }
 
   const [controlsResult, checkinsResult] = await Promise.all([
@@ -69,12 +69,19 @@ export default async function BrevetCardAdminPage({ params }: BrevetCardAdminPag
 
   const eventStart = computeEventStart(typedEvent.event_date, typedEvent.start_time)
   const gridControls: GridControl[] = controls.map((control) => {
-    const window = computeControlWindow(eventStart, control.distanceKm, typedEvent.distance_km)
+    // Leg-tagged controls have no per-control window (per-leg distances
+    // restart at 0; the overall event limit governs) — omit the label.
+    const window =
+      control.legName !== null
+        ? null
+        : computeControlWindow(eventStart, control.distanceKm, typedEvent.distance_km)
     return {
       id: control.id,
       name: control.name,
       distanceKm: control.distanceKm,
-      windowLabel: `${formatControlTime(window.openAt)} – ${formatControlTime(window.closeAt)}`,
+      windowLabel: window
+        ? `${formatControlTime(window.openAt)} – ${formatControlTime(window.closeAt)}`
+        : null,
       lat: control.lat,
       lng: control.lng,
       radiusM: control.radiusM,
@@ -109,6 +116,7 @@ export default async function BrevetCardAdminPage({ params }: BrevetCardAdminPag
         eventId={typedEvent.id}
         initialControls={controls}
         hasRwgpsRoute={Boolean(typedEvent.routes?.rwgps_id)}
+        hasRwgpsCollection={Boolean(typedEvent.routes?.rwgps_collection_id)}
         initialOrganizer={initialOrganizer}
       />
 

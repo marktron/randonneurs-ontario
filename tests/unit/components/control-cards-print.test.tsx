@@ -68,3 +68,95 @@ describe('ControlCardsPrint — first-time rider indicator', () => {
     expect(screen.queryByText(/^★/)).toBeNull()
   })
 })
+
+import type { CardLeg } from '@/types/control-card'
+
+const legA: CardLeg = {
+  legRwgpsId: '101',
+  legName: 'Leg 1: Gravenhurst',
+  distanceKm: 205.3,
+  rwgpsUrl: 'https://ridewithgps.com/routes/101',
+  controls: [
+    { id: 'a0', name: 'A Start', distance: 0 },
+    { id: 'a1', name: 'A Finish', distance: 205.3 },
+  ],
+}
+
+const legB: CardLeg = {
+  legRwgpsId: '102',
+  legName: 'Leg 2: Haliburton',
+  distanceKm: 302.1,
+  rwgpsUrl: 'https://ridewithgps.com/routes/102',
+  controls: [{ id: 'b0', name: 'B Start', distance: 0 }],
+}
+
+function renderWithLegs(riders: CardRider[], legs: CardLeg[]) {
+  return render(
+    <ControlCardsPrint
+      event={baseEvent}
+      organizer={baseOrganizer}
+      controls={[]}
+      riders={riders}
+      legs={legs}
+      totalAllowableTime={{ hours: 90, minutes: 0 }}
+      formattedDate="Fri, May 15, 2026"
+    />
+  )
+}
+
+describe('ControlCardsPrint — collection legs', () => {
+  const alice: CardRider = { id: 'r-alice', firstName: 'Alice', lastName: 'Adams' }
+  const bob: CardRider = { id: 'r-bob', firstName: 'Bob', lastName: 'Brar' }
+
+  it('expands rider-major: all of rider 1 legs before rider 2', () => {
+    const { container } = renderWithLegs([alice, bob], [legA, legB])
+    const verticalNames = Array.from(container.querySelectorAll('.rider-name-vertical')).map(
+      (el) => el.textContent
+    )
+    expect(verticalNames).toEqual(['Adams, Alice', 'Adams, Alice', 'Brar, Bob', 'Brar, Bob'])
+    const routeNames = Array.from(container.querySelectorAll('.route-name')).map(
+      (el) => el.textContent
+    )
+    expect(routeNames).toEqual([
+      'Leg 1: Gravenhurst',
+      'Leg 2: Haliburton',
+      'Leg 1: Gravenhurst',
+      'Leg 2: Haliburton',
+    ])
+  })
+
+  it('prints no open/close times on leg cards', () => {
+    renderWithLegs([alice], [legA])
+    expect(screen.queryByText(/Open:/)).toBeNull()
+    expect(screen.queryByText(/Close:/)).toBeNull()
+  })
+
+  it('shows the leg distance on the front and a Route Map QR per leg card', () => {
+    const { container } = renderWithLegs([alice], [legA, legB])
+    expect(container.textContent).toContain('205.3 km')
+    expect(container.textContent).toContain('302.1 km')
+    // One Route Map QR per card (leg URL provides it even with no event rwgpsUrl).
+    expect(screen.getAllByText('Route Map')).toHaveLength(2)
+  })
+
+  it('names the offending leg when a leg exceeds MAX_CARD_CONTROLS', () => {
+    const bigLeg: CardLeg = {
+      ...legA,
+      controls: Array.from({ length: 25 }, (_, i) => ({
+        id: `c${i}`,
+        name: `C${i}`,
+        distance: i * 8,
+      })),
+    }
+    renderWithLegs([alice], [bigLeg])
+    expect(screen.getByText(/Leg 1: Gravenhurst lists 25 controls/)).toBeTruthy()
+    // No card pages rendered.
+    expect(document.querySelector('.card-page')).toBeNull()
+  })
+
+  it('still prints open/close times on single-route cards', () => {
+    renderWithRiders([{ id: 'r1', firstName: 'Solo', lastName: 'Rider' }])
+    expect(screen.getAllByText(/Open:/).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/Close:/).length).toBeGreaterThan(0)
+  })
+})

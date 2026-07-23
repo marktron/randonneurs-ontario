@@ -31,6 +31,8 @@ interface ControlRow {
   distance_km: number
   radius_m: number
   notes: string | null
+  leg_rwgps_id: string | null
+  leg_name: string | null
   created_at: string
   updated_at: string
 }
@@ -79,7 +81,9 @@ describe('saveEventControls (real DB)', () => {
     const rows = await checked(
       supabase
         .from('event_controls')
-        .select('id, position, name, distance_km, radius_m, notes, created_at, updated_at')
+        .select(
+          'id, position, name, distance_km, radius_m, notes, leg_rwgps_id, leg_name, created_at, updated_at'
+        )
         .eq('event_id', IDS.event)
         .order('position', { ascending: true }),
       'read controls'
@@ -373,5 +377,49 @@ describe('saveEventControls (real DB)', () => {
       // Un-freeze so afterAll cleanup (and reruns) start from a mutable event.
       await supabase.from('events').update({ status: 'scheduled' }).eq('id', IDS.event)
     }
+  })
+
+  it('persists leg columns and assigns leg-major positions through the real constraints', async () => {
+    await seedControls()
+
+    // Leg 1's rows arrive out of distance order; leg 2 follows. The save
+    // replaces the seeded untagged rows entirely (no ids passed).
+    const result = await saveEventControls(IDS.event, [
+      {
+        name: 'A Finish',
+        distanceKm: 300,
+        lat: null,
+        lng: null,
+        radiusM: 500,
+        legRwgpsId: '111',
+        legName: 'Leg 1: A',
+      },
+      {
+        name: 'A Start',
+        distanceKm: 0,
+        lat: null,
+        lng: null,
+        radiusM: 500,
+        legRwgpsId: '111',
+        legName: 'Leg 1: A',
+      },
+      {
+        name: 'B Start',
+        distanceKm: 0,
+        lat: null,
+        lng: null,
+        radiusM: 500,
+        legRwgpsId: '222',
+        legName: 'Leg 2: B',
+      },
+    ])
+    expect(result.success).toBe(true)
+
+    const after = await readControls()
+    expect(after.map((c) => [c.name, c.position, c.leg_rwgps_id, c.leg_name])).toEqual([
+      ['A Start', 1, '111', 'Leg 1: A'],
+      ['A Finish', 2, '111', 'Leg 1: A'],
+      ['B Start', 3, '222', 'Leg 2: B'],
+    ])
   })
 })

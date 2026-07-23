@@ -164,6 +164,7 @@ function makeControlRow() {
     lat: 43.65,
     lng: -79.38,
     radius_m: 500,
+    leg_name: null,
   }
 }
 
@@ -395,6 +396,57 @@ describe('checkInAtControl input validation', () => {
   })
 })
 
+describe('checkInAtControl leg-control flags', () => {
+  it('returns no late flag for a check-in at a leg-tagged control', async () => {
+    // Same restarted-distance trap as the card read: a 0 km leg-2 control on
+    // an event that started 3 hours ago would read "late" if the window were
+    // computed; leg controls have no window.
+    const past = torontoNowParts(-3 * 60 * 60 * 1000)
+    const reg = makeRegistration()
+    reg.events.event_date = past.date
+    reg.events.start_time = past.time
+    tables.registrations = { singleResponse: { data: reg, error: null } }
+    tables.event_controls = {
+      singleResponse: {
+        data: {
+          ...makeControlRow(),
+          id: 'ctrl-l2',
+          position: 3,
+          distance_km: 0,
+          leg_name: 'Leg 2: Haliburton',
+        },
+        error: null,
+      },
+      maybeSingleResponse: { data: { position: 5 }, error: null },
+    }
+    const nowIso = new Date().toISOString()
+    tables.control_checkins = {
+      insertResponse: {
+        data: {
+          control_id: 'ctrl-l2',
+          checked_in_at: nowIso,
+          received_at: nowIso,
+          method: 'gps',
+          distance_to_control_m: 0,
+        },
+        error: null,
+      },
+    }
+
+    const result = await checkInAtControl(TOKEN, {
+      controlId: 'ctrl-l2',
+      checkedInAt: nowIso,
+      lat: 43.65,
+      lng: -79.38,
+      accuracyM: 10,
+    })
+
+    expect(result.success).toBe(true)
+    expect(result.data!.checkin.flags.late).toBe(false)
+    expect(result.data!.checkin.flags.early).toBe(false)
+  })
+})
+
 describe('checkInAtControl first-control start-time clamp', () => {
   it('records a pre-start first-control check-in at the event start time', async () => {
     // Event starts 30 minutes from now — inside the 2h acceptance window.
@@ -552,6 +604,135 @@ describe('getBrevetCardByToken', () => {
     tables.control_checkins = { listResponse: { data: null, error: { message: 'boom' } } }
 
     await expect(getBrevetCardByToken(TOKEN)).rejects.toThrow()
+  })
+
+  it('carries leg_name into the payload as legName', async () => {
+    seedHappyTables()
+    tables.event_controls = {
+      listResponse: {
+        data: [{ ...makeControlRow(), position: 1, notes: null, leg_name: 'Leg 1: Gravenhurst' }],
+        error: null,
+      },
+    }
+
+    const card = await getBrevetCardByToken(TOKEN)
+
+    expect(card!.controls[0].legName).toBe('Leg 1: Gravenhurst')
+  })
+
+  it('returns legName null for single-route controls', async () => {
+    seedHappyTables()
+
+    const card = await getBrevetCardByToken(TOKEN)
+
+    expect(card!.controls[0].legName).toBeNull()
+  })
+
+  it('suppresses the control window for leg-tagged controls (opensAt/closesAt null)', async () => {
+    seedHappyTables()
+    tables.event_controls = {
+      listResponse: {
+        data: [{ ...makeControlRow(), position: 1, notes: null, leg_name: 'Leg 1: Gravenhurst' }],
+        error: null,
+      },
+    }
+
+    const card = await getBrevetCardByToken(TOKEN)
+
+    expect(card!.controls[0].opensAt).toBeNull()
+    expect(card!.controls[0].closesAt).toBeNull()
+  })
+
+  it('keeps the computed window for single-route controls', async () => {
+    seedHappyTables()
+
+    const card = await getBrevetCardByToken(TOKEN)
+
+    expect(card!.controls[0].opensAt).toEqual(expect.any(String))
+    expect(card!.controls[0].closesAt).toEqual(expect.any(String))
+  })
+
+  it('derives no late flag for a leg-tagged control tap that the restarted distance would call late', async () => {
+    // Event started 3 hours ago. A leg-2 control's per-leg distance restarts
+    // at 0 km, so the (wrong) window computed from the event start would
+    // close 1 hour in — a tap now would read "late". Leg controls have no
+    // window: the overall event limit governs.
+    const past = torontoNowParts(-3 * 60 * 60 * 1000)
+    const reg = makeRegistration()
+    reg.events.event_date = past.date
+    reg.events.start_time = past.time
+    tables.registrations = { singleResponse: { data: reg, error: null } }
+    const nowIso = new Date().toISOString()
+    tables.event_controls = {
+      listResponse: {
+        data: [
+          {
+            ...makeControlRow(),
+            id: 'ctrl-l2',
+            position: 3,
+            distance_km: 0,
+            notes: null,
+            leg_name: 'Leg 2: Haliburton',
+          },
+        ],
+        error: null,
+      },
+    }
+    tables.control_checkins = {
+      listResponse: {
+        data: [
+          {
+            control_id: 'ctrl-l2',
+            checked_in_at: nowIso,
+            received_at: nowIso,
+            method: 'gps',
+            distance_to_control_m: 0,
+          },
+        ],
+        error: null,
+      },
+    }
+
+    const card = await getBrevetCardByToken(TOKEN)
+
+    expect(card!.checkins).toHaveLength(1)
+    expect(card!.checkins[0].flags.late).toBe(false)
+    expect(card!.checkins[0].flags.early).toBe(false)
+  })
+
+  it('still derives the late flag for the same tap on a single-route control (non-vacuous)', async () => {
+    // Identical setup to the leg test above but with leg_name null: the
+    // window applies and the tap 3 hours after a 0 km control's start is late.
+    const past = torontoNowParts(-3 * 60 * 60 * 1000)
+    const reg = makeRegistration()
+    reg.events.event_date = past.date
+    reg.events.start_time = past.time
+    tables.registrations = { singleResponse: { data: reg, error: null } }
+    const nowIso = new Date().toISOString()
+    tables.event_controls = {
+      listResponse: {
+        data: [{ ...makeControlRow(), position: 1, distance_km: 0, notes: null, leg_name: null }],
+        error: null,
+      },
+    }
+    tables.control_checkins = {
+      listResponse: {
+        data: [
+          {
+            control_id: 'ctrl-1',
+            checked_in_at: nowIso,
+            received_at: nowIso,
+            method: 'gps',
+            distance_to_control_m: 0,
+          },
+        ],
+        error: null,
+      },
+    }
+
+    const card = await getBrevetCardByToken(TOKEN)
+
+    expect(card!.checkins[0].flags.late).toBe(true)
   })
 
   it('still returns null for an unknown token', async () => {

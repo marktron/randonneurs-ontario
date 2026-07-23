@@ -1,3 +1,5 @@
+import type { CardLeg } from '@/types/control-card'
+
 interface ControlInput {
   id: string
   name: string
@@ -126,4 +128,92 @@ export function backCardLayout(controlCount: number): {
           ? 'dense'
           : 'ultra'
   return { rowsPerColumn, tier }
+}
+
+// ============================================================================
+// Collection legs (per-leg control cards; see docs/control-cards.md)
+// ============================================================================
+
+export interface LegGroup<T> {
+  legRwgpsId: string
+  legName: string
+  controls: T[]
+}
+
+/**
+ * Group leg-tagged controls into legs in first-appearance order. Returns
+ * null unless EVERY control carries the leg pair — a mixed or untagged list
+ * is a single-route card (collection imports tag every row; anything else
+ * falls back to today's behavior).
+ *
+ * `T` is intentionally left unconstrained beyond `object`: further
+ * constraining it to require `legRwgpsId`/`legName` would make TypeScript's
+ * array-literal inference apply that constraint as a contextual type and
+ * reject any literal that doesn't already mention those fields
+ * (excess-property check on e.g. `[{ name: 'Start' }]`), which is exactly
+ * the untagged shape this function needs to accept. The leg fields are read
+ * via a narrowed view instead.
+ */
+export function groupControlsByLeg<T extends object>(controls: T[]): LegGroup<T>[] | null {
+  if (controls.length === 0) return null
+
+  const legFields = controls as unknown as { legRwgpsId?: string | null; legName?: string | null }[]
+  if (!legFields.every((c) => c.legRwgpsId != null && c.legName != null)) return null
+
+  const groups: LegGroup<T>[] = []
+  const byId = new Map<string, LegGroup<T>>()
+  controls.forEach((control, i) => {
+    const id = legFields[i].legRwgpsId!
+    let group = byId.get(id)
+    if (!group) {
+      group = { legRwgpsId: id, legName: legFields[i].legName!, controls: [] }
+      byId.set(id, group)
+      groups.push(group)
+    }
+    group.controls.push(control)
+  })
+  return groups
+}
+
+/** A stored event_controls row, position-ordered, as needed for leg cards. */
+export interface ControlRowForLegs {
+  name: string
+  distanceKm: number
+  legRwgpsId: string | null
+  legName: string | null
+}
+
+/**
+ * Build the printed-card legs from the stored event_controls rows — the DB
+ * is the source of truth at print time (leg control lists are too large to
+ * round-trip through the print URL). Rows must be position-ordered; legs
+ * come out in first-appearance order, each leg's distance is its largest
+ * control distance (per-leg distances restart at 0), and leg controls never
+ * carry open/close times — the overall event limit governs.
+ *
+ * Returns null unless every row is leg-tagged (mirrors `groupControlsByLeg`):
+ * a mixed or untagged list is a single-route card.
+ */
+export function buildCardLegsFromRows(rows: ControlRowForLegs[]): CardLeg[] | null {
+  const groups = groupControlsByLeg(rows)
+  if (!groups) return null
+  return groups.map((group, groupIndex) => ({
+    legRwgpsId: group.legRwgpsId,
+    legName: group.legName,
+    distanceKm: Math.max(...group.controls.map((row) => row.distanceKm)),
+    rwgpsUrl: `https://ridewithgps.com/routes/${group.legRwgpsId}`,
+    controls: group.controls.map((row, index) => ({
+      id: `leg-${groupIndex}-control-${index}`,
+      name: row.name,
+      distance: row.distanceKm,
+    })),
+  }))
+}
+
+/**
+ * Rider-major card expansion for collection events: all of rider 1's legs,
+ * then rider 2's, ... The 2-per-sheet pairing consumes this stream.
+ */
+export function expandRiderLegCards<R, L>(riders: R[], legs: L[]): { rider: R; leg: L }[] {
+  return riders.flatMap((rider) => legs.map((leg) => ({ rider, leg })))
 }

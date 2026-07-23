@@ -220,6 +220,23 @@ describe('deriveCheckinFlags', () => {
     expect(gpsFlags.lateSync).toBe(true)
     expect(manualFlags.lateSync).toBe(true)
   })
+
+  it('never derives early/late when the window is null (leg-tagged controls)', () => {
+    // Leg cards carry no per-control window — the overall event limit
+    // governs — so a tap far outside what the (wrong) restarted-distance
+    // window would be must not read early or late.
+    const wayLate = new Date(window.closeAt.getTime() + 6 * 60 * 60 * 1000).toISOString()
+    const flags = deriveCheckinFlags(
+      { ...cleanCheckin, checked_in_at: wayLate, received_at: wayLate },
+      control,
+      null
+    )
+    expect(flags.early).toBe(false)
+    expect(flags.late).toBe(false)
+    // Window-independent flags still derive.
+    expect(flags.outOfRadius).toBe(false)
+    expect(flags.noGps).toBe(false)
+  })
 })
 
 describe('hasAnyFlag', () => {

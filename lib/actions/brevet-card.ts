@@ -82,9 +82,15 @@ export interface CardControl {
   lng: number | null
   radiusM: number
   notes: string | null
-  /** ISO timestamps, computed from distance + event start (never stored). */
-  opensAt: string
-  closesAt: string
+  /** Leg heading from event_controls.leg_name; null for single-route events. */
+  legName: string | null
+  /**
+   * ISO timestamps, computed from distance + event start (never stored).
+   * Null for leg-tagged controls: per-leg distances restart at 0, so no
+   * per-control window exists — the overall event limit governs.
+   */
+  opensAt: string | null
+  closesAt: string | null
 }
 
 export interface CardCheckin {
@@ -200,7 +206,7 @@ export async function getBrevetCardByToken(token: string): Promise<BrevetCardDat
     await Promise.all([
       supabase
         .from('event_controls')
-        .select('id, position, name, distance_km, lat, lng, radius_m, notes')
+        .select('id, position, name, distance_km, lat, lng, radius_m, notes, leg_name')
         .eq('event_id', event.id)
         .order('position', { ascending: true }),
       supabase
@@ -235,6 +241,7 @@ export async function getBrevetCardByToken(token: string): Promise<BrevetCardDat
     lng: number | null
     radius_m: number
     notes: string | null
+    leg_name: string | null
   }[]
 
   const checkins = (checkinRows || []) as {
@@ -277,7 +284,12 @@ export async function getBrevetCardByToken(token: string): Promise<BrevetCardDat
       lastName: reg.riders.last_name,
     },
     controls: controls.map((control) => {
-      const window = computeControlWindow(eventStart, control.distance_km, event.distance_km)
+      // Leg-tagged controls carry no window — their distances restart at 0
+      // per leg, so a window from the event start would be wrong for legs 2+.
+      const window =
+        control.leg_name !== null
+          ? null
+          : computeControlWindow(eventStart, control.distance_km, event.distance_km)
       return {
         id: control.id,
         position: control.position,
@@ -287,15 +299,19 @@ export async function getBrevetCardByToken(token: string): Promise<BrevetCardDat
         lng: control.lng,
         radiusM: control.radius_m,
         notes: control.notes,
-        opensAt: window.openAt.toISOString(),
-        closesAt: window.closeAt.toISOString(),
+        legName: control.leg_name,
+        opensAt: window === null ? null : window.openAt.toISOString(),
+        closesAt: window === null ? null : window.closeAt.toISOString(),
       }
     }),
     checkins: checkins.flatMap((checkin) => {
       const control = controlById.get(checkin.control_id)
       // A check-in for a deleted/replaced control has nothing to render.
       if (!control) return []
-      const window = computeControlWindow(eventStart, control.distance_km, event.distance_km)
+      const window =
+        control.leg_name !== null
+          ? null
+          : computeControlWindow(eventStart, control.distance_km, event.distance_km)
       return [
         {
           controlId: checkin.control_id,
@@ -450,7 +466,7 @@ export async function checkInAtControl(token: string, input: CheckinInput): Prom
     ] = await Promise.all([
       supabase
         .from('event_controls')
-        .select('id, event_id, name, position, distance_km, lat, lng, radius_m')
+        .select('id, event_id, name, position, distance_km, lat, lng, radius_m, leg_name')
         .eq('id', input.controlId)
         .single(),
       supabase
@@ -475,6 +491,7 @@ export async function checkInAtControl(token: string, input: CheckinInput): Prom
       lat: number | null
       lng: number | null
       radius_m: number
+      leg_name: string | null
     }
 
     if (control.event_id !== event.id) {
@@ -571,7 +588,12 @@ export async function checkInAtControl(token: string, input: CheckinInput): Prom
       return { success: false, error: 'Failed to record check-in', retryable: true }
     }
 
-    const window = computeControlWindow(eventStart, control.distance_km, event.distance_km)
+    // Null for leg-tagged controls — no per-control window exists (see
+    // CardControl.opensAt), so the returned flags never read early/late.
+    const window =
+      control.leg_name !== null
+        ? null
+        : computeControlWindow(eventStart, control.distance_km, event.distance_km)
 
     // Final-control check-ins pre-fill the rider's result and send the
     // "add your track" email. Never blocks the check-in (module never throws).

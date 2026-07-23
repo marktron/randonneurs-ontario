@@ -22,6 +22,7 @@ import {
   isReversedEvent,
   matchImportedControls,
   controlsInSync,
+  groupControlsByLeg,
   MAX_CARD_CONTROLS,
 } from '@/lib/controlPoints'
 import {
@@ -46,6 +47,8 @@ interface ControlInput {
   lng: number | null
   radiusM: number
   notes: string | null
+  legRwgpsId: string | null
+  legName: string | null
 }
 
 interface EventInput {
@@ -88,6 +91,8 @@ function rowFromSaved(control: AdminEventControl): ControlInput {
     lng: control.lng,
     radiusM: control.radiusM,
     notes: control.notes,
+    legRwgpsId: control.legRwgpsId,
+    legName: control.legName,
   }
 }
 
@@ -130,6 +135,8 @@ export function ControlCardsForm({
             lng: null,
             radiusM: DEFAULT_CONTROL_RADIUS_M,
             notes: null,
+            legRwgpsId: null,
+            legName: null,
           },
           {
             id: crypto.randomUUID(),
@@ -140,6 +147,8 @@ export function ControlCardsForm({
             lng: null,
             radiusM: DEFAULT_CONTROL_RADIUS_M,
             notes: null,
+            legRwgpsId: null,
+            legName: null,
           },
         ]
   )
@@ -179,25 +188,38 @@ export function ControlCardsForm({
       ? riders.filter((r) => selectedRiderIds.has(r.id)).length
       : riders.length
 
-  // The print page falls back to 2 blank cards when nothing else would print.
-  const cardCount = chosenRiderCount + extraBlankCards > 0 ? chosenRiderCount + extraBlankCards : 2
-
   const individualSelectionValid = selectionMode === 'all' || chosenRiderCount > 0
+
+  // Grouped by leg for collection events (Task 3 imports tag every control
+  // with its source leg); null for single-route events. Declared before
+  // generatePrintUrl below, which depends on it.
+  const legGroups = groupControlsByLeg(controls)
+  const legCount = legGroups?.length ?? 1
+
+  // The print page falls back to 2 blank cards when nothing else would print.
+  const baseCardCount =
+    chosenRiderCount + extraBlankCards > 0 ? chosenRiderCount + extraBlankCards : 2
+  const cardCount = baseCardCount * legCount
 
   const addControl = useCallback(() => {
     // Insert before the last control (finish). Hand-added rows carry no
     // coordinates until an admin sets them in the digital brevet card manager.
-    const newControl: ControlInput = {
-      id: crypto.randomUUID(),
-      savedId: undefined,
-      name: '',
-      distance: '',
-      lat: null,
-      lng: null,
-      radiusM: DEFAULT_CONTROL_RADIUS_M,
-      notes: null,
-    }
-    setControls((prev) => [...prev.slice(0, -1), newControl, prev[prev.length - 1]])
+    setControls((prev) => {
+      const anchor = prev[prev.length - 1]
+      const newControl: ControlInput = {
+        id: crypto.randomUUID(),
+        savedId: undefined,
+        name: '',
+        distance: '',
+        lat: null,
+        lng: null,
+        radiusM: DEFAULT_CONTROL_RADIUS_M,
+        notes: null,
+        legRwgpsId: anchor?.legRwgpsId ?? null,
+        legName: anchor?.legName ?? null,
+      }
+      return [...prev.slice(0, -1), newControl, prev[prev.length - 1]]
+    })
   }, [])
 
   const removeControl = useCallback((id: string) => {
@@ -243,6 +265,8 @@ export function ControlCardsForm({
         lng: c.lng,
         radiusM: c.radiusM,
         notes: c.notes,
+        legRwgpsId: c.legRwgpsId,
+        legName: c.legName,
       }))
 
       startSaveTransition(async () => {
@@ -307,6 +331,8 @@ export function ControlCardsForm({
             lng: c.lng,
             radiusM: m?.radiusM ?? DEFAULT_CONTROL_RADIUS_M,
             notes: m?.notes ?? null,
+            legRwgpsId: c.legRwgpsId,
+            legName: c.legName,
           }
         })
         setControls(importedRows)
@@ -347,19 +373,23 @@ export function ControlCardsForm({
     params.set('organizerPhone', organizerPhone)
     params.set('organizerEmail', organizerEmail)
 
-    // Sort controls by distance before encoding
-    const sortedControls = [...controls].sort(
-      (a, b) => parseFloat(a.distance || '0') - parseFloat(b.distance || '0')
-    )
-    params.set(
-      'controls',
-      JSON.stringify(
-        sortedControls.map((c) => ({
-          name: c.name,
-          distance: parseFloat(c.distance || '0'),
-        }))
+    // Single-route events encode the controls into the URL (legacy shape,
+    // unchanged). Leg-grouped (collection) events omit the param entirely:
+    // a full leg control list blows past platform request-line limits
+    // (~14 KB on Vercel), so the admin print page reads the saved
+    // event_controls rows instead — the DB is the source of truth at
+    // print time.
+    if (!legGroups) {
+      const sortedControls = [...controls].sort(
+        (a, b) => parseFloat(a.distance || '0') - parseFloat(b.distance || '0')
       )
-    )
+      params.set(
+        'controls',
+        JSON.stringify(
+          sortedControls.map((c) => ({ name: c.name, distance: parseFloat(c.distance || '0') }))
+        )
+      )
+    }
 
     if (extraBlankCards > 0) {
       params.set('extraBlank', String(extraBlankCards))
@@ -377,6 +407,7 @@ export function ControlCardsForm({
     organizerPhone,
     organizerEmail,
     controls,
+    legGroups,
     extraBlankCards,
     selectionMode,
     selectedRiderIds,
@@ -401,7 +432,8 @@ export function ControlCardsForm({
     saveRows(controls)
   }, [saveRows, controls])
 
-  const tooManyControls = controls.length > MAX_CARD_CONTROLS
+  const oversizedLeg = legGroups?.find((g) => g.controls.length > MAX_CARD_CONTROLS) ?? null
+  const tooManyControls = legGroups ? oversizedLeg !== null : controls.length > MAX_CARD_CONTROLS
 
   const isFormValid =
     organizerName &&
@@ -570,7 +602,7 @@ export function ControlCardsForm({
             )}
           </div>
           {rwgpsError && <p className="text-sm text-destructive">{rwgpsError}</p>}
-          {!event.rwgpsId && (
+          {!event.rwgpsId && !legGroups && (
             <p className="text-sm text-muted-foreground">
               No RWGPS route linked to this event. Add control points manually or link a route.
             </p>
@@ -608,7 +640,11 @@ export function ControlCardsForm({
                 <div className="space-y-3 rounded-md border border-amber-500/50 bg-amber-50 p-3 text-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
                   <div className="flex items-start gap-2 text-sm">
                     <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
-                    <span>These controls differ from the saved digital-card controls.</span>
+                    <span>
+                      These controls differ from the saved digital-card controls.
+                      {legGroups &&
+                        ' Printed leg cards use the saved controls — update them before generating.'}
+                    </span>
                   </div>
                   <div className="flex gap-2">
                     <Button
@@ -759,8 +795,9 @@ export function ControlCardsForm({
         </Button>
         {tooManyControls && (
           <p className="text-sm text-destructive self-center">
-            {controls.length} controls — printed cards support at most {MAX_CARD_CONTROLS}. Merge or
-            remove controls.
+            {oversizedLeg
+              ? `${oversizedLeg.legName} has ${oversizedLeg.controls.length} controls — printed cards support at most ${MAX_CARD_CONTROLS} per leg. Merge or remove controls.`
+              : `${controls.length} controls — printed cards support at most ${MAX_CARD_CONTROLS}. Merge or remove controls.`}
           </p>
         )}
         {!isFormValid && !tooManyControls && (
