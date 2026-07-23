@@ -717,6 +717,10 @@ describe('extractRwgpsRefs', () => {
       rwgpsId: null,
       rwgpsCollectionId: '8387874',
     })
+    expect(extractRwgpsRefs('https://ridewithgps.com/collections/8387874/some-slug')).toEqual({
+      rwgpsId: null,
+      rwgpsCollectionId: '8387874',
+    })
   })
 
   it('treats a bare numeric id as a route id', () => {
@@ -844,6 +848,14 @@ describe('fetchRwgpsCollection', () => {
 
   it('returns null when credentials are missing', async () => {
     vi.stubEnv('RWGPS_API_KEY', '')
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    expect(await fetchRwgpsCollection('8387874')).toBeNull()
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('returns null when the auth token is missing but the key is present', async () => {
+    vi.stubEnv('RWGPS_AUTH_TOKEN', '')
     const fetchMock = vi.fn()
     vi.stubGlobal('fetch', fetchMock)
     expect(await fetchRwgpsCollection('8387874')).toBeNull()
