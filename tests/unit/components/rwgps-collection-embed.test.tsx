@@ -57,4 +57,11 @@ describe('RwgpsCollectionEmbed', () => {
     const link = screen.getByRole('link', { name: /view full collection/i })
     expect(link).toHaveAttribute('href', 'https://ridewithgps.com/collections/8387874')
   })
+
+  it('renders nothing when the collection has no routes', () => {
+    const { container } = render(
+      <RwgpsCollectionEmbed collection={{ ...collection, routes: [] }} />
+    )
+    expect(container).toBeEmptyDOMElement()
+  })
 })

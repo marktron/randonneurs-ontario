@@ -18,6 +18,10 @@ interface RwgpsCollectionEmbedProps {
 export function RwgpsCollectionEmbed({ collection }: RwgpsCollectionEmbedProps) {
   const [selected, setSelected] = useState(collection.routes[0])
 
+  // fetchRwgpsCollection never returns an empty collection, but the props
+  // type permits routes: [] — bail out rather than crash on selected.id.
+  if (!selected) return null
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap gap-2" aria-label="Collection legs">
