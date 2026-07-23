@@ -517,4 +517,31 @@ describe('mergeRoutes', () => {
     const updateCalls = mockModule.__calls.filter((c) => c.method === 'update')
     expect(updateCalls.length).toBeGreaterThanOrEqual(1)
   })
+
+  it('merging with a collection URL persists rwgps_collection_id and null rwgps_id on the target route', async () => {
+    mockModule.__mockUpdateSuccess() // For event updates
+    mockModule.__mockUpdateSuccess() // For route deletion
+    mockModule.__mockUpdateSuccess() // For route update
+
+    const result = await mergeRoutes({
+      targetRouteId: 'route-1',
+      sourceRouteIds: ['route-1', 'route-2'],
+      routeData: {
+        name: 'Merged Route',
+        slug: 'merged-route',
+        rwgpsUrl: 'https://ridewithgps.com/collections/8387874',
+      },
+    })
+
+    expect(result.success).toBe(true)
+
+    const routeUpdateCalls = mockModule.__calls.filter(
+      (c) => c.table === 'routes' && c.method === 'update'
+    )
+    expect(routeUpdateCalls).toHaveLength(1)
+    expect(routeUpdateCalls[0].args![0]).toMatchObject({
+      rwgps_id: null,
+      rwgps_collection_id: '8387874',
+    })
+  })
 })

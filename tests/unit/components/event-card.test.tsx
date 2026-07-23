@@ -109,8 +109,13 @@ describe('EventCard', () => {
     })
 
     it('still renders the Route link when rwgpsId is set', () => {
-      render(<EventCard event={cancelledEvent} />)
-      expect(screen.getByRole('link', { name: /route/i })).toBeInTheDocument()
+      // rwgpsCollectionId is also set here: the DB forbids both rwgps_id and
+      // rwgps_collection_id being non-null on the same route, but setting
+      // both in this fixture pins the ternary's precedence — route wins.
+      render(<EventCard event={{ ...cancelledEvent, rwgpsCollectionId: '999999' }} />)
+      const link = screen.getByRole('link', { name: /route/i })
+      expect(link).toBeInTheDocument()
+      expect(link).toHaveAttribute('href', 'https://ridewithgps.com/routes/12345')
     })
 
     it('applies muted styling to the details column', () => {

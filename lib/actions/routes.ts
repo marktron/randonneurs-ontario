@@ -58,7 +58,7 @@ export interface RouteData {
   distanceKm?: number | null
   collection?: string | null
   description?: string | null
-  rwgpsUrl?: string | null // Accept full URL, will extract ID
+  rwgpsUrl?: string | null // Route or collection URL; the matching id is extracted automatically
   cueSheetUrl?: string | null
   notes?: string | null
   isActive?: boolean

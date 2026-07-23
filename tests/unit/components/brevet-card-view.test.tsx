@@ -1258,6 +1258,15 @@ describe('BrevetCard leg section headings', () => {
     expect(screen.getByText('Depart Gravenhurst')).toBeTruthy()
     expect(screen.getByText('Arrive Gravenhurst')).toBeTruthy()
     expect(screen.getByText('Depart Haliburton')).toBeTruthy()
+
+    // Headings appear in document order, not just in count.
+    const headings = screen
+      .getAllByRole('listitem')
+      .filter((li) => /^Leg \d+:/.test(li.textContent ?? ''))
+    expect(headings.map((li) => li.textContent)).toEqual([
+      'Leg 1: Gravenhurst',
+      'Leg 2: Haliburton',
+    ])
   })
 
   it('renders no leg headings for single-route events', () => {

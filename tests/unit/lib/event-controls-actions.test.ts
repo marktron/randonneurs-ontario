@@ -876,6 +876,8 @@ describe('getEventCollectionLegs', () => {
       { legRwgpsId: '102', name: 'CCE 300 - Haliburton', distanceKm: 302.1 },
       { legRwgpsId: '103', name: 'CCE Full Route', distanceKm: 2007.4 },
     ])
+    // Read-only action: fetching legs for the picker must not write to the DB.
+    expect(writeCalls()).toEqual([])
   })
 
   it('returns an error when the route has no collection id', async () => {
@@ -952,6 +954,9 @@ describe('importEventControlsFromRwgpsCollection', () => {
         legName: 'CCE 300 - Haliburton',
       },
     ])
+    // Read-only action: this only returns parsed controls for the admin to
+    // review — saveEventControls performs the actual DB write afterward.
+    expect(writeCalls()).toEqual([])
   })
 
   it('is all-or-nothing: a failing leg aborts with a leg-specific message and no data', async () => {
