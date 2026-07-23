@@ -127,3 +127,55 @@ export function backCardLayout(controlCount: number): {
           : 'ultra'
   return { rowsPerColumn, tier }
 }
+
+// ============================================================================
+// Collection legs (per-leg control cards; see docs/control-cards.md)
+// ============================================================================
+
+export interface LegGroup<T> {
+  legRwgpsId: string
+  legName: string
+  controls: T[]
+}
+
+/**
+ * Group leg-tagged controls into legs in first-appearance order. Returns
+ * null unless EVERY control carries the leg pair — a mixed or untagged list
+ * is a single-route card (collection imports tag every row; anything else
+ * falls back to today's behavior).
+ *
+ * `T` is intentionally unconstrained: TypeScript's array-literal inference
+ * applies the constraint as a contextual type and rejects any literal that
+ * doesn't already mention `legRwgpsId`/`legName` (excess-property check on
+ * e.g. `[{ name: 'Start' }]`), which is exactly the untagged shape this
+ * function needs to accept. The leg fields are read via a narrowed view
+ * instead.
+ */
+export function groupControlsByLeg<T>(controls: T[]): LegGroup<T>[] | null {
+  if (controls.length === 0) return null
+
+  const legFields = controls as unknown as { legRwgpsId?: string | null; legName?: string | null }[]
+  if (!legFields.every((c) => c.legRwgpsId != null && c.legName != null)) return null
+
+  const groups: LegGroup<T>[] = []
+  const byId = new Map<string, LegGroup<T>>()
+  controls.forEach((control, i) => {
+    const id = legFields[i].legRwgpsId!
+    let group = byId.get(id)
+    if (!group) {
+      group = { legRwgpsId: id, legName: legFields[i].legName!, controls: [] }
+      byId.set(id, group)
+      groups.push(group)
+    }
+    group.controls.push(control)
+  })
+  return groups
+}
+
+/**
+ * Rider-major card expansion for collection events: all of rider 1's legs,
+ * then rider 2's, ... The 2-per-sheet pairing consumes this stream.
+ */
+export function expandRiderLegCards<R, L>(riders: R[], legs: L[]): { rider: R; leg: L }[] {
+  return riders.flatMap((rider) => legs.map((leg) => ({ rider, leg })))
+}

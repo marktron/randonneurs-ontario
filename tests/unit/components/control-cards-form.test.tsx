@@ -379,3 +379,118 @@ describe('ControlCardsForm control-count cap', () => {
     ).toBeNull()
   })
 })
+
+describe('ControlCardsForm collection legs', () => {
+  const legSaved: AdminEventControl[] = [
+    makeSaved({
+      id: 'l1-start',
+      position: 1,
+      name: 'L1 Start',
+      distanceKm: 0,
+      legRwgpsId: '101',
+      legName: 'Leg 1: A',
+    }),
+    makeSaved({
+      id: 'l1-fin',
+      position: 2,
+      name: 'L1 Finish',
+      distanceKm: 200,
+      legRwgpsId: '101',
+      legName: 'Leg 1: A',
+    }),
+    makeSaved({
+      id: 'l2-start',
+      position: 3,
+      name: 'L2 Start',
+      distanceKm: 0,
+      legRwgpsId: '102',
+      legName: 'Leg 2: B',
+    }),
+    makeSaved({
+      id: 'l2-fin',
+      position: 4,
+      name: 'L2 Finish',
+      distanceKm: 300,
+      legRwgpsId: '102',
+      legName: 'Leg 2: B',
+    }),
+  ]
+
+  it('multiplies the card count by the number of legs (riders × legs)', () => {
+    renderForm({ savedControls: legSaved })
+    // 3 riders × 2 legs = 6
+    expect(screen.getByRole('link', { name: 'Generate 6 Control Cards' })).toBeTruthy()
+  })
+
+  it('encodes leg tags into the controls print param, leg-major', () => {
+    renderForm({ savedControls: legSaved })
+    const href = generateHref()
+    const controlsJson = new URLSearchParams(href.split('?')[1]).get('controls')!
+    expect(JSON.parse(controlsJson)).toEqual([
+      { name: 'L1 Start', distance: 0, legRwgpsId: '101', legName: 'Leg 1: A' },
+      { name: 'L1 Finish', distance: 200, legRwgpsId: '101', legName: 'Leg 1: A' },
+      { name: 'L2 Start', distance: 0, legRwgpsId: '102', legName: 'Leg 2: B' },
+      { name: 'L2 Finish', distance: 300, legRwgpsId: '102', legName: 'Leg 2: B' },
+    ])
+  })
+
+  it('keeps the single-route controls param shape unchanged (no leg keys)', () => {
+    renderForm({
+      savedControls: [
+        makeSaved({ id: 's', position: 1, name: 'Start', distanceKm: 0 }),
+        makeSaved({ id: 'f', position: 2, name: 'Finish', distanceKm: 200 }),
+      ],
+    })
+    const href = generateHref()
+    const controlsJson = new URLSearchParams(href.split('?')[1]).get('controls')!
+    expect(JSON.parse(controlsJson)).toEqual([
+      { name: 'Start', distance: 0 },
+      { name: 'Finish', distance: 200 },
+    ])
+  })
+
+  it('applies MAX_CARD_CONTROLS per leg and names the offending leg', () => {
+    const bigLeg = Array.from({ length: 25 }, (_, i) =>
+      makeSaved({
+        id: `big-${i}`,
+        position: i + 1,
+        name: `C${i}`,
+        distanceKm: i * 10,
+        legRwgpsId: '101',
+        legName: 'Leg 1: A',
+      })
+    )
+    const smallLeg = makeSaved({
+      id: 'l2',
+      position: 26,
+      name: 'L2 Start',
+      distanceKm: 0,
+      legRwgpsId: '102',
+      legName: 'Leg 2: B',
+    })
+    renderForm({ savedControls: [...bigLeg, smallLeg] })
+    expect(screen.getByText(/Leg 1: A has 25 controls/)).toBeTruthy()
+    const link = screen.getByRole('link', { name: /Generate/i })
+    expect(link.className).toContain('pointer-events-none')
+  })
+
+  it('does not trip the global cap when legs are each under it', () => {
+    // 2 legs × 20 controls = 40 total, but ≤ 24 per leg — printable.
+    const legs = ['101', '102'].flatMap((legId, li) =>
+      Array.from({ length: 20 }, (_, i) =>
+        makeSaved({
+          id: `${legId}-${i}`,
+          position: li * 20 + i + 1,
+          name: `C${li}-${i}`,
+          distanceKm: i * 10,
+          legRwgpsId: legId,
+          legName: `Leg ${li + 1}: X${li}`,
+        })
+      )
+    )
+    renderForm({ savedControls: legs })
+    expect(screen.queryByText(/printed cards support at most/)).toBeNull()
+    // 3 riders × 2 legs = 6
+    expect(screen.getByRole('link', { name: 'Generate 6 Control Cards' })).toBeTruthy()
+  })
+})

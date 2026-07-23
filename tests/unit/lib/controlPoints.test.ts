@@ -6,6 +6,8 @@ import {
   controlsInSync,
   backCardLayout,
   MAX_CARD_CONTROLS,
+  groupControlsByLeg,
+  expandRiderLegCards,
 } from '@/lib/controlPoints'
 
 describe('reverseControls', () => {
@@ -295,5 +297,52 @@ describe('backCardLayout', () => {
   it('clamps above the cap rather than throwing (callers reject >24)', () => {
     expect(backCardLayout(25)).toEqual({ rowsPerColumn: 8, tier: 'ultra' })
     expect(backCardLayout(40)).toEqual({ rowsPerColumn: 8, tier: 'ultra' })
+  })
+})
+
+describe('groupControlsByLeg', () => {
+  it('groups fully-tagged controls in first-appearance order', () => {
+    const controls = [
+      { name: 'A1', legRwgpsId: '101', legName: 'Leg 1: A' },
+      { name: 'A2', legRwgpsId: '101', legName: 'Leg 1: A' },
+      { name: 'B1', legRwgpsId: '102', legName: 'Leg 2: B' },
+    ]
+    expect(groupControlsByLeg(controls)).toEqual([
+      { legRwgpsId: '101', legName: 'Leg 1: A', controls: [controls[0], controls[1]] },
+      { legRwgpsId: '102', legName: 'Leg 2: B', controls: [controls[2]] },
+    ])
+  })
+
+  it('returns null for untagged controls (single-route card)', () => {
+    expect(groupControlsByLeg([{ name: 'Start' }, { name: 'Finish' }])).toBeNull()
+    expect(groupControlsByLeg([{ name: 'Start', legRwgpsId: null, legName: null }])).toBeNull()
+  })
+
+  it('returns null for a mixed list (any untagged row falls back to single-route)', () => {
+    expect(
+      groupControlsByLeg([
+        { name: 'A1', legRwgpsId: '101', legName: 'Leg 1: A' },
+        { name: 'Stray' },
+      ])
+    ).toBeNull()
+  })
+
+  it('returns null for an empty list', () => {
+    expect(groupControlsByLeg([])).toBeNull()
+  })
+})
+
+describe('expandRiderLegCards', () => {
+  it('expands rider-major: all of rider 1 legs before rider 2', () => {
+    expect(expandRiderLegCards(['r1', 'r2'], ['l1', 'l2'])).toEqual([
+      { rider: 'r1', leg: 'l1' },
+      { rider: 'r1', leg: 'l2' },
+      { rider: 'r2', leg: 'l1' },
+      { rider: 'r2', leg: 'l2' },
+    ])
+  })
+
+  it('returns empty for no riders', () => {
+    expect(expandRiderLegCards([], ['l1'])).toEqual([])
   })
 })
