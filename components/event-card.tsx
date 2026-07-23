@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { devData } from '@/lib/dev-data'
+import { buildRwgpsCollectionUrl } from '@/lib/rwgps'
 
 export interface Event {
   id?: string // Event UUID for debugging
@@ -16,6 +17,7 @@ export interface Event {
   registeredCount?: number // Number of registered riders
   chapterName?: string // Chapter name for all-chapters view
   rwgpsId?: string | null // RideWithGPS route ID for route link
+  rwgpsCollectionId?: string | null // RWGPS collection ID for multi-leg events
 }
 
 function formatDate(dateString: string): {
@@ -193,10 +195,14 @@ export function EventCard({
               : 'md:opacity-0 md:group-hover:opacity-100 md:transition-opacity'
           } flex items-center gap-2`}
         >
-          {event.rwgpsId && (
+          {(event.rwgpsId || event.rwgpsCollectionId) && (
             <Button variant="outline" size="sm" asChild>
               <a
-                href={`https://ridewithgps.com/routes/${event.rwgpsId}`}
+                href={
+                  event.rwgpsId
+                    ? `https://ridewithgps.com/routes/${event.rwgpsId}`
+                    : buildRwgpsCollectionUrl(event.rwgpsCollectionId!)
+                }
                 target="_blank"
                 rel="noopener noreferrer"
               >

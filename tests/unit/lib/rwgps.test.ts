@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import {
+  buildRwgpsCollectionUrl,
   cleanControlName,
   extractControls,
   extractControlsWithCoords,
@@ -874,5 +875,11 @@ describe('fetchRwgpsCollection', () => {
       })
     )
     expect(await fetchRwgpsCollection('8387874')).toBeNull()
+  })
+})
+
+describe('buildRwgpsCollectionUrl', () => {
+  it('builds the collection page URL', () => {
+    expect(buildRwgpsCollectionUrl('8387874')).toBe('https://ridewithgps.com/collections/8387874')
   })
 })
