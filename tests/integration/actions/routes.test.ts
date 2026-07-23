@@ -404,6 +404,62 @@ describe('toggleRouteActive', () => {
   })
 })
 
+describe('createRoute / updateRoute RWGPS ref handling', () => {
+  beforeEach(() => {
+    mockModule.__reset()
+    vi.clearAllMocks()
+  })
+
+  it('createRoute with a collection URL sets rwgps_collection_id and null rwgps_id', async () => {
+    mockModule.__mockInsertSuccess()
+    const result = await createRoute({
+      name: 'Cottage Country Explorer 2000',
+      slug: 'cce-2000',
+      rwgpsUrl: 'https://ridewithgps.com/collections/8387874',
+    })
+    expect(result.success).toBe(true)
+    const insertCall = mockModule.__calls.find((c) => c.table === 'routes' && c.method === 'insert')
+    expect(insertCall).toBeDefined()
+    expect(insertCall!.args![0]).toMatchObject({
+      rwgps_id: null,
+      rwgps_collection_id: '8387874',
+    })
+  })
+
+  it('createRoute with a route URL sets rwgps_id and null rwgps_collection_id', async () => {
+    mockModule.__mockInsertSuccess()
+    await createRoute({
+      name: 'Waterloo-Paris 200',
+      slug: 'waterloo-paris-200',
+      rwgpsUrl: 'https://ridewithgps.com/routes/12345678',
+    })
+    const insertCall = mockModule.__calls.find((c) => c.table === 'routes' && c.method === 'insert')
+    expect(insertCall!.args![0]).toMatchObject({
+      rwgps_id: '12345678',
+      rwgps_collection_id: null,
+    })
+  })
+
+  it('updateRoute switching to a collection URL clears rwgps_id (and vice versa)', async () => {
+    mockModule.__mockUpdateSuccess()
+    await updateRoute('route-1', { rwgpsUrl: 'https://ridewithgps.com/collections/8387874' })
+    let updateCall = mockModule.__calls.find((c) => c.table === 'routes' && c.method === 'update')
+    expect(updateCall!.args![0]).toMatchObject({
+      rwgps_id: null,
+      rwgps_collection_id: '8387874',
+    })
+
+    mockModule.__reset()
+    mockModule.__mockUpdateSuccess()
+    await updateRoute('route-1', { rwgpsUrl: 'https://ridewithgps.com/routes/999' })
+    updateCall = mockModule.__calls.find((c) => c.table === 'routes' && c.method === 'update')
+    expect(updateCall!.args![0]).toMatchObject({
+      rwgps_id: '999',
+      rwgps_collection_id: null,
+    })
+  })
+})
+
 describe('mergeRoutes', () => {
   beforeEach(() => {
     mockModule.__reset()

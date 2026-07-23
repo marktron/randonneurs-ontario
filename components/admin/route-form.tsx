@@ -41,7 +41,11 @@ export function RouteForm({ chapters, route, mode }: RouteFormProps) {
   const [collection, setCollection] = useState(route?.collection || '')
   const [description, setDescription] = useState(route?.description || '')
   const [rwgpsUrl, setRwgpsUrl] = useState(
-    route?.rwgps_id ? `https://ridewithgps.com/routes/${route.rwgps_id}` : ''
+    route?.rwgps_collection_id
+      ? `https://ridewithgps.com/collections/${route.rwgps_collection_id}`
+      : route?.rwgps_id
+        ? `https://ridewithgps.com/routes/${route.rwgps_id}`
+        : ''
   )
   const [cueSheetUrl, setCueSheetUrl] = useState(route?.cue_sheet_url || '')
   const [notes, setNotes] = useState(route?.notes || '')
@@ -208,20 +212,25 @@ export function RouteForm({ chapters, route, mode }: RouteFormProps) {
               id="rwgps"
               value={rwgpsUrl}
               onChange={(e) => setRwgpsUrl(e.target.value)}
-              placeholder="https://ridewithgps.com/routes/12345678"
+              placeholder="https://ridewithgps.com/routes/12345678 or /collections/12345"
               disabled={isPending}
             />
             <p className="text-xs text-muted-foreground">
-              Paste the full RWGPS URL. The route ID will be extracted automatically.
+              Paste a full RWGPS route URL, or a collection URL for multi-leg events. The type and
+              ID are detected automatically.
             </p>
-            {route?.rwgps_id && (
+            {(route?.rwgps_collection_id || route?.rwgps_id) && (
               <a
-                href={`https://ridewithgps.com/routes/${route.rwgps_id}`}
+                href={
+                  route.rwgps_collection_id
+                    ? `https://ridewithgps.com/collections/${route.rwgps_collection_id}`
+                    : `https://ridewithgps.com/routes/${route.rwgps_id}`
+                }
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
               >
-                View current route on RWGPS
+                View current {route.rwgps_collection_id ? 'collection' : 'route'} on RWGPS
                 <ExternalLink className="h-3 w-3" />
               </a>
             )}

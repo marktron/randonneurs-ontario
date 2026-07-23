@@ -33,6 +33,7 @@ export interface RouteDetail {
   distanceKm: number | null
   description: string | null
   rwgpsId: string | null
+  rwgpsCollectionId: string | null
   cueSheetUrl: string | null
   chapterSlug: string
   chapterName: string
@@ -58,7 +59,7 @@ const getRouteBySlugInner = cache(async (slug: string): Promise<RouteDetail | nu
     .from('routes')
     .select(
       `
-      slug, name, distance_km, description, rwgps_id, cue_sheet_url,
+      slug, name, distance_km, description, rwgps_id, rwgps_collection_id, cue_sheet_url,
       chapters (slug, name)
     `
     )
@@ -75,6 +76,7 @@ const getRouteBySlugInner = cache(async (slug: string): Promise<RouteDetail | nu
     distanceKm: typedRoute.distance_km,
     description: typedRoute.description,
     rwgpsId: typedRoute.rwgps_id,
+    rwgpsCollectionId: typedRoute.rwgps_collection_id,
     cueSheetUrl: typedRoute.cue_sheet_url ?? null,
     chapterSlug: chapterDbSlug ? getUrlSlugFromDbSlug(chapterDbSlug) : '',
     chapterName: typedRoute.chapters?.name ?? '',
@@ -254,10 +256,12 @@ const getRoutesByChapterInner = cache(async (urlSlug: string): Promise<RouteColl
   // Fetch active routes for this chapter that have a map or cue sheet
   const { data: routes, error: routesError } = await getSupabase()
     .from('routes')
-    .select('slug, name, distance_km, rwgps_id, cue_sheet_url, chapters!inner(slug)')
+    .select(
+      'slug, name, distance_km, rwgps_id, rwgps_collection_id, cue_sheet_url, chapters!inner(slug)'
+    )
     .eq('chapters.slug', dbSlug)
     .eq('is_active', true)
-    .or('rwgps_id.not.is.null,cue_sheet_url.not.is.null')
+    .or('rwgps_id.not.is.null,rwgps_collection_id.not.is.null,cue_sheet_url.not.is.null')
 
   if (routesError) {
     console.error('Error fetching routes:', routesError)
@@ -294,7 +298,11 @@ const getRoutesByChapterInner = cache(async (urlSlug: string): Promise<RouteColl
           slug: route.slug!,
           name: route.name,
           distance: route.distance_km!.toString(),
-          rwgpsUrl: route.rwgps_id ? buildRwgpsUrl(route.rwgps_id) : null,
+          rwgpsUrl: route.rwgps_id
+            ? buildRwgpsUrl(route.rwgps_id)
+            : route.rwgps_collection_id
+              ? `https://ridewithgps.com/collections/${route.rwgps_collection_id}`
+              : null,
           cueSheetUrl: route.cue_sheet_url ?? null,
         })),
       })

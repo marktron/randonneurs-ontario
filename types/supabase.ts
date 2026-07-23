@@ -909,6 +909,7 @@ export type Database = {
           is_active: boolean
           name: string
           notes: string | null
+          rwgps_collection_id: string | null
           rwgps_id: string | null
           slug: string
           updated_at: string | null
@@ -924,6 +925,7 @@ export type Database = {
           is_active?: boolean
           name: string
           notes?: string | null
+          rwgps_collection_id?: string | null
           rwgps_id?: string | null
           slug: string
           updated_at?: string | null
@@ -939,6 +941,7 @@ export type Database = {
           is_active?: boolean
           name?: string
           notes?: string | null
+          rwgps_collection_id?: string | null
           rwgps_id?: string | null
           slug?: string
           updated_at?: string | null

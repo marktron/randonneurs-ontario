@@ -254,14 +254,20 @@ export function RoutesTable({ routes, chapters, defaultChapterId }: RoutesTableP
                   </TableCell>
                   <TableCell className="hidden lg:table-cell">{route.collection || '—'}</TableCell>
                   <TableCell className="hidden lg:table-cell">
-                    {route.rwgps_id ? (
+                    {route.rwgps_id || route.rwgps_collection_id ? (
                       <a
-                        href={`https://ridewithgps.com/routes/${route.rwgps_id}`}
+                        href={
+                          route.rwgps_collection_id
+                            ? `https://ridewithgps.com/collections/${route.rwgps_collection_id}`
+                            : `https://ridewithgps.com/routes/${route.rwgps_id}`
+                        }
                         target="_blank"
                         rel="noopener noreferrer"
                         className="inline-flex items-center gap-1 text-primary hover:underline"
                       >
-                        {route.rwgps_id}
+                        {route.rwgps_collection_id
+                          ? `Collection ${route.rwgps_collection_id}`
+                          : route.rwgps_id}
                         <ExternalLink className="h-3 w-3" />
                       </a>
                     ) : (

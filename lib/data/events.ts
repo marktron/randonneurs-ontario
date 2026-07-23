@@ -254,6 +254,7 @@ export interface EventDetails {
   chapterName: string
   chapterSlug: string
   rwgpsId: string | null // RideWithGPS route ID for map embed
+  rwgpsCollectionId: string | null // RWGPS collection ID for multi-leg events
   routeSlug: string | null // For linking to route details page
   cueSheetUrl: string | null // PDF cue sheet download URL
   description: string | null // Optional markdown event description
@@ -483,7 +484,7 @@ const getEventBySlugInner = cache(async (slug: string): Promise<EventDetails | n
       erw_canonical_url,
       status,
       chapters (name, slug),
-      routes (slug, rwgps_id, cue_sheet_url)
+      routes (slug, rwgps_id, rwgps_collection_id, cue_sheet_url)
     `
     )
     .eq('slug', slug)
@@ -512,14 +513,14 @@ const getEventBySlugInner = cache(async (slug: string): Promise<EventDetails | n
     chapterName: typedEvent.chapters?.name || '',
     chapterSlug: dbChapterSlug ? getUrlSlugFromDbSlug(dbChapterSlug) : '',
     rwgpsId: typedEvent.routes?.rwgps_id || null,
+    rwgpsCollectionId: typedEvent.routes?.rwgps_collection_id || null,
     routeSlug: typedEvent.routes?.slug || null,
     cueSheetUrl: typedEvent.routes?.cue_sheet_url || null,
     description: typedEvent.description || null,
     imageUrl: typedEvent.image_url || null,
     erwCanonicalUrl: typedEvent.erw_canonical_url || null,
     status: (typedEvent.status === 'cancelled' ? 'cancelled' : 'scheduled') as
-      | 'scheduled'
-      | 'cancelled',
+      'scheduled' | 'cancelled',
   }
 })
 

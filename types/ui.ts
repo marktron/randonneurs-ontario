@@ -30,6 +30,7 @@ export interface RouteOption {
   collection: string | null
   description: string | null
   rwgps_id: string | null
+  rwgps_collection_id: string | null
   cue_sheet_url: string | null
   notes: string | null
   is_active: boolean

@@ -7,6 +7,7 @@ import { createSlug } from '@/lib/utils'
 import { getUrlSlugFromDbSlug } from '@/lib/chapter-config'
 import { logAuditEvent } from '@/lib/audit-log'
 import { handleActionError, handleSupabaseError, createActionResult, logError } from '@/lib/errors'
+import { extractRwgpsRefs } from '@/lib/rwgps'
 import type { ActionResult, MergeResult } from '@/types/actions'
 import type {
   ChapterSlugOnly,
@@ -63,43 +64,6 @@ export interface RouteData {
   isActive?: boolean
 }
 
-/**
- * Extract RWGPS route ID from various URL formats:
- * - https://ridewithgps.com/routes/12345678
- * - https://ridewithgps.com/routes/12345678?privacy_code=xyz
- * - https://ridewithgps.com/ambassador_routes/12345678
- * - Just the ID: 12345678
- */
-function extractRwgpsId(input: string | null | undefined): string | null {
-  if (!input) return null
-
-  const trimmed = input.trim()
-  if (!trimmed) return null
-
-  // If it's already just a number, return it
-  if (/^\d+$/.test(trimmed)) {
-    return trimmed
-  }
-
-  // Try to extract from URL patterns
-  const patterns = [
-    /ridewithgps\.com\/routes\/(\d+)/,
-    /ridewithgps\.com\/ambassador_routes\/(\d+)/,
-    /ridewithgps\.com\/trips\/(\d+)/,
-  ]
-
-  for (const pattern of patterns) {
-    const match = trimmed.match(pattern)
-    if (match) {
-      return match[1]
-    }
-  }
-
-  // If nothing matched but looks like it might be an ID, return as-is
-  // This allows for flexibility
-  return trimmed
-}
-
 export async function createRoute(data: RouteData): Promise<ActionResult> {
   const admin = await requireAdmin()
 
@@ -120,7 +84,7 @@ export async function createRoute(data: RouteData): Promise<ActionResult> {
   }
 
   const slug = data.slug || createSlug(name)
-  const rwgpsId = extractRwgpsId(rwgpsUrl)
+  const rwgpsRefs = extractRwgpsRefs(rwgpsUrl)
 
   const insertData: RouteInsert = {
     name: name.trim(),
@@ -129,7 +93,8 @@ export async function createRoute(data: RouteData): Promise<ActionResult> {
     distance_km: distanceKm || null,
     collection: collection || null,
     description: description || null,
-    rwgps_id: rwgpsId,
+    rwgps_id: rwgpsRefs.rwgpsId,
+    rwgps_collection_id: rwgpsRefs.rwgpsCollectionId,
     cue_sheet_url: cueSheetUrl || null,
     notes: notes || null,
     is_active: isActive ?? true,
@@ -190,7 +155,9 @@ export async function updateRoute(
     updateData.description = data.description || null
   }
   if (data.rwgpsUrl !== undefined) {
-    updateData.rwgps_id = extractRwgpsId(data.rwgpsUrl)
+    const rwgpsRefs = extractRwgpsRefs(data.rwgpsUrl)
+    updateData.rwgps_id = rwgpsRefs.rwgpsId
+    updateData.rwgps_collection_id = rwgpsRefs.rwgpsCollectionId
   }
   if (data.cueSheetUrl !== undefined) {
     updateData.cue_sheet_url = data.cueSheetUrl || null
@@ -402,7 +369,7 @@ export async function mergeRoutes(data: MergeRoutesData): Promise<MergeResult> {
     }
 
     // Step 3: Update the target route with new properties
-    const rwgpsId = extractRwgpsId(routeData.rwgpsUrl)
+    const rwgpsRefs = extractRwgpsRefs(routeData.rwgpsUrl)
 
     const routeUpdateData: RouteUpdate = {
       name: routeData.name.trim(),
@@ -411,7 +378,8 @@ export async function mergeRoutes(data: MergeRoutesData): Promise<MergeResult> {
       distance_km: routeData.distanceKm || null,
       collection: routeData.collection || null,
       description: routeData.description || null,
-      rwgps_id: rwgpsId,
+      rwgps_id: rwgpsRefs.rwgpsId,
+      rwgps_collection_id: rwgpsRefs.rwgpsCollectionId,
       cue_sheet_url: routeData.cueSheetUrl || null,
       notes: routeData.notes || null,
       is_active: routeData.isActive ?? true,

@@ -5,6 +5,8 @@ import { PageShell } from '@/components/page-shell'
 import { RegisterCTA } from '@/components/register-cta'
 import { MarkdownContent } from '@/components/markdown-content'
 import { RwgpsEmbed } from '@/components/rwgps-embed'
+import { RwgpsCollectionEmbed } from '@/components/rwgps-collection-embed'
+import { fetchRwgpsCollection } from '@/lib/rwgps'
 import {
   getEventBySlug,
   getRegisteredRiders,
@@ -103,6 +105,10 @@ export default async function RegisterPage({ params }: PageProps) {
     isFleche ? getRegisteredRidersWithTeams(event.id) : getRegisteredRiders(event.id),
     isFleche ? getFlecheTeams(event.id) : Promise.resolve([]),
   ])
+
+  const collection = event.rwgpsCollectionId
+    ? await fetchRwgpsCollection(event.rwgpsCollectionId)
+    : null
 
   const baseUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://randonneursontario.ca'
 
@@ -264,6 +270,32 @@ export default async function RegisterPage({ params }: PageProps) {
               <div className="mb-8 md:mb-12">
                 <h2 className="font-serif text-2xl tracking-tight pb-4">Route</h2>
                 <RwgpsEmbed routeId={event.rwgpsId} />
+                {event.routeSlug && (
+                  <p className="mt-3 text-sm">
+                    <Link
+                      href={`/routes/${event.chapterSlug}/${event.routeSlug}`}
+                      className="text-primary hover:underline underline-offset-2"
+                    >
+                      View past results for this route
+                    </Link>
+                  </p>
+                )}
+              </div>
+            ) : event.rwgpsCollectionId ? (
+              <div className="mb-8 md:mb-12">
+                <h2 className="font-serif text-2xl tracking-tight pb-4">Route</h2>
+                {collection ? (
+                  <RwgpsCollectionEmbed collection={collection} />
+                ) : (
+                  <a
+                    href={`https://ridewithgps.com/collections/${event.rwgpsCollectionId}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 text-primary hover:underline underline-offset-2"
+                  >
+                    View the route collection on Ride with GPS
+                  </a>
+                )}
                 {event.routeSlug && (
                   <p className="mt-3 text-sm">
                     <Link

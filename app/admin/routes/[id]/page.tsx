@@ -8,22 +8,21 @@ import type { Route } from '@/types/queries'
 import type { RouteOption } from '@/types/ui'
 
 // Lazy-load RouteForm (complex form component)
-const RouteForm = dynamic(() => import('@/components/admin/route-form').then(mod => ({ default: mod.RouteForm })), {
-  loading: () => (
-    <div className="space-y-6">
-      <div className="h-10 bg-muted animate-pulse rounded" />
-      <div className="h-10 bg-muted animate-pulse rounded" />
-      <div className="h-32 bg-muted animate-pulse rounded" />
-    </div>
-  ),
-})
+const RouteForm = dynamic(
+  () => import('@/components/admin/route-form').then((mod) => ({ default: mod.RouteForm })),
+  {
+    loading: () => (
+      <div className="space-y-6">
+        <div className="h-10 bg-muted animate-pulse rounded" />
+        <div className="h-10 bg-muted animate-pulse rounded" />
+        <div className="h-32 bg-muted animate-pulse rounded" />
+      </div>
+    ),
+  }
+)
 
 async function getRoute(id: string): Promise<RouteOption | null> {
-  const { data } = await getSupabaseAdmin()
-    .from('routes')
-    .select('*')
-    .eq('id', id)
-    .single()
+  const { data } = await getSupabaseAdmin().from('routes').select('*').eq('id', id).single()
 
   if (!data) return null
 
@@ -37,6 +36,7 @@ async function getRoute(id: string): Promise<RouteOption | null> {
     collection: route.collection,
     description: route.description,
     rwgps_id: route.rwgps_id,
+    rwgps_collection_id: route.rwgps_collection_id,
     cue_sheet_url: route.cue_sheet_url,
     notes: route.notes,
     is_active: route.is_active,
@@ -60,10 +60,7 @@ export default async function EditRoutePage({ params }: EditRoutePageProps) {
   const { id } = await params
   await requireAdmin()
 
-  const [route, chapters] = await Promise.all([
-    getRoute(id),
-    getChapters(),
-  ])
+  const [route, chapters] = await Promise.all([getRoute(id), getChapters()])
 
   if (!route) {
     notFound()

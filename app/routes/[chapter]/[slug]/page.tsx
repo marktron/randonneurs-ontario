@@ -86,7 +86,7 @@ export default async function RouteDetailPage({ params }: PageProps) {
               </div>
             </div>
 
-            {(route.rwgpsId || route.cueSheetUrl) && (
+            {(route.rwgpsId || route.rwgpsCollectionId || route.cueSheetUrl) && (
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-6">
                 {route.rwgpsId && (
                   <a
@@ -96,6 +96,24 @@ export default async function RouteDetailPage({ params }: PageProps) {
                     className="inline-flex items-center gap-2 text-base font-medium text-primary underline decoration-primary/30 underline-offset-4 transition-colors hover:decoration-primary"
                   >
                     View on RideWithGPS
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+                      />
+                    </svg>
+                  </a>
+                )}
+                {!route.rwgpsId && route.rwgpsCollectionId && (
+                  <a
+                    href={`https://ridewithgps.com/collections/${route.rwgpsCollectionId}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 text-base font-medium text-primary underline decoration-primary/30 underline-offset-4 transition-colors hover:decoration-primary"
+                  >
+                    View collection on RideWithGPS
                     <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path
                         strokeLinecap="round"

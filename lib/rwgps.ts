@@ -116,6 +116,48 @@ export function parseRwgpsRouteRef(
   return { id, privacyCode }
 }
 
+export interface RwgpsRefs {
+  rwgpsId: string | null
+  rwgpsCollectionId: string | null
+}
+
+/**
+ * Parse the admin form's single "Ride With GPS Link" field, which accepts
+ * either a route URL/ID or a collection URL. Exactly one of the two ids is
+ * non-null for non-empty input (they are mutually exclusive in the DB).
+ * Route parsing preserves the legacy lenient behavior: bare numeric ids,
+ * ambassador_routes/trips URLs, and a fall-through that returns the trimmed
+ * input as-is.
+ */
+export function extractRwgpsRefs(input: string | null | undefined): RwgpsRefs {
+  const none: RwgpsRefs = { rwgpsId: null, rwgpsCollectionId: null }
+  if (!input) return none
+  const trimmed = input.trim()
+  if (!trimmed) return none
+
+  const collectionMatch = trimmed.match(/ridewithgps\.com\/collections\/(\d+)/)
+  if (collectionMatch) {
+    return { rwgpsId: null, rwgpsCollectionId: collectionMatch[1] }
+  }
+
+  if (/^\d+$/.test(trimmed)) {
+    return { rwgpsId: trimmed, rwgpsCollectionId: null }
+  }
+
+  const routePatterns = [
+    /ridewithgps\.com\/routes\/(\d+)/,
+    /ridewithgps\.com\/ambassador_routes\/(\d+)/,
+    /ridewithgps\.com\/trips\/(\d+)/,
+  ]
+  for (const pattern of routePatterns) {
+    const match = trimmed.match(pattern)
+    if (match) return { rwgpsId: match[1], rwgpsCollectionId: null }
+  }
+
+  // Fall through: keep whatever was pasted so the admin can see and fix it.
+  return { rwgpsId: trimmed, rwgpsCollectionId: null }
+}
+
 /**
  * Strip common control-name prefixes ("CTL -", "CTRL ", "CONTROL-", etc.)
  * used by organizers when tagging RWGPS waypoints and course points.
@@ -433,4 +475,89 @@ export async function fetchRwgpsControlsWithCoords(
     )
   }
   return controls
+}
+
+export interface RwgpsCollectionRoute {
+  id: number
+  name: string
+  distanceKm: number
+  elevationGain: number
+  htmlUrl: string
+}
+
+export interface RwgpsCollection {
+  name: string
+  htmlUrl: string
+  routes: RwgpsCollectionRoute[]
+}
+
+interface RwgpsApiCollectionRoute {
+  id?: number
+  name?: string
+  distance?: number // meters
+  elevation_gain?: number // meters
+  html_url?: string
+}
+
+/**
+ * Fetch a RWGPS collection (group of routes, used for events beyond 1200 km)
+ * via the authenticated v1 API. The v1 API ignores the collection's custom
+ * sort order, so member routes are natural-sorted by name ("Leg 2" before
+ * "Leg 10"). Returns null on missing credentials, HTTP errors, network
+ * errors, malformed bodies, or an empty collection — callers fall back to a
+ * plain link to the collection page. Cached ~1 hour via fetch revalidation.
+ */
+export async function fetchRwgpsCollection(collectionId: string): Promise<RwgpsCollection | null> {
+  const apiKey = process.env.RWGPS_API_KEY
+  const authToken = process.env.RWGPS_AUTH_TOKEN
+  if (!apiKey || !authToken) {
+    console.warn('fetchRwgpsCollection: RWGPS_API_KEY / RWGPS_AUTH_TOKEN not configured')
+    return null
+  }
+
+  try {
+    const response = await fetch(
+      `https://ridewithgps.com/api/v1/collections/${collectionId}.json`,
+      {
+        headers: { 'x-rwgps-api-key': apiKey, 'x-rwgps-auth-token': authToken },
+        next: { revalidate: 3600 },
+      }
+    )
+    if (!response.ok) {
+      console.warn(
+        `fetchRwgpsCollection: ${response.status} ${response.statusText} for collection ${collectionId}`
+      )
+      return null
+    }
+
+    const data: unknown = await response.json()
+    const collection = (
+      data as {
+        collection?: { name?: string; html_url?: string; routes?: RwgpsApiCollectionRoute[] }
+      }
+    ).collection
+    const rawRoutes = collection?.routes ?? []
+    if (!collection || rawRoutes.length === 0) return null
+
+    const routes = rawRoutes
+      .filter((r): r is RwgpsApiCollectionRoute & { id: number } => typeof r.id === 'number')
+      .map((r) => ({
+        id: r.id,
+        name: r.name?.trim() || 'Untitled Route',
+        distanceKm: (r.distance ?? 0) / 1000,
+        elevationGain: r.elevation_gain ?? 0,
+        htmlUrl: r.html_url ?? `https://ridewithgps.com/routes/${r.id}`,
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name, 'en', { numeric: true, sensitivity: 'base' }))
+    if (routes.length === 0) return null
+
+    return {
+      name: collection.name?.trim() || 'Route Collection',
+      htmlUrl: collection.html_url ?? `https://ridewithgps.com/collections/${collectionId}`,
+      routes,
+    }
+  } catch (err) {
+    console.warn(`fetchRwgpsCollection: failed for collection ${collectionId}`, err)
+    return null
+  }
 }
