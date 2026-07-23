@@ -6,9 +6,18 @@ import type { NominalDistance } from '@/lib/brmTimes'
 export interface ControlPoint {
   id: string
   name: string
-  distance: number // km from start
-  openTime: string // formatted time like "Thu 04h30"
-  closeTime: string // formatted time like "Thu 05h30"
+  distance: number // km from start (per-leg for leg cards)
+  openTime?: string // formatted time like "Thu 04h30" — omitted on leg cards
+  closeTime?: string // formatted time like "Thu 05h30" — omitted on leg cards
+}
+
+/** One collection leg's card content for the print run. */
+export interface CardLeg {
+  legRwgpsId: string
+  legName: string
+  distanceKm: number
+  rwgpsUrl: string
+  controls: ControlPoint[]
 }
 
 /**

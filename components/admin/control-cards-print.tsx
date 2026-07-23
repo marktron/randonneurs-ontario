@@ -1,11 +1,17 @@
 'use client'
 
 import { useEffect } from 'react'
-import type { ControlPoint, CardRider, OrganizerInfo, CardEvent } from '@/types/control-card'
+import type {
+  ControlPoint,
+  CardRider,
+  OrganizerInfo,
+  CardEvent,
+  CardLeg,
+} from '@/types/control-card'
 import { REGULATIONS_TEXT, EVENT_INFO_TEXT } from '@/types/control-card'
 import { QRCodeSVG } from 'qrcode.react'
 import { BoldLabelText } from '@/components/bold-label-text'
-import { backCardLayout, MAX_CARD_CONTROLS } from '@/lib/controlPoints'
+import { backCardLayout, MAX_CARD_CONTROLS, expandRiderLegCards } from '@/lib/controlPoints'
 
 interface ControlCardsPrintProps {
   event: CardEvent
@@ -15,6 +21,8 @@ interface ControlCardsPrintProps {
   totalAllowableTime: { hours: number; minutes: number }
   formattedDate: string
   rwgpsUrl?: string
+  /** Collection legs: one card per rider per leg (rider-major). Absent/empty = single-route. */
+  legs?: CardLeg[]
 }
 
 export function ControlCardsPrint(props: ControlCardsPrintProps) {
@@ -68,10 +76,32 @@ function ControlCardsPrintContent({
   totalAllowableTime,
   formattedDate,
   rwgpsUrl,
+  legs,
 }: ControlCardsPrintProps) {
+  const legList = legs ?? []
+  const hasLegs = legList.length > 0
+
   // Backstop for deep links / stale URLs: never print a truncated card.
   // The forms block Generate above the cap, so normal flows never hit this.
-  if (controls.length > MAX_CARD_CONTROLS) {
+  // For collection events the cap applies per leg, and the error names the leg.
+  const oversizedLeg = legList.find((l) => l.controls.length > MAX_CARD_CONTROLS)
+  if (oversizedLeg) {
+    return (
+      <div className="control-cards-print">
+        <div className="card-overflow-error">
+          <div style={{ fontWeight: 700, fontSize: '14pt', marginBottom: '0.15in' }}>
+            Too many controls to print
+          </div>
+          <p>
+            {oversizedLeg.legName} lists {oversizedLeg.controls.length} controls, but printed
+            control cards support at most {MAX_CARD_CONTROLS} per leg. Merge or remove controls in
+            the form, then generate again.
+          </p>
+        </div>
+      </div>
+    )
+  }
+  if (!hasLegs && controls.length > MAX_CARD_CONTROLS) {
     return (
       <div className="control-cards-print">
         <div className="card-overflow-error">
@@ -87,16 +117,30 @@ function ControlCardsPrintContent({
     )
   }
 
-  // Pair riders (2 per page), adding empty rider if odd number
-  const riderPairs: (CardRider | null)[][] = []
-  for (let i = 0; i < riders.length; i += 2) {
-    riderPairs.push([riders[i], riders[i + 1] || null])
+  // One card per rider (single-route), or per rider × leg in rider-major
+  // order (collection). The existing 2-per-sheet pairing consumes the stream.
+  type PrintCard = { rider: CardRider | null; leg: CardLeg | null }
+  const cards: PrintCard[] = hasLegs
+    ? expandRiderLegCards(riders, legList)
+    : riders.map((rider) => ({ rider, leg: null }))
+
+  const cardPairs: (PrintCard | null)[][] = []
+  for (let i = 0; i < cards.length; i += 2) {
+    cardPairs.push([cards[i], cards[i + 1] ?? null])
   }
 
-  // If no riders, show at least one blank card
-  if (riderPairs.length === 0) {
-    riderPairs.push([null, null])
+  // If no cards, show at least one blank sheet
+  if (cardPairs.length === 0) {
+    cardPairs.push([null, null])
   }
+
+  // Leg cards override the route identity: leg name as the route name, leg
+  // distance, and a Route Map QR pointing at the leg's RWGPS route. Event
+  // name/date/start info, organizer, and Submit Results QR are unchanged.
+  const eventFor = (leg: CardLeg | null): CardEvent =>
+    leg ? { ...event, routeName: leg.legName, distance: leg.distanceKm } : event
+  const rwgpsUrlFor = (leg: CardLeg | null): string | undefined => (leg ? leg.rwgpsUrl : rwgpsUrl)
+  const controlsFor = (leg: CardLeg | null): ControlPoint[] => (leg ? leg.controls : controls)
 
   return (
     <div className="control-cards-print">
@@ -131,37 +175,48 @@ function ControlCardsPrintContent({
           Print Control Cards
         </button>
         <span style={{ marginLeft: '1rem', color: '#666' }}>
-          {riders.length} rider{riders.length !== 1 ? 's' : ''} &middot; {riderPairs.length} page
-          {riderPairs.length !== 1 ? 's' : ''} (double-sided)
+          {riders.length} rider{riders.length !== 1 ? 's' : ''}
+          {hasLegs
+            ? ` × ${legList.length} leg${legList.length !== 1 ? 's' : ''} = ${cards.length} cards`
+            : ''}{' '}
+          &middot; {cardPairs.length} page{cardPairs.length !== 1 ? 's' : ''} (double-sided)
         </span>
       </div>
 
-      {riderPairs.map((pair, pairIndex) => (
+      {cardPairs.map((pair, pairIndex) => (
         <div key={pairIndex}>
           {/* FRONT PAGE - Regulations and rider info */}
           <div className="card-page">
-            {pair.map((rider, riderIndex) => (
+            {pair.map((card, cardIndex) => (
               <CardFront
-                key={rider?.id || `empty-${riderIndex}`}
-                event={event}
+                key={
+                  card?.rider
+                    ? `${card.rider.id}-${card.leg?.legRwgpsId ?? 'route'}`
+                    : `empty-${pairIndex}-${cardIndex}`
+                }
+                event={eventFor(card?.leg ?? null)}
                 organizer={organizer}
-                rider={rider}
+                rider={card?.rider ?? null}
                 totalAllowableTime={totalAllowableTime}
                 formattedDate={formattedDate}
-                rwgpsUrl={rwgpsUrl}
+                rwgpsUrl={rwgpsUrlFor(card?.leg ?? null)}
               />
             ))}
           </div>
 
           {/* BACK PAGE - Controls */}
           <div className="card-page page-break">
-            {pair.map((rider, riderIndex) => (
+            {pair.map((card, cardIndex) => (
               <CardBack
-                key={rider?.id || `empty-back-${riderIndex}`}
-                event={event}
-                controls={controls}
+                key={
+                  card?.rider
+                    ? `${card.rider.id}-${card.leg?.legRwgpsId ?? 'route'}-back`
+                    : `empty-back-${pairIndex}-${cardIndex}`
+                }
+                event={eventFor(card?.leg ?? null)}
+                controls={controlsFor(card?.leg ?? null)}
                 formattedDate={formattedDate}
-                rider={rider}
+                rider={card?.rider ?? null}
               />
             ))}
           </div>
@@ -423,19 +478,21 @@ function CardBack({
               <div className="control-info">
                 <div className="control-name">{control.name}</div>
                 <div className="control-distance">{control.distance} km</div>
-                <div className="control-times">
-                  {tier === 'ultra' ? (
-                    <>
-                      {control.openTime} - {control.closeTime}
-                    </>
-                  ) : (
-                    <>
-                      Open: {control.openTime}
-                      <br />
-                      Close: {control.closeTime}
-                    </>
-                  )}
-                </div>
+                {control.openTime && control.closeTime && (
+                  <div className="control-times">
+                    {tier === 'ultra' ? (
+                      <>
+                        {control.openTime} - {control.closeTime}
+                      </>
+                    ) : (
+                      <>
+                        Open: {control.openTime}
+                        <br />
+                        Close: {control.closeTime}
+                      </>
+                    )}
+                  </div>
+                )}
               </div>
               {tier === 'ultra' ? (
                 <div className="signature-cell"></div>

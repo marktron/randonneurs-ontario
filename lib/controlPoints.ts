@@ -144,14 +144,15 @@ export interface LegGroup<T> {
  * is a single-route card (collection imports tag every row; anything else
  * falls back to today's behavior).
  *
- * `T` is intentionally unconstrained: TypeScript's array-literal inference
- * applies the constraint as a contextual type and rejects any literal that
- * doesn't already mention `legRwgpsId`/`legName` (excess-property check on
- * e.g. `[{ name: 'Start' }]`), which is exactly the untagged shape this
- * function needs to accept. The leg fields are read via a narrowed view
- * instead.
+ * `T` is intentionally left unconstrained beyond `object`: further
+ * constraining it to require `legRwgpsId`/`legName` would make TypeScript's
+ * array-literal inference apply that constraint as a contextual type and
+ * reject any literal that doesn't already mention those fields
+ * (excess-property check on e.g. `[{ name: 'Start' }]`), which is exactly
+ * the untagged shape this function needs to accept. The leg fields are read
+ * via a narrowed view instead.
  */
-export function groupControlsByLeg<T>(controls: T[]): LegGroup<T>[] | null {
+export function groupControlsByLeg<T extends object>(controls: T[]): LegGroup<T>[] | null {
   if (controls.length === 0) return null
 
   const legFields = controls as unknown as { legRwgpsId?: string | null; legName?: string | null }[]

@@ -11,12 +11,21 @@ import {
   formatCardDate,
   createTorontoDate,
 } from '@/lib/brmTimes'
-import type { ControlPoint, CardRider, OrganizerInfo, CardEvent } from '@/types/control-card'
+import { groupControlsByLeg } from '@/lib/controlPoints'
+import type {
+  ControlPoint,
+  CardRider,
+  OrganizerInfo,
+  CardEvent,
+  CardLeg,
+} from '@/types/control-card'
 import type { EventForControlCards, RegistrationForControlCardsWithToken } from '@/types/queries'
 
 interface ControlInput {
   name: string
   distance: number
+  legRwgpsId?: string
+  legName?: string
 }
 
 async function getEventDetails(eventId: string): Promise<EventForControlCards | null> {
@@ -110,23 +119,45 @@ export default async function PrintPage({ params, searchParams }: PrintPageProps
   // Get nominal distance for BRM calculations
   const nominalDistance = getNominalDistance(event.distance_km)
 
-  // Calculate control times
-  const controls: ControlPoint[] = controlInputs.map((input, index) => {
-    const { openAt, closeAt } = computeControlTimes(
-      startDate,
-      input.distance,
-      nominalDistance,
-      event.distance_km
-    )
+  const legGroups = groupControlsByLeg(controlInputs)
 
-    return {
-      id: `control-${index}`,
-      name: input.name,
-      distance: input.distance,
-      openTime: formatControlTime(openAt),
-      closeTime: formatControlTime(closeAt),
-    }
-  })
+  // Collection events: one CardLeg per stored leg. Leg cards never print
+  // open/close times (the overall event limit governs), so no BRM window
+  // computation happens for them; distances are per-leg (each leg starts
+  // at 0), and the leg distance is its last control's distance.
+  const legs: CardLeg[] | undefined = legGroups
+    ? legGroups.map((group, groupIndex) => ({
+        legRwgpsId: group.legRwgpsId,
+        legName: group.legName,
+        distanceKm: Math.max(...group.controls.map((c) => c.distance)),
+        rwgpsUrl: `https://ridewithgps.com/routes/${group.legRwgpsId}`,
+        controls: group.controls.map((input, index) => ({
+          id: `leg-${groupIndex}-control-${index}`,
+          name: input.name,
+          distance: input.distance,
+        })),
+      }))
+    : undefined
+
+  // Single-route events: unchanged BRM open/close computation.
+  const controls: ControlPoint[] = legGroups
+    ? []
+    : controlInputs.map((input, index) => {
+        const { openAt, closeAt } = computeControlTimes(
+          startDate,
+          input.distance,
+          nominalDistance,
+          event.distance_km
+        )
+
+        return {
+          id: `control-${index}`,
+          name: input.name,
+          distance: input.distance,
+          openTime: formatControlTime(openAt),
+          closeTime: formatControlTime(closeAt),
+        }
+      })
 
   // Calculate total allowable time
   const { closeMin } = computeControlTimes(
@@ -200,6 +231,7 @@ export default async function PrintPage({ params, searchParams }: PrintPageProps
       totalAllowableTime={{ hours: totalHours, minutes: totalMinutes }}
       formattedDate={formatCardDate(startDate)}
       rwgpsUrl={rwgpsUrl}
+      legs={legs}
     />
   )
 }
