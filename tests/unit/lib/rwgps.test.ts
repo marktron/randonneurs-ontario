@@ -3,6 +3,7 @@ import {
   cleanControlName,
   extractControls,
   extractControlsWithCoords,
+  extractRwgpsRefs,
   fetchRwgpsControls,
   fetchRwgpsRoute,
   parseRwgpsRouteRef,
@@ -691,5 +692,67 @@ describe('fetchRwgpsRoute', () => {
     expect(fetchMock).toHaveBeenCalledWith(
       'https://ridewithgps.com/routes/1.json?privacy_code=ABC123'
     )
+  })
+})
+
+describe('extractRwgpsRefs', () => {
+  it('extracts a route id from a route URL', () => {
+    expect(extractRwgpsRefs('https://ridewithgps.com/routes/12345678')).toEqual({
+      rwgpsId: '12345678',
+      rwgpsCollectionId: null,
+    })
+  })
+
+  it('extracts a collection id from a collection URL', () => {
+    expect(extractRwgpsRefs('https://ridewithgps.com/collections/8387874')).toEqual({
+      rwgpsId: null,
+      rwgpsCollectionId: '8387874',
+    })
+  })
+
+  it('handles collection URLs with query strings and trailing paths', () => {
+    expect(extractRwgpsRefs('https://ridewithgps.com/collections/8387874?lang=en')).toEqual({
+      rwgpsId: null,
+      rwgpsCollectionId: '8387874',
+    })
+  })
+
+  it('treats a bare numeric id as a route id', () => {
+    expect(extractRwgpsRefs('12345678')).toEqual({
+      rwgpsId: '12345678',
+      rwgpsCollectionId: null,
+    })
+  })
+
+  it('extracts route ids from ambassador_routes and trips URLs', () => {
+    expect(extractRwgpsRefs('https://ridewithgps.com/ambassador_routes/111')).toEqual({
+      rwgpsId: '111',
+      rwgpsCollectionId: null,
+    })
+    expect(extractRwgpsRefs('https://ridewithgps.com/trips/222')).toEqual({
+      rwgpsId: '222',
+      rwgpsCollectionId: null,
+    })
+  })
+
+  it('handles route URLs with privacy codes', () => {
+    expect(extractRwgpsRefs('https://ridewithgps.com/routes/12345678?privacy_code=abc')).toEqual({
+      rwgpsId: '12345678',
+      rwgpsCollectionId: null,
+    })
+  })
+
+  it('returns both null for empty/blank input', () => {
+    expect(extractRwgpsRefs(null)).toEqual({ rwgpsId: null, rwgpsCollectionId: null })
+    expect(extractRwgpsRefs(undefined)).toEqual({ rwgpsId: null, rwgpsCollectionId: null })
+    expect(extractRwgpsRefs('   ')).toEqual({ rwgpsId: null, rwgpsCollectionId: null })
+  })
+
+  it('falls back to the trimmed input as a route id for unrecognized non-empty input', () => {
+    // Preserves the legacy lenient behavior of the admin form field.
+    expect(extractRwgpsRefs(' some-weird-value ')).toEqual({
+      rwgpsId: 'some-weird-value',
+      rwgpsCollectionId: null,
+    })
   })
 })

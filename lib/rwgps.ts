@@ -116,6 +116,48 @@ export function parseRwgpsRouteRef(
   return { id, privacyCode }
 }
 
+export interface RwgpsRefs {
+  rwgpsId: string | null
+  rwgpsCollectionId: string | null
+}
+
+/**
+ * Parse the admin form's single "Ride With GPS Link" field, which accepts
+ * either a route URL/ID or a collection URL. Exactly one of the two ids is
+ * non-null for non-empty input (they are mutually exclusive in the DB).
+ * Route parsing preserves the legacy lenient behavior: bare numeric ids,
+ * ambassador_routes/trips URLs, and a fall-through that returns the trimmed
+ * input as-is.
+ */
+export function extractRwgpsRefs(input: string | null | undefined): RwgpsRefs {
+  const none: RwgpsRefs = { rwgpsId: null, rwgpsCollectionId: null }
+  if (!input) return none
+  const trimmed = input.trim()
+  if (!trimmed) return none
+
+  const collectionMatch = trimmed.match(/ridewithgps\.com\/collections\/(\d+)/)
+  if (collectionMatch) {
+    return { rwgpsId: null, rwgpsCollectionId: collectionMatch[1] }
+  }
+
+  if (/^\d+$/.test(trimmed)) {
+    return { rwgpsId: trimmed, rwgpsCollectionId: null }
+  }
+
+  const routePatterns = [
+    /ridewithgps\.com\/routes\/(\d+)/,
+    /ridewithgps\.com\/ambassador_routes\/(\d+)/,
+    /ridewithgps\.com\/trips\/(\d+)/,
+  ]
+  for (const pattern of routePatterns) {
+    const match = trimmed.match(pattern)
+    if (match) return { rwgpsId: match[1], rwgpsCollectionId: null }
+  }
+
+  // Fall through: keep whatever was pasted so the admin can see and fix it.
+  return { rwgpsId: trimmed, rwgpsCollectionId: null }
+}
+
 /**
  * Strip common control-name prefixes ("CTL -", "CTRL ", "CONTROL-", etc.)
  * used by organizers when tagging RWGPS waypoints and course points.
