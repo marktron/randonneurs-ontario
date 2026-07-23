@@ -23,7 +23,7 @@ export default async function BrevetCardAdminPage({ params }: BrevetCardAdminPag
   const { data: event } = await getSupabaseAdmin()
     .from('events')
     .select(
-      'id, name, event_date, start_time, distance_km, event_type, status, chapter_id, organizer_name, organizer_phone, organizer_email, routes (rwgps_id)'
+      'id, name, event_date, start_time, distance_km, event_type, status, chapter_id, organizer_name, organizer_phone, organizer_email, routes (rwgps_id, rwgps_collection_id)'
     )
     .eq('id', id)
     .single()
@@ -44,7 +44,7 @@ export default async function BrevetCardAdminPage({ params }: BrevetCardAdminPag
     organizer_name: string | null
     organizer_phone: string | null
     organizer_email: string | null
-    routes: { rwgps_id: string | null } | null
+    routes: { rwgps_id: string | null; rwgps_collection_id: string | null } | null
   }
 
   const [controlsResult, checkinsResult] = await Promise.all([
@@ -109,6 +109,7 @@ export default async function BrevetCardAdminPage({ params }: BrevetCardAdminPag
         eventId={typedEvent.id}
         initialControls={controls}
         hasRwgpsRoute={Boolean(typedEvent.routes?.rwgps_id)}
+        hasRwgpsCollection={Boolean(typedEvent.routes?.rwgps_collection_id)}
         initialOrganizer={initialOrganizer}
       />
 
