@@ -49,7 +49,7 @@ export type EventWithChapter = Event & {
  */
 export type EventWithRelations = Event & {
   chapters: Pick<Chapter, 'id' | 'name' | 'slug'> | null
-  routes: Pick<Route, 'id' | 'slug' | 'rwgps_id' | 'cue_sheet_url'> | null
+  routes: Pick<Route, 'id' | 'slug' | 'rwgps_id' | 'rwgps_collection_id' | 'cue_sheet_url'> | null
 }
 
 /**
