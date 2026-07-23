@@ -171,6 +171,8 @@ describe('getEventControlsForAdmin', () => {
             lng: -79.4,
             radius_m: 500,
             notes: null,
+            leg_rwgps_id: null,
+            leg_name: null,
           },
           {
             id: 'ctl-2',
@@ -181,6 +183,8 @@ describe('getEventControlsForAdmin', () => {
             lng: null,
             radius_m: 500,
             notes: 'Cafe',
+            leg_rwgps_id: null,
+            leg_name: null,
           },
         ],
         error: null,
@@ -206,6 +210,8 @@ describe('getEventControlsForAdmin', () => {
         lng: -79.4,
         radiusM: 500,
         notes: null,
+        legRwgpsId: null,
+        legName: null,
         checkinCount: 2,
       },
       {
@@ -217,6 +223,8 @@ describe('getEventControlsForAdmin', () => {
         lng: null,
         radiusM: 500,
         notes: 'Cafe',
+        legRwgpsId: null,
+        legName: null,
         checkinCount: 0,
       },
     ])
@@ -398,6 +406,8 @@ describe('saveEventControls', () => {
         lng: null,
         radius_m: 250,
         notes: null,
+        leg_rwgps_id: null,
+        leg_name: null,
       },
       {
         id: 'ctl-a',
@@ -409,6 +419,8 @@ describe('saveEventControls', () => {
         lng: -79,
         radius_m: 500,
         notes: 'hi',
+        leg_rwgps_id: null,
+        leg_name: null,
       },
     ])
 
@@ -425,6 +437,8 @@ describe('saveEventControls', () => {
         lng: -78.9,
         radius_m: 500,
         notes: null,
+        leg_rwgps_id: null,
+        leg_name: null,
       },
     ])
 
@@ -535,6 +549,108 @@ describe('saveEventControls', () => {
 
     expect(result.success).toBe(false)
     expect(mockLogAuditEvent).not.toHaveBeenCalled()
+  })
+
+  it('rejects a leg id without a leg name before touching the DB', async () => {
+    const result = await saveEventControls('event-1', [
+      { ...validControl, legRwgpsId: '111', legName: null },
+    ])
+    expect(result.success).toBe(false)
+    expect(result.error).toMatch(/leg/i)
+    expect(fromCalls).toEqual([])
+  })
+
+  it('rejects a leg name without a leg id before touching the DB', async () => {
+    const result = await saveEventControls('event-1', [
+      { ...validControl, legRwgpsId: null, legName: 'Leg 1: A' },
+    ])
+    expect(result.success).toBe(false)
+    expect(result.error).toMatch(/leg/i)
+    expect(fromCalls).toEqual([])
+  })
+
+  it('assigns positions leg-major (first-appearance leg order, distance within a leg) and persists leg columns', async () => {
+    setupEvent()
+    tables.event_controls = { selectResponse: { data: [], error: null } }
+
+    // Leg 222 appears first in the input, leg 111's rows arrive out of
+    // distance order. Expected order: 222 rows first, then 111's sorted by
+    // distance, positions sequential across the two legs.
+    const result = await saveEventControls('event-1', [
+      {
+        name: 'B Start',
+        distanceKm: 0,
+        lat: null,
+        lng: null,
+        radiusM: 500,
+        notes: null,
+        legRwgpsId: '222',
+        legName: 'Leg 2: B',
+      },
+      {
+        name: 'A Far',
+        distanceKm: 100,
+        lat: null,
+        lng: null,
+        radiusM: 500,
+        notes: null,
+        legRwgpsId: '111',
+        legName: 'Leg 1: A',
+      },
+      {
+        name: 'A Start',
+        distanceKm: 0,
+        lat: null,
+        lng: null,
+        radiusM: 500,
+        notes: null,
+        legRwgpsId: '111',
+        legName: 'Leg 1: A',
+      },
+    ])
+
+    expect(result.success).toBe(true)
+    const writes = writeCalls()
+    expect(writes).toHaveLength(1)
+    expect(writes[0].ops).toContain('insert')
+    expect(writes[0].insertPayload).toEqual([
+      {
+        event_id: 'event-1',
+        position: 1,
+        name: 'B Start',
+        distance_km: 0,
+        lat: null,
+        lng: null,
+        radius_m: 500,
+        notes: null,
+        leg_rwgps_id: '222',
+        leg_name: 'Leg 2: B',
+      },
+      {
+        event_id: 'event-1',
+        position: 2,
+        name: 'A Start',
+        distance_km: 0,
+        lat: null,
+        lng: null,
+        radius_m: 500,
+        notes: null,
+        leg_rwgps_id: '111',
+        leg_name: 'Leg 1: A',
+      },
+      {
+        event_id: 'event-1',
+        position: 3,
+        name: 'A Far',
+        distance_km: 100,
+        lat: null,
+        lng: null,
+        radius_m: 500,
+        notes: null,
+        leg_rwgps_id: '111',
+        leg_name: 'Leg 1: A',
+      },
+    ])
   })
 })
 

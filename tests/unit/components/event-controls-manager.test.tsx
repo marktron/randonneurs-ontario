@@ -39,6 +39,8 @@ function makeSaved(overrides: Partial<AdminEventControl> = {}): AdminEventContro
     lng: -79.38,
     radiusM: 500,
     notes: null,
+    legRwgpsId: null,
+    legName: null,
     checkinCount: 0,
     ...overrides,
   }

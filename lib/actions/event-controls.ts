@@ -30,6 +30,10 @@ export interface AdminEventControl {
   lng: number | null
   radiusM: number
   notes: string | null
+  /** RWGPS route id of the collection leg this control belongs to; null = single-route. */
+  legRwgpsId: string | null
+  /** Display heading for the leg (e.g. "Leg 3: CCE 200 - Gravenhurst"); null = single-route. */
+  legName: string | null
   /** Number of rider check-ins recorded against this control. */
   checkinCount: number
 }
@@ -43,6 +47,8 @@ export interface EventControlInput {
   lng: number | null
   radiusM: number
   notes?: string | null
+  legRwgpsId?: string | null // optional so existing callers compile unchanged
+  legName?: string | null
 }
 
 export interface ImportedControl {
@@ -67,7 +73,7 @@ export async function getEventControlsForAdmin(
 
     const { data: controls, error } = await supabase
       .from('event_controls')
-      .select('id, position, name, distance_km, lat, lng, radius_m, notes')
+      .select('id, position, name, distance_km, lat, lng, radius_m, notes, leg_rwgps_id, leg_name')
       .eq('event_id', eventId)
       .order('position', { ascending: true })
 
@@ -88,6 +94,8 @@ export async function getEventControlsForAdmin(
       lng: number | null
       radius_m: number
       notes: string | null
+      leg_rwgps_id: string | null
+      leg_name: string | null
     }[]
 
     // Check-in counts per control (drives the "this will delete check-ins"
@@ -116,6 +124,8 @@ export async function getEventControlsForAdmin(
         lng: row.lng,
         radiusM: row.radius_m,
         notes: row.notes,
+        legRwgpsId: row.leg_rwgps_id,
+        legName: row.leg_name,
         checkinCount: counts.get(row.id) || 0,
       }))
     )
@@ -165,6 +175,14 @@ export async function saveEventControls(
       if (hasLng && (control.lng! < -180 || control.lng! > 180)) {
         return { success: false, error: `Invalid longitude for "${control.name}"` }
       }
+      const hasLegId = control.legRwgpsId != null && control.legRwgpsId !== ''
+      const hasLegName = control.legName != null && control.legName.trim() !== ''
+      if (hasLegId !== hasLegName) {
+        return {
+          success: false,
+          error: `Control "${control.name}" needs both a leg and a leg name (or neither)`,
+        }
+      }
     }
 
     // Once results are submitted, controls are frozen too: deleting a
@@ -206,7 +224,23 @@ export async function saveEventControls(
     // into kept rows (upserted by id) and new rows (inserted without id).
     // Only ids that belong to this event (existingIds) go down the upsert
     // path, so a stray id can never overwrite another event's control.
-    const ordered = [...controls].sort((a, b) => a.distanceKm - b.distanceKm)
+    // Group rows by leg (null = the single-route group) in first-appearance
+    // order, sort within each leg by distance, then assign positions
+    // sequentially across legs — `position` keeps ordering controls globally.
+    // For untagged rows this is exactly the old global distance sort.
+    const legOrder: (string | null)[] = []
+    const rowsByLeg = new Map<string | null, EventControlInput[]>()
+    for (const control of controls) {
+      const key = control.legRwgpsId || null
+      if (!rowsByLeg.has(key)) {
+        rowsByLeg.set(key, [])
+        legOrder.push(key)
+      }
+      rowsByLeg.get(key)!.push(control)
+    }
+    const ordered = legOrder.flatMap((key) =>
+      [...rowsByLeg.get(key)!].sort((a, b) => a.distanceKm - b.distanceKm)
+    )
     const keptRows: EventControlInsert[] = []
     const newRows: EventControlInsert[] = []
     for (const [i, control] of ordered.entries()) {
@@ -219,6 +253,8 @@ export async function saveEventControls(
         lng: control.lng,
         radius_m: Math.round(control.radiusM),
         notes: control.notes?.trim() || null,
+        leg_rwgps_id: control.legRwgpsId || null,
+        leg_name: control.legName?.trim() || null,
       }
       if (control.id && existingIds.has(control.id)) {
         keptRows.push({ ...row, id: control.id })
