@@ -201,6 +201,7 @@ describe('getEventsByChapter', () => {
         start_location: 'Toronto',
         start_time: '08:00',
         public_registrations: [{ count: 5 }],
+        routes: { rwgps_id: null, rwgps_collection_id: '8387874' },
       },
     ]
 
@@ -214,6 +215,7 @@ describe('getEventsByChapter', () => {
     expect(result[0].type).toBe('Brevet')
     expect(result[0].distance).toBe('200')
     expect(result[0].registeredCount).toBe(5)
+    expect(result[0].rwgpsCollectionId).toBe('8387874')
   })
 
   it('handles missing optional fields', async () => {
@@ -238,6 +240,7 @@ describe('getEventsByChapter', () => {
     expect(result[0].startLocation).toBe('')
     expect(result[0].startTime).toBe('08:00')
     expect(result[0].registeredCount).toBe(0)
+    expect(result[0].rwgpsCollectionId).toBeNull()
   })
 
   it('handles query errors gracefully', async () => {

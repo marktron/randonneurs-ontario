@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { PageShell } from '@/components/page-shell'
 import { PageHero } from '@/components/page-hero'
 import { getRouteBySlug, getRouteResults, getChapterInfo } from '@/lib/data/routes'
+import { buildRwgpsCollectionUrl } from '@/lib/rwgps'
 import { AwardBadge } from '@/components/award-badge'
 
 interface PageProps {
@@ -108,7 +109,7 @@ export default async function RouteDetailPage({ params }: PageProps) {
                 )}
                 {!route.rwgpsId && route.rwgpsCollectionId && (
                   <a
-                    href={`https://ridewithgps.com/collections/${route.rwgpsCollectionId}`}
+                    href={buildRwgpsCollectionUrl(route.rwgpsCollectionId)}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="inline-flex items-center gap-2 text-base font-medium text-primary underline decoration-primary/30 underline-offset-4 transition-colors hover:decoration-primary"

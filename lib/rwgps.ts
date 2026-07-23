@@ -121,6 +121,11 @@ export interface RwgpsRefs {
   rwgpsCollectionId: string | null
 }
 
+/** Public page URL for a RWGPS collection. The only place this URL format lives. */
+export function buildRwgpsCollectionUrl(id: string): string {
+  return `https://ridewithgps.com/collections/${id}`
+}
+
 /**
  * Parse the admin form's single "Ride With GPS Link" field, which accepts
  * either a route URL/ID or a collection URL. Exactly one of the two ids is
@@ -553,7 +558,7 @@ export async function fetchRwgpsCollection(collectionId: string): Promise<RwgpsC
 
     return {
       name: collection.name?.trim() || 'Route Collection',
-      htmlUrl: collection.html_url ?? `https://ridewithgps.com/collections/${collectionId}`,
+      htmlUrl: collection.html_url ?? buildRwgpsCollectionUrl(collectionId),
       routes,
     }
   } catch (err) {

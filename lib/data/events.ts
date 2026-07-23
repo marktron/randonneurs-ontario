@@ -75,7 +75,9 @@ const getEventsByChapterInner = cache(async (urlSlug: string): Promise<Event[]> 
   const [chapterResult, flecheResult] = await Promise.all([
     getSupabase()
       .from('events')
-      .select('*, public_registrations(count), chapters!inner(slug), routes(rwgps_id)')
+      .select(
+        '*, public_registrations(count), chapters!inner(slug), routes(rwgps_id, rwgps_collection_id)'
+      )
       .eq('chapters.slug', dbSlug)
       .eq('public_registrations.status', 'registered')
       .in('status', ['scheduled', 'cancelled'])
@@ -86,7 +88,7 @@ const getEventsByChapterInner = cache(async (urlSlug: string): Promise<Event[]> 
       .order('distance_km', { ascending: false }),
     getSupabase()
       .from('events')
-      .select('*, public_registrations(count), routes(rwgps_id)')
+      .select('*, public_registrations(count), routes(rwgps_id, rwgps_collection_id)')
       .eq('public_registrations.status', 'registered')
       .in('status', ['scheduled', 'cancelled'])
       .eq('event_type', 'fleche')
@@ -113,6 +115,7 @@ const getEventsByChapterInner = cache(async (urlSlug: string): Promise<Event[]> 
     status: event.status as 'scheduled' | 'cancelled',
     registeredCount: event.public_registrations?.[0]?.count ?? 0,
     rwgpsId: event.routes?.rwgps_id ?? null,
+    rwgpsCollectionId: event.routes?.rwgps_collection_id ?? null,
   })
 
   const chapterEvents = (chapterResult.data as EventWithRegistrationCountAndRoute[]).map(
@@ -155,7 +158,9 @@ const getAllUpcomingEventsInner = cache(async (): Promise<Event[]> => {
   const today = new Date().toISOString().split('T')[0]
   const { data: events, error } = await getSupabase()
     .from('events')
-    .select('*, public_registrations(count), chapters!inner(slug, name), routes(rwgps_id)')
+    .select(
+      '*, public_registrations(count), chapters!inner(slug, name), routes(rwgps_id, rwgps_collection_id)'
+    )
     .eq('public_registrations.status', 'registered')
     .in('status', ['scheduled', 'cancelled'])
     .neq('event_type', 'permanent')
@@ -180,6 +185,7 @@ const getAllUpcomingEventsInner = cache(async (): Promise<Event[]> => {
     registeredCount: event.public_registrations?.[0]?.count ?? 0,
     chapterName: event.chapters?.name || '',
     rwgpsId: event.routes?.rwgps_id ?? null,
+    rwgpsCollectionId: event.routes?.rwgps_collection_id ?? null,
   }))
 })
 
@@ -200,7 +206,7 @@ const getPermanentEventsInner = cache(async (): Promise<Event[]> => {
   const today = new Date().toISOString().split('T')[0]
   const { data: events, error } = await getSupabase()
     .from('events')
-    .select('*, public_registrations(count), routes(rwgps_id)')
+    .select('*, public_registrations(count), routes(rwgps_id, rwgps_collection_id)')
     .eq('public_registrations.status', 'registered')
     .eq('event_type', 'permanent')
     .in('status', ['scheduled', 'cancelled'])
@@ -225,6 +231,7 @@ const getPermanentEventsInner = cache(async (): Promise<Event[]> => {
     status: event.status as 'scheduled' | 'cancelled',
     registeredCount: event.public_registrations?.[0]?.count ?? 0,
     rwgpsId: event.routes?.rwgps_id ?? null,
+    rwgpsCollectionId: event.routes?.rwgps_collection_id ?? null,
   }))
 })
 

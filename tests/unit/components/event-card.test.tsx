@@ -131,4 +131,17 @@ describe('EventCard', () => {
       expect(titleLink).toHaveAttribute('href', '/register/spring-200')
     })
   })
+
+  describe('Route button', () => {
+    it('links the Route button to the collection when only rwgpsCollectionId is set', () => {
+      render(<EventCard event={{ ...baseEvent, rwgpsId: null, rwgpsCollectionId: '8387874' }} />)
+      const link = screen.getByRole('link', { name: 'Route' })
+      expect(link).toHaveAttribute('href', 'https://ridewithgps.com/collections/8387874')
+    })
+
+    it('shows no Route button when neither RWGPS id is set', () => {
+      render(<EventCard event={{ ...baseEvent, rwgpsId: null, rwgpsCollectionId: null }} />)
+      expect(screen.queryByRole('link', { name: 'Route' })).not.toBeInTheDocument()
+    })
+  })
 })

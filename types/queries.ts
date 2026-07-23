@@ -64,7 +64,7 @@ export type EventWithRegistrationCount = Event & {
  */
 export type EventWithRegistrationCountAndRoute = Event & {
   public_registrations: Array<{ count: number }> | null
-  routes: Pick<Route, 'rwgps_id'> | null
+  routes: Pick<Route, 'rwgps_id' | 'rwgps_collection_id'> | null
 }
 
 /**
@@ -81,7 +81,7 @@ export type EventWithRegistrationCountAndChapter = Event & {
 export type EventWithRegistrationCountAndChapterAndRoute = Event & {
   public_registrations: Array<{ count: number }> | null
   chapters: Pick<Chapter, 'slug' | 'name'> | null
-  routes: Pick<Route, 'rwgps_id'> | null
+  routes: Pick<Route, 'rwgps_id' | 'rwgps_collection_id'> | null
 }
 
 /**
