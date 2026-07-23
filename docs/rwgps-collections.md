@@ -110,17 +110,25 @@ events, and omits the row entirely when neither id is present.
 
 ## Per-leg control cards
 
-Collection-backed events import brevet-card controls per member route. The
-Event Controls manager fetches the legs with `fetchRwgpsCollection()`
-(natural-sorted), lets the admin choose legs (all checked by default —
-uncheck combined/overview routes), and imports each selected leg's controls
-with `fetchRwgpsControlsWithCoords(legRouteId)`, tagged onto
+Collection-backed events import brevet-card controls per member route, via
+the shared `CollectionLegImportDialog`
+(`components/admin/collection-leg-import-dialog.tsx`) — available on **both**
+the Event Controls manager (`components/admin/event-controls-manager.tsx`,
+the digital brevet card page) and the Control Cards form
+(`components/admin/control-cards-form.tsx`, the printed-card page). The
+dialog fetches the legs with `fetchRwgpsCollection()` (natural-sorted), lets
+the admin choose legs (all checked by default — uncheck combined/overview
+routes), and imports each selected leg's controls with
+`fetchRwgpsControlsWithCoords(legRouteId)`, tagged onto
 `event_controls.leg_rwgps_id`/`leg_name` (the member route's name verbatim —
 RWGPS names already carry the organizer's leg numbering). The import is
-all-or-nothing: a leg that fails to fetch
-or has no parseable controls aborts with a leg-specific error and nothing is
-written. Printing expands riders × legs (rider-major) with per-leg distances
-and no open/close times; the digital card shows one leg-sectioned card. See
+all-or-nothing: a leg that fails to fetch or has no parseable controls aborts
+with a leg-specific error and nothing is written. The two callers differ in
+what happens after import: the Event Controls manager populates the
+(unsaved) row list for review before Save; the Control Cards form saves
+immediately, since leg-event printing reads the saved `event_controls` rows.
+Printing expands riders × legs (rider-major) with per-leg distances and no
+open/close times; the digital card shows one leg-sectioned card. See
 `docs/control-cards.md` → "Collection routes (per-leg cards)".
 
 ## Deployment requirement
