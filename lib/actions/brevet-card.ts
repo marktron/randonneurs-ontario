@@ -82,6 +82,8 @@ export interface CardControl {
   lng: number | null
   radiusM: number
   notes: string | null
+  /** Leg heading from event_controls.leg_name; null for single-route events. */
+  legName: string | null
   /** ISO timestamps, computed from distance + event start (never stored). */
   opensAt: string
   closesAt: string
@@ -200,7 +202,7 @@ export async function getBrevetCardByToken(token: string): Promise<BrevetCardDat
     await Promise.all([
       supabase
         .from('event_controls')
-        .select('id, position, name, distance_km, lat, lng, radius_m, notes')
+        .select('id, position, name, distance_km, lat, lng, radius_m, notes, leg_name')
         .eq('event_id', event.id)
         .order('position', { ascending: true }),
       supabase
@@ -235,6 +237,7 @@ export async function getBrevetCardByToken(token: string): Promise<BrevetCardDat
     lng: number | null
     radius_m: number
     notes: string | null
+    leg_name: string | null
   }[]
 
   const checkins = (checkinRows || []) as {
@@ -287,6 +290,7 @@ export async function getBrevetCardByToken(token: string): Promise<BrevetCardDat
         lng: control.lng,
         radiusM: control.radius_m,
         notes: control.notes,
+        legName: control.leg_name,
         opensAt: window.openAt.toISOString(),
         closesAt: window.closeAt.toISOString(),
       }

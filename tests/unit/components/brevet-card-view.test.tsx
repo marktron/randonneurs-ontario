@@ -63,6 +63,7 @@ function makeTwoControlData(): BrevetCardData {
       notes: null,
       opensAt: openPast,
       closesAt: closeFuture,
+      legName: null,
     },
     {
       id: 'ctrl-b',
@@ -75,6 +76,7 @@ function makeTwoControlData(): BrevetCardData {
       notes: null,
       opensAt: openPast,
       closesAt: closeFuture,
+      legName: null,
     },
   ]
   return data
@@ -97,6 +99,7 @@ function makeNotOpenData(): BrevetCardData {
       notes: null,
       opensAt: openFuture,
       closesAt: closeFuture,
+      legName: null,
     },
   ]
   return data
@@ -119,6 +122,7 @@ function makePreStartData(): BrevetCardData {
       notes: null,
       opensAt: startsAt.toISOString(),
       closesAt: new Date(startsAt.getTime() + 60 * 60 * 1000).toISOString(),
+      legName: null,
     },
   ]
   return data
@@ -158,6 +162,7 @@ function makeData(): BrevetCardData {
         notes: null,
         opensAt: startsAt.toISOString(),
         closesAt: new Date(startsAt.getTime() + 60 * 60 * 1000).toISOString(),
+        legName: null,
       },
     ],
     checkins: [],
@@ -1193,5 +1198,70 @@ describe('BrevetCard proactive location check', () => {
 
     await waitFor(() => expect(perms.query).toHaveBeenCalled())
     expect(screen.queryByRole('button', { name: /test your location/i })).toBeNull()
+  })
+})
+
+function makeLegSectionData(): BrevetCardData {
+  const data = makeData()
+  const openPast = new Date(Date.now() - 30 * 60 * 1000).toISOString()
+  const closeFuture = new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString()
+  data.controls = [
+    {
+      id: 'l1-c1',
+      position: 1,
+      name: 'Depart Gravenhurst',
+      distanceKm: 0,
+      lat: null,
+      lng: null,
+      radiusM: 500,
+      notes: null,
+      opensAt: openPast,
+      closesAt: closeFuture,
+      legName: 'Leg 1: Gravenhurst',
+    },
+    {
+      id: 'l1-c2',
+      position: 2,
+      name: 'Arrive Gravenhurst',
+      distanceKm: 205,
+      lat: null,
+      lng: null,
+      radiusM: 500,
+      notes: null,
+      opensAt: openPast,
+      closesAt: closeFuture,
+      legName: 'Leg 1: Gravenhurst',
+    },
+    {
+      id: 'l2-c1',
+      position: 3,
+      name: 'Depart Haliburton',
+      distanceKm: 0,
+      lat: null,
+      lng: null,
+      radiusM: 500,
+      notes: null,
+      opensAt: openPast,
+      closesAt: closeFuture,
+      legName: 'Leg 2: Haliburton',
+    },
+  ]
+  return data
+}
+
+describe('BrevetCard leg section headings', () => {
+  it('renders one heading per leg at each boundary, in order', () => {
+    render(<BrevetCard token="tok" initialData={makeLegSectionData()} />)
+    expect(screen.getAllByText('Leg 1: Gravenhurst')).toHaveLength(1)
+    expect(screen.getAllByText('Leg 2: Haliburton')).toHaveLength(1)
+    // All three controls still render.
+    expect(screen.getByText('Depart Gravenhurst')).toBeTruthy()
+    expect(screen.getByText('Arrive Gravenhurst')).toBeTruthy()
+    expect(screen.getByText('Depart Haliburton')).toBeTruthy()
+  })
+
+  it('renders no leg headings for single-route events', () => {
+    render(<BrevetCard token="tok" initialData={makeData()} />)
+    expect(screen.queryByText(/^Leg \d+:/)).toBeNull()
   })
 })

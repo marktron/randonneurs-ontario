@@ -164,6 +164,7 @@ function makeControlRow() {
     lat: 43.65,
     lng: -79.38,
     radius_m: 500,
+    leg_name: null,
   }
 }
 
@@ -552,6 +553,28 @@ describe('getBrevetCardByToken', () => {
     tables.control_checkins = { listResponse: { data: null, error: { message: 'boom' } } }
 
     await expect(getBrevetCardByToken(TOKEN)).rejects.toThrow()
+  })
+
+  it('carries leg_name into the payload as legName', async () => {
+    seedHappyTables()
+    tables.event_controls = {
+      listResponse: {
+        data: [{ ...makeControlRow(), position: 1, notes: null, leg_name: 'Leg 1: Gravenhurst' }],
+        error: null,
+      },
+    }
+
+    const card = await getBrevetCardByToken(TOKEN)
+
+    expect(card!.controls[0].legName).toBe('Leg 1: Gravenhurst')
+  })
+
+  it('returns legName null for single-route controls', async () => {
+    seedHappyTables()
+
+    const card = await getBrevetCardByToken(TOKEN)
+
+    expect(card!.controls[0].legName).toBeNull()
   })
 
   it('still returns null for an unknown token', async () => {
