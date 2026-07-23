@@ -42,8 +42,10 @@ numeric id:
   numeric id, `/routes/`, `/ambassador_routes/`, or `/trips/` URLs).
 
 The two ids are exactly mutually exclusive coming out of `extractRwgpsRefs`,
-matching the DB constraint. The routes table and route form both show
-"Collection `<id>`" instead of a route id when `rwgps_collection_id` is set.
+matching the DB constraint. The routes table shows "Collection `<id>`"
+instead of a route id when `rwgps_collection_id` is set; the route form
+instead pre-fills the URL input with the collection URL and shows a "View
+current collection on RWGPS" link.
 
 ## Fetching collection data
 
@@ -57,8 +59,8 @@ Behaviour:
 - Cached for 1 hour via Next's `fetch` revalidation (`next: { revalidate:
 3600 }`).
 - The v1 API ignores the collection's custom sort order, so member routes
-  are natural-sorted by name client-side (`"Leg 2"` before `"Leg 10"`,
-  via `localeCompare` with `numeric: true`).
+  are natural-sorted by name server-side, inside `fetchRwgpsCollection`
+  (`"Leg 2"` before `"Leg 10"`, via `localeCompare` with `numeric: true`).
 - Returns `null` — never throws — on missing `RWGPS_API_KEY`/
   `RWGPS_AUTH_TOKEN`, HTTP errors, network errors, a malformed body, or an
   empty collection. Callers treat `null` as "show a link instead of an

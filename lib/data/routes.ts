@@ -33,6 +33,7 @@ export interface RouteDetail {
   distanceKm: number | null
   description: string | null
   rwgpsId: string | null
+  rwgpsCollectionId: string | null
   cueSheetUrl: string | null
   chapterSlug: string
   chapterName: string
@@ -58,7 +59,7 @@ const getRouteBySlugInner = cache(async (slug: string): Promise<RouteDetail | nu
     .from('routes')
     .select(
       `
-      slug, name, distance_km, description, rwgps_id, cue_sheet_url,
+      slug, name, distance_km, description, rwgps_id, rwgps_collection_id, cue_sheet_url,
       chapters (slug, name)
     `
     )
@@ -75,6 +76,7 @@ const getRouteBySlugInner = cache(async (slug: string): Promise<RouteDetail | nu
     distanceKm: typedRoute.distance_km,
     description: typedRoute.description,
     rwgpsId: typedRoute.rwgps_id,
+    rwgpsCollectionId: typedRoute.rwgps_collection_id,
     cueSheetUrl: typedRoute.cue_sheet_url ?? null,
     chapterSlug: chapterDbSlug ? getUrlSlugFromDbSlug(chapterDbSlug) : '',
     chapterName: typedRoute.chapters?.name ?? '',

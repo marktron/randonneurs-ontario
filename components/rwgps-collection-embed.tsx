@@ -24,7 +24,7 @@ export function RwgpsCollectionEmbed({ collection }: RwgpsCollectionEmbedProps) 
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap gap-2" aria-label="Collection legs">
+      <div className="flex flex-wrap gap-2" role="group" aria-label="Collection legs">
         {collection.routes.map((leg) => {
           const isSelected = leg.id === selected.id
           return (

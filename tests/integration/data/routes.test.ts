@@ -126,6 +126,7 @@ describe('getRouteBySlug', () => {
       distance_km: 200,
       description: 'Test route',
       rwgps_id: '12345678',
+      rwgps_collection_id: null,
       cue_sheet_url: 'https://example.com/cue.pdf',
       chapters: {
         slug: 'toronto',
@@ -142,7 +143,34 @@ describe('getRouteBySlug', () => {
       expect(result.name).toBe('Toronto 200')
       expect(result.distanceKm).toBe(200)
       expect(result.rwgpsId).toBe('12345678')
+      expect(result.rwgpsCollectionId).toBeNull()
       expect(result.cueSheetUrl).toBe('https://example.com/cue.pdf')
+    }
+  })
+
+  it('returns rwgpsCollectionId for collection-backed routes', async () => {
+    const mockRoute = {
+      slug: 'devil-week',
+      name: 'Devil Week',
+      distance_km: 1200,
+      description: 'Multi-leg route',
+      rwgps_id: null,
+      rwgps_collection_id: '8387874',
+      cue_sheet_url: null,
+      chapters: {
+        slug: 'toronto',
+        name: 'Toronto',
+      },
+    }
+
+    mockModule.__mockRouteFound(mockRoute)
+
+    const result = await getRouteBySlug('devil-week')
+
+    expect(result).not.toBeNull()
+    if (result) {
+      expect(result.rwgpsId).toBeNull()
+      expect(result.rwgpsCollectionId).toBe('8387874')
     }
   })
 })
