@@ -66,6 +66,15 @@ Behaviour:
   empty collection. Callers treat `null` as "show a link instead of an
   embed."
 
+## Event and calendar cards
+
+`components/event-card.tsx` displays events on the calendar and event listing
+pages. When an event's route is collection-backed (`rwgpsCollectionId` set),
+the "Route" button links to the collection page via
+`buildRwgpsCollectionUrl(rwgpsCollectionId)`. When `rwgpsId` is set instead
+(single-leg routes), the button links to the individual route URL. The card
+only shows the "Route" button when at least one RWGPS reference exists.
+
 ## Register page rendering
 
 `app/register/[slug]/page.tsx` fetches the collection server-side when

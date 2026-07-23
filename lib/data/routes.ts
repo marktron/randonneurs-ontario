@@ -22,6 +22,7 @@ import {
 } from '@/lib/chapter-config'
 import { formatFinishTime, formatStatus, parseFinishTimeToMinutes } from '@/lib/utils'
 import { handleDataError } from '@/lib/errors'
+import { buildRwgpsCollectionUrl } from '@/lib/rwgps'
 import type { RouteWithChapter, RouteWithChapterName, RouteBasic } from '@/types/queries'
 
 // Re-export chapter utilities for convenience
@@ -301,7 +302,7 @@ const getRoutesByChapterInner = cache(async (urlSlug: string): Promise<RouteColl
           rwgpsUrl: route.rwgps_id
             ? buildRwgpsUrl(route.rwgps_id)
             : route.rwgps_collection_id
-              ? `https://ridewithgps.com/collections/${route.rwgps_collection_id}`
+              ? buildRwgpsCollectionUrl(route.rwgps_collection_id)
               : null,
           cueSheetUrl: route.cue_sheet_url ?? null,
         })),

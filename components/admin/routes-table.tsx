@@ -33,6 +33,7 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Pencil, Trash2, ExternalLink, Loader2, Eye, EyeOff, GitMerge, X } from 'lucide-react'
 import { deleteRoute, toggleRouteActive } from '@/lib/actions/routes'
+import { buildRwgpsCollectionUrl } from '@/lib/rwgps'
 import { MergeRoutesDialog } from './merge-routes-dialog'
 import { toast } from 'sonner'
 import type { ChapterOption, RouteWithChapter } from '@/types/ui'
@@ -258,7 +259,7 @@ export function RoutesTable({ routes, chapters, defaultChapterId }: RoutesTableP
                       <a
                         href={
                           route.rwgps_collection_id
-                            ? `https://ridewithgps.com/collections/${route.rwgps_collection_id}`
+                            ? buildRwgpsCollectionUrl(route.rwgps_collection_id)
                             : `https://ridewithgps.com/routes/${route.rwgps_id}`
                         }
                         target="_blank"

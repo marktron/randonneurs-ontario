@@ -20,6 +20,7 @@ import { AlertCircle, Loader2, ExternalLink } from 'lucide-react'
 import { CueSheetField } from '@/components/admin/cue-sheet-field'
 import { createRoute, updateRoute } from '@/lib/actions/routes'
 import { createSlug } from '@/lib/utils'
+import { buildRwgpsCollectionUrl } from '@/lib/rwgps'
 import { toast } from 'sonner'
 import type { ChapterOption, RouteOption } from '@/types/ui'
 
@@ -42,7 +43,7 @@ export function RouteForm({ chapters, route, mode }: RouteFormProps) {
   const [description, setDescription] = useState(route?.description || '')
   const [rwgpsUrl, setRwgpsUrl] = useState(
     route?.rwgps_collection_id
-      ? `https://ridewithgps.com/collections/${route.rwgps_collection_id}`
+      ? buildRwgpsCollectionUrl(route.rwgps_collection_id)
       : route?.rwgps_id
         ? `https://ridewithgps.com/routes/${route.rwgps_id}`
         : ''
@@ -223,7 +224,7 @@ export function RouteForm({ chapters, route, mode }: RouteFormProps) {
               <a
                 href={
                   route.rwgps_collection_id
-                    ? `https://ridewithgps.com/collections/${route.rwgps_collection_id}`
+                    ? buildRwgpsCollectionUrl(route.rwgps_collection_id)
                     : `https://ridewithgps.com/routes/${route.rwgps_id}`
                 }
                 target="_blank"

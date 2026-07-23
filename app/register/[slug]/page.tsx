@@ -6,7 +6,7 @@ import { RegisterCTA } from '@/components/register-cta'
 import { MarkdownContent } from '@/components/markdown-content'
 import { RwgpsEmbed } from '@/components/rwgps-embed'
 import { RwgpsCollectionEmbed } from '@/components/rwgps-collection-embed'
-import { fetchRwgpsCollection } from '@/lib/rwgps'
+import { fetchRwgpsCollection, buildRwgpsCollectionUrl } from '@/lib/rwgps'
 import {
   getEventBySlug,
   getRegisteredRiders,
@@ -288,7 +288,7 @@ export default async function RegisterPage({ params }: PageProps) {
                   <RwgpsCollectionEmbed collection={collection} />
                 ) : (
                   <a
-                    href={`https://ridewithgps.com/collections/${event.rwgpsCollectionId}`}
+                    href={buildRwgpsCollectionUrl(event.rwgpsCollectionId)}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="inline-flex items-center gap-2 text-primary hover:underline underline-offset-2"
