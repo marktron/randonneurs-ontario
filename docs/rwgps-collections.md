@@ -100,6 +100,14 @@ This mirrors the single-route case (`event.rwgpsId` → `RwgpsEmbed` directly)
 but is only reached when `rwgpsId` is null and `rwgpsCollectionId` is set —
 the two are mutually exclusive per the DB constraint.
 
+## Registration confirmation emails
+
+`buildRouteUrl(rwgpsId, rwgpsCollectionId)` (`lib/actions/registration/helpers.ts`)
+builds the "View on Ride with GPS" link included in registration
+confirmation emails. It prefers the route URL when `rwgpsId` is set, falls
+back to the collection URL (`buildRwgpsCollectionUrl`) for collection-backed
+events, and omits the row entirely when neither id is present.
+
 ## Deployment requirement
 
 `RWGPS_API_KEY` and `RWGPS_AUTH_TOKEN` must be set in the Vercel production

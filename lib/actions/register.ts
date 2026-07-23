@@ -113,7 +113,7 @@ function eventEmailBase(
     eventType: formatEventType(event.event_type),
     chapterName: event.chapters?.name || '',
     chapterSlug: event.chapters?.slug || '',
-    routeUrl: buildRouteUrl(event.routes?.rwgps_id),
+    routeUrl: buildRouteUrl(event.routes?.rwgps_id, event.routes?.rwgps_collection_id),
     notes: notes || undefined,
   }
 }
@@ -132,7 +132,7 @@ const EVENT_SELECT = `
   id, slug, status, name, event_date, start_time,
   start_location, distance_km, event_type, chapter_id,
   chapters (slug, name),
-  routes (slug, rwgps_id)
+  routes (slug, rwgps_id, rwgps_collection_id)
 `
 
 // ============================================================================
@@ -358,7 +358,7 @@ export async function registerForPermanent(
     .from('routes')
     .select(
       `
-      id, name, slug, distance_km, chapter_id, rwgps_id,
+      id, name, slug, distance_km, chapter_id, rwgps_id, rwgps_collection_id,
       chapters (slug, name)
     `
     )
@@ -485,7 +485,7 @@ export async function registerForPermanent(
         eventType: 'Permanent',
         chapterName: route.chapters?.name || '',
         chapterSlug: route.chapters?.slug || '',
-        routeUrl: buildRouteUrl(route.rwgps_id),
+        routeUrl: buildRouteUrl(route.rwgps_id, route.rwgps_collection_id),
         notes: notes || undefined,
       },
       duplicateMessage: 'You are already registered for this permanent ride',
