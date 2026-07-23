@@ -11,7 +11,7 @@ import {
   formatCardDate,
   createTorontoDate,
 } from '@/lib/brmTimes'
-import { groupControlsByLeg } from '@/lib/controlPoints'
+import { buildCardLegsFromRows, type ControlRowForLegs } from '@/lib/controlPoints'
 import type {
   ControlPoint,
   CardRider,
@@ -24,8 +24,6 @@ import type { EventForControlCards, RegistrationForControlCardsWithToken } from 
 interface ControlInput {
   name: string
   distance: number
-  legRwgpsId?: string
-  legName?: string
 }
 
 async function getEventDetails(eventId: string): Promise<EventForControlCards | null> {
@@ -68,6 +66,34 @@ async function getRegistrations(eventId: string): Promise<RegistrationForControl
   return (data as RegistrationForControlCardsWithToken[]) ?? []
 }
 
+/**
+ * Stored digital-card controls, position-ordered with their leg tags. Leg
+ * events print from these rows — the DB is the source of truth at print
+ * time; a leg control list is far too large for the print URL (~14 KB
+ * request-line cap on Vercel).
+ */
+async function getStoredControlRows(eventId: string): Promise<ControlRowForLegs[]> {
+  const { data } = await getSupabaseAdmin()
+    .from('event_controls')
+    .select('name, distance_km, leg_rwgps_id, leg_name')
+    .eq('event_id', eventId)
+    .order('position', { ascending: true })
+
+  const rows = (data ?? []) as {
+    name: string
+    distance_km: number
+    leg_rwgps_id: string | null
+    leg_name: string | null
+  }[]
+
+  return rows.map((row) => ({
+    name: row.name,
+    distanceKm: row.distance_km,
+    legRwgpsId: row.leg_rwgps_id,
+    legName: row.leg_name,
+  }))
+}
+
 interface PrintPageProps {
   params: Promise<{ id: string }>
   searchParams: Promise<{
@@ -86,7 +112,11 @@ export default async function PrintPage({ params, searchParams }: PrintPageProps
 
   await requireAdmin()
 
-  const [event, registrations] = await Promise.all([getEventDetails(id), getRegistrations(id)])
+  const [event, registrations, storedControlRows] = await Promise.all([
+    getEventDetails(id),
+    getRegistrations(id),
+    getStoredControlRows(id),
+  ])
 
   if (!event) {
     notFound()
@@ -119,28 +149,17 @@ export default async function PrintPage({ params, searchParams }: PrintPageProps
   // Get nominal distance for BRM calculations
   const nominalDistance = getNominalDistance(event.distance_km)
 
-  const legGroups = groupControlsByLeg(controlInputs)
-
-  // Collection events: one CardLeg per stored leg. Leg cards never print
-  // open/close times (the overall event limit governs), so no BRM window
-  // computation happens for them; distances are per-leg (each leg starts
-  // at 0), and the leg distance is its last control's distance.
-  const legs: CardLeg[] | undefined = legGroups
-    ? legGroups.map((group, groupIndex) => ({
-        legRwgpsId: group.legRwgpsId,
-        legName: group.legName,
-        distanceKm: Math.max(...group.controls.map((c) => c.distance)),
-        rwgpsUrl: `https://ridewithgps.com/routes/${group.legRwgpsId}`,
-        controls: group.controls.map((input, index) => ({
-          id: `leg-${groupIndex}-control-${index}`,
-          name: input.name,
-          distance: input.distance,
-        })),
-      }))
-    : undefined
+  // Collection events: one CardLeg per stored leg, built from the DB rows
+  // (the form omits the `controls` param for leg events — the saved
+  // event_controls rows are the source of truth at print time). Leg cards
+  // never print open/close times (the overall event limit governs), and
+  // distances are per-leg (each leg restarts at 0). Null unless every
+  // stored row is leg-tagged — single-route events fall through to the
+  // unchanged query-param flow below.
+  const legs: CardLeg[] | undefined = buildCardLegsFromRows(storedControlRows) ?? undefined
 
   // Single-route events: unchanged BRM open/close computation.
-  const controls: ControlPoint[] = legGroups
+  const controls: ControlPoint[] = legs
     ? []
     : controlInputs.map((input, index) => {
         const { openAt, closeAt } = computeControlTimes(

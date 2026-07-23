@@ -152,8 +152,11 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
     fix: CheckinFix
   } | null>(null)
   // Early-window confirm (all methods): tapped a control before it opens.
+  // `opensAt` is the non-null window start — leg-tagged controls have no
+  // window (opensAt null) and never trigger this confirm.
   const [earlyConfirm, setEarlyConfirm] = useState<{
     control: CardControl
+    opensAt: string
     entry: OutboxEntry
   } | null>(null)
   const flushInFlight = useRef(false)
@@ -327,8 +330,8 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
         control.id === controls[0]?.id
       )
       const clamped = { ...entry, checkedInAt: recordedAt.toISOString() }
-      if (Date.now() < new Date(control.opensAt).getTime()) {
-        setEarlyConfirm({ control, entry: clamped })
+      if (control.opensAt !== null && Date.now() < new Date(control.opensAt).getTime()) {
+        setEarlyConfirm({ control, opensAt: control.opensAt, entry: clamped })
         return
       }
       enqueueCheckin(clamped)
@@ -720,10 +723,12 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
                       {control.distanceKm} km
                     </span>
                   </p>
-                  <p className="text-sm text-muted-foreground tabular-nums">
-                    {formatControlTime(new Date(control.opensAt))} –{' '}
-                    {formatControlTime(new Date(control.closesAt))}
-                  </p>
+                  {control.opensAt !== null && control.closesAt !== null && (
+                    <p className="text-sm text-muted-foreground tabular-nums">
+                      {formatControlTime(new Date(control.opensAt))} –{' '}
+                      {formatControlTime(new Date(control.closesAt))}
+                    </p>
+                  )}
                   {control.notes && (
                     <p className="text-sm text-muted-foreground mt-1">{control.notes}</p>
                   )}
@@ -1057,7 +1062,7 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
                       new Date(event.startsAt)
                     )}).`
                   : `${earlyConfirm.control.name} doesn't open until ${formatControlTime(
-                      new Date(earlyConfirm.control.opensAt)
+                      new Date(earlyConfirm.opensAt)
                     )}. Check in anyway?`)}
             </AlertDialogDescription>
           </AlertDialogHeader>

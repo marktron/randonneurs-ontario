@@ -175,7 +175,9 @@ Design notes:
 
 - Header: event name, date, distance, rider name.
 - Control list, ordered by `position`: name, km, open/close (computed
-  server-side, displayed in local time), and per-control status:
+  server-side, displayed in local time; omitted for leg-tagged collection
+  controls, whose per-leg distances restart at 0 — the overall event limit
+  governs, see docs/control-cards.md), and per-control status:
   ✓ checked in at HH:MM · **next** (highlighted) · upcoming · queued
   (offline, waiting to sync).
 - **Check in** button on any un-checked control (the next expected one is

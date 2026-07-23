@@ -1,3 +1,5 @@
+import type { CardLeg } from '@/types/control-card'
+
 interface ControlInput {
   id: string
   name: string
@@ -171,6 +173,41 @@ export function groupControlsByLeg<T extends object>(controls: T[]): LegGroup<T>
     group.controls.push(control)
   })
   return groups
+}
+
+/** A stored event_controls row, position-ordered, as needed for leg cards. */
+export interface ControlRowForLegs {
+  name: string
+  distanceKm: number
+  legRwgpsId: string | null
+  legName: string | null
+}
+
+/**
+ * Build the printed-card legs from the stored event_controls rows — the DB
+ * is the source of truth at print time (leg control lists are too large to
+ * round-trip through the print URL). Rows must be position-ordered; legs
+ * come out in first-appearance order, each leg's distance is its largest
+ * control distance (per-leg distances restart at 0), and leg controls never
+ * carry open/close times — the overall event limit governs.
+ *
+ * Returns null unless every row is leg-tagged (mirrors `groupControlsByLeg`):
+ * a mixed or untagged list is a single-route card.
+ */
+export function buildCardLegsFromRows(rows: ControlRowForLegs[]): CardLeg[] | null {
+  const groups = groupControlsByLeg(rows)
+  if (!groups) return null
+  return groups.map((group, groupIndex) => ({
+    legRwgpsId: group.legRwgpsId,
+    legName: group.legName,
+    distanceKm: Math.max(...group.controls.map((row) => row.distanceKm)),
+    rwgpsUrl: `https://ridewithgps.com/routes/${group.legRwgpsId}`,
+    controls: group.controls.map((row, index) => ({
+      id: `leg-${groupIndex}-control-${index}`,
+      name: row.name,
+      distance: row.distanceKm,
+    })),
+  }))
 }
 
 /**

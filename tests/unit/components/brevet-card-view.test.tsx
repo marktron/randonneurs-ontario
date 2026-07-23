@@ -1203,8 +1203,8 @@ describe('BrevetCard proactive location check', () => {
 
 function makeLegSectionData(): BrevetCardData {
   const data = makeData()
-  const openPast = new Date(Date.now() - 30 * 60 * 1000).toISOString()
-  const closeFuture = new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString()
+  // Leg-tagged controls carry no window (per-leg distances restart at 0;
+  // the overall event limit governs) — the payload sends nulls.
   data.controls = [
     {
       id: 'l1-c1',
@@ -1215,8 +1215,8 @@ function makeLegSectionData(): BrevetCardData {
       lng: null,
       radiusM: 500,
       notes: null,
-      opensAt: openPast,
-      closesAt: closeFuture,
+      opensAt: null,
+      closesAt: null,
       legName: 'Leg 1: Gravenhurst',
     },
     {
@@ -1228,8 +1228,8 @@ function makeLegSectionData(): BrevetCardData {
       lng: null,
       radiusM: 500,
       notes: null,
-      opensAt: openPast,
-      closesAt: closeFuture,
+      opensAt: null,
+      closesAt: null,
       legName: 'Leg 1: Gravenhurst',
     },
     {
@@ -1241,8 +1241,8 @@ function makeLegSectionData(): BrevetCardData {
       lng: null,
       radiusM: 500,
       notes: null,
-      opensAt: openPast,
-      closesAt: closeFuture,
+      opensAt: null,
+      closesAt: null,
       legName: 'Leg 2: Haliburton',
     },
   ]
@@ -1263,5 +1263,18 @@ describe('BrevetCard leg section headings', () => {
   it('renders no leg headings for single-route events', () => {
     render(<BrevetCard token="tok" initialData={makeData()} />)
     expect(screen.queryByText(/^Leg \d+:/)).toBeNull()
+  })
+})
+
+describe('BrevetCard leg-control windows', () => {
+  it('renders no open/close times line for leg-tagged controls (null window)', () => {
+    render(<BrevetCard token="tok" initialData={makeLegSectionData()} />)
+    // The times line is the only " – " range on the card.
+    expect(screen.queryAllByText(/–/)).toHaveLength(0)
+  })
+
+  it('still renders the open/close times line for single-route controls', () => {
+    render(<BrevetCard token={TOKEN} initialData={makeData()} />)
+    expect(screen.getAllByText(/–/).length).toBeGreaterThan(0)
   })
 })

@@ -422,16 +422,41 @@ describe('ControlCardsForm collection legs', () => {
     expect(screen.getByRole('link', { name: 'Generate 6 Control Cards' })).toBeTruthy()
   })
 
-  it('encodes leg tags into the controls print param, leg-major', () => {
+  it('omits the controls param entirely for leg-grouped controls (print reads saved rows)', () => {
+    // Encoding every leg-tagged control into the URL blows past platform
+    // request-line limits (~14 KB on Vercel); the admin print page reads the
+    // stored event_controls rows instead.
     renderForm({ savedControls: legSaved })
     const href = generateHref()
-    const controlsJson = new URLSearchParams(href.split('?')[1]).get('controls')!
-    expect(JSON.parse(controlsJson)).toEqual([
-      { name: 'L1 Start', distance: 0, legRwgpsId: '101', legName: 'Leg 1: A' },
-      { name: 'L1 Finish', distance: 200, legRwgpsId: '101', legName: 'Leg 1: A' },
-      { name: 'L2 Start', distance: 0, legRwgpsId: '102', legName: 'Leg 2: B' },
-      { name: 'L2 Finish', distance: 300, legRwgpsId: '102', legName: 'Leg 2: B' },
-    ])
+    expect(new URLSearchParams(href.split('?')[1]).get('controls')).toBeNull()
+    // Count display is unaffected: 3 riders × 2 legs.
+    expect(screen.getByRole('link', { name: 'Generate 6 Control Cards' })).toBeTruthy()
+  })
+
+  it('notes that printed leg cards use the saved controls when leg rows drift', async () => {
+    // With the DB as the print-time source of truth, unsaved edits do not
+    // affect leg printing — the drift warning must say so.
+    const user = userEvent.setup()
+    renderForm({ savedControls: legSaved })
+
+    await user.type(controlNameInputs()[0], 'X')
+
+    expect(
+      screen.getByText(/These controls differ from the saved digital-card controls/i)
+    ).toBeTruthy()
+    expect(screen.getByText(/Printed leg cards use the saved controls/i)).toBeTruthy()
+  })
+
+  it('does not show the leg-print note for single-route drift', async () => {
+    const user = userEvent.setup()
+    renderForm({ savedControls: savedThree })
+
+    await user.type(controlNameInputs()[0], 'X')
+
+    expect(
+      screen.getByText(/These controls differ from the saved digital-card controls/i)
+    ).toBeTruthy()
+    expect(screen.queryByText(/Printed leg cards use the saved controls/i)).toBeNull()
   })
 
   it('keeps the single-route controls param shape unchanged (no leg keys)', () => {

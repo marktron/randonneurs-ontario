@@ -211,6 +211,119 @@ describe('getEventCheckinsForAdmin', () => {
     expect(checkinCall?.ops).toContain('in')
   })
 
+  it('derives no early/late flags for check-ins at leg-tagged controls', async () => {
+    // Per-leg distances restart at 0, so the window computed from the event
+    // start is wrong for legs 2+. Leg controls carry no window — no false
+    // "late" badges in the organizer grid.
+    setupEvent()
+    tables.event_controls = {
+      selectResponse: {
+        data: [
+          {
+            id: 'control-1',
+            distance_km: 50,
+            radius_m: 500,
+            leg_name: 'Leg 2: Haliburton',
+          },
+        ],
+        error: null,
+      },
+    }
+    tables.registrations = {
+      selectResponse: {
+        data: [
+          {
+            id: 'reg-1',
+            rider_id: 'rider-1',
+            management_token: null,
+            riders: { first_name: 'Jane', last_name: 'Doe' },
+            pre_ride_date: null,
+            pre_ride_start_time: null,
+          },
+        ],
+        error: null,
+      },
+    }
+    tables.control_checkins = {
+      selectResponse: {
+        data: [
+          {
+            id: 'chk-1',
+            control_id: 'control-1',
+            registration_id: 'reg-1',
+            // Two days after the event start — far beyond any control window.
+            checked_in_at: '2026-07-13T13:00:00.000Z',
+            received_at: '2026-07-13T13:00:00.000Z',
+            method: 'gps',
+            lat: 43.6532,
+            lng: -79.3832,
+            accuracy_m: 10,
+            distance_to_control_m: 20,
+            note: null,
+          },
+        ],
+        error: null,
+      },
+    }
+
+    const result = await getEventCheckinsForAdmin('event-1')
+
+    expect(result.success).toBe(true)
+    const checkin = result.data![0].checkins[0]
+    expect(checkin.flags.late).toBe(false)
+    expect(checkin.flags.early).toBe(false)
+  })
+
+  it('still derives the late flag for the same check-in at an untagged control (non-vacuous)', async () => {
+    setupEvent()
+    tables.event_controls = {
+      selectResponse: {
+        data: [{ id: 'control-1', distance_km: 50, radius_m: 500, leg_name: null }],
+        error: null,
+      },
+    }
+    tables.registrations = {
+      selectResponse: {
+        data: [
+          {
+            id: 'reg-1',
+            rider_id: 'rider-1',
+            management_token: null,
+            riders: { first_name: 'Jane', last_name: 'Doe' },
+            pre_ride_date: null,
+            pre_ride_start_time: null,
+          },
+        ],
+        error: null,
+      },
+    }
+    tables.control_checkins = {
+      selectResponse: {
+        data: [
+          {
+            id: 'chk-1',
+            control_id: 'control-1',
+            registration_id: 'reg-1',
+            checked_in_at: '2026-07-13T13:00:00.000Z',
+            received_at: '2026-07-13T13:00:00.000Z',
+            method: 'gps',
+            lat: 43.6532,
+            lng: -79.3832,
+            accuracy_m: 10,
+            distance_to_control_m: 20,
+            note: null,
+          },
+        ],
+        error: null,
+      },
+    }
+
+    const result = await getEventCheckinsForAdmin('event-1')
+
+    expect(result.success).toBe(true)
+    expect(result.data![0].checkins[0].flags.late).toBe(true)
+  })
+
   it('returns riders with empty check-ins and skips the check-ins query when there are no controls', async () => {
     setupEvent()
     tables.event_controls = { selectResponse: { data: [], error: null } }

@@ -373,29 +373,23 @@ export function ControlCardsForm({
     params.set('organizerPhone', organizerPhone)
     params.set('organizerEmail', organizerEmail)
 
-    // Leg-major for collection events (leg first-appearance order, distance
-    // within a leg — matches how positions are stored); plain global distance
-    // sort otherwise. Single-route entries keep the exact legacy shape.
-    const sortByDistance = (list: ControlInput[]) =>
-      [...list].sort((a, b) => parseFloat(a.distance || '0') - parseFloat(b.distance || '0'))
-    const sortedControls = legGroups
-      ? legGroups.flatMap((g) => sortByDistance(g.controls))
-      : sortByDistance(controls)
-    params.set(
-      'controls',
-      JSON.stringify(
-        sortedControls.map((c) =>
-          c.legRwgpsId != null && c.legName != null
-            ? {
-                name: c.name,
-                distance: parseFloat(c.distance || '0'),
-                legRwgpsId: c.legRwgpsId,
-                legName: c.legName,
-              }
-            : { name: c.name, distance: parseFloat(c.distance || '0') }
+    // Single-route events encode the controls into the URL (legacy shape,
+    // unchanged). Leg-grouped (collection) events omit the param entirely:
+    // a full leg control list blows past platform request-line limits
+    // (~14 KB on Vercel), so the admin print page reads the saved
+    // event_controls rows instead — the DB is the source of truth at
+    // print time.
+    if (!legGroups) {
+      const sortedControls = [...controls].sort(
+        (a, b) => parseFloat(a.distance || '0') - parseFloat(b.distance || '0')
+      )
+      params.set(
+        'controls',
+        JSON.stringify(
+          sortedControls.map((c) => ({ name: c.name, distance: parseFloat(c.distance || '0') }))
         )
       )
-    )
+    }
 
     if (extraBlankCards > 0) {
       params.set('extraBlank', String(extraBlankCards))
@@ -646,7 +640,11 @@ export function ControlCardsForm({
                 <div className="space-y-3 rounded-md border border-amber-500/50 bg-amber-50 p-3 text-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
                   <div className="flex items-start gap-2 text-sm">
                     <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
-                    <span>These controls differ from the saved digital-card controls.</span>
+                    <span>
+                      These controls differ from the saved digital-card controls.
+                      {legGroups &&
+                        ' Printed leg cards use the saved controls — update them before generating.'}
+                    </span>
                   </div>
                   <div className="flex gap-2">
                     <Button

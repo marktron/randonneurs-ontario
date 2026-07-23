@@ -204,10 +204,16 @@ per rider per collection member route ("leg")** instead of one card per rider.
   assigns positions leg-major (leg first-appearance order, distance within a
   leg).
 - The admin print form (`components/admin/control-cards-form.tsx`) shows the
-  card count as riders × legs, applies `MAX_CARD_CONTROLS` **per leg** (the
-  error names the offending leg), and encodes `legRwgpsId`/`legName` on each
-  entry of the `controls` param. `groupControlsByLeg` / `expandRiderLegCards`
-  (`lib/controlPoints.ts`) drive grouping and rider-major expansion.
+  card count as riders × legs and applies `MAX_CARD_CONTROLS` **per leg** (the
+  error names the offending leg). For leg-grouped controls it **omits the
+  `controls` query param entirely** — a full leg control list blows past
+  platform request-line limits (~14 KB on Vercel) — and the admin print page
+  instead reads the stored `event_controls` rows and builds its `CardLeg[]`
+  via `buildCardLegsFromRows` (`lib/controlPoints.ts`). Because of that,
+  unsaved form edits never affect leg printing; the drift warning says so.
+  Single-route events keep the legacy `controls` param flow unchanged.
+  `groupControlsByLeg` / `expandRiderLegCards` (`lib/controlPoints.ts`) drive
+  grouping and rider-major expansion.
 - Leg card front: leg name as the route name, per-leg distance (the leg's
   last control distance), Route Map QR pointing at the leg's RWGPS route.
   Event name/date/start info, organizer, Total Allowable Time (overall event
@@ -222,6 +228,14 @@ per rider per collection member route ("leg")** instead of one card per rider.
   the payload carries `legName` per control and
   `components/brevet-card-view.tsx` renders a heading at each leg boundary.
   Check-in/start/completion logic is untouched.
+- Like the printed leg cards, **leg-tagged controls carry no per-control
+  window** anywhere digital: per-leg distances restart at 0, so a window
+  computed from the event start would be wrong for legs 2+. The card payload
+  sends `opensAt`/`closesAt` as null (`CardControl` in
+  `lib/actions/brevet-card.ts`), the rider card renders no times line,
+  `deriveCheckinFlags` never derives `early`/`late` for a null window, and
+  the admin check-ins grid omits `windowLabel` for leg rows. The overall
+  event limit governs.
 
 ## RWGPS import
 

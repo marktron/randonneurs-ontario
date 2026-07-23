@@ -8,6 +8,7 @@ import userEvent from '@testing-library/user-event'
 import { EventControlsManager } from '@/components/admin/event-controls-manager'
 import type { AdminEventControl } from '@/lib/actions/event-controls'
 import type { OrganizerContact } from '@/lib/actions/event-organizer'
+import { toast } from 'sonner'
 
 const mockSaveEventControls = vi.fn()
 const mockImportEventControlsFromRwgps = vi.fn()
@@ -71,6 +72,8 @@ beforeEach(() => {
     .mockReset()
     .mockResolvedValue({ success: true, data: [] })
   mockSaveEventOrganizer.mockReset().mockResolvedValue({ success: true })
+  vi.mocked(toast.success).mockClear()
+  vi.mocked(toast.error).mockClear()
 })
 
 describe('EventControlsManager mount auto-load', () => {
@@ -339,5 +342,35 @@ describe('EventControlsManager collection import', () => {
         ])
       )
     )
+  })
+
+  it('closes the leg dialog with an error toast when loading the legs rejects', async () => {
+    // Without a catch, a rejected action leaves the dialog stuck on
+    // "Loading legs…" forever.
+    const user = userEvent.setup()
+    mockGetEventCollectionLegs.mockRejectedValue(new Error('network down'))
+
+    renderCollectionManager()
+
+    await user.click(screen.getByRole('button', { name: /import from rwgps/i }))
+
+    await waitFor(() => expect(vi.mocked(toast.error)).toHaveBeenCalled())
+    await waitFor(() => expect(screen.queryByText(/loading legs/i)).toBeNull())
+  })
+
+  it('keeps the dialog usable with an error toast when the collection import rejects', async () => {
+    const user = userEvent.setup()
+    mockGetEventCollectionLegs.mockResolvedValue({ success: true, data: legsThree })
+    mockImportEventControlsFromRwgpsCollection.mockRejectedValue(new Error('network down'))
+
+    renderCollectionManager()
+
+    await user.click(screen.getByRole('button', { name: /import from rwgps/i }))
+    await screen.findAllByRole('checkbox')
+    await user.click(screen.getByRole('button', { name: /import 3 legs/i }))
+
+    await waitFor(() => expect(vi.mocked(toast.error)).toHaveBeenCalled())
+    // The import button recovers (no stuck spinner) so the admin can retry.
+    expect(screen.getByRole('button', { name: /import 3 legs/i })).toBeEnabled()
   })
 })

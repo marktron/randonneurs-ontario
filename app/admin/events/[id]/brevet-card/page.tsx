@@ -69,12 +69,19 @@ export default async function BrevetCardAdminPage({ params }: BrevetCardAdminPag
 
   const eventStart = computeEventStart(typedEvent.event_date, typedEvent.start_time)
   const gridControls: GridControl[] = controls.map((control) => {
-    const window = computeControlWindow(eventStart, control.distanceKm, typedEvent.distance_km)
+    // Leg-tagged controls have no per-control window (per-leg distances
+    // restart at 0; the overall event limit governs) — omit the label.
+    const window =
+      control.legName !== null
+        ? null
+        : computeControlWindow(eventStart, control.distanceKm, typedEvent.distance_km)
     return {
       id: control.id,
       name: control.name,
       distanceKm: control.distanceKm,
-      windowLabel: `${formatControlTime(window.openAt)} – ${formatControlTime(window.closeAt)}`,
+      windowLabel: window
+        ? `${formatControlTime(window.openAt)} – ${formatControlTime(window.closeAt)}`
+        : null,
       lat: control.lat,
       lng: control.lng,
       radiusM: control.radiusM,

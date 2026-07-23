@@ -155,10 +155,16 @@ export interface CheckinForFlags {
   distance_to_control_m: number | null
 }
 
+/**
+ * `window` is null for leg-tagged controls (collection events): per-leg
+ * distances restart at 0, so a window computed from the event start would be
+ * wrong for legs 2+. No window means early/late are never derived — the
+ * overall event limit governs, same as the printed leg cards.
+ */
 export function deriveCheckinFlags(
   checkin: CheckinForFlags,
   control: { radius_m: number },
-  window: ControlWindow
+  window: ControlWindow | null
 ): CheckinFlags {
   const checkedInAt = new Date(checkin.checked_in_at)
   const receivedAt = new Date(checkin.received_at)
@@ -169,8 +175,8 @@ export function deriveCheckinFlags(
       checkin.distance_to_control_m !== null &&
       checkin.distance_to_control_m > control.radius_m,
     noGps: checkin.method === 'manual',
-    early: checkedInAt < window.openAt,
-    late: checkedInAt > window.closeAt,
+    early: window !== null && checkedInAt < window.openAt,
+    late: window !== null && checkedInAt > window.closeAt,
     // Admin corrections record a historical checked_in_at with received_at
     // defaulting to the time of the edit — that gap is not an offline-outbox
     // sync delay, so admin entries are exempt from the lateSync signal.

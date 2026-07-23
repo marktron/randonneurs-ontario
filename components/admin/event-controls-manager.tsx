@@ -235,6 +235,11 @@ export function EventControlsManager({
       setLegs(result.data)
       // All legs checked by default; the admin unchecks combined/overview routes.
       setSelectedLegIds(new Set(result.data.map((leg) => leg.legRwgpsId)))
+    } catch {
+      // A rejected action (network down) would otherwise leave the dialog
+      // stuck on "Loading legs…" forever.
+      toast.error('Failed to load the collection legs')
+      setLegDialogOpen(false)
     } finally {
       setIsLoadingLegs(false)
     }
@@ -280,6 +285,10 @@ export function EventControlsManager({
       toast.success(
         `Imported ${result.data.length} controls across ${ids.length} legs — review and save`
       )
+    } catch {
+      // Mirror the error-result path: toast and keep the dialog open so the
+      // admin can retry (the finally below clears the spinner).
+      toast.error('Failed to import controls')
     } finally {
       setIsImporting(false)
     }
