@@ -476,3 +476,88 @@ export async function fetchRwgpsControlsWithCoords(
   }
   return controls
 }
+
+export interface RwgpsCollectionRoute {
+  id: number
+  name: string
+  distanceKm: number
+  elevationGain: number
+  htmlUrl: string
+}
+
+export interface RwgpsCollection {
+  name: string
+  htmlUrl: string
+  routes: RwgpsCollectionRoute[]
+}
+
+interface RwgpsApiCollectionRoute {
+  id?: number
+  name?: string
+  distance?: number // meters
+  elevation_gain?: number // meters
+  html_url?: string
+}
+
+/**
+ * Fetch a RWGPS collection (group of routes, used for events beyond 1200 km)
+ * via the authenticated v1 API. The v1 API ignores the collection's custom
+ * sort order, so member routes are natural-sorted by name ("Leg 2" before
+ * "Leg 10"). Returns null on missing credentials, HTTP errors, network
+ * errors, malformed bodies, or an empty collection — callers fall back to a
+ * plain link to the collection page. Cached ~1 hour via fetch revalidation.
+ */
+export async function fetchRwgpsCollection(collectionId: string): Promise<RwgpsCollection | null> {
+  const apiKey = process.env.RWGPS_API_KEY
+  const authToken = process.env.RWGPS_AUTH_TOKEN
+  if (!apiKey || !authToken) {
+    console.warn('fetchRwgpsCollection: RWGPS_API_KEY / RWGPS_AUTH_TOKEN not configured')
+    return null
+  }
+
+  try {
+    const response = await fetch(
+      `https://ridewithgps.com/api/v1/collections/${collectionId}.json`,
+      {
+        headers: { 'x-rwgps-api-key': apiKey, 'x-rwgps-auth-token': authToken },
+        next: { revalidate: 3600 },
+      }
+    )
+    if (!response.ok) {
+      console.warn(
+        `fetchRwgpsCollection: ${response.status} ${response.statusText} for collection ${collectionId}`
+      )
+      return null
+    }
+
+    const data: unknown = await response.json()
+    const collection = (
+      data as {
+        collection?: { name?: string; html_url?: string; routes?: RwgpsApiCollectionRoute[] }
+      }
+    ).collection
+    const rawRoutes = collection?.routes ?? []
+    if (!collection || rawRoutes.length === 0) return null
+
+    const routes = rawRoutes
+      .filter((r): r is RwgpsApiCollectionRoute & { id: number } => typeof r.id === 'number')
+      .map((r) => ({
+        id: r.id,
+        name: r.name?.trim() || 'Untitled Route',
+        distanceKm: (r.distance ?? 0) / 1000,
+        elevationGain: r.elevation_gain ?? 0,
+        htmlUrl: r.html_url ?? `https://ridewithgps.com/routes/${r.id}`,
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name, 'en', { numeric: true, sensitivity: 'base' }))
+    if (routes.length === 0) return null
+
+    return {
+      name: collection.name?.trim() || 'Route Collection',
+      htmlUrl: collection.html_url ?? `https://ridewithgps.com/collections/${collectionId}`,
+      routes,
+    }
+  } catch (err) {
+    console.warn(`fetchRwgpsCollection: failed for collection ${collectionId}`, err)
+    return null
+  }
+}

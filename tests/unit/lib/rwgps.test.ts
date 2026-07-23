@@ -4,6 +4,7 @@ import {
   extractControls,
   extractControlsWithCoords,
   extractRwgpsRefs,
+  fetchRwgpsCollection,
   fetchRwgpsControls,
   fetchRwgpsRoute,
   parseRwgpsRouteRef,
@@ -754,5 +755,124 @@ describe('extractRwgpsRefs', () => {
       rwgpsId: 'some-weird-value',
       rwgpsCollectionId: null,
     })
+  })
+})
+
+describe('fetchRwgpsCollection', () => {
+  const collectionBody = {
+    collection: {
+      id: 8387874,
+      name: 'Cottage Country Explorer 2000',
+      html_url: 'https://ridewithgps.com/collections/8387874',
+      routes: [
+        {
+          id: 53678831,
+          name: 'Leg 3: CCE 200 - Gravenhurst',
+          distance: 199528,
+          elevation_gain: 1964,
+          html_url: 'https://ridewithgps.com/routes/53678831',
+        },
+        {
+          id: 56239318,
+          name: 'Leg 1: CCE 300 - Port Loring',
+          distance: 314000,
+          elevation_gain: 3000,
+          html_url: 'https://ridewithgps.com/routes/56239318',
+        },
+        {
+          id: 56271316,
+          name: 'CCE 2000',
+          distance: 2019000,
+          elevation_gain: 20000,
+          html_url: 'https://ridewithgps.com/routes/56271316',
+        },
+        {
+          id: 56239304,
+          name: 'Leg 2: CCE 500 - Lake Simcoe',
+          distance: 496000,
+          elevation_gain: 5000,
+          html_url: 'https://ridewithgps.com/routes/56239304',
+        },
+      ],
+    },
+  }
+
+  beforeEach(() => {
+    vi.stubEnv('RWGPS_API_KEY', 'test-key')
+    vi.stubEnv('RWGPS_AUTH_TOKEN', 'test-token')
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.unstubAllEnvs()
+  })
+
+  it('fetches, maps, and natural-sorts member routes by name', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => collectionBody,
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await fetchRwgpsCollection('8387874')
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://ridewithgps.com/api/v1/collections/8387874.json',
+      expect.objectContaining({
+        headers: { 'x-rwgps-api-key': 'test-key', 'x-rwgps-auth-token': 'test-token' },
+        next: { revalidate: 3600 },
+      })
+    )
+    expect(result).not.toBeNull()
+    expect(result!.name).toBe('Cottage Country Explorer 2000')
+    expect(result!.htmlUrl).toBe('https://ridewithgps.com/collections/8387874')
+    expect(result!.routes.map((r) => r.name)).toEqual([
+      'CCE 2000',
+      'Leg 1: CCE 300 - Port Loring',
+      'Leg 2: CCE 500 - Lake Simcoe',
+      'Leg 3: CCE 200 - Gravenhurst',
+    ])
+    expect(result!.routes[3]).toEqual({
+      id: 53678831,
+      name: 'Leg 3: CCE 200 - Gravenhurst',
+      distanceKm: 199.528,
+      elevationGain: 1964,
+      htmlUrl: 'https://ridewithgps.com/routes/53678831',
+    })
+  })
+
+  it('returns null when credentials are missing', async () => {
+    vi.stubEnv('RWGPS_API_KEY', '')
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    expect(await fetchRwgpsCollection('8387874')).toBeNull()
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('returns null on a non-200 response', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({ ok: false, status: 404, statusText: 'Not Found' })
+    )
+    expect(await fetchRwgpsCollection('8387874')).toBeNull()
+  })
+
+  it('returns null when the fetch throws', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('network down')))
+    expect(await fetchRwgpsCollection('8387874')).toBeNull()
+  })
+
+  it('returns null on malformed body or zero member routes', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) }))
+    expect(await fetchRwgpsCollection('8387874')).toBeNull()
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ collection: { name: 'Empty', routes: [] } }),
+      })
+    )
+    expect(await fetchRwgpsCollection('8387874')).toBeNull()
   })
 })
