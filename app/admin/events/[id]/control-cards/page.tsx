@@ -24,7 +24,7 @@ async function getEventDetails(eventId: string): Promise<EventForControlCardsWit
       event_type,
       status,
       chapters (id, name),
-      routes (id, name, rwgps_id)
+      routes (id, name, rwgps_id, rwgps_collection_id)
     `
     )
     .eq('id', eventId)
@@ -106,6 +106,7 @@ export default async function ControlCardsPage({ params }: ControlCardsPageProps
           startLocation: event.start_location || '',
           chapter: event.chapters?.name || 'Randonneurs Ontario',
           rwgpsId: event.routes?.rwgps_id || null,
+          rwgpsCollectionId: event.routes?.rwgps_collection_id || null,
           eventType: event.event_type,
         }}
         riders={registrations

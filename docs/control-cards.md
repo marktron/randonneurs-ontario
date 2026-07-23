@@ -223,6 +223,12 @@ per rider per collection member route ("leg")** instead of one card per rider.
   omitted; `CardBack` skips the times block). Layout tiers apply per leg.
 - The DB is the source of truth at print time: cards keep printing from
   stored leg rows even if the route later loses its collection reference.
+- Collection events import controls on the Digital Brevet Card page, not
+  here — the Control Cards form has no per-leg import UI. If a collection
+  event has no saved `event_controls` yet, the form shows a hint pointing at
+  `/admin/events/[id]/brevet-card` (the generic "No RWGPS route linked" hint
+  is single-route-only and does not apply). Once leg-grouped controls exist,
+  no hint shows.
 - The public `/control-cards` flow is single-route only and untouched.
 - The digital brevet card stays **one card per event**, sectioned by leg:
   the payload carries `legName` per control and

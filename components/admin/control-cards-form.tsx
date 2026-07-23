@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useCallback, useEffect, useRef, useTransition } from 'react'
+import Link from 'next/link'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -61,6 +62,7 @@ interface EventInput {
   startLocation: string
   chapter: string
   rwgpsId: string | null
+  rwgpsCollectionId: string | null
   eventType: string
 }
 
@@ -602,10 +604,24 @@ export function ControlCardsForm({
             )}
           </div>
           {rwgpsError && <p className="text-sm text-destructive">{rwgpsError}</p>}
-          {!event.rwgpsId && !legGroups && (
+          {event.rwgpsCollectionId && !legGroups ? (
             <p className="text-sm text-muted-foreground">
-              No RWGPS route linked to this event. Add control points manually or link a route.
+              This event uses a route collection. Import per-leg controls on the{' '}
+              <Link
+                href={`/admin/events/${event.id}/brevet-card`}
+                className="text-primary hover:underline underline-offset-2"
+              >
+                Digital Brevet Card
+              </Link>{' '}
+              page first, then print cards here.
             </p>
+          ) : (
+            !event.rwgpsId &&
+            !legGroups && (
+              <p className="text-sm text-muted-foreground">
+                No RWGPS route linked to this event. Add control points manually or link a route.
+              </p>
+            )
           )}
 
           {/* Digital brevet card sync — hidden once the event is submitted. */}
