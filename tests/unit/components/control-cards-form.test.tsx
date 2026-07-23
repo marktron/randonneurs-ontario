@@ -35,6 +35,7 @@ const event = {
   startLocation: 'Test Start',
   chapter: 'Toronto',
   rwgpsId: null,
+  rwgpsCollectionId: null,
   eventType: 'brevet',
 }
 
@@ -377,6 +378,50 @@ describe('ControlCardsForm control-count cap', () => {
     expect(
       screen.queryByText(/Please fill in all organizer details and control points/i)
     ).toBeNull()
+  })
+})
+
+describe('ControlCardsForm no-route hint', () => {
+  it('shows the generic "no route linked" hint for a single-route event with no saved controls', () => {
+    renderForm()
+    expect(screen.getByText(/No RWGPS route linked to this event/i)).toBeTruthy()
+  })
+
+  it('points to the Digital Brevet Card import for a collection event with no saved controls', () => {
+    renderForm({ event: { ...event, rwgpsId: null, rwgpsCollectionId: 'coll-1' } })
+
+    expect(screen.queryByText(/No RWGPS route linked to this event/i)).toBeNull()
+    expect(screen.getByText(/This event uses a route collection/i)).toBeTruthy()
+    const link = screen.getByRole('link', { name: /Digital Brevet Card/i })
+    expect(link.getAttribute('href')).toBe('/admin/events/event-1/brevet-card')
+  })
+
+  it('shows no hint for a collection event once leg-grouped controls are saved', () => {
+    const legSaved: AdminEventControl[] = [
+      makeSaved({
+        id: 'l1-start',
+        position: 1,
+        name: 'L1 Start',
+        distanceKm: 0,
+        legRwgpsId: '101',
+        legName: 'Leg 1: A',
+      }),
+      makeSaved({
+        id: 'l2-start',
+        position: 2,
+        name: 'L2 Start',
+        distanceKm: 0,
+        legRwgpsId: '102',
+        legName: 'Leg 2: B',
+      }),
+    ]
+    renderForm({
+      event: { ...event, rwgpsId: null, rwgpsCollectionId: 'coll-1' },
+      savedControls: legSaved,
+    })
+
+    expect(screen.queryByText(/No RWGPS route linked to this event/i)).toBeNull()
+    expect(screen.queryByText(/This event uses a route collection/i)).toBeNull()
   })
 })
 
