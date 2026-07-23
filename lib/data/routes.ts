@@ -254,10 +254,12 @@ const getRoutesByChapterInner = cache(async (urlSlug: string): Promise<RouteColl
   // Fetch active routes for this chapter that have a map or cue sheet
   const { data: routes, error: routesError } = await getSupabase()
     .from('routes')
-    .select('slug, name, distance_km, rwgps_id, cue_sheet_url, chapters!inner(slug)')
+    .select(
+      'slug, name, distance_km, rwgps_id, rwgps_collection_id, cue_sheet_url, chapters!inner(slug)'
+    )
     .eq('chapters.slug', dbSlug)
     .eq('is_active', true)
-    .or('rwgps_id.not.is.null,cue_sheet_url.not.is.null')
+    .or('rwgps_id.not.is.null,rwgps_collection_id.not.is.null,cue_sheet_url.not.is.null')
 
   if (routesError) {
     console.error('Error fetching routes:', routesError)
@@ -294,7 +296,11 @@ const getRoutesByChapterInner = cache(async (urlSlug: string): Promise<RouteColl
           slug: route.slug!,
           name: route.name,
           distance: route.distance_km!.toString(),
-          rwgpsUrl: route.rwgps_id ? buildRwgpsUrl(route.rwgps_id) : null,
+          rwgpsUrl: route.rwgps_id
+            ? buildRwgpsUrl(route.rwgps_id)
+            : route.rwgps_collection_id
+              ? `https://ridewithgps.com/collections/${route.rwgps_collection_id}`
+              : null,
           cueSheetUrl: route.cue_sheet_url ?? null,
         })),
       })

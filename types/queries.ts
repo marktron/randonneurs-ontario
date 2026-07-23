@@ -116,7 +116,10 @@ export type EventWithPublicResults = EventWithRouteSlug & {
 /**
  * Route with basic fields for chapter listings
  */
-export type RouteBasic = Pick<Route, 'slug' | 'name' | 'distance_km' | 'rwgps_id' | 'cue_sheet_url'>
+export type RouteBasic = Pick<
+  Route,
+  'slug' | 'name' | 'distance_km' | 'rwgps_id' | 'rwgps_collection_id' | 'cue_sheet_url'
+>
 
 /**
  * Event with results for rider profile pages
