@@ -186,6 +186,43 @@ The public form does **not** implement reversal — that flow has no concept of 
 
 Logic lives in `lib/controlPoints.ts`, covered by `tests/unit/lib/controlPoints.test.ts`.
 
+## Collection routes (per-leg cards)
+
+Events whose route has `rwgps_collection_id` (no `rwgps_id`) print **one card
+per rider per collection member route ("leg")** instead of one card per rider.
+
+- Controls are stored per leg in `event_controls` via the nullable pair
+  `leg_rwgps_id` + `leg_name` (set together or not at all —
+  `event_controls_leg_pair` CHECK). `position` still orders controls globally
+  across legs. Single-route events leave both NULL — zero behavior change.
+- Import happens in the Event Controls manager
+  (`components/admin/event-controls-manager.tsx`): the Import button opens a
+  leg-selection dialog (`getEventCollectionLegs`, all legs checked by default,
+  natural-sorted) and `importEventControlsFromRwgpsCollection` fetches every
+  selected leg's controls all-or-nothing, tagging rows with the member
+  route's name verbatim as `leg_name`. `saveEventControls`
+  assigns positions leg-major (leg first-appearance order, distance within a
+  leg).
+- The admin print form (`components/admin/control-cards-form.tsx`) shows the
+  card count as riders × legs, applies `MAX_CARD_CONTROLS` **per leg** (the
+  error names the offending leg), and encodes `legRwgpsId`/`legName` on each
+  entry of the `controls` param. `groupControlsByLeg` / `expandRiderLegCards`
+  (`lib/controlPoints.ts`) drive grouping and rider-major expansion.
+- Leg card front: leg name as the route name, per-leg distance (the leg's
+  last control distance), Route Map QR pointing at the leg's RWGPS route.
+  Event name/date/start info, organizer, Total Allowable Time (overall event
+  limit) and Submit Results QR are the same on every leg card.
+- Leg card back: that leg's controls with per-leg distances and **no
+  open/close times** (`ControlPoint.openTime`/`closeTime` are optional and
+  omitted; `CardBack` skips the times block). Layout tiers apply per leg.
+- The DB is the source of truth at print time: cards keep printing from
+  stored leg rows even if the route later loses its collection reference.
+- The public `/control-cards` flow is single-route only and untouched.
+- The digital brevet card stays **one card per event**, sectioned by leg:
+  the payload carries `legName` per control and
+  `components/brevet-card-view.tsx` renders a heading at each leg boundary.
+  Check-in/start/completion logic is untouched.
+
 ## RWGPS import
 
 Both forms auto-import controls when the route has an `rwgps_id`, on mount (public form: when the user selects a route; admin form: on initial mount **only when the event has no saved `event_controls`** — otherwise it prefills from those, see below). When the admin form auto-imports on mount, it also **auto-saves** the imported rows back to `event_controls` (via the same save flow as the manual button), so an unconfigured event lands in sync with the digital brevet card without a click — a distinct toast ("Controls imported from RWGPS and saved to this event") confirms it. The auto-save is skipped when the event is submitted (controls are frozen — the import still runs so the printed card is populated), and a run-once ref guard keeps React strict-mode's double-invoked mount effect from importing or saving twice. A **manual** "Import from RWGPS" click never auto-saves; it only repopulates the rows and lets the drift affordances persist them. All fetching, parsing, and dedupe logic lives in `lib/rwgps.ts`.
