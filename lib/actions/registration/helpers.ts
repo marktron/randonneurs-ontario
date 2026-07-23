@@ -9,6 +9,7 @@ import * as Sentry from '@sentry/nextjs'
 import { format, parseISO } from 'date-fns'
 
 import { isDigitalCardEventType } from '@/lib/brevet-card'
+import { buildRwgpsCollectionUrl } from '@/lib/rwgps'
 
 /**
  * Truncated SHA-256 of an email, for forensic correlation in telemetry
@@ -59,11 +60,17 @@ export function formatEventTime(timeStr: string | null): string {
 }
 
 /**
- * Build a URL to the route page if route info is available.
+ * Build the RWGPS link for a registration email: the route page when the
+ * route has an rwgps_id, else the collection page for collection-backed
+ * routes (multi-leg events), else undefined (row omitted from the email).
  */
-export function buildRouteUrl(rwgpsId: string | null | undefined): string | undefined {
-  if (!rwgpsId) return undefined
-  return `https://ridewithgps.com/routes/${rwgpsId}`
+export function buildRouteUrl(
+  rwgpsId: string | null | undefined,
+  rwgpsCollectionId?: string | null
+): string | undefined {
+  if (rwgpsId) return `https://ridewithgps.com/routes/${rwgpsId}`
+  if (rwgpsCollectionId) return buildRwgpsCollectionUrl(rwgpsCollectionId)
+  return undefined
 }
 
 export function buildManagementUrl(managementToken: string): string {

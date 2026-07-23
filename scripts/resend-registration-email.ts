@@ -129,7 +129,7 @@ async function main() {
   const { data: event, error: eventError } = await supabase
     .from('events')
     .select(
-      'name, event_date, start_time, start_location, distance_km, event_type, chapters(slug, name), routes(rwgps_id)'
+      'name, event_date, start_time, start_location, distance_km, event_type, chapters(slug, name), routes(rwgps_id, rwgps_collection_id)'
     )
     .eq('id', registration.event_id)
     .maybeSingle()
@@ -142,7 +142,11 @@ async function main() {
   const chapter = one(
     event.chapters as { slug: string; name: string } | { slug: string; name: string }[]
   )
-  const route = one(event.routes as { rwgps_id: string | null } | { rwgps_id: string | null }[])
+  const route = one(
+    event.routes as
+      | { rwgps_id: string | null; rwgps_collection_id: string | null }
+      | { rwgps_id: string | null; rwgps_collection_id: string | null }[]
+  )
 
   // Derive membership fields from current DB state (no CCN re-check).
   let membershipStatus: 'valid' | 'none' | 'trial-used' = 'none'
@@ -169,7 +173,7 @@ async function main() {
     eventType: formatEventType(event.event_type),
     chapterName: chapter?.name || '',
     chapterSlug: chapter?.slug || '',
-    routeUrl: buildRouteUrl(route?.rwgps_id),
+    routeUrl: buildRouteUrl(route?.rwgps_id, route?.rwgps_collection_id),
     notes: registration.notes || undefined,
     membershipStatus,
     membershipType,
