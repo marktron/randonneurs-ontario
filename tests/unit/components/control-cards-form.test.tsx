@@ -575,6 +575,94 @@ describe('ControlCardsForm collection legs', () => {
   })
 })
 
+const legSavedForGating: AdminEventControl[] = [
+  makeSaved({
+    id: 'g1-start',
+    position: 1,
+    name: 'L1 Start',
+    distanceKm: 0,
+    legRwgpsId: '101',
+    legName: 'Leg 1: A',
+  }),
+  makeSaved({
+    id: 'g1-fin',
+    position: 2,
+    name: 'L1 Finish',
+    distanceKm: 200,
+    legRwgpsId: '101',
+    legName: 'Leg 1: A',
+  }),
+  makeSaved({
+    id: 'g2-start',
+    position: 3,
+    name: 'L2 Start',
+    distanceKm: 0,
+    legRwgpsId: '102',
+    legName: 'Leg 2: B',
+  }),
+  makeSaved({
+    id: 'g2-fin',
+    position: 4,
+    name: 'L2 Finish',
+    distanceKm: 300,
+    legRwgpsId: '102',
+    legName: 'Leg 2: B',
+  }),
+]
+
+describe('ControlCardsForm Generate gating on save (leg events)', () => {
+  it('disables Generate for a leg event once controls drift from saved (unsaved leg imports must not print stale/blank backs)', async () => {
+    const user = userEvent.setup()
+    renderForm({ savedControls: legSavedForGating })
+
+    // Starts in sync -> enabled with a real print URL.
+    expect(generateHref()).toContain('/control-cards/print?')
+
+    await user.type(controlNameInputs()[0], 'X')
+
+    const link = screen.getByRole('link', { name: /Generate/i })
+    expect(link.className).toContain('pointer-events-none')
+    expect(link.getAttribute('href')).toBe('#')
+    // A visible reason near the Generate button, not just the amber banner
+    // above (which can be scrolled past the Control Points card).
+    expect(screen.getByText(/Save your imported controls before generating cards/i)).toBeTruthy()
+  })
+
+  it('re-enables Generate for a leg event once controls are back in sync with saved', async () => {
+    const user = userEvent.setup()
+    renderForm({ savedControls: legSavedForGating })
+
+    await user.type(controlNameInputs()[0], 'X')
+    expect(screen.getByRole('link', { name: /Generate/i }).className).toContain(
+      'pointer-events-none'
+    )
+
+    await user.click(screen.getByRole('button', { name: /Reset to saved/i }))
+
+    const link = screen.getByRole('link', { name: /Generate/i })
+    // Token check, not substring: the button's base classes always include
+    // the Tailwind variant "disabled:pointer-events-none", which would
+    // falsely match a plain .toContain('pointer-events-none') string check.
+    expect((link.getAttribute('class') || '').split(/\s+/)).not.toContain('pointer-events-none')
+    expect(link.getAttribute('href')).toContain('/control-cards/print?')
+    expect(screen.queryByText(/Save your imported controls before generating cards/i)).toBeNull()
+  })
+
+  it('leaves Generate enabled for a single-route event with unsaved edits (URL carries the controls; unaffected by this gate)', async () => {
+    const user = userEvent.setup()
+    renderForm({ savedControls: savedThree })
+
+    await user.type(controlNameInputs()[0], 'X')
+    expect(
+      screen.getByText(/These controls differ from the saved digital-card controls/i)
+    ).toBeTruthy()
+
+    const link = screen.getByRole('link', { name: /Generate/i })
+    expect((link.getAttribute('class') || '').split(/\s+/)).not.toContain('pointer-events-none')
+    expect(link.getAttribute('href')).toContain('/control-cards/print?')
+  })
+})
+
 const collectionEvent = { ...event, rwgpsId: null, rwgpsCollectionId: 'coll-1' }
 
 const legsThree = [
@@ -693,6 +781,124 @@ describe('ControlCardsForm collection leg import', () => {
     ])
     expect(toast.success).toHaveBeenCalledWith(expect.stringMatching(/3 controls/i))
     expect(toast.success).toHaveBeenCalledWith(expect.stringMatching(/2 legs/i))
+  })
+
+  it('preserves saved control ids leg-scoped on re-import (never matches across legs)', async () => {
+    // Regression test for the data-loss bug: handleCollectionImported used to
+    // stamp savedId: undefined on every row, so the immediate save deleted
+    // and reinserted every control — cascading to rider check-ins. It must
+    // instead carry over each surviving control's id, and the matching must
+    // be scoped per leg: both legs below share a "Start"/"Control" name pair
+    // with distances chosen so a *flat* (unscoped) match would swap the two
+    // legs' "Control" ids with each other.
+    const user = userEvent.setup()
+    const savedLegControls: AdminEventControl[] = [
+      makeSaved({
+        id: 'a-start',
+        position: 1,
+        name: 'Start',
+        distanceKm: 0,
+        legRwgpsId: 'legA',
+        legName: 'Leg 1: Alpha Loop',
+      }),
+      makeSaved({
+        id: 'a-ctrl',
+        position: 2,
+        name: 'Control',
+        distanceKm: 50,
+        radiusM: 300,
+        notes: 'Coffee stop',
+        legRwgpsId: 'legA',
+        legName: 'Leg 1: Alpha Loop',
+      }),
+      makeSaved({
+        id: 'b-start',
+        position: 3,
+        name: 'Start',
+        distanceKm: 0,
+        legRwgpsId: 'legB',
+        legName: 'Leg 2: Beta Loop',
+      }),
+      makeSaved({
+        id: 'b-ctrl',
+        position: 4,
+        name: 'Control',
+        distanceKm: 60,
+        legRwgpsId: 'legB',
+        legName: 'Leg 2: Beta Loop',
+      }),
+    ]
+    mockGetEventCollectionLegs.mockResolvedValue({
+      success: true,
+      data: [
+        { legRwgpsId: 'legA', name: 'Alpha Loop', distanceKm: 100 },
+        { legRwgpsId: 'legB', name: 'Beta Loop', distanceKm: 120 },
+      ],
+    })
+    // Re-import: leg A's "Control" (61) is numerically closer to leg B's
+    // saved "Control" (60, delta 1) than to its own leg's saved "Control"
+    // (50, delta 11) — and vice versa for leg B's "Control" (50, delta 0 to
+    // leg A's saved "Control"). A flat match would swap them.
+    mockImportEventControlsFromRwgpsCollection.mockResolvedValue({
+      success: true,
+      data: [
+        {
+          name: 'Start',
+          distanceKm: 0,
+          lat: null,
+          lng: null,
+          notes: null,
+          legRwgpsId: 'legA',
+          legName: 'Leg 1: Alpha Loop',
+        },
+        {
+          name: 'Control',
+          distanceKm: 61,
+          lat: null,
+          lng: null,
+          notes: null,
+          legRwgpsId: 'legA',
+          legName: 'Leg 1: Alpha Loop',
+        },
+        {
+          name: 'Start',
+          distanceKm: 0,
+          lat: null,
+          lng: null,
+          notes: null,
+          legRwgpsId: 'legB',
+          legName: 'Leg 2: Beta Loop',
+        },
+        {
+          name: 'Control',
+          distanceKm: 50,
+          lat: null,
+          lng: null,
+          notes: null,
+          legRwgpsId: 'legB',
+          legName: 'Leg 2: Beta Loop',
+        },
+      ],
+    })
+
+    renderForm({ event: collectionEvent, savedControls: savedLegControls })
+
+    await user.click(screen.getByRole('button', { name: /Import from RWGPS/i }))
+    await screen.findAllByRole('checkbox')
+    await user.click(screen.getByRole('button', { name: /Import 2 legs/i }))
+
+    await waitFor(() => expect(mockSaveEventControls).toHaveBeenCalled())
+    const [, inputs] = mockSaveEventControls.mock.calls[0]
+    expect(inputs.map((c: { id?: string }) => c.id)).toEqual([
+      'a-start',
+      'a-ctrl',
+      'b-start',
+      'b-ctrl',
+    ])
+    // Radius/notes carried over from the matched saved row, not defaults.
+    expect(inputs[1]).toMatchObject({ radiusM: 300, notes: 'Coffee stop' })
+    // A genuinely new control (no saved match) still falls back to defaults.
+    expect(inputs[0]).toMatchObject({ radiusM: 500, notes: null })
   })
 
   it('does not save the import when the event is submitted', async () => {

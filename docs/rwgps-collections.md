@@ -127,9 +127,16 @@ with a leg-specific error and nothing is written. The two callers differ in
 what happens after import: the Event Controls manager populates the
 (unsaved) row list for review before Save; the Control Cards form saves
 immediately, since leg-event printing reads the saved `event_controls` rows.
-Printing expands riders × legs (rider-major) with per-leg distances and no
-open/close times; the digital card shows one leg-sectioned card. See
-`docs/control-cards.md` → "Collection routes (per-leg cards)".
+A re-import preserves each surviving control's saved id (and its radius and
+notes) rather than discarding it: imported and saved controls are grouped by
+`leg_rwgps_id` and matched leg-by-leg with `matchImportedControls`, so the
+resulting save updates rows in place instead of delete+reinserting them —
+which would cascade-delete rider check-ins on the deleted rows. Matching
+never crosses legs, since per-leg distances restart at 0 and two legs can
+share a control name. Printing expands riders × legs (rider-major) with
+per-leg distances and no open/close times; the digital card shows one
+leg-sectioned card. See `docs/control-cards.md` → "Collection routes
+(per-leg cards)".
 
 ## Deployment requirement
 

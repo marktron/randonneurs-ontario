@@ -587,6 +587,30 @@ describe('saveEventControls', () => {
     expect(fromCalls).toEqual([])
   })
 
+  it('rejects a control list that mixes leg-tagged and untagged rows, writing nothing', async () => {
+    setupEvent()
+    tables.event_controls = { selectResponse: { data: [], error: null } }
+
+    // buildCardLegsFromRows (print page) is all-or-nothing: a mixed list
+    // would silently fall back to the single-route BRM-time path with wrong
+    // per-leg windows. Reject the mix here so it can never reach the DB.
+    const result = await saveEventControls('event-1', [
+      { ...validControl, name: 'Untagged Start', distanceKm: 0 },
+      {
+        ...validControl,
+        name: 'Leg Start',
+        distanceKm: 0,
+        legRwgpsId: '111',
+        legName: 'Leg 1: A',
+      },
+    ])
+
+    expect(result.success).toBe(false)
+    expect(result.error).toMatch(/must all belong to route legs or none/i)
+    expect(fromCalls).toEqual([])
+    expect(writeCalls()).toEqual([])
+  })
+
   it('assigns positions leg-major (first-appearance leg order, distance within a leg) and persists leg columns', async () => {
     setupEvent()
     tables.event_controls = { selectResponse: { data: [], error: null } }
