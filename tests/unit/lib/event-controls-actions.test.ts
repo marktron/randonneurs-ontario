@@ -127,14 +127,32 @@ const mockFetchRwgpsControls = vi.fn(
     }[]
   > => []
 )
+const mockFetchRwgpsCollection = vi.fn(
+  async (
+    _collectionId: string
+  ): Promise<{
+    name: string
+    htmlUrl: string
+    routes: {
+      id: number
+      name: string
+      distanceKm: number
+      elevationGain: number
+      htmlUrl: string
+    }[]
+  } | null> => null
+)
 vi.mock('@/lib/rwgps', () => ({
   fetchRwgpsControlsWithCoords: (rwgpsId: string) => mockFetchRwgpsControls(rwgpsId),
+  fetchRwgpsCollection: (collectionId: string) => mockFetchRwgpsCollection(collectionId),
 }))
 
 import {
   getEventControlsForAdmin,
   saveEventControls,
   importEventControlsFromRwgps,
+  getEventCollectionLegs,
+  importEventControlsFromRwgpsCollection,
 } from '@/lib/actions/event-controls'
 
 function resetAll() {
@@ -688,9 +706,33 @@ describe('importEventControlsFromRwgps', () => {
     expect(result.success).toBe(true)
     expect(mockFetchRwgpsControls).toHaveBeenCalledWith('12345')
     expect(result.data).toEqual([
-      { name: 'Start', distanceKm: 0, lat: 43.6, lng: -79.4, notes: 'Sign in here' },
-      { name: 'Mid', distanceKm: 98.7, lat: 44.0, lng: -79.0, notes: null },
-      { name: 'Finish', distanceKm: 200, lat: null, lng: null, notes: null },
+      {
+        name: 'Start',
+        distanceKm: 0,
+        lat: 43.6,
+        lng: -79.4,
+        notes: 'Sign in here',
+        legRwgpsId: null,
+        legName: null,
+      },
+      {
+        name: 'Mid',
+        distanceKm: 98.7,
+        lat: 44.0,
+        lng: -79.0,
+        notes: null,
+        legRwgpsId: null,
+        legName: null,
+      },
+      {
+        name: 'Finish',
+        distanceKm: 200,
+        lat: null,
+        lng: null,
+        notes: null,
+        legRwgpsId: null,
+        legName: null,
+      },
     ])
   })
 
@@ -708,9 +750,33 @@ describe('importEventControlsFromRwgps', () => {
     expect(result.data).toEqual([
       // Order reversed; distance flipped to (total - original), rounded to
       // 0.1 km; each control keeps its physical coordinates and notes.
-      { name: 'Finish', distanceKm: 0, lat: 45.0, lng: -78.0, notes: 'Final control' },
-      { name: 'Mid', distanceKm: 150.1, lat: 44.0, lng: -79.0, notes: null },
-      { name: 'Start', distanceKm: 200, lat: 43.6, lng: -79.4, notes: 'Depart A&W' },
+      {
+        name: 'Finish',
+        distanceKm: 0,
+        lat: 45.0,
+        lng: -78.0,
+        notes: 'Final control',
+        legRwgpsId: null,
+        legName: null,
+      },
+      {
+        name: 'Mid',
+        distanceKm: 150.1,
+        lat: 44.0,
+        lng: -79.0,
+        notes: null,
+        legRwgpsId: null,
+        legName: null,
+      },
+      {
+        name: 'Start',
+        distanceKm: 200,
+        lat: 43.6,
+        lng: -79.4,
+        notes: 'Depart A&W',
+        legRwgpsId: null,
+        legName: null,
+      },
     ])
   })
 
@@ -746,5 +812,185 @@ describe('importEventControlsFromRwgps', () => {
     expect(result.error).toBe(
       'No control points found in the RWGPS route. Add controls as course points.'
     )
+  })
+})
+
+// ============================================================================
+// getEventCollectionLegs / importEventControlsFromRwgpsCollection
+// ============================================================================
+
+const testCollection = {
+  name: 'CCE 2000',
+  htmlUrl: 'https://ridewithgps.com/collections/8387874',
+  // Already natural-sorted, as fetchRwgpsCollection guarantees.
+  routes: [
+    {
+      id: 101,
+      name: 'CCE 200 - Gravenhurst',
+      distanceKm: 205.34,
+      elevationGain: 1500,
+      htmlUrl: 'https://ridewithgps.com/routes/101',
+    },
+    {
+      id: 102,
+      name: 'CCE 300 - Haliburton',
+      distanceKm: 302.1,
+      elevationGain: 2400,
+      htmlUrl: 'https://ridewithgps.com/routes/102',
+    },
+    {
+      id: 103,
+      name: 'CCE Full Route',
+      distanceKm: 2007.4,
+      elevationGain: 14000,
+      htmlUrl: 'https://ridewithgps.com/routes/103',
+    },
+  ],
+}
+
+function setupCollectionEvent(collectionId: string | null = '8387874') {
+  tables.events = {
+    singleResponse: {
+      data: {
+        id: 'event-1',
+        routes: collectionId === null ? null : { rwgps_collection_id: collectionId },
+      },
+      error: null,
+    },
+  }
+}
+
+describe('getEventCollectionLegs', () => {
+  beforeEach(resetAll)
+
+  it('returns the collection legs with string ids and rounded distances', async () => {
+    setupCollectionEvent()
+    mockFetchRwgpsCollection.mockResolvedValue(testCollection)
+
+    const result = await getEventCollectionLegs('event-1')
+
+    expect(result.success).toBe(true)
+    expect(mockFetchRwgpsCollection).toHaveBeenCalledWith('8387874')
+    expect(result.data).toEqual([
+      { legRwgpsId: '101', name: 'CCE 200 - Gravenhurst', distanceKm: 205.3 },
+      { legRwgpsId: '102', name: 'CCE 300 - Haliburton', distanceKm: 302.1 },
+      { legRwgpsId: '103', name: 'CCE Full Route', distanceKm: 2007.4 },
+    ])
+  })
+
+  it('returns an error when the route has no collection id', async () => {
+    setupCollectionEvent(null)
+
+    const result = await getEventCollectionLegs('event-1')
+
+    expect(result.success).toBe(false)
+    expect(result.error).toMatch(/no ridewithgps collection/i)
+    expect(mockFetchRwgpsCollection).not.toHaveBeenCalled()
+  })
+
+  it('returns an error when the collection fetch fails', async () => {
+    setupCollectionEvent()
+    mockFetchRwgpsCollection.mockResolvedValue(null)
+
+    const result = await getEventCollectionLegs('event-1')
+
+    expect(result.success).toBe(false)
+    expect(result.error).toMatch(/failed to load/i)
+  })
+})
+
+describe('importEventControlsFromRwgpsCollection', () => {
+  beforeEach(resetAll)
+
+  it('imports only the selected legs, tagged and numbered over the selection, leg-major', async () => {
+    setupCollectionEvent()
+    mockFetchRwgpsCollection.mockResolvedValue(testCollection)
+    mockFetchRwgpsControls.mockImplementation(async (rwgpsId: string) => {
+      if (rwgpsId === '101') {
+        return [
+          { name: 'A Start', distance: '0.0', lat: 43.6, lng: -79.4, notes: 'Sign in' },
+          { name: 'A Finish', distance: '205.3', lat: null, lng: null, notes: null },
+        ]
+      }
+      if (rwgpsId === '102') {
+        return [{ name: 'B Start', distance: '0.0', lat: 44.0, lng: -78.9, notes: null }]
+      }
+      throw new Error(`unexpected leg ${rwgpsId}`)
+    })
+
+    // '103' (the combined route) deliberately unselected; ids passed out of
+    // order to prove the collection's natural-sorted order wins.
+    const result = await importEventControlsFromRwgpsCollection('event-1', ['102', '101'])
+
+    expect(result.success).toBe(true)
+    expect(result.data).toEqual([
+      {
+        name: 'A Start',
+        distanceKm: 0,
+        lat: 43.6,
+        lng: -79.4,
+        notes: 'Sign in',
+        legRwgpsId: '101',
+        legName: 'CCE 200 - Gravenhurst',
+      },
+      {
+        name: 'A Finish',
+        distanceKm: 205.3,
+        lat: null,
+        lng: null,
+        notes: null,
+        legRwgpsId: '101',
+        legName: 'CCE 200 - Gravenhurst',
+      },
+      {
+        name: 'B Start',
+        distanceKm: 0,
+        lat: 44.0,
+        lng: -78.9,
+        notes: null,
+        legRwgpsId: '102',
+        legName: 'CCE 300 - Haliburton',
+      },
+    ])
+  })
+
+  it('is all-or-nothing: a failing leg aborts with a leg-specific message and no data', async () => {
+    setupCollectionEvent()
+    mockFetchRwgpsCollection.mockResolvedValue(testCollection)
+    mockFetchRwgpsControls.mockImplementation(async (rwgpsId: string) => {
+      if (rwgpsId === '101') {
+        return [{ name: 'A Start', distance: '0.0', lat: null, lng: null, notes: null }]
+      }
+      // e.g. a leg with zero parseable controls — the fetcher throws.
+      throw new Error('No control points found in the RWGPS route. Add controls as course points.')
+    })
+
+    const result = await importEventControlsFromRwgpsCollection('event-1', ['101', '102'])
+
+    expect(result.success).toBe(false)
+    expect(result.error).toContain('CCE 300 - Haliburton')
+    expect(result.error).toContain('No control points found')
+    expect(result.data).toBeUndefined()
+  })
+
+  it('rejects an empty selection', async () => {
+    setupCollectionEvent()
+
+    const result = await importEventControlsFromRwgpsCollection('event-1', [])
+
+    expect(result.success).toBe(false)
+    expect(result.error).toMatch(/at least one leg/i)
+    expect(mockFetchRwgpsCollection).not.toHaveBeenCalled()
+  })
+
+  it('rejects a selected leg that is no longer in the collection', async () => {
+    setupCollectionEvent()
+    mockFetchRwgpsCollection.mockResolvedValue(testCollection)
+
+    const result = await importEventControlsFromRwgpsCollection('event-1', ['101', '999'])
+
+    expect(result.success).toBe(false)
+    expect(result.error).toMatch(/no longer in the collection/i)
+    expect(mockFetchRwgpsControls).not.toHaveBeenCalled()
   })
 })
