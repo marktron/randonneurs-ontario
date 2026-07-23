@@ -14,11 +14,16 @@ import { toast } from 'sonner'
 const mockSaveEventControls = vi.fn()
 const mockGetEventControlsForAdmin = vi.fn()
 const mockImportEventControlsFromRwgps = vi.fn()
+const mockGetEventCollectionLegs = vi.fn()
+const mockImportEventControlsFromRwgpsCollection = vi.fn()
 
 vi.mock('@/lib/actions/event-controls', () => ({
   saveEventControls: (...args: unknown[]) => mockSaveEventControls(...args),
   getEventControlsForAdmin: (...args: unknown[]) => mockGetEventControlsForAdmin(...args),
   importEventControlsFromRwgps: (...args: unknown[]) => mockImportEventControlsFromRwgps(...args),
+  getEventCollectionLegs: (...args: unknown[]) => mockGetEventCollectionLegs(...args),
+  importEventControlsFromRwgpsCollection: (...args: unknown[]) =>
+    mockImportEventControlsFromRwgpsCollection(...args),
 }))
 
 vi.mock('sonner', () => ({
@@ -85,6 +90,10 @@ beforeEach(() => {
   mockSaveEventControls.mockReset().mockResolvedValue({ success: true })
   mockGetEventControlsForAdmin.mockReset().mockResolvedValue({ success: true, data: [] })
   mockImportEventControlsFromRwgps.mockReset().mockResolvedValue({ success: true, data: [] })
+  mockGetEventCollectionLegs.mockReset().mockResolvedValue({ success: true, data: [] })
+  mockImportEventControlsFromRwgpsCollection
+    .mockReset()
+    .mockResolvedValue({ success: true, data: [] })
   vi.mocked(toast.success).mockClear()
   vi.mocked(toast.error).mockClear()
 })
@@ -387,11 +396,12 @@ describe('ControlCardsForm no-route hint', () => {
     expect(screen.getByText(/No RWGPS route linked to this event/i)).toBeTruthy()
   })
 
-  it('points to the Digital Brevet Card import for a collection event with no saved controls', () => {
+  it('points to the "Import from RWGPS" button and the Digital Brevet Card page for a collection event with no saved controls', () => {
     renderForm({ event: { ...event, rwgpsId: null, rwgpsCollectionId: 'coll-1' } })
 
     expect(screen.queryByText(/No RWGPS route linked to this event/i)).toBeNull()
     expect(screen.getByText(/This event uses a route collection/i)).toBeTruthy()
+    expect(screen.getByText(/Use "Import from RWGPS" to choose legs/i)).toBeTruthy()
     const link = screen.getByRole('link', { name: /Digital Brevet Card/i })
     expect(link.getAttribute('href')).toBe('/admin/events/event-1/brevet-card')
   })
@@ -562,5 +572,203 @@ describe('ControlCardsForm collection legs', () => {
     expect(screen.queryByText(/printed cards support at most/)).toBeNull()
     // 3 riders × 2 legs = 6
     expect(screen.getByRole('link', { name: 'Generate 6 Control Cards' })).toBeTruthy()
+  })
+})
+
+const collectionEvent = { ...event, rwgpsId: null, rwgpsCollectionId: 'coll-1' }
+
+const legsThree = [
+  { legRwgpsId: '101', name: 'CCE 200 - Gravenhurst', distanceKm: 205.3 },
+  { legRwgpsId: '102', name: 'CCE 300 - Haliburton', distanceKm: 302.1 },
+  { legRwgpsId: '103', name: 'CCE Full Route', distanceKm: 2007.4 },
+]
+
+const importedLegControls = [
+  {
+    name: 'Alpha',
+    distanceKm: 0,
+    lat: 43.6,
+    lng: -79.4,
+    notes: null,
+    legRwgpsId: '101',
+    legName: 'Leg 1: CCE 200 - Gravenhurst',
+  },
+  {
+    name: 'Beta',
+    distanceKm: 205.3,
+    lat: null,
+    lng: null,
+    notes: null,
+    legRwgpsId: '101',
+    legName: 'Leg 1: CCE 200 - Gravenhurst',
+  },
+  {
+    name: 'Gamma',
+    distanceKm: 0,
+    lat: null,
+    lng: null,
+    notes: null,
+    legRwgpsId: '102',
+    legName: 'Leg 2: CCE 300 - Haliburton',
+  },
+]
+
+describe('ControlCardsForm collection leg import', () => {
+  it('shows the Import from RWGPS button for a collection event', () => {
+    renderForm({ event: collectionEvent })
+    expect(screen.getByRole('button', { name: /Import from RWGPS/i })).toBeTruthy()
+  })
+
+  it('does not show the collection import button for a single-route event', () => {
+    renderForm({ event: { ...event, rwgpsId: null, rwgpsCollectionId: null } })
+    expect(screen.queryByRole('button', { name: /Import from RWGPS/i })).toBeNull()
+  })
+
+  it('fetches legs, all pre-checked, when the dialog is opened', async () => {
+    const user = userEvent.setup()
+    mockGetEventCollectionLegs.mockResolvedValue({ success: true, data: legsThree })
+    renderForm({ event: collectionEvent })
+
+    await user.click(screen.getByRole('button', { name: /Import from RWGPS/i }))
+
+    await waitFor(() => expect(mockGetEventCollectionLegs).toHaveBeenCalledWith('event-1'))
+    const checks = await screen.findAllByRole('checkbox')
+    expect(checks).toHaveLength(3)
+    expect(checks.every((c) => c.getAttribute('data-state') === 'checked')).toBe(true)
+  })
+
+  it('imports the selected legs, replaces the control list with leg headings, and saves immediately', async () => {
+    const user = userEvent.setup()
+    mockGetEventCollectionLegs.mockResolvedValue({ success: true, data: legsThree })
+    mockImportEventControlsFromRwgpsCollection.mockResolvedValue({
+      success: true,
+      data: importedLegControls,
+    })
+    mockGetEventControlsForAdmin.mockResolvedValue({
+      success: true,
+      data: importedLegControls.map((c, i) =>
+        makeSaved({
+          id: `saved-${i}`,
+          position: i + 1,
+          name: c.name,
+          distanceKm: c.distanceKm,
+          lat: c.lat,
+          lng: c.lng,
+          legRwgpsId: c.legRwgpsId,
+          legName: c.legName,
+        })
+      ),
+    })
+
+    renderForm({ event: collectionEvent })
+
+    await user.click(screen.getByRole('button', { name: /Import from RWGPS/i }))
+    await screen.findAllByRole('checkbox')
+
+    // Uncheck the combined/overview route, then import the remaining two legs.
+    await user.click(screen.getByLabelText(/CCE Full Route/))
+    await user.click(screen.getByRole('button', { name: /Import 2 legs/i }))
+
+    await waitFor(() =>
+      expect(mockImportEventControlsFromRwgpsCollection).toHaveBeenCalledWith('event-1', [
+        '101',
+        '102',
+      ])
+    )
+
+    // Rows replace the seeded Start/Finish rows and land grouped under leg headings.
+    expect(controlNameInputs().map((i) => i.value)).toEqual(['Alpha', 'Beta', 'Gamma'])
+    expect(screen.getByText('Leg 1: CCE 200 - Gravenhurst')).toBeTruthy()
+    expect(screen.getByText('Leg 2: CCE 300 - Haliburton')).toBeTruthy()
+
+    // Leg-event printing reads the DB, so the import must save immediately.
+    await waitFor(() => expect(mockSaveEventControls).toHaveBeenCalled())
+    const [eventId, inputs] = mockSaveEventControls.mock.calls[0]
+    expect(eventId).toBe('event-1')
+    expect(inputs).toHaveLength(3)
+    expect(inputs.map((c: { legRwgpsId: string | null }) => c.legRwgpsId)).toEqual([
+      '101',
+      '101',
+      '102',
+    ])
+    expect(toast.success).toHaveBeenCalledWith(expect.stringMatching(/3 controls/i))
+    expect(toast.success).toHaveBeenCalledWith(expect.stringMatching(/2 legs/i))
+  })
+
+  it('does not save the import when the event is submitted', async () => {
+    const user = userEvent.setup()
+    mockGetEventCollectionLegs.mockResolvedValue({ success: true, data: legsThree })
+    mockImportEventControlsFromRwgpsCollection.mockResolvedValue({
+      success: true,
+      data: importedLegControls,
+    })
+
+    renderForm({ event: collectionEvent, eventSubmitted: true })
+
+    await user.click(screen.getByRole('button', { name: /Import from RWGPS/i }))
+    await screen.findAllByRole('checkbox')
+    await user.click(screen.getByRole('button', { name: /Import 3 legs/i }))
+
+    await waitFor(() =>
+      expect(mockImportEventControlsFromRwgpsCollection).toHaveBeenCalledWith('event-1', [
+        '101',
+        '102',
+        '103',
+      ])
+    )
+    expect(controlNameInputs().map((i) => i.value)).toEqual(['Alpha', 'Beta', 'Gamma'])
+    expect(mockSaveEventControls).not.toHaveBeenCalled()
+  })
+
+  it('closes the leg dialog with an error toast when loading the legs rejects', async () => {
+    const user = userEvent.setup()
+    mockGetEventCollectionLegs.mockRejectedValue(new Error('network down'))
+    renderForm({ event: collectionEvent })
+
+    await user.click(screen.getByRole('button', { name: /Import from RWGPS/i }))
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalled())
+    await waitFor(() => expect(screen.queryByText(/loading legs/i)).toBeNull())
+  })
+})
+
+describe('ControlCardsForm leg heading rows', () => {
+  it('renders no leg headings for a single-route control list', () => {
+    renderForm({ savedControls: savedThree })
+    expect(screen.queryByText(/^Leg \d/)).toBeNull()
+  })
+
+  it('renders a heading before the first control of each leg', () => {
+    const legSaved: AdminEventControl[] = [
+      makeSaved({
+        id: 'l1-start',
+        position: 1,
+        name: 'L1 Start',
+        distanceKm: 0,
+        legRwgpsId: '101',
+        legName: 'Leg 1: A',
+      }),
+      makeSaved({
+        id: 'l1-fin',
+        position: 2,
+        name: 'L1 Finish',
+        distanceKm: 200,
+        legRwgpsId: '101',
+        legName: 'Leg 1: A',
+      }),
+      makeSaved({
+        id: 'l2-start',
+        position: 3,
+        name: 'L2 Start',
+        distanceKm: 0,
+        legRwgpsId: '102',
+        legName: 'Leg 2: B',
+      }),
+    ]
+    renderForm({ savedControls: legSaved })
+
+    // One heading per leg, not one per control.
+    expect(screen.getAllByText('Leg 1: A')).toHaveLength(1)
+    expect(screen.getAllByText('Leg 2: B')).toHaveLength(1)
   })
 })

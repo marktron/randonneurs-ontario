@@ -40,6 +40,7 @@ components/
   admin/
     control-cards-form.tsx                    # Admin flow's client form
     control-cards-print.tsx                   # Shared print renderer (used by both flows)
+    collection-leg-import-dialog.tsx          # Leg-selection import dialog, shared by control-cards-form.tsx and event-controls-manager.tsx
 
 lib/
   brmTimes.ts                                 # ACP/BRM opening/closing time math + Toronto TZ helpers
@@ -195,14 +196,23 @@ per rider per collection member route ("leg")** instead of one card per rider.
   `leg_rwgps_id` + `leg_name` (set together or not at all —
   `event_controls_leg_pair` CHECK). `position` still orders controls globally
   across legs. Single-route events leave both NULL — zero behavior change.
-- Import happens in the Event Controls manager
-  (`components/admin/event-controls-manager.tsx`): the Import button opens a
-  leg-selection dialog (`getEventCollectionLegs`, all legs checked by default,
-  natural-sorted) and `importEventControlsFromRwgpsCollection` fetches every
-  selected leg's controls all-or-nothing, tagging rows with the member
-  route's name verbatim as `leg_name`. `saveEventControls`
-  assigns positions leg-major (leg first-appearance order, distance within a
-  leg).
+- Import is available from both admin pages via the shared
+  `CollectionLegImportDialog` (`components/admin/collection-leg-import-dialog.tsx`):
+  the Import button opens a leg-selection dialog (`getEventCollectionLegs`,
+  all legs checked by default, natural-sorted) and
+  `importEventControlsFromRwgpsCollection` fetches every selected leg's
+  controls all-or-nothing, tagging rows with the member route's name verbatim
+  as `leg_name`. `saveEventControls` assigns positions leg-major (leg
+  first-appearance order, distance within a leg).
+  - In the Event Controls manager (`components/admin/event-controls-manager.tsx`),
+    an import replaces the (unsaved) row list for review — the admin still
+    clicks Save.
+  - In the Control Cards form (`components/admin/control-cards-form.tsx`), an
+    import replaces the row list **and saves immediately** (same persistence
+    path as the single-route mount auto-import, `importFromRwgps({ autoSave:
+true })`) — leg-event printing reads the saved `event_controls` rows, so
+    an unsaved import would print nothing. The save is skipped when the event
+    is submitted (controls are frozen).
 - The admin print form (`components/admin/control-cards-form.tsx`) shows the
   card count as riders × legs and applies `MAX_CARD_CONTROLS` **per leg** (the
   error names the offending leg). For leg-grouped controls it **omits the
@@ -223,12 +233,17 @@ per rider per collection member route ("leg")** instead of one card per rider.
   omitted; `CardBack` skips the times block). Layout tiers apply per leg.
 - The DB is the source of truth at print time: cards keep printing from
   stored leg rows even if the route later loses its collection reference.
-- Collection events import controls on the Digital Brevet Card page, not
-  here — the Control Cards form has no per-leg import UI. If a collection
-  event has no saved `event_controls` yet, the form shows a hint pointing at
-  `/admin/events/[id]/brevet-card` (the generic "No RWGPS route linked" hint
-  is single-route-only and does not apply). Once leg-grouped controls exist,
-  no hint shows.
+- Collection events can import controls directly on the Control Cards form
+  (via the shared leg-selection dialog above) or on the Digital Brevet Card
+  page. If a collection event has no saved `event_controls` yet, the form
+  also shows a hint pointing at `/admin/events/[id]/brevet-card` as an
+  alternative (the generic "No RWGPS route linked" hint is single-route-only
+  and does not apply). Once leg-grouped controls exist, no hint shows.
+- Leg heading rows: the editable control list on the Control Cards form
+  renders a muted, non-editable heading row (`legName`) before the first
+  control of each leg — same boundary rule as the digital-card manager's
+  table (heading whenever a row's `legName` differs from the previous row's).
+  Single-route lists (every `legName` null) render no headings.
 - The public `/control-cards` flow is single-route only and untouched.
 - The digital brevet card stays **one card per event**, sectioned by leg:
   the payload carries `legName` per control and

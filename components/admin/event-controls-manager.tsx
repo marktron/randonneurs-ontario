@@ -22,24 +22,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
-import { Checkbox } from '@/components/ui/checkbox'
-import { Label } from '@/components/ui/label'
+import { CollectionLegImportDialog } from '@/components/admin/collection-leg-import-dialog'
 import {
   saveEventControls,
   importEventControlsFromRwgps,
-  getEventCollectionLegs,
-  importEventControlsFromRwgpsCollection,
   type AdminEventControl,
   type EventControlInput,
-  type CollectionLeg,
+  type ImportedControl,
 } from '@/lib/actions/event-controls'
 import { saveEventOrganizer, type OrganizerContact } from '@/lib/actions/event-organizer'
 import { DEFAULT_CONTROL_RADIUS_M } from '@/lib/brevet-card'
@@ -217,81 +206,26 @@ export function EventControlsManager({
 
   // ---- Collection leg-selection import --------------------------------
   const [legDialogOpen, setLegDialogOpen] = useState(false)
-  const [legs, setLegs] = useState<CollectionLeg[] | null>(null)
-  const [selectedLegIds, setSelectedLegIds] = useState<Set<string>>(new Set())
-  const [isLoadingLegs, setIsLoadingLegs] = useState(false)
 
-  const openLegDialog = async () => {
-    setLegDialogOpen(true)
-    setLegs(null)
-    setIsLoadingLegs(true)
-    try {
-      const result = await getEventCollectionLegs(eventId)
-      if (!result.success || !result.data) {
-        toast.error(result.error || 'Failed to load the collection legs')
-        setLegDialogOpen(false)
-        return
-      }
-      setLegs(result.data)
-      // All legs checked by default; the admin unchecks combined/overview routes.
-      setSelectedLegIds(new Set(result.data.map((leg) => leg.legRwgpsId)))
-    } catch {
-      // A rejected action (network down) would otherwise leave the dialog
-      // stuck on "Loading legs…" forever.
-      toast.error('Failed to load the collection legs')
-      setLegDialogOpen(false)
-    } finally {
-      setIsLoadingLegs(false)
-    }
-  }
-
-  const toggleLeg = (legRwgpsId: string) => {
-    setSelectedLegIds((prev) => {
-      const next = new Set(prev)
-      if (next.has(legRwgpsId)) next.delete(legRwgpsId)
-      else next.add(legRwgpsId)
-      return next
-    })
-  }
-
-  const handleCollectionImport = async () => {
-    if (!legs) return
-    setIsImporting(true)
-    try {
-      // Pass ids in the collection's (natural-sorted) leg order.
-      const ids = legs
-        .filter((leg) => selectedLegIds.has(leg.legRwgpsId))
-        .map((leg) => leg.legRwgpsId)
-      const result = await importEventControlsFromRwgpsCollection(eventId, ids)
-      if (!result.success || !result.data) {
-        toast.error(result.error || 'Failed to import controls')
-        return
-      }
-      setRows(
-        result.data.map((control) => ({
-          key: nextRowKey(),
-          name: control.name,
-          distanceKm: String(control.distanceKm),
-          lat: control.lat === null ? '' : String(control.lat),
-          lng: control.lng === null ? '' : String(control.lng),
-          radiusM: String(DEFAULT_CONTROL_RADIUS_M),
-          notes: control.notes ?? '',
-          checkinCount: 0,
-          legRwgpsId: control.legRwgpsId,
-          legName: control.legName,
-        }))
-      )
-      setLegDialogOpen(false)
-      toast.success(
-        `Imported ${result.data.length} controls across ${ids.length} legs — review and save`
-      )
-    } catch {
-      // Mirror the error-result path: toast and keep the dialog open so the
-      // admin can retry (the finally below clears the spinner).
-      toast.error('Failed to import controls')
-    } finally {
-      setIsImporting(false)
-    }
+  const handleCollectionImported = (importedControls: ImportedControl[]) => {
+    setRows(
+      importedControls.map((control) => ({
+        key: nextRowKey(),
+        name: control.name,
+        distanceKm: String(control.distanceKm),
+        lat: control.lat === null ? '' : String(control.lat),
+        lng: control.lng === null ? '' : String(control.lng),
+        radiusM: String(DEFAULT_CONTROL_RADIUS_M),
+        notes: control.notes ?? '',
+        checkinCount: 0,
+        legRwgpsId: control.legRwgpsId,
+        legName: control.legName,
+      }))
+    )
+    const legCount = new Set(importedControls.map((c) => c.legRwgpsId)).size
+    toast.success(
+      `Imported ${importedControls.length} controls across ${legCount} legs — review and save`
+    )
   }
 
   const parseRows = (): EventControlInput[] | null => {
@@ -466,7 +400,7 @@ export function EventControlsManager({
           {(hasRwgpsRoute || hasRwgpsCollection) && (
             <Button
               variant="outline"
-              onClick={hasRwgpsCollection ? openLegDialog : handleImport}
+              onClick={hasRwgpsCollection ? () => setLegDialogOpen(true) : handleImport}
               disabled={isImporting || isPending}
             >
               {isImporting ? (
@@ -569,53 +503,12 @@ export function EventControlsManager({
         </AlertDialogContent>
       </AlertDialog>
 
-      <Dialog open={legDialogOpen} onOpenChange={setLegDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Import controls from the route collection</DialogTitle>
-            <DialogDescription>
-              Choose which legs get control cards. Uncheck combined or overview routes.
-            </DialogDescription>
-          </DialogHeader>
-          {isLoadingLegs || legs === null ? (
-            <div className="flex items-center gap-2 py-4 text-sm text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Loading legs…
-            </div>
-          ) : (
-            <div className="space-y-2 py-2">
-              {legs.map((leg) => (
-                <div key={leg.legRwgpsId} className="flex items-center gap-2">
-                  <Checkbox
-                    id={`leg-${leg.legRwgpsId}`}
-                    checked={selectedLegIds.has(leg.legRwgpsId)}
-                    onCheckedChange={() => toggleLeg(leg.legRwgpsId)}
-                  />
-                  <Label htmlFor={`leg-${leg.legRwgpsId}`} className="text-sm font-normal">
-                    {leg.name} · {leg.distanceKm} km
-                  </Label>
-                </div>
-              ))}
-            </div>
-          )}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setLegDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button
-              onClick={handleCollectionImport}
-              disabled={isImporting || legs === null || selectedLegIds.size === 0}
-            >
-              {isImporting ? (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              ) : (
-                <Download className="h-4 w-4 mr-2" />
-              )}
-              Import {selectedLegIds.size} leg{selectedLegIds.size === 1 ? '' : 's'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <CollectionLegImportDialog
+        eventId={eventId}
+        open={legDialogOpen}
+        onOpenChange={setLegDialogOpen}
+        onImported={handleCollectionImported}
+      />
 
       <div className="space-y-3 border rounded-md p-4">
         <div>

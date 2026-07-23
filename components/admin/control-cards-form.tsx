@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useEffect, useRef, useTransition } from 'react'
+import { Fragment, useState, useCallback, useEffect, useRef, useTransition } from 'react'
 import Link from 'next/link'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -32,11 +32,13 @@ import {
   importEventControlsFromRwgps,
   type AdminEventControl,
   type EventControlInput,
+  type ImportedControl,
 } from '@/lib/actions/event-controls'
 import { DEFAULT_CONTROL_RADIUS_M } from '@/lib/brevet-card'
 import { toast } from 'sonner'
 import { Checkbox } from '@/components/ui/checkbox'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { CollectionLegImportDialog } from '@/components/admin/collection-leg-import-dialog'
 
 interface ControlInput {
   id: string
@@ -249,6 +251,7 @@ export function ControlCardsForm({
 
   const [isLoadingRwgps, setIsLoadingRwgps] = useState(false)
   const [rwgpsError, setRwgpsError] = useState<string | null>(null)
+  const [legImportDialogOpen, setLegImportDialogOpen] = useState(false)
 
   // ---- Digital brevet card sync ----------------------------------------
   const [isSaving, startSaveTransition] = useTransition()
@@ -353,6 +356,41 @@ export function ControlCardsForm({
       }
     },
     [event.id, event.rwgpsId, savedSnapshot, eventSubmitted, saveRows]
+  )
+
+  // Leg-selection import for collection-backed events (see
+  // docs/rwgps-collections.md → "Per-leg control cards"). The dialog fetches
+  // legs and imported controls itself; this replaces the control list and, as
+  // with the single-route mount auto-import, saves immediately — leg-event
+  // printing reads the saved event_controls rows, so unsaved imports would
+  // print nothing.
+  const handleCollectionImported = useCallback(
+    (imported: ImportedControl[]) => {
+      const importedRows: ControlInput[] = imported.map((c) => ({
+        id: crypto.randomUUID(),
+        savedId: undefined,
+        name: c.name,
+        distance: String(c.distanceKm),
+        lat: c.lat,
+        lng: c.lng,
+        radiusM: DEFAULT_CONTROL_RADIUS_M,
+        notes: c.notes,
+        legRwgpsId: c.legRwgpsId,
+        legName: c.legName,
+      }))
+      setControls(importedRows)
+
+      const legCount = new Set(imported.map((c) => c.legRwgpsId)).size
+      // Mirrors importFromRwgps({ autoSave: true }): never persist once the
+      // event is submitted (controls are frozen).
+      if (!eventSubmitted) {
+        saveRows(
+          importedRows,
+          `Imported ${imported.length} controls across ${legCount} leg${legCount === 1 ? '' : 's'} and saved to this event`
+        )
+      }
+    },
+    [eventSubmitted, saveRows]
   )
 
   // Auto-import controls from RWGPS on mount — but only when there are no saved
@@ -511,74 +549,82 @@ export function ControlCardsForm({
         <CardContent className="space-y-4">
           <div className="space-y-2">
             {controls.map((control, index) => (
-              <div key={control.id} className="flex items-center gap-2">
-                <div className="flex items-center gap-1 text-muted-foreground">
-                  <GripVertical className="h-4 w-4" />
-                  <div className="flex flex-col">
-                    <button
-                      type="button"
-                      onClick={() => moveControl(index, 'up')}
-                      disabled={index === 0}
-                      className="h-3 hover:text-foreground disabled:opacity-30"
-                    >
-                      <svg
-                        className="h-3 w-3"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
+              <Fragment key={control.id}>
+                {control.legName !== null &&
+                  control.legName !== (index === 0 ? null : controls[index - 1].legName) && (
+                    <div className="pt-2 text-sm font-medium text-muted-foreground first:pt-0">
+                      {control.legName}
+                    </div>
+                  )}
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1 text-muted-foreground">
+                    <GripVertical className="h-4 w-4" />
+                    <div className="flex flex-col">
+                      <button
+                        type="button"
+                        onClick={() => moveControl(index, 'up')}
+                        disabled={index === 0}
+                        className="h-3 hover:text-foreground disabled:opacity-30"
                       >
-                        <polyline points="18 15 12 9 6 15" />
-                      </svg>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => moveControl(index, 'down')}
-                      disabled={index === controls.length - 1}
-                      className="h-3 hover:text-foreground disabled:opacity-30"
-                    >
-                      <svg
-                        className="h-3 w-3"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
+                        <svg
+                          className="h-3 w-3"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                        >
+                          <polyline points="18 15 12 9 6 15" />
+                        </svg>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => moveControl(index, 'down')}
+                        disabled={index === controls.length - 1}
+                        className="h-3 hover:text-foreground disabled:opacity-30"
                       >
-                        <polyline points="6 9 12 15 18 9" />
-                      </svg>
-                    </button>
+                        <svg
+                          className="h-3 w-3"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                        >
+                          <polyline points="6 9 12 15 18 9" />
+                        </svg>
+                      </button>
+                    </div>
                   </div>
-                </div>
-                <Input
-                  placeholder="Control name"
-                  value={control.name}
-                  onChange={(e) => updateControl(control.id, 'name', e.target.value)}
-                  className="flex-1"
-                />
-                <div className="flex items-center gap-1">
                   <Input
-                    type="number"
-                    placeholder="km"
-                    value={control.distance}
-                    onChange={(e) => updateControl(control.id, 'distance', e.target.value)}
-                    className="w-24"
-                    min="0"
-                    step="0.1"
+                    placeholder="Control name"
+                    value={control.name}
+                    onChange={(e) => updateControl(control.id, 'name', e.target.value)}
+                    className="flex-1"
                   />
-                  <span className="text-sm text-muted-foreground">km</span>
+                  <div className="flex items-center gap-1">
+                    <Input
+                      type="number"
+                      placeholder="km"
+                      value={control.distance}
+                      onChange={(e) => updateControl(control.id, 'distance', e.target.value)}
+                      className="w-24"
+                      min="0"
+                      step="0.1"
+                    />
+                    <span className="text-sm text-muted-foreground">km</span>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => removeControl(control.id)}
+                    disabled={controls.length <= 2}
+                    className="text-muted-foreground hover:text-destructive"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    <span className="sr-only">Remove control</span>
+                  </Button>
                 </div>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => removeControl(control.id)}
-                  disabled={controls.length <= 2}
-                  className="text-muted-foreground hover:text-destructive"
-                >
-                  <Trash2 className="h-4 w-4" />
-                  <span className="sr-only">Remove control</span>
-                </Button>
-              </div>
+              </Fragment>
             ))}
           </div>
           <div className="flex gap-2">
@@ -602,18 +648,36 @@ export function ControlCardsForm({
                 Import from RWGPS
               </Button>
             )}
+            {event.rwgpsCollectionId && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setLegImportDialogOpen(true)}
+              >
+                <Download className="h-4 w-4 mr-1" />
+                Import from RWGPS
+              </Button>
+            )}
           </div>
+          <CollectionLegImportDialog
+            eventId={event.id}
+            open={legImportDialogOpen}
+            onOpenChange={setLegImportDialogOpen}
+            onImported={handleCollectionImported}
+          />
           {rwgpsError && <p className="text-sm text-destructive">{rwgpsError}</p>}
           {event.rwgpsCollectionId && !legGroups ? (
             <p className="text-sm text-muted-foreground">
-              This event uses a route collection. Import per-leg controls on the{' '}
+              This event uses a route collection. Use &quot;Import from RWGPS&quot; to choose legs,
+              or manage controls on the{' '}
               <Link
                 href={`/admin/events/${event.id}/brevet-card`}
                 className="text-primary hover:underline underline-offset-2"
               >
                 Digital Brevet Card
               </Link>{' '}
-              page first, then print cards here.
+              page.
             </p>
           ) : (
             !event.rwgpsId &&
