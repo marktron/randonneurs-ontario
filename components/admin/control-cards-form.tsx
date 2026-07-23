@@ -366,18 +366,54 @@ export function ControlCardsForm({
   // print nothing.
   const handleCollectionImported = useCallback(
     (imported: ImportedControl[]) => {
-      const importedRows: ControlInput[] = imported.map((c) => ({
-        id: crypto.randomUUID(),
-        savedId: undefined,
-        name: c.name,
-        distance: String(c.distanceKm),
-        lat: c.lat,
-        lng: c.lng,
-        radiusM: DEFAULT_CONTROL_RADIUS_M,
-        notes: c.notes,
-        legRwgpsId: c.legRwgpsId,
-        legName: c.legName,
-      }))
+      // Preserve saved ids/radius/notes across a re-import so saving updates
+      // rows in place rather than delete+reinserting (which loses check-ins)
+      // — mirrors importFromRwgps below, but scoped per leg: two legs can
+      // share a control name and their distances both restart at 0, so
+      // matching across the whole saved snapshot could pair a control with
+      // another leg's saved row. Group both sides by legRwgpsId and run
+      // matchImportedControls leg-by-leg, then reassemble in import order.
+      const savedByLeg = new Map<string | null, AdminEventControl[]>()
+      for (const c of savedSnapshot) {
+        const key = c.legRwgpsId
+        if (!savedByLeg.has(key)) savedByLeg.set(key, [])
+        savedByLeg.get(key)!.push(c)
+      }
+      const importedByLeg = new Map<string | null, ImportedControl[]>()
+      for (const c of imported) {
+        const key = c.legRwgpsId
+        if (!importedByLeg.has(key)) importedByLeg.set(key, [])
+        importedByLeg.get(key)!.push(c)
+      }
+      const matchedByLeg = new Map<string | null, (AdminEventControl | null)[]>()
+      for (const [legKey, impGroup] of importedByLeg) {
+        matchedByLeg.set(
+          legKey,
+          matchImportedControls(
+            impGroup.map((c) => ({ name: c.name, distanceKm: c.distanceKm })),
+            savedByLeg.get(legKey) ?? []
+          )
+        )
+      }
+      const legCursor = new Map<string | null, number>()
+      const importedRows: ControlInput[] = imported.map((c) => {
+        const legKey = c.legRwgpsId
+        const idx = legCursor.get(legKey) ?? 0
+        legCursor.set(legKey, idx + 1)
+        const m = matchedByLeg.get(legKey)![idx]
+        return {
+          id: crypto.randomUUID(),
+          savedId: m?.id,
+          name: c.name,
+          distance: String(c.distanceKm),
+          lat: c.lat,
+          lng: c.lng,
+          radiusM: m?.radiusM ?? DEFAULT_CONTROL_RADIUS_M,
+          notes: m?.notes ?? c.notes,
+          legRwgpsId: c.legRwgpsId,
+          legName: c.legName,
+        }
+      })
       setControls(importedRows)
 
       const legCount = new Set(imported.map((c) => c.legRwgpsId)).size
@@ -390,7 +426,7 @@ export function ControlCardsForm({
         )
       }
     },
-    [eventSubmitted, saveRows]
+    [eventSubmitted, saveRows, savedSnapshot]
   )
 
   // Auto-import controls from RWGPS on mount — but only when there are no saved
@@ -482,6 +518,13 @@ export function ControlCardsForm({
     controls.every((c) => c.name && c.distance !== '') &&
     individualSelectionValid &&
     !tooManyControls
+
+  // Leg (collection) events print from the saved event_controls rows — the
+  // print URL carries no controls param — so a Generate click while unsaved
+  // edits sit in this form would print stale or blank backs. Single-route
+  // events encode the controls straight into the URL, so they stay current
+  // regardless of the saved snapshot and are unaffected by this gate.
+  const canGenerate = Boolean(isFormValid) && (legGroups ? inSync : true)
 
   return (
     <div className="space-y-6">
@@ -862,12 +905,13 @@ export function ControlCardsForm({
 
       {/* Actions */}
       <div className="flex gap-4 items-center">
-        <Button asChild disabled={!isFormValid}>
+        <Button asChild disabled={!canGenerate}>
           <a
-            href={isFormValid ? generatePrintUrl() : '#'}
+            href={canGenerate ? generatePrintUrl() : '#'}
             target="_blank"
             rel="noopener noreferrer"
-            className={!isFormValid ? 'pointer-events-none opacity-50' : ''}
+            aria-disabled={!canGenerate}
+            className={!canGenerate ? 'pointer-events-none opacity-50' : ''}
           >
             <Printer className="h-4 w-4 mr-2" />
             Generate {cardCount} Control Card{cardCount === 1 ? '' : 's'}
@@ -883,6 +927,11 @@ export function ControlCardsForm({
         {!isFormValid && !tooManyControls && (
           <p className="text-sm text-muted-foreground self-center">
             Please fill in all organizer details and control points.
+          </p>
+        )}
+        {isFormValid && legGroups && !inSync && (
+          <p className="text-sm text-muted-foreground self-center">
+            Save your imported controls before generating cards.
           </p>
         )}
       </div>

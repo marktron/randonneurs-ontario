@@ -101,14 +101,11 @@ export default async function RegisterPage({ params }: PageProps) {
   const flecheDisplayName = isFleche
     ? `${new Date(event.date + 'T00:00:00').getFullYear()} Flèche${event.startLocation ? ` – ${event.startLocation}` : ''}`
     : null
-  const [registeredRiders, flecheTeams] = await Promise.all([
+  const [registeredRiders, flecheTeams, collection] = await Promise.all([
     isFleche ? getRegisteredRidersWithTeams(event.id) : getRegisteredRiders(event.id),
     isFleche ? getFlecheTeams(event.id) : Promise.resolve([]),
+    event.rwgpsCollectionId ? fetchRwgpsCollection(event.rwgpsCollectionId) : Promise.resolve(null),
   ])
-
-  const collection = event.rwgpsCollectionId
-    ? await fetchRwgpsCollection(event.rwgpsCollectionId)
-    : null
 
   const baseUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://randonneursontario.ca'
 

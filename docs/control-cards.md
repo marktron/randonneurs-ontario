@@ -196,6 +196,12 @@ per rider per collection member route ("leg")** instead of one card per rider.
   `leg_rwgps_id` + `leg_name` (set together or not at all —
   `event_controls_leg_pair` CHECK). `position` still orders controls globally
   across legs. Single-route events leave both NULL — zero behavior change.
+  `saveEventControls` also rejects a control list that mixes leg-tagged and
+  untagged rows within one event, before any write: `groupControlsByLeg` /
+  `buildCardLegsFromRows` are all-or-nothing, so a saved mix would silently
+  fall back to the single-route BRM-time path with wrong per-leg windows.
+  "All tagged or none" is therefore an enforced write-time invariant, not
+  just a read-time convention.
 - Import is available from both admin pages via the shared
   `CollectionLegImportDialog` (`components/admin/collection-leg-import-dialog.tsx`):
   the Import button opens a leg-selection dialog (`getEventCollectionLegs`,
@@ -221,6 +227,12 @@ true })`) — leg-event printing reads the saved `event_controls` rows, so
   instead reads the stored `event_controls` rows and builds its `CardLeg[]`
   via `buildCardLegsFromRows` (`lib/controlPoints.ts`). Because of that,
   unsaved form edits never affect leg printing; the drift warning says so.
+  For the same reason, the Generate button is disabled for leg events
+  whenever the form drifts from the saved snapshot (`controlsInSync` is
+  false) — clicking it while a save is pending or failed would otherwise
+  open a print page reading stale or blank controls. Single-route events are
+  unaffected by this gate: their print URL carries the controls directly, so
+  they stay current regardless of the saved snapshot.
   Single-route events keep the legacy `controls` param flow unchanged.
   `groupControlsByLeg` / `expandRiderLegCards` (`lib/controlPoints.ts`) drive
   grouping and rider-major expansion.

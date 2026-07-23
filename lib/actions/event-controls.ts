@@ -189,6 +189,16 @@ export async function saveEventControls(
       }
     }
 
+    // buildCardLegsFromRows (print page) and groupControlsByLeg (admin form)
+    // are both all-or-nothing: a list that mixes leg-tagged and untagged
+    // rows silently falls back to the single-route path with wrong per-leg
+    // print windows. Enforce "all tagged or none" as a write-time invariant
+    // so that state can never be persisted.
+    const isLegTagged = (c: EventControlInput) => c.legRwgpsId != null && c.legRwgpsId !== ''
+    if (controls.some(isLegTagged) && controls.some((c) => !isLegTagged(c))) {
+      return { success: false, error: 'Controls must all belong to route legs or none — not a mix' }
+    }
+
     // Once results are submitted, controls are frozen too: deleting a
     // control cascade-deletes its check-ins (FK ON DELETE CASCADE).
     const mutable = await assertEventMutable(eventId)
@@ -509,6 +519,12 @@ export async function importEventControlsFromRwgpsCollection(
       return { success: false, error: ref.error }
     }
 
+    // getEventCollectionLegs (called moments earlier to populate the leg
+    // picker) already fetched this same collection URL. Not a double
+    // network hit in practice: fetchRwgpsCollection sets
+    // `next: { revalidate: 3600 }`, so Next's fetch cache serves this call
+    // from cache for the rest of that hour. The only repeated work is this
+    // small event-route DB lookup.
     const collection = await fetchRwgpsCollection(ref.collectionId)
     if (!collection) {
       return {
