@@ -272,6 +272,22 @@ describe('createRoute', () => {
       expect(result.success).toBe(false)
       expect(result.error).toBeDefined()
     })
+
+    it('revalidates the routes cache even when the route has no chapter', async () => {
+      mockModule.__mockInsertSuccess()
+
+      const result = await createRoute({
+        name: 'Orphan Route',
+        slug: 'orphan-route',
+        chapterId: null,
+        rwgpsUrl: 'https://ridewithgps.com/routes/12345678',
+      })
+
+      expect(result.success).toBe(true)
+
+      const { revalidateTag } = await import('next/cache')
+      expect(revalidateTag).toHaveBeenCalledWith('routes', { expire: 0 })
+    })
   })
 })
 
@@ -328,6 +344,39 @@ describe('updateRoute', () => {
 
     expect(result.success).toBe(false)
     expect(result.error).toBe('A route with this slug already exists')
+  })
+
+  it('revalidates the events cache so event pages pick up route RWGPS changes', async () => {
+    mockModule.__mockRouteFound({ id: 'route-1', chapter_id: 'chapter-1', slug: 'test-route' })
+    mockModule.__mockUpdateSuccess()
+
+    const result = await updateRoute('route-1', {
+      rwgpsUrl: 'https://ridewithgps.com/routes/12345678',
+    })
+
+    expect(result.success).toBe(true)
+
+    // Event detail pages (getEventBySlug) bake the route's rwgps_id into an
+    // 'events'-tagged cache. Editing a route must bust that tag or the public
+    // event page keeps rendering the stale RWGPS embed.
+    const { revalidateTag } = await import('next/cache')
+    expect(revalidateTag).toHaveBeenCalledWith('events', { expire: 0 })
+  })
+
+  it('revalidates the routes cache even when the route has no chapter', async () => {
+    mockModule.__mockRouteFound({ id: 'route-1', chapter_id: null, slug: 'orphan-route' })
+    mockModule.__mockUpdateSuccess()
+
+    const result = await updateRoute('route-1', {
+      rwgpsUrl: 'https://ridewithgps.com/routes/12345678',
+    })
+
+    expect(result.success).toBe(true)
+
+    // chapter_id is nullable; a chapter-less route must still bust the shared
+    // 'routes' tag (getActiveRoutesWithRwgps, getRouteBySlug, etc.).
+    const { revalidateTag } = await import('next/cache')
+    expect(revalidateTag).toHaveBeenCalledWith('routes', { expire: 0 })
   })
 })
 

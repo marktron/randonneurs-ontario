@@ -452,6 +452,16 @@ Top-level cache tags used across the codebase:
 
 Dynamic tags like `event-${slug}`, `chapter-${urlSlug}`, `rider-${slug}`, and `year-${year}` provide fine-grained invalidation.
 
+**Cross-entity invalidation:** a mutation must bust every tag under which its
+data is cached, including caches owned by _other_ entities that embed it. For
+example, `getEventBySlug` (`events` tag) bakes the joined route's `rwgps_id` /
+`rwgps_collection_id` into its cached output, so route mutations in
+`lib/actions/routes.ts` bust `events` in addition to `routes` — otherwise the
+public event page (`/register/[slug]`) keeps rendering a stale RWGPS embed after
+a route edit. For the same reason, `revalidateRoutesTags` always busts the
+shared `routes`/`events` tags even when the route has no `chapter_id` (the
+chapter-scoped `chapter-${urlSlug}` bust is the only part gated on the chapter).
+
 #### Path-based revalidation
 
 `revalidatePath()` is used for specific page caches:

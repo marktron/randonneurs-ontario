@@ -23,6 +23,11 @@ async function revalidateRoutesTags(chapterId: string | null, routeSlug?: string
   // Revalidate general routes cache
   revalidateTag('routes', { expire: 0 })
 
+  // Event detail pages (getEventBySlug) bake the route's rwgps_id /
+  // rwgps_collection_id into an 'events'-tagged cache. A route edit must bust
+  // that tag too, or the public event page keeps rendering a stale RWGPS embed.
+  revalidateTag('events', { expire: 0 })
+
   if (routeSlug) {
     // Revalidate specific route cache
     revalidateTag(`route-${routeSlug}`, { expire: 0 })
@@ -113,10 +118,9 @@ export async function createRoute(data: RouteData): Promise<ActionResult> {
   // Revalidate admin pages (still use revalidatePath for admin routes)
   revalidatePath('/admin/routes')
 
-  // Revalidate cache tags for routes pages
-  if (chapterId) {
-    await revalidateRoutesTags(chapterId, slug)
-  }
+  // Revalidate cache tags for routes pages (chapterId may be null — the helper
+  // still busts the shared 'routes'/'events' tags in that case).
+  await revalidateRoutesTags(chapterId || null, slug)
 
   await logAuditEvent({
     adminId: admin.id,
@@ -197,9 +201,7 @@ export async function updateRoute(
 
   if (route) {
     const typedRoute = route as RouteWithChapterId & { slug: string }
-    if (typedRoute.chapter_id) {
-      await revalidateRoutesTags(typedRoute.chapter_id, typedRoute.slug)
-    }
+    await revalidateRoutesTags(typedRoute.chapter_id, typedRoute.slug)
   }
 
   const updatedRouteName = data.name || (route as { name: string } | null)?.name || routeId
@@ -251,9 +253,7 @@ export async function deleteRoute(routeId: string): Promise<ActionResult> {
   // Revalidate cache tags for routes pages
   if (route) {
     const typedRoute = route as RouteWithChapterId
-    if (typedRoute.chapter_id) {
-      await revalidateRoutesTags(typedRoute.chapter_id)
-    }
+    await revalidateRoutesTags(typedRoute.chapter_id)
   }
 
   await logAuditEvent({
@@ -293,9 +293,7 @@ export async function toggleRouteActive(routeId: string, isActive: boolean): Pro
 
   if (route) {
     const typedRoute = route as RouteWithChapterId & { slug: string }
-    if (typedRoute.chapter_id) {
-      await revalidateRoutesTags(typedRoute.chapter_id, typedRoute.slug)
-    }
+    await revalidateRoutesTags(typedRoute.chapter_id, typedRoute.slug)
   }
 
   const routeName = (route as { name: string } | null)?.name || routeId
@@ -403,6 +401,10 @@ export async function mergeRoutes(data: MergeRoutesData): Promise<MergeResult> {
 
     revalidatePath('/admin/routes')
     revalidatePath('/admin/events')
+
+    // Merging reassigns events to the target route and rewrites its properties,
+    // so the public routes and event caches both need busting.
+    await revalidateRoutesTags(routeData.chapterId || null, routeData.slug)
 
     await logAuditEvent({
       adminId: admin.id,
