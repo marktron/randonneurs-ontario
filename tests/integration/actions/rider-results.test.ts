@@ -390,6 +390,37 @@ describe('submitRiderResult', () => {
     // Verify update was attempted on the query builder
     expect(mockModule.__queryBuilder.update).toHaveBeenCalled()
   })
+
+  it('revalidates the results cache after a successful submission', async () => {
+    // 1. verify-token lookup on results
+    mockModule.__mockResultFound({
+      id: 'result-1',
+      event_id: 'event-1',
+      events: { status: 'completed' },
+    })
+    // 2. update succeeds
+    mockModule.__mockUpdateSuccess()
+    // 3. revalidateResultsTags fetches the event for season/chapter/event_type
+    mockModule.__mockResultFound({
+      season: 2026,
+      event_type: 'brevet',
+      chapters: null,
+    })
+
+    const result = await submitRiderResult({
+      token: 'valid-token',
+      status: 'finished',
+      finishTime: '13:30',
+    })
+
+    expect(result.success).toBe(true)
+
+    // The public results pages (getChapterResults, getRiderResults,
+    // getRouteResults) are cached under the 'results' tag. A rider's own
+    // submission must bust it or their result never appears publicly.
+    const { revalidateTag } = await import('next/cache')
+    expect(revalidateTag).toHaveBeenCalledWith('results', { expire: 0 })
+  })
 })
 
 describe('getRiderUpcomingEvents', () => {

@@ -2,6 +2,7 @@
 
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { handleSupabaseError, createActionResult, logError } from '@/lib/errors'
+import { revalidateResultsTags } from '@/lib/revalidate-results'
 import type { ActionResult } from '@/types/actions'
 import type {
   ResultForSubmission,
@@ -213,7 +214,7 @@ export async function submitRiderResult(input: SubmitResultInput): Promise<Actio
   // First, verify the token and check event status
   const { data: result, error: fetchError } = await supabase
     .from('results')
-    .select('id, events(status)')
+    .select('id, event_id, events(status)')
     .eq('submission_token', token)
     .single()
 
@@ -253,6 +254,14 @@ export async function submitRiderResult(input: SubmitResultInput): Promise<Actio
       { operation: 'submitResult' },
       'Failed to submit result'
     )
+  }
+
+  // Bust the results caches so the rider's submission appears on the public
+  // results and rider pages immediately (getChapterResults, getRiderResults,
+  // getRouteResults all carry the 'results' tag). Without this, a rider's
+  // self-submitted result stayed hidden until an admin action or TTL expiry.
+  if (typedResult.event_id) {
+    await revalidateResultsTags(typedResult.event_id)
   }
 
   return createActionResult()

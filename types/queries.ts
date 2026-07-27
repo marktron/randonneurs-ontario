@@ -555,7 +555,7 @@ export type ResultForSubmission = Pick<
 /**
  * Result with event status for validation
  */
-export type ResultWithEventStatus = Pick<Result, 'id'> & {
+export type ResultWithEventStatus = Pick<Result, 'id' | 'event_id'> & {
   events: Pick<Event, 'status'> | null
 }
 

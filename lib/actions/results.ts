@@ -3,9 +3,9 @@
 import { revalidatePath, revalidateTag } from 'next/cache'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { requireAdmin } from '@/lib/auth/get-admin'
-import { getUrlSlugFromDbSlug } from '@/lib/chapter-config'
 import { logAuditEvent } from '@/lib/audit-log'
 import { handleSupabaseError, createActionResult } from '@/lib/errors'
+import { revalidateResultsTags } from '@/lib/revalidate-results'
 import type { ActionResult } from '@/types/actions'
 import { getMembershipForRider, isTrialUsed } from '@/lib/memberships/service'
 import type {
@@ -13,49 +13,7 @@ import type {
   ResultInsert,
   ResultUpdate,
   ResultWithEventId,
-  EventForResultsRevalidation,
 } from '@/types/queries'
-
-// Helper to revalidate cache tags for results pages
-async function revalidateResultsTags(eventId: string) {
-  // Get event info including season, chapter, and event_type.
-  // event_type matters because permanent/fleche results pages are queried by
-  // event_type (not chapter), so they live at /results/{year}/permanent and
-  // /results/{year}/fleche regardless of which chapter owns the event row.
-  const { data: event } = await getSupabaseAdmin()
-    .from('events')
-    .select('season, event_type, chapters (slug)')
-    .eq('id', eventId)
-    .single()
-
-  if (event) {
-    const typedEvent = event as EventForResultsRevalidation
-    // Revalidate general results cache. { expire: 0 } forces immediate
-    // path revalidation; passing a named profile like 'max' only schedules a
-    // background refresh and leaves stale pages served in the meantime.
-    revalidateTag('results', { expire: 0 })
-
-    if (typedEvent.season) {
-      // Year-specific cache spans all chapters for the season.
-      revalidateTag(`year-${typedEvent.season}`, { expire: 0 })
-
-      if (typedEvent.chapters?.slug) {
-        const urlSlug = getUrlSlugFromDbSlug(typedEvent.chapters.slug)
-        if (urlSlug) {
-          revalidateTag(`chapter-${urlSlug}`, { expire: 0 })
-          revalidatePath(`/results/${typedEvent.season}/${urlSlug}`)
-        }
-      }
-
-      // Permanent/fleche results pages are grouped by event_type, not chapter,
-      // so they need their own path revalidation.
-      if (typedEvent.event_type === 'permanent' || typedEvent.event_type === 'fleche') {
-        revalidateTag(`chapter-${typedEvent.event_type}`, { expire: 0 })
-        revalidatePath(`/results/${typedEvent.season}/${typedEvent.event_type}`)
-      }
-    }
-  }
-}
 
 export type ResultStatus = 'pending' | 'finished' | 'dnf' | 'dns' | 'otl' | 'dq'
 

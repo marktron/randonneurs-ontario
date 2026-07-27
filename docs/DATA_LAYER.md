@@ -260,6 +260,8 @@ export async function updateRegistrationTeamName(
 
 These actions support the rider self-service result submission flow. They use a token-based authentication system, where each result has a unique `submission_token` that is emailed to the rider after an event is completed.
 
+`submitRiderResult` busts the results caches via the shared `revalidateResultsTags` helper (`lib/revalidate-results.ts`) — the same helper the admin results actions use, so the two write paths can never drift on which tags a results change invalidates. The file-upload actions (`confirmResultUpload`, `deleteResultFile`) deliberately do **not** revalidate: the GPX/control-card fields they mutate are not selected by any public cached read (`lib/data/results.ts`, `lib/data/routes.ts`) and are only shown in the admin.
+
 ```typescript
 // Get result data by submission token (for result submission form)
 export async function getResultByToken(token: string): Promise<ActionResult<ResultSubmissionData>>
