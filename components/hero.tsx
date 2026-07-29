@@ -2,7 +2,7 @@
 
 import Image from 'next/image'
 import Link from 'next/link'
-import { useCallback, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import useEmblaCarousel from 'embla-carousel-react'
 import Autoplay from 'embla-carousel-autoplay'
 import Fade from 'embla-carousel-fade'
@@ -17,23 +17,19 @@ export function Hero({ images }: HeroProps) {
   // Pick a random starting slide on each load so the carousel doesn't always
   // open on the same image. A lazy initializer keeps this out of the rendered
   // markup (the DOM slide order is unchanged), so there's no hydration
-  // mismatch — embla just applies the start position client-side on mount.
+  // mismatch. Embla always mounts on slide 0 — matching what the server
+  // already rendered, so it's visible (and eligible as the LCP element)
+  // without waiting on JS — and then crossfades to this random slide once
+  // ready, reusing the same Fade-plugin transition as autoplay.
   const [startIndex] = useState(() =>
     images.length > 0 ? Math.floor(Math.random() * images.length) : 0
   )
   const [selectedIndex, setSelectedIndex] = useState(0)
-  // Slides render in fixed DOM order, so the first paint would show slide 0
-  // before embla scrolls to the random start — a visible flash. Keep the
-  // carousel hidden until embla has initialized on its start slide, then fade
-  // it in. SSR and the first client render both start hidden, so there's no
-  // hydration mismatch.
-  const [isReady, setIsReady] = useState(false)
 
   const [emblaRef, emblaApi] = useEmblaCarousel(
     {
       loop: true,
       duration: 40,
-      startIndex,
     },
     [
       Autoplay({
@@ -45,34 +41,26 @@ export function Hero({ images }: HeroProps) {
     ]
   )
 
-  const onSelect = useCallback(() => {
-    if (!emblaApi) return
-    setSelectedIndex(emblaApi.selectedScrollSnap())
-  }, [emblaApi])
-
   useEffect(() => {
     if (!emblaApi) return
+    const onSelect = () => setSelectedIndex(emblaApi.selectedScrollSnap())
     onSelect()
-    // embla has applied the start slide (and Fade's per-slide opacity) by now,
-    // so it's safe to reveal the carousel without flashing slide 0.
-    setIsReady(true)
     emblaApi.on('select', onSelect)
+    // Crossfade from the server-rendered first slide to the randomized start
+    // slide, rather than snapping to it instantly.
+    if (startIndex !== 0) {
+      emblaApi.scrollTo(startIndex)
+    }
     return () => {
       emblaApi.off('select', onSelect)
     }
-  }, [emblaApi, onSelect])
+  }, [emblaApi, startIndex])
 
   return (
     <section className="relative">
       {/* Hero Carousel - Full bleed */}
       <div className="relative h-[40vh] min-h-[250px] md:h-[60vh] md:min-h-[400px] lg:h-[70vh] lg:min-h-[500px] w-full overflow-hidden bg-muted">
-        <div
-          ref={emblaRef}
-          className={cn(
-            'h-full overflow-hidden transition-opacity duration-700',
-            isReady ? 'opacity-100' : 'opacity-0'
-          )}
-        >
+        <div ref={emblaRef} className="h-full overflow-hidden">
           <div className="flex h-full">
             {images.map((image, index) => (
               <div key={image.src} className="relative h-full min-w-0 flex-[0_0_100%]">
@@ -87,7 +75,7 @@ export function Hero({ images }: HeroProps) {
                     alt={image.alt}
                     fill
                     className="object-cover editorial-image"
-                    priority={index === startIndex}
+                    priority={index === 0}
                     sizes="100vw"
                   />
                 </div>

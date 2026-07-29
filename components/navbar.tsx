@@ -31,11 +31,13 @@ export function Navbar({ items }: NavbarProps) {
         {/* Logo */}
         <Link href="/" className="flex items-center gap-3">
           <Image
-            src="/logo.png"
+            src="/logo.svg"
             alt="Randonneurs Ontario"
-            width={160}
-            height={113}
+            width={157}
+            height={107}
             className="h-10 w-auto"
+            // SVG: served as-is; next/image won't optimize vector sources
+            unoptimized
           />
           <span className="hidden font-serif font-medium text-lg tracking-tight sm:inline-block">
             Randonneurs Ontario
@@ -136,7 +138,12 @@ function NavChildItem({ item }: { item: NavItem }) {
   if (item.external) {
     return (
       <li>
-        <a href={item.href} target="_blank" rel="noopener noreferrer" className={dropdownLinkStyles}>
+        <a
+          href={item.href}
+          target="_blank"
+          rel="noopener noreferrer"
+          className={dropdownLinkStyles}
+        >
           {item.label}
         </a>
       </li>

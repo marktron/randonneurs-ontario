@@ -5,6 +5,7 @@ import { PageHero } from '@/components/page-hero'
 import { getRouteBySlug, getRouteResults, getChapterInfo } from '@/lib/data/routes'
 import { buildRwgpsCollectionUrl } from '@/lib/rwgps'
 import { AwardBadge } from '@/components/award-badge'
+import { BreadcrumbJsonLd } from '@/components/structured-data'
 
 interface PageProps {
   params: Promise<{ chapter: string; slug: string }>
@@ -54,6 +55,14 @@ export default async function RouteDetailPage({ params }: PageProps) {
 
   return (
     <PageShell>
+      <BreadcrumbJsonLd
+        items={[
+          { name: 'Home', href: '/' },
+          { name: 'Routes', href: '/routes' },
+          { name: chapterInfo.name, href: `/routes/${chapter}` },
+          { name: route.name, href: `/routes/${chapter}/${slug}` },
+        ]}
+      />
       {/* Header */}
       <PageHero
         image={chapterInfo.coverImage}

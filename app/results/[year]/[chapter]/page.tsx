@@ -6,6 +6,7 @@ import {
   getAvailableYears,
   getAllChaptersWithYears,
 } from '@/lib/data/results'
+import { BreadcrumbJsonLd } from '@/components/structured-data'
 
 // Revalidate every hour - results don't change frequently
 export const revalidate = 3600
@@ -66,14 +67,23 @@ export default async function ChapterResultsPage({ params }: ResultsPageParams) 
   }
 
   return (
-    <ResultsPage
-      chapter={meta.name}
-      chapterSlug={chapter}
-      year={yearNum}
-      description={meta.description}
-      coverImage={meta.coverImage}
-      events={events}
-      availableYears={availableYears}
-    />
+    <>
+      <BreadcrumbJsonLd
+        items={[
+          { name: 'Home', href: '/' },
+          { name: 'Results', href: '/results' },
+          { name: `${yearNum} ${meta.name}`, href: `/results/${yearNum}/${chapter}` },
+        ]}
+      />
+      <ResultsPage
+        chapter={meta.name}
+        chapterSlug={chapter}
+        year={yearNum}
+        description={meta.description}
+        coverImage={meta.coverImage}
+        events={events}
+        availableYears={availableYears}
+      />
+    </>
   )
 }

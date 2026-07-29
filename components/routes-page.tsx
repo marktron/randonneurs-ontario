@@ -32,7 +32,12 @@ export function RoutesPage({
 }: RoutesPageProps) {
   return (
     <PageShell>
-      <PageHero image={coverImage} eyebrow="Routes" title={chapter} description={description} />
+      <PageHero
+        image={coverImage}
+        eyebrow="Routes"
+        title={`${chapter} Chapter Routes`}
+        description={description}
+      />
       <div className="content-container py-16 md:py-20">
         <div className="space-y-16">
           {collections.map((collection) => (

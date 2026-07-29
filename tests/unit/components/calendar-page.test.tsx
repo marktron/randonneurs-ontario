@@ -101,6 +101,18 @@ describe('CalendarPage', () => {
     localStorage.clear()
   })
 
+  it('defaults the hero h1 to the chapter name when no title override is given', () => {
+    render(<CalendarPage {...defaultProps} />)
+
+    expect(screen.getByTestId('page-hero')).toHaveTextContent('Toronto')
+  })
+
+  it('uses the title override for the hero h1 when provided', () => {
+    render(<CalendarPage {...defaultProps} title="Toronto Chapter Ride Calendar" />)
+
+    expect(screen.getByTestId('page-hero')).toHaveTextContent('Toronto Chapter Ride Calendar')
+  })
+
   it('renders the distance filter dropdown', () => {
     render(<CalendarPage {...defaultProps} />)
 
