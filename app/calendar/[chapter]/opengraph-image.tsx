@@ -4,6 +4,7 @@ import { createOgImageResponse, resolvePublicImage, size } from '@/lib/og/og-lay
 export const runtime = 'nodejs'
 export { size }
 export const contentType = 'image/png'
+export const alt = 'Randonneurs Ontario — Event Calendar'
 
 export default async function Image({ params }: { params: Promise<{ chapter: string }> }) {
   const { chapter } = await params

@@ -19,13 +19,32 @@ import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { EventJsonLd } from '@/components/structured-data'
 import { formatRideName } from '@/lib/events/format'
+import { SITE_URL } from '@/lib/site-url'
 
 interface PageProps {
   params: Promise<{ slug: string }>
 }
 
-// Always render fresh - registered riders list changes frequently
-export const dynamic = 'force-dynamic'
+/**
+ * Cached (ISR) rather than force-dynamic: these event pages are the site's most
+ * crawled content, and every read here previously cost a full SSR + DB round
+ * trip. Freshness comes from tag invalidation, not from re-rendering — every
+ * mutation that changes what this page shows busts `registrations` / `events` /
+ * `event-${slug}` (see docs/DATA_LAYER.md → "Caching & Revalidation"):
+ *
+ * - registerForEvent / registerForPermanent / registerFlecheTeam (lib/actions/register.ts)
+ * - cancelRegistration (lib/actions/manage-registration.ts)
+ * - addRegistration / adminCancelRegistration / updateRegistrationTeamName /
+ *   revalidateMembership (lib/actions/results.ts)
+ * - rider profile + hidden-rider edits (lib/actions/riders.ts), which change the
+ *   displayed names / share_registration
+ * - event and route edits (lib/actions/events.ts, lib/actions/routes.ts)
+ *
+ * The one-hour window is only a backstop for writes that bypass the actions
+ * entirely (direct Supabase edits — see /api/revalidate). The RWGPS collection
+ * fetch does its own `next: { revalidate: 3600 }` caching in lib/rwgps.ts.
+ */
+export const revalidate = 3600
 
 // Generate metadata for each event
 export async function generateMetadata({ params }: PageProps) {
@@ -107,7 +126,7 @@ export default async function RegisterPage({ params }: PageProps) {
     event.rwgpsCollectionId ? fetchRwgpsCollection(event.rwgpsCollectionId) : Promise.resolve(null),
   ])
 
-  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://randonneursontario.ca'
+  const baseUrl = SITE_URL
 
   return (
     <PageShell>

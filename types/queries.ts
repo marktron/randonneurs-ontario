@@ -150,7 +150,7 @@ export type RouteWithChapter = Route & {
  */
 export type RouteWithChapterName = Pick<
   Route,
-  'id' | 'name' | 'slug' | 'distance_km' | 'chapter_id'
+  'id' | 'name' | 'slug' | 'distance_km' | 'chapter_id' | 'updated_at'
 > & {
   chapters: Pick<Chapter, 'name'> | null
 }
@@ -173,7 +173,7 @@ export type ChapterId = Pick<Chapter, 'id'>
 /**
  * Event with just slug (for static generation)
  */
-export type EventSlug = Pick<Event, 'slug'>
+export type EventSlug = Pick<Event, 'slug' | 'updated_at'>
 
 /**
  * Event with season and results for year queries

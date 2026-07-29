@@ -26,6 +26,14 @@ const nextConfig: NextConfig = {
   },
   redirects: async () => [
     {
+      // register.randonneursontario.ca predates the site handling more than
+      // registration; www is the canonical host for SEO.
+      source: '/:path*',
+      has: [{ type: 'host', value: 'register.randonneursontario.ca' }],
+      destination: 'https://www.randonneursontario.ca/:path*',
+      permanent: true,
+    },
+    {
       source: '/registration',
       destination: '/calendar',
       permanent: true,

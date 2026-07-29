@@ -1,4 +1,4 @@
-const baseUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://randonneursontario.ca'
+import { SITE_URL as baseUrl } from '@/lib/site-url'
 
 export const dynamic = 'force-static'
 

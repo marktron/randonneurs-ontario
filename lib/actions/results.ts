@@ -136,12 +136,24 @@ export async function addRegistration(data: AddRegistrationData): Promise<Action
 
   revalidatePath(`/admin/events/${eventId}`)
 
-  // Look up names for audit log
+  // Look up names for the audit log (the slug also drives cache invalidation)
   const [{ data: eventData }, { data: riderData }] = await Promise.all([
-    getSupabaseAdmin().from('events').select('name').eq('id', eventId).single(),
+    getSupabaseAdmin().from('events').select('name, slug').eq('id', eventId).single(),
     getSupabaseAdmin().from('riders').select('first_name, last_name').eq('id', riderId).single(),
   ])
-  const eventName = (eventData as { name: string } | null)?.name || eventId
+  const typedEventData = eventData as { name: string; slug: string } | null
+  const eventName = typedEventData?.name || eventId
+
+  // The public event page (/register/[slug]) is cached and invalidated by tag,
+  // so an admin-added registration has to bust the same tags the rider-facing
+  // registration flow does (lib/actions/register.ts) — otherwise the new rider
+  // is missing from the "Registered" list until the ISR window expires.
+  revalidateTag('registrations', { expire: 0 })
+  revalidateTag('events', { expire: 0 }) // chapter calendar registration counts
+  if (typedEventData?.slug) {
+    revalidateTag(`event-${typedEventData.slug}`, { expire: 0 })
+    revalidatePath(`/register/${typedEventData.slug}`)
+  }
   const riderName = riderData
     ? `${(riderData as { first_name: string; last_name: string }).first_name} ${(riderData as { first_name: string; last_name: string }).last_name}`
     : riderId

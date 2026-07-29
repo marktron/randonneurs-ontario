@@ -79,7 +79,7 @@ export function ResultsPage({
       <PageHero
         image={coverImage}
         eyebrow="Season Results"
-        title={chapter}
+        title={`${chapter} Chapter ${year} Results`}
         description={description}
       />
 

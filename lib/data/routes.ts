@@ -330,6 +330,10 @@ export interface ActiveRoute {
   distanceKm: number | null
   chapterId: string | null
   chapterName: string | null
+  // Optional (rather than required) so existing ActiveRoute/ActiveRouteWithRwgps
+  // fixtures elsewhere in the codebase don't need updating just because the
+  // sitemap started reading this field.
+  updatedAt?: string | null
 }
 
 const getActiveRoutesInner = cache(async (): Promise<ActiveRoute[]> => {
@@ -342,6 +346,7 @@ const getActiveRoutesInner = cache(async (): Promise<ActiveRoute[]> => {
       slug,
       distance_km,
       chapter_id,
+      updated_at,
       chapters (name)
     `
     )
@@ -363,6 +368,7 @@ const getActiveRoutesInner = cache(async (): Promise<ActiveRoute[]> => {
     distanceKm: route.distance_km,
     chapterId: route.chapter_id,
     chapterName: route.chapters?.name ?? null,
+    updatedAt: route.updated_at,
   }))
 })
 

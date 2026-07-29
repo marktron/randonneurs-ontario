@@ -5,6 +5,7 @@ export const runtime = 'nodejs'
 export const revalidate = 3600
 export { size }
 export const contentType = 'image/png'
+export const alt = 'Randonneurs Ontario — Event Registration'
 
 function formatDate(dateString: string): string {
   const date = new Date(dateString + 'T00:00:00')

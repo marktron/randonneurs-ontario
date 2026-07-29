@@ -14,9 +14,24 @@ const queryCalls: { method: string; args: unknown[] }[] = []
 
 // Mock rider data
 const mockRiderData = [
-  { slug: 'bob-anderson', first_name: 'Bob', last_name: 'Anderson' },
-  { slug: 'alice-brown', first_name: 'Alice', last_name: 'Brown' },
-  { slug: 'john-smith', first_name: 'John', last_name: 'Smith' },
+  {
+    slug: 'bob-anderson',
+    first_name: 'Bob',
+    last_name: 'Anderson',
+    updated_at: '2026-01-01T00:00:00Z',
+  },
+  {
+    slug: 'alice-brown',
+    first_name: 'Alice',
+    last_name: 'Brown',
+    updated_at: '2026-01-02T00:00:00Z',
+  },
+  {
+    slug: 'john-smith',
+    first_name: 'John',
+    last_name: 'Smith',
+    updated_at: '2026-01-03T00:00:00Z',
+  },
 ]
 
 // Create a chainable mock that tracks all method calls
@@ -74,7 +89,7 @@ describe('Riders Data Layer', () => {
 
       const selectCall = queryCalls.find((c) => c.method === 'select')
       expect(selectCall).toBeDefined()
-      expect(selectCall?.args[0]).toBe('slug, first_name, last_name')
+      expect(selectCall?.args[0]).toBe('slug, first_name, last_name, updated_at')
     })
 
     it('orders by last_name then first_name ascending', async () => {
@@ -100,6 +115,7 @@ describe('Riders Data Layer', () => {
         slug: 'bob-anderson',
         firstName: 'Bob',
         lastName: 'Anderson',
+        updatedAt: '2026-01-01T00:00:00Z',
       })
     })
 

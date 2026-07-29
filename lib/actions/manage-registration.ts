@@ -6,6 +6,7 @@ import { createTorontoDate } from '@/lib/brmTimes'
 import { isDigitalCardEventType } from '@/lib/brevet-card'
 import { sendCancellationConfirmationEmail } from '@/lib/email/send-registration-email'
 import { createActionResult, handleActionError, handleSupabaseError, logError } from '@/lib/errors'
+import { SITE_URL } from '@/lib/site-url'
 import { parseISO } from 'date-fns'
 import type { ActionResult } from '@/types/actions'
 import type { ResultInsert } from '@/types/queries'
@@ -237,7 +238,7 @@ export async function cancelRegistration(token: string): Promise<ActionResult> {
 
     // Send cancellation email (fire-and-forget)
     if (reg.riders.email) {
-      const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://randonneursontario.ca'
+      const baseUrl = SITE_URL
       const riderName = `${reg.riders.first_name} ${reg.riders.last_name}`
       sendCancellationConfirmationEmail({
         registrantName: riderName,

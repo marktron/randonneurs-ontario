@@ -12,6 +12,7 @@ import {
   createTorontoDate,
 } from '@/lib/brmTimes'
 import { buildCardLegsFromRows, type ControlRowForLegs } from '@/lib/controlPoints'
+import { SITE_URL } from '@/lib/site-url'
 import type {
   ControlPoint,
   CardRider,
@@ -206,7 +207,7 @@ export default async function PrintPage({ params, searchParams }: PrintPageProps
 
   // Format riders - if no registrations, create two blank entries
   // Also add any extra blank cards requested
-  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://randonneursontario.ca'
+  const baseUrl = SITE_URL
   const registeredRiderIds = selectedRegistrations.filter((r) => r.riders).map((r) => r.riders!.id)
   const firstTimeRiderIdSet = new Set(await getFirstTimeRiderIds(id, registeredRiderIds))
   const registeredRiders: CardRider[] = selectedRegistrations

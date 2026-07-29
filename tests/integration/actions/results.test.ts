@@ -521,6 +521,41 @@ describe('addRegistration', () => {
     expect(result.success).toBe(false)
     expect(result.error).toBeDefined()
   })
+
+  // /register/[slug] is cached (ISR + tags), so an admin-added registration must
+  // bust the same tags the public registration flow does — otherwise the rider
+  // never shows up in the "Registered" list until the hourly revalidate.
+  it('busts the registration and event caches so the public event page updates', async () => {
+    mockModule.__mockNoExistingResult()
+    mockModule.__mockInsertSuccess()
+    // Post-insert lookups: event first, then rider (for the audit log).
+    mockModule.__mockResultFound({ name: 'Spring 200', slug: 'spring-200' })
+    mockModule.__mockResultFound({ first_name: 'Ada', last_name: 'Lovelace' })
+
+    const result = await addRegistration({
+      eventId: 'event-1',
+      riderId: 'rider-1',
+    })
+
+    expect(result.success).toBe(true)
+
+    const { revalidateTag, revalidatePath } = await import('next/cache')
+    const calls = vi.mocked(revalidateTag).mock.calls
+
+    const registrationsCall = calls.find((c) => c[0] === 'registrations')
+    expect(registrationsCall, 'revalidateTag was not called with "registrations"').toBeDefined()
+    expect(registrationsCall![1]).toEqual({ expire: 0 })
+
+    const eventsCall = calls.find((c) => c[0] === 'events')
+    expect(eventsCall, 'revalidateTag was not called with "events"').toBeDefined()
+    expect(eventsCall![1]).toEqual({ expire: 0 })
+
+    const eventSlugCall = calls.find((c) => c[0] === 'event-spring-200')
+    expect(eventSlugCall, 'revalidateTag was not called with "event-spring-200"').toBeDefined()
+    expect(eventSlugCall![1]).toEqual({ expire: 0 })
+
+    expect(revalidatePath).toHaveBeenCalledWith('/register/spring-200')
+  })
 })
 
 describe('createBulkResults', () => {

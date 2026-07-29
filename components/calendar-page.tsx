@@ -86,6 +86,8 @@ export interface CalendarPageProps {
   description: string
   coverImage?: string
   events: Event[]
+  /** Overrides the hero h1 text. Defaults to `chapter` for backward compatibility. */
+  title?: string
 }
 
 export function CalendarPage({
@@ -94,6 +96,7 @@ export function CalendarPage({
   description,
   coverImage,
   events,
+  title,
 }: CalendarPageProps) {
   const router = useRouter()
   const [distanceFilter, setDistanceFilter] = useState<DistanceFilter>('all')
@@ -121,7 +124,7 @@ export function CalendarPage({
       <PageHero
         image={coverImage}
         eyebrow="2026 Season"
-        title={chapter}
+        title={title ?? chapter}
         description={description}
       />
       <div className="content-container pt-6 pb-16 md:pt-10 md:pb-20">

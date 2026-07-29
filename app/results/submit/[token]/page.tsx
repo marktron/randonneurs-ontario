@@ -17,6 +17,7 @@ export async function generateMetadata({ params }: PageProps) {
   if (!result.success || !result.data) {
     return {
       title: 'Submit Result',
+      robots: { index: false, follow: false },
     }
   }
 
@@ -24,6 +25,7 @@ export async function generateMetadata({ params }: PageProps) {
   return {
     title: `Submit Result: ${rideName}`,
     description: `Submit your result for the ${rideName} event.`,
+    robots: { index: false, follow: false },
   }
 }
 

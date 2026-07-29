@@ -3,6 +3,7 @@ import { Noto_Sans, Noto_Serif } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
 import { AuthRedirectHandler } from '@/components/auth-redirect-handler'
 import { OrganizationJsonLd } from '@/components/structured-data'
+import { SITE_URL } from '@/lib/site-url'
 import './globals.css'
 
 // `axes: ['wdth']` opts into the variable font's width axis so that
@@ -21,7 +22,12 @@ const notoSerif = Noto_Serif({
 })
 
 export const metadata: Metadata = {
-  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000'),
+  metadataBase: new URL(SITE_URL),
+  // Relative canonical resolves against the current route, so every page
+  // gets a self-referencing canonical on the canonical host.
+  alternates: {
+    canonical: './',
+  },
   title: {
     default: 'Randonneurs Ontario',
     template: '%s | Randonneurs Ontario',
@@ -66,9 +72,7 @@ export default function RootLayout({
         <link rel="help" type="text/markdown" href="/llms.txt" />
       </head>
       <body>
-        <OrganizationJsonLd
-          baseUrl={process.env.NEXT_PUBLIC_SITE_URL ?? 'https://randonneursontario.ca'}
-        />
+        <OrganizationJsonLd baseUrl={SITE_URL} />
         <AuthRedirectHandler />
         {children}
         <Analytics />

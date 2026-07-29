@@ -10,6 +10,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { SITE_URL } from '@/lib/site-url'
 
 interface CalendarSubscribeButtonProps {
   chapter: string
@@ -27,8 +28,7 @@ export function CalendarSubscribeButton({
   // Build the calendar feed URL using the configured site URL
   // Using NEXT_PUBLIC_SITE_URL consistently avoids hydration mismatches
   const feedPath = `/api/calendar/${chapter}.ics`
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://randonneurs.to'
-  const feedUrl = `${siteUrl}${feedPath}`
+  const feedUrl = `${SITE_URL}${feedPath}`
 
   // webcal:// protocol for native calendar apps
   const webcalUrl = feedUrl.replace(/^https?:/, 'webcal:')

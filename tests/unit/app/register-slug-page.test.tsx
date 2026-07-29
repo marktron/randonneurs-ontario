@@ -4,7 +4,7 @@
 
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
-import RegisterPage from '@/app/register/[slug]/page'
+import RegisterPage, * as registerPageModule from '@/app/register/[slug]/page'
 
 const mockGetEventBySlug = vi.fn()
 const mockGetRegisteredRiders = vi.fn().mockResolvedValue([])
@@ -67,6 +67,18 @@ vi.mock('next/link', () => ({
     </a>
   ),
 }))
+
+describe('RegisterPage /register/[slug] — route config', () => {
+  // The page is the site's most-crawled content: it must stay cached and rely
+  // on tag invalidation (registrations / events / event-${slug}) for freshness,
+  // with the hourly window as a backstop. Reverting to force-dynamic would make
+  // every crawl a full SSR again.
+  it('renders with ISR rather than force-dynamic', () => {
+    const config = registerPageModule as Record<string, unknown>
+    expect(config.revalidate).toBe(3600)
+    expect(config.dynamic).toBeUndefined()
+  })
+})
 
 describe('RegisterPage /register/[slug] — cancelled event', () => {
   it('renders the cancelled banner, hides RegisterCTA, and shows the description', async () => {

@@ -17,11 +17,12 @@ export async function generateMetadata({ params }: PageProps) {
   const data = await getRegistrationByToken(token)
 
   if (!data) {
-    return { title: 'Registration Not Found' }
+    return { title: 'Registration Not Found', robots: { index: false, follow: false } }
   }
 
   return {
     title: `Manage Registration: ${formatRideName(data.event.name, data.event.distance_km)}`,
+    robots: { index: false, follow: false },
   }
 }
 

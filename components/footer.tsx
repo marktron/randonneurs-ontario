@@ -26,13 +26,81 @@ function StravaIcon({ className }: { className?: string }) {
   )
 }
 
+/**
+ * Plain-href sitemap rendered on every page.
+ *
+ * The navbar's links live inside Radix `NavigationMenuContent` (desktop) and a
+ * `Sheet` (mobile), neither of which mounts its children until the user opens
+ * it -- so those hrefs never appear in the server HTML. These footer links are
+ * the crawlable path to every main section of the site.
+ */
+const footerSections: { title: string; links: { label: string; href: string }[] }[] = [
+  {
+    title: 'Ride',
+    links: [
+      { label: 'Calendar', href: '/calendar' },
+      { label: 'Routes', href: '/routes' },
+      { label: 'Permanents', href: '/calendar/permanents' },
+      { label: 'Register a Permanent', href: '/register/permanent' },
+      { label: 'Live Tracking', href: '/live-tracking' },
+    ],
+  },
+  {
+    title: 'Results',
+    links: [
+      { label: 'Results', href: '/results' },
+      { label: 'Rider Directory', href: '/riders' },
+      { label: 'Records', href: '/records' },
+      { label: 'Awards', href: '/awards' },
+    ],
+  },
+  {
+    title: 'Club',
+    links: [
+      { label: 'About Us', href: '/about' },
+      { label: 'What is Randonneuring?', href: '/intro' },
+      { label: 'Membership', href: '/membership' },
+      { label: 'Contact', href: '/contact' },
+      { label: 'Club Policies', href: '/policies' },
+      { label: 'News', href: '/news' },
+      { label: 'Mailing List', href: '/mailing-list' },
+    ],
+  },
+]
+
 export function Footer() {
   const currentYear = new Date().getFullYear()
 
   return (
     <footer className="border-t border-border bg-muted/30">
       <div className="mx-auto max-w-7xl px-6 py-12">
-        <div className="flex flex-col items-center gap-6 sm:flex-row sm:justify-between">
+        {/* Site sections */}
+        <nav
+          aria-label="Footer"
+          className="grid grid-cols-2 gap-x-8 gap-y-10 sm:grid-cols-3 lg:max-w-3xl"
+        >
+          {footerSections.map((section) => (
+            <div key={section.title}>
+              <h2 className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
+                {section.title}
+              </h2>
+              <ul className="mt-4 space-y-2.5">
+                {section.links.map((link) => (
+                  <li key={link.href}>
+                    <Link
+                      href={link.href}
+                      className="text-sm text-muted-foreground hover:text-foreground hover:underline underline-offset-4 transition-colors"
+                    >
+                      {link.label}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </nav>
+
+        <div className="mt-12 flex flex-col items-center gap-6 border-t border-border pt-8 sm:flex-row sm:justify-between">
           {/* Copyright */}
           <div className="text-sm text-muted-foreground">
             <p>&copy; {currentYear} Randonneurs Ontario. All rights reserved.</p>

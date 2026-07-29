@@ -1,13 +1,11 @@
 import { sendEmail, fromEmail, isEmailConfigured } from '@/lib/email/ses'
 import { getVpEmail } from '@/lib/email/vp-emails'
 import type { EventForSubmissionEmail } from '@/lib/email/send-result-submission-email'
-
-/** Fallback base URL when `NEXT_PUBLIC_SITE_URL` isn't set. */
-const DEFAULT_SITE_URL = 'https://randonneursontario.ca'
+import { SITE_URL } from '@/lib/site-url'
 
 /** Base URL for submission links, e.g. `${resolveSiteBaseUrl()}/results/submit/{token}`. */
 export function resolveSiteBaseUrl(): string {
-  return process.env.NEXT_PUBLIC_SITE_URL || DEFAULT_SITE_URL
+  return SITE_URL
 }
 
 /**

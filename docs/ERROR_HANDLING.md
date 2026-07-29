@@ -343,7 +343,7 @@ benign, unactionable browser noise and carries an inline rationale.
 
 One such pattern is `/^Connection closed\.$/` (Sentry issue
 `JAVASCRIPT-NEXTJS-28`). Pages marked `export const dynamic = 'force-dynamic'`
-(e.g. `app/register/[slug]/page.tsx`) stream their React Server Component
+(e.g. `app/registration/manage/[token]/page.tsx`) stream their React Server Component
 (Flight) response to the browser. When the browser aborts that stream mid-load
 — the user navigates away, closes the tab, or hits a flaky connection — React's
 client runtime reports `Error: Connection closed.`. It is handled, has zero user

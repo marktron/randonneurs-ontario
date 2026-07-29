@@ -37,7 +37,7 @@ describe('GET /llms.txt', () => {
   it('uses the configured base URL', async () => {
     const response = getLlmsTxt()
     const body = await response.text()
-    expect(body).toContain('https://randonneursontario.ca')
+    expect(body).toContain('https://www.randonneursontario.ca')
   })
 })
 

@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation'
 import { RoutesPage } from '@/components/routes-page'
 import { getRoutesByChapter, getChapterInfo, getAllChapterSlugs } from '@/lib/data/routes'
+import { BreadcrumbJsonLd } from '@/components/structured-data'
 
 interface PageProps {
   params: Promise<{ chapter: string }>
@@ -39,12 +40,21 @@ export default async function ChapterRoutesPage({ params }: PageProps) {
   const collections = await getRoutesByChapter(chapter)
 
   return (
-    <RoutesPage
-      chapter={chapterInfo.name}
-      chapterSlug={chapter}
-      description={chapterInfo.description}
-      coverImage={chapterInfo.coverImage}
-      collections={collections}
-    />
+    <>
+      <BreadcrumbJsonLd
+        items={[
+          { name: 'Home', href: '/' },
+          { name: 'Routes', href: '/routes' },
+          { name: chapterInfo.name, href: `/routes/${chapter}` },
+        ]}
+      />
+      <RoutesPage
+        chapter={chapterInfo.name}
+        chapterSlug={chapter}
+        description={chapterInfo.description}
+        coverImage={chapterInfo.coverImage}
+        collections={collections}
+      />
+    </>
   )
 }

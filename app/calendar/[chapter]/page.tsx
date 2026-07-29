@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation'
 import { CalendarPage } from '@/components/calendar-page'
 import { getEventsByChapter, getChapterInfo, getAllChapterSlugs } from '@/lib/data/events'
+import { BreadcrumbJsonLd } from '@/components/structured-data'
 
 interface PageProps {
   params: Promise<{ chapter: string }>
@@ -41,12 +42,22 @@ export default async function ChapterCalendarPage({ params }: PageProps) {
   const events = await getEventsByChapter(chapter)
 
   return (
-    <CalendarPage
-      chapter={chapterInfo.name}
-      chapterSlug={chapter}
-      description={chapterInfo.description}
-      coverImage={chapterInfo.coverImage}
-      events={events}
-    />
+    <>
+      <BreadcrumbJsonLd
+        items={[
+          { name: 'Home', href: '/' },
+          { name: 'Calendar', href: '/calendar' },
+          { name: chapterInfo.name, href: `/calendar/${chapter}` },
+        ]}
+      />
+      <CalendarPage
+        chapter={chapterInfo.name}
+        chapterSlug={chapter}
+        description={chapterInfo.description}
+        coverImage={chapterInfo.coverImage}
+        events={events}
+        title={`${chapterInfo.name} Chapter Ride Calendar`}
+      />
+    </>
   )
 }
