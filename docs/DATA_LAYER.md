@@ -464,6 +464,33 @@ a route edit. For the same reason, `revalidateRoutesTags` always busts the
 shared `routes`/`events` tags even when the route has no `chapter_id` (the
 chapter-scoped `chapter-${urlSlug}` bust is the only part gated on the chapter).
 
+#### Page rendering strategy
+
+Public pages render with ISR (`export const revalidate = 3600`) and stay fresh
+through tag invalidation; the time window is only a backstop for writes that
+bypass the server actions (direct Supabase edits, post-deploy). `force-dynamic`
+is reserved for genuinely per-request pages — the token-gated ones
+(`/registration/manage/[token]`, `/results/submit/[token]`, `/card/[token]`).
+
+`/register/[slug]` is the site's most-crawled page and is cached on this model.
+Its reads are `getEventBySlug` (`events`, `event-${slug}`),
+`getRegisteredRiders` / `getRegisteredRidersWithTeams` / `getFlecheTeams`
+(`registrations`, `event-${eventId}`), and `fetchRwgpsCollection`, which is a
+plain `fetch` carrying its own `next: { revalidate: 3600 }` rather than an
+`unstable_cache` tag. Note the asymmetry: the registration queries are tagged by
+event **id** while mutations bust `event-${slug}`, so the shared `registrations`
+tag is what actually invalidates the rider lists — any new mutation that changes
+who appears on the page must bust `registrations`, not just `event-${slug}`.
+
+Every write that changes the page's contents already does: `registerForEvent` /
+`registerForPermanent` / `registerFlecheTeam` (`lib/actions/register.ts`),
+`cancelRegistration` (`lib/actions/manage-registration.ts`), `addRegistration` /
+`adminCancelRegistration` / `updateRegistrationTeamName` / `revalidateMembership`
+(`lib/actions/results.ts`), the rider profile and hidden-rider edits
+(`lib/actions/riders.ts`), and the event/route mutations. Admin-only fields that
+no public cached read selects — e.g. `setPreRideStart` (`lib/actions/pre-ride.ts`)
+— deliberately skip revalidation.
+
 #### Path-based revalidation
 
 `revalidatePath()` is used for specific page caches:
