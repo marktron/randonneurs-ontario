@@ -10,6 +10,7 @@ import { format, parseISO } from 'date-fns'
 
 import { isDigitalCardEventType } from '@/lib/brevet-card'
 import { buildRwgpsCollectionUrl } from '@/lib/rwgps'
+import { SITE_URL } from '@/lib/site-url'
 
 /**
  * Truncated SHA-256 of an email, for forensic correlation in telemetry
@@ -74,12 +75,12 @@ export function buildRouteUrl(
 }
 
 export function buildManagementUrl(managementToken: string): string {
-  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://randonneursontario.ca'
+  const baseUrl = SITE_URL
   return `${baseUrl}/registration/manage/${managementToken}`
 }
 
 export function buildDigitalCardUrl(managementToken: string): string {
-  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://randonneursontario.ca'
+  const baseUrl = SITE_URL
   return `${baseUrl}/card/${managementToken}`
 }
 

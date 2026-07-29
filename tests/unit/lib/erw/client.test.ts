@@ -137,8 +137,8 @@ describe('ERW API Client', () => {
         date: '2026-06-15',
         published: false,
         tags: ['brevet'],
-        url: 'https://register.randonneursontario.ca/register/huron-200',
-        registrationUrl: 'https://register.randonneursontario.ca/register/huron-200',
+        url: 'https://www.randonneursontario.ca/register/huron-200',
+        registrationUrl: 'https://www.randonneursontario.ca/register/huron-200',
         routes: [
           {
             name: 'Test Brevet 200',

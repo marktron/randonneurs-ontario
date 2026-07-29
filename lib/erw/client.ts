@@ -169,7 +169,7 @@ async function erwFetch<T>(
 
 function buildErwPayload(event: ErwEventData): Record<string, unknown> {
   // Always use production URL — ERW events should link to the live site, not localhost
-  const baseUrl = 'https://register.randonneursontario.ca'
+  const baseUrl = 'https://www.randonneursontario.ca'
 
   // Ensure the name ends with the distance (e.g. "Gentle Start 200") without
   // duplicating it. The Apr-2026 bulk-rename script already appended distance

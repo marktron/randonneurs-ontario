@@ -5,6 +5,7 @@ import { getSupabase } from '@/lib/supabase'
 import { getDbSlug, getChapterInfo, getAllChapterSlugs } from '@/lib/chapter-config'
 import { formatEventType } from '@/lib/utils'
 import { logError } from '@/lib/errors'
+import { SITE_URL } from '@/lib/site-url'
 import type { ChapterId, EventForCalendar } from '@/types/queries'
 
 // Revalidate the calendar feed every hour
@@ -152,7 +153,7 @@ export async function GET(request: Request, { params }: RouteParams) {
   }
 
   // Convert events to iCal format
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://randonneursontario.ca'
+  const siteUrl = SITE_URL
   const siteHostname = siteUrl.replace(/^https?:\/\//, '').replace(/\/$/, '')
 
   const typedEvents = (events || []) as EventForCalendar[]
