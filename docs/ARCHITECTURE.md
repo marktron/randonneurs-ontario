@@ -35,7 +35,8 @@ randonneurs-ontario/
 │   ├── api/                  # API routes
 │   │   └── calendar/         # iCal feeds for calendar subscriptions
 │   ├── calendar/[chapter]/   # Chapter event calendars
-│   ├── routes/[chapter]/     # Route listings
+│   ├── routes/                # Route library index, linking each chapter
+│   │   └── [chapter]/         # Route listings
 │   ├── results/[year]/       # Historical results
 │   ├── register/             # Event registration
 │   ├── riders/[slug]/        # Rider profiles
@@ -224,6 +225,33 @@ HTML streamed to browser
 Client components hydrate
 ```
 
+### Content Pages (Markdown CMS)
+
+Static editorial pages (About, Rules, Origins, Your First Brevet, etc.) are markdown files in `content/pages/*.md`, rendered through the catch-all `app/[slug]/page.tsx` route (some, like About, are instead served by a dedicated static route that reads the same file — see below). Each file has YAML frontmatter plus a markdown body:
+
+```markdown
+---
+title: Page Title
+description: One-line summary used for <meta> and card previews.
+lastUpdated: 2026-01-10
+headerImage: /some-image.jpg # optional
+draft: true # optional — see below
+---
+
+Markdown body content.
+```
+
+**Key files:**
+
+- `lib/content.ts` — `getPage(slug)` (single page) and `getAllPages()` (metadata for every page, sorted by title), both reading from disk via `fs`
+- `lib/actions/pages.ts` — `savePage()` server action (writes locally in development; commits via the GitHub API in production, then relies on Vercel's GitHub integration to rebuild — see `docs/2026-04-29-audit.md` for the tradeoffs of this "GitHub-as-CMS" approach)
+- `app/[slug]/page.tsx` — public rendering route; calls `notFound()` when `getPage()`/`getAllPages()` don't have the slug
+- `app/admin/pages/` — admin list/edit UI, built on the same `getPage()`/`getAllPages()` functions
+
+**`draft` frontmatter flag:** set `draft: true` to keep a page out of production entirely without deleting the file. `getAllPages()` always excludes draft pages (so they never appear in listings, the admin nav-link picker, or the sitemap), and `getPage(slug)` treats a draft page as not-found whenever `NODE_ENV === 'production'` — but still renders it in development, so an author can preview work-in-progress content locally before flipping the flag off. Use this for any page that isn't ready for real users to land on; a lorem-ipsum placeholder (`content/pages/test-page.md`) shipped live at `/test-page` and in the sitemap before this flag existed, which is why it exists now.
+
+**`lastModified` for the sitemap:** `getAllPages()` also computes `lastModifiedDate` per page — the frontmatter `lastUpdated` date when present, otherwise the markdown file's mtime — consumed by `app/sitemap.ts` for the page's `lastModified` field.
+
 ### Site Navigation
 
 The site navigation is data-driven, stored as `content/navigation.json` and managed via the admin tool at `/admin/navigation`.
@@ -254,9 +282,12 @@ Navbar renders desktop + mobile nav from data
 - `lib/content.ts` — `getNavigation()` (server-side, reads from disk via `fs`) and `getNavigationRaw()` (for admin editing)
 - `lib/actions/navigation.ts` — `saveNavigation()` server action
 - `components/navbar.tsx` — data-driven navbar renderer
+- `components/footer.tsx` — footer, including the crawlable site-section links
 - `components/admin/navigation-editor.tsx` — admin drag-and-drop editor
 
 **Template system:** Items with `"template": "chapters"` expand into one link per chapter at read time. Variables like `{{season}}`, `{{pbpYear}}`, and `{{graniteAnvilYear}}` are resolved from environment config and computed values.
+
+**Crawlability:** `PageShell` renders `Navbar` as a normal server-rendered import — it must not be wrapped in `dynamic(..., { ssr: false })`, or the primary navigation disappears from the server HTML on every page. Even so, the navbar's _dropdown_ links are not in the initial HTML: the desktop links live inside Radix `NavigationMenuContent` and the mobile links inside a `Sheet`, neither of which mounts its children until the user opens it. Force-mounting them would make every dropdown link permanently focusable (a keyboard/screen-reader regression) for no SEO gain, so instead `components/footer.tsx` renders a plain-`<Link>` list of every main site section on every page. That footer list is the crawl path — keep it in sync when routes are added or removed. `tests/unit/components/page-shell.test.tsx` asserts both properties against `renderToString`.
 
 ### News & Notices
 

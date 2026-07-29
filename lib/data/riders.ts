@@ -14,17 +14,20 @@ export interface RiderListItem {
   slug: string
   firstName: string
   lastName: string
+  // Optional so existing RiderListItem fixtures elsewhere in the codebase
+  // don't need updating just because the sitemap started reading this field.
+  updatedAt?: string | null
 }
 
 const getAllRidersInner = cache(async (): Promise<RiderListItem[]> => {
   const BATCH_SIZE = 1000
-  let allData: Array<Pick<PublicRider, 'slug' | 'first_name' | 'last_name'>> = []
+  let allData: Array<Pick<PublicRider, 'slug' | 'first_name' | 'last_name' | 'updated_at'>> = []
   let from = 0
 
   while (true) {
     const { data, error } = await getSupabase()
       .from('public_riders')
-      .select('slug, first_name, last_name')
+      .select('slug, first_name, last_name, updated_at')
       .order('last_name', { ascending: true })
       .order('first_name', { ascending: true })
       .range(from, from + BATCH_SIZE - 1)
@@ -45,6 +48,7 @@ const getAllRidersInner = cache(async (): Promise<RiderListItem[]> => {
     slug: rider.slug ?? '',
     firstName: rider.first_name ?? '',
     lastName: rider.last_name ?? '',
+    updatedAt: rider.updated_at ?? null,
   }))
 })
 

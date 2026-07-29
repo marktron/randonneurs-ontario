@@ -434,15 +434,25 @@ export async function getRegisteredRidersWithTeams(eventId: string): Promise<Reg
 }
 
 /**
- * Get all event slugs for static page generation.
- * Used by Next.js generateStaticParams() to pre-render event pages.
- *
- * @returns Array of event slug strings
+ * Event slug plus its last-modified timestamp (for the sitemap and static
+ * generation).
  */
-const getAllEventSlugsInner = cache(async (): Promise<string[]> => {
+export interface EventSlugWithUpdatedAt {
+  slug: string
+  updatedAt: string | null
+}
+
+/**
+ * Get all event slugs (with updated_at) for static page generation.
+ * Used by Next.js generateStaticParams() to pre-render event pages, and by
+ * the sitemap to set `lastModified` on event registration pages.
+ *
+ * @returns Array of { slug, updatedAt }
+ */
+const getAllEventSlugsInner = cache(async (): Promise<EventSlugWithUpdatedAt[]> => {
   const { data: events, error } = await getSupabase()
     .from('events')
-    .select('slug')
+    .select('slug, updated_at')
     .eq('status', 'scheduled')
 
   if (error) {
@@ -450,10 +460,10 @@ const getAllEventSlugsInner = cache(async (): Promise<string[]> => {
     return []
   }
 
-  return (events as EventSlug[]).map((e) => e.slug)
+  return (events as EventSlug[]).map((e) => ({ slug: e.slug, updatedAt: e.updated_at }))
 })
 
-export async function getAllEventSlugs(): Promise<string[]> {
+export async function getAllEventSlugs(): Promise<EventSlugWithUpdatedAt[]> {
   return unstable_cache(async () => getAllEventSlugsInner(), ['all-event-slugs'], {
     tags: ['events', 'slugs'],
   })()
