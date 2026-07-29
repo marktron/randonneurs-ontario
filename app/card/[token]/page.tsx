@@ -22,11 +22,12 @@ export async function generateMetadata({ params }: PageProps) {
   const data = await getCard(token)
 
   if (!data) {
-    return { title: 'Brevet Card Not Found' }
+    return { title: 'Brevet Card Not Found', robots: { index: false, follow: false } }
   }
 
   return {
     title: `Brevet Card: ${formatRideName(data.event.name, data.event.distanceKm)}`,
+    robots: { index: false, follow: false },
   }
 }
 

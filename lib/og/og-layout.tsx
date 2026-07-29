@@ -248,8 +248,10 @@ export function OgLayout({
           marginTop: '-80',
         }}
       >
+        {/* Dimensions match public/logo.png's intrinsic 160x109 — Satori scales
+            to whatever is given here, so a mismatch stretches the logo. */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={logoSrc} alt="" width={160} height={120} />
+        <img src={logoSrc} alt="" width={160} height={109} />
       </div>
     </div>
   )

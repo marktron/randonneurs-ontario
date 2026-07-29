@@ -24,9 +24,44 @@ interface RiderPageProps {
   params: Promise<{ slug: string }>
 }
 
+/**
+ * Build a one-sentence, factual metadata description for a rider page from
+ * data the page already fetches (no extra queries). Falls back to a generic
+ * sentence when the rider has no finished results to summarize — e.g. a
+ * newly-added rider, or one whose results are all DNF/DNS/OTL/DQ.
+ */
+export function buildRiderDescription(
+  rider: { firstName: string; lastName: string },
+  yearResults: RiderYearResults[]
+): string {
+  const fullName = `${rider.firstName} ${rider.lastName}`.trim()
+  const completedResults = yearResults.flatMap((year) =>
+    year.results.filter((result) => result.status === 'finished')
+  )
+
+  if (completedResults.length === 0) {
+    return `View randonneuring results for ${fullName}.`
+  }
+
+  const totalCompleted = completedResults.length
+  const distances = completedResults.map((result) => result.distanceKm)
+  const minDistance = Math.min(...distances)
+  const maxDistance = Math.max(...distances)
+  const distanceRange =
+    minDistance === maxDistance ? `${minDistance} km` : `${minDistance}–${maxDistance} km`
+
+  const seasons = yearResults.map((year) => year.year)
+  const firstSeason = Math.min(...seasons)
+  const lastSeason = Math.max(...seasons)
+  const seasonRange =
+    firstSeason === lastSeason ? `in ${firstSeason}` : `from ${firstSeason} to ${lastSeason}`
+
+  return `${fullName} has completed ${totalCompleted} randonneuring ride${totalCompleted !== 1 ? 's' : ''} (${distanceRange}) with Randonneurs Ontario ${seasonRange}.`
+}
+
 export async function generateMetadata({ params }: RiderPageProps) {
   const { slug } = await params
-  const rider = await getRiderBySlug(slug)
+  const [rider, yearResults] = await Promise.all([getRiderBySlug(slug), getRiderResults(slug)])
 
   if (!rider) {
     return { title: 'Rider Not Found' }
@@ -34,7 +69,7 @@ export async function generateMetadata({ params }: RiderPageProps) {
 
   return {
     title: `${rider.firstName} ${rider.lastName} - Results`,
-    description: `View randonneuring results for ${rider.firstName} ${rider.lastName}.`,
+    description: buildRiderDescription(rider, yearResults),
   }
 }
 

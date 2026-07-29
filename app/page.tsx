@@ -1,3 +1,4 @@
+import type { Metadata } from 'next'
 import { PageShell } from '@/components/page-shell'
 import { Hero } from '@/components/hero'
 import { UpcomingRides } from '@/components/upcoming-rides'
@@ -6,6 +7,14 @@ import { MyRidesSection } from '@/components/my-rides-section'
 import { NewsSection } from '@/components/news-section'
 import { getHeroImages } from '@/lib/hero-images'
 import { getPublishedNews } from '@/lib/data/news'
+
+export const metadata: Metadata = {
+  title: {
+    absolute: 'Randonneurs Ontario — Long-Distance Cycling in Ontario',
+  },
+  description:
+    'A volunteer-run randonneuring club organizing non-competitive long-distance brevets across Ontario since 1983, with chapters in Toronto, Ottawa, Huron, and Simcoe-Muskoka. See the ride calendar, learn about your first brevet, and join.',
+}
 
 export default async function Page() {
   const heroImages = getHeroImages()
