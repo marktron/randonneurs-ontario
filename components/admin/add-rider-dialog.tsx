@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/dialog'
 import { searchRiders, createRider, type RiderSearchResult } from '@/lib/actions/riders'
 import { createResult, addRegistration } from '@/lib/actions/results'
+import { SelectedRiderCard } from './selected-rider-card'
 import { toast } from 'sonner'
 import { Loader2, Plus, Search, UserPlus } from 'lucide-react'
 
@@ -27,6 +28,12 @@ interface AddRiderDialogProps {
   season: number | null
   distanceKm: number
   existingRiderIds: Set<string>
+  /**
+   * Called with the rider's id after a successful add. Lets the parent drop any
+   * optimistic cancellation it is holding for that rider — router.refresh()
+   * keeps client state, so a revived registration would otherwise stay hidden.
+   */
+  onRiderAdded?: (riderId: string) => void
 }
 
 export function AddRiderDialog({
@@ -37,6 +44,7 @@ export function AddRiderDialog({
   season,
   distanceKm,
   existingRiderIds,
+  onRiderAdded,
 }: AddRiderDialogProps) {
   const isScheduled = eventStatus === 'scheduled'
   const router = useRouter()
@@ -54,9 +62,11 @@ export function AddRiderDialog({
   const [lastName, setLastName] = useState('')
   const [email, setEmail] = useState('')
 
-  // Debounced search
+  // Debounced search. Skipped once a rider is picked: selecting sets the query
+  // to their name, which would otherwise re-run the search and redraw a
+  // one-row list that looks identical to the unselected results.
   useEffect(() => {
-    if (mode !== 'search' || searchQuery.length < 2) {
+    if (mode !== 'search' || selectedRider || searchQuery.length < 2) {
       setSearchResults([])
       return
     }
@@ -71,7 +81,7 @@ export function AddRiderDialog({
     }, 300)
 
     return () => clearTimeout(timeoutId)
-  }, [searchQuery, mode, existingRiderIds])
+  }, [searchQuery, mode, selectedRider, existingRiderIds])
 
   // Reset state when dialog closes
   useEffect(() => {
@@ -92,6 +102,12 @@ export function AddRiderDialog({
     setSearchResults([])
   }
 
+  const handleClearSelection = () => {
+    setSelectedRider(null)
+    setSearchQuery('')
+    setSearchResults([])
+  }
+
   const handleAddExistingRider = () => {
     if (!selectedRider) return
 
@@ -108,6 +124,7 @@ export function AddRiderDialog({
 
       if (res.success) {
         toast.success(`Added ${selectedRider.first_name} ${selectedRider.last_name}`)
+        onRiderAdded?.(selectedRider.id)
         router.refresh()
         onOpenChange(false)
       } else {
@@ -148,6 +165,7 @@ export function AddRiderDialog({
 
       if (addRes.success) {
         toast.success(`Added ${firstName} ${lastName}`)
+        onRiderAdded?.(createRes.riderId)
         router.refresh()
         onOpenChange(false)
       } else {
@@ -171,19 +189,26 @@ export function AddRiderDialog({
 
         {mode === 'search' ? (
           <div className="space-y-4">
-            <InputGroup>
-              <InputGroupAddon>
-                <Search className="h-4 w-4" />
-              </InputGroupAddon>
-              <InputGroupInput
-                placeholder="Search by name or email…"
-                value={searchQuery}
-                onChange={(e) => {
-                  setSearchQuery(e.target.value)
-                  setSelectedRider(null)
-                }}
+            {selectedRider ? (
+              <SelectedRiderCard
+                firstName={selectedRider.first_name}
+                lastName={selectedRider.last_name}
+                email={selectedRider.email}
+                onClear={handleClearSelection}
+                disabled={isPending}
               />
-            </InputGroup>
+            ) : (
+              <InputGroup>
+                <InputGroupAddon>
+                  <Search className="h-4 w-4" />
+                </InputGroupAddon>
+                <InputGroupInput
+                  placeholder="Search by name or email…"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+              </InputGroup>
+            )}
 
             {isSearching && (
               <div className="flex items-center justify-center py-4">
@@ -191,7 +216,7 @@ export function AddRiderDialog({
               </div>
             )}
 
-            {!isSearching && searchResults.length > 0 && (
+            {!isSearching && !selectedRider && searchResults.length > 0 && (
               <div className="border rounded-md max-h-48 overflow-y-auto">
                 {searchResults.map((rider) => (
                   <button

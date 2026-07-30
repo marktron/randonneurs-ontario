@@ -21,6 +21,7 @@ import {
   type RiderResultOption,
 } from '@/lib/actions/awards'
 import { searchRiders, type RiderSearchResult } from '@/lib/actions/riders'
+import { SelectedRiderCard } from './selected-rider-card'
 
 export interface AwardOption {
   id: string
@@ -169,25 +170,35 @@ export function AwardAssignForm({ awards }: Props) {
       {award && (
         <div className="space-y-2">
           <Label htmlFor="rider">Rider</Label>
-          <div className="relative">
-            <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              id="rider"
-              className="pl-8"
-              placeholder="Search riders by name or email…"
-              value={riderQuery}
-              onChange={(e) => {
-                setRiderQuery(e.target.value)
+          {selectedRider ? (
+            <SelectedRiderCard
+              firstName={selectedRider.first_name}
+              lastName={selectedRider.last_name}
+              email={selectedRider.email}
+              onClear={() => {
                 setSelectedRider(null)
+                setRiderQuery('')
+                setRiderResults([])
               }}
             />
-          </div>
+          ) : (
+            <div className="relative">
+              <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                id="rider"
+                className="pl-8"
+                placeholder="Search riders by name or email…"
+                value={riderQuery}
+                onChange={(e) => setRiderQuery(e.target.value)}
+              />
+            </div>
+          )}
           {isSearchingRiders && (
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin" /> Searching…
             </div>
           )}
-          {riderResults.length > 0 && (
+          {!selectedRider && riderResults.length > 0 && (
             <div className="rounded-md border max-h-48 overflow-y-auto">
               {riderResults.map((r) => (
                 <button

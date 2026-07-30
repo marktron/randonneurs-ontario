@@ -101,6 +101,42 @@ export interface AddRegistrationData {
   riderId: string
 }
 
+/** Statuses an existing registration row can be revived from. */
+const REVIVABLE_REGISTRATION_STATUSES = ['cancelled', 'incomplete: membership']
+
+/**
+ * Flip an existing registration row back to 'registered'.
+ *
+ * `registrations` has a UNIQUE (event_id, rider_id), so a rider who cancelled
+ * already owns the row for that event — re-adding them means updating it, not
+ * inserting a second one. The row's notes/team fields are left alone so the
+ * restored registration is exactly what the rider originally submitted.
+ *
+ * Cancellations between 2026-03-18 and 2026-03-27 nulled `management_token`
+ * and those rows persist, so regenerate one when it is missing — otherwise the
+ * revived registration has no working manage link.
+ */
+async function reviveRegistrationRow(
+  registrationId: string,
+  managementToken: string | null,
+  operation: string,
+  failureMessage: string
+): Promise<ActionResult | null> {
+  const { error } = await getSupabaseAdmin()
+    .from('registrations')
+    .update({
+      status: 'registered',
+      cancelled_at: null,
+      ...(managementToken ? {} : { management_token: crypto.randomUUID() }),
+    })
+    .eq('id', registrationId)
+
+  if (error) {
+    return handleSupabaseError(error, { operation }, failureMessage)
+  }
+  return null
+}
+
 export async function addRegistration(data: AddRegistrationData): Promise<ActionResult> {
   const admin = await requireAdmin()
 
@@ -109,29 +145,51 @@ export async function addRegistration(data: AddRegistrationData): Promise<Action
   // Check if registration already exists for this rider/event
   const { data: existing } = await getSupabaseAdmin()
     .from('registrations')
-    .select('id')
+    .select('id, status, management_token')
     .eq('event_id', eventId)
     .eq('rider_id', riderId)
     .single()
 
-  if (existing) {
-    return { success: false, error: 'This rider is already registered for this event' }
-  }
+  const existingReg = existing as {
+    id: string
+    status: string | null
+    management_token: string | null
+  } | null
 
-  const insertData: RegistrationInsert = {
-    event_id: eventId,
-    rider_id: riderId,
-    status: 'registered',
-  }
+  // A rider who cancelled (or never cleared membership) keeps their row, so
+  // re-adding them has to revive it. Only a live 'registered' row is a true
+  // duplicate. Mirrors the rider-facing re-registration path in
+  // lib/actions/registration/finalize.ts.
+  const revived = Boolean(
+    existingReg && REVIVABLE_REGISTRATION_STATUSES.includes(existingReg.status ?? '')
+  )
 
-  const { error } = await getSupabaseAdmin().from('registrations').insert(insertData)
-
-  if (error) {
-    return handleSupabaseError(
-      error,
-      { operation: 'addRegistration' },
+  if (existingReg && revived) {
+    const failure = await reviveRegistrationRow(
+      existingReg.id,
+      existingReg.management_token,
+      'addRegistration.revive',
       'Failed to add registration'
     )
+    if (failure) return failure
+  } else if (existingReg) {
+    return { success: false, error: 'This rider is already registered for this event' }
+  } else {
+    const insertData: RegistrationInsert = {
+      event_id: eventId,
+      rider_id: riderId,
+      status: 'registered',
+    }
+
+    const { error } = await getSupabaseAdmin().from('registrations').insert(insertData)
+
+    if (error) {
+      return handleSupabaseError(
+        error,
+        { operation: 'addRegistration' },
+        'Failed to add registration'
+      )
+    }
   }
 
   revalidatePath(`/admin/events/${eventId}`)
@@ -160,10 +218,12 @@ export async function addRegistration(data: AddRegistrationData): Promise<Action
 
   await logAuditEvent({
     adminId: admin.id,
-    action: 'create',
+    action: revived ? 'update' : 'create',
     entityType: 'result',
     entityId: eventId,
-    description: `Added registration for ${eventName}: ${riderName}`,
+    description: revived
+      ? `Restored registration for ${eventName}: ${riderName}`
+      : `Added registration for ${eventName}: ${riderName}`,
   })
 
   return createActionResult()
@@ -325,6 +385,80 @@ export async function adminCancelRegistration(registrationId: string): Promise<A
     entityType: 'registration',
     entityId: registrationId,
     description: `Cancelled registration for ${eventName}: ${riderName}`,
+  })
+
+  return createActionResult()
+}
+
+/**
+ * Put a cancelled registration back on the start list.
+ *
+ * Riders can already un-cancel themselves by simply re-registering (the public
+ * flow revives the row), but organizers had no equivalent — the rider still
+ * owns the unique (event_id, rider_id) row, so "Add rider" reported them as
+ * already registered. This is the organizer-side counterpart to
+ * `adminCancelRegistration`.
+ */
+export async function adminRestoreRegistration(registrationId: string): Promise<ActionResult> {
+  const admin = await requireAdmin()
+
+  const { data: registration, error: fetchError } = await getSupabaseAdmin()
+    .from('registrations')
+    .select(
+      'id, status, event_id, management_token, riders (first_name, last_name), events (name, slug)'
+    )
+    .eq('id', registrationId)
+    .single()
+
+  if (fetchError || !registration) {
+    return handleSupabaseError(
+      fetchError,
+      { operation: 'adminRestoreRegistration' },
+      'Registration not found'
+    )
+  }
+
+  const reg = registration as {
+    id: string
+    status: string | null
+    event_id: string
+    management_token: string | null
+    riders: { first_name: string; last_name: string } | null
+    events: { name: string; slug: string } | null
+  }
+
+  if (reg.status !== 'cancelled') {
+    return { success: false, error: 'This registration is not cancelled' }
+  }
+
+  const failure = await reviveRegistrationRow(
+    reg.id,
+    reg.management_token,
+    'adminRestoreRegistration',
+    'Failed to restore registration'
+  )
+  if (failure) return failure
+
+  revalidatePath('/admin/events')
+  revalidatePath(`/admin/events/${reg.event_id}`)
+  revalidateTag('registrations', { expire: 0 })
+  revalidateTag('events', { expire: 0 })
+  if (reg.events?.slug) {
+    revalidateTag(`event-${reg.events.slug}`, { expire: 0 })
+    revalidatePath(`/register/${reg.events.slug}`)
+  }
+
+  const riderName = reg.riders
+    ? `${reg.riders.first_name} ${reg.riders.last_name}`
+    : 'Unknown rider'
+  const eventName = reg.events?.name || reg.event_id
+
+  await logAuditEvent({
+    adminId: admin.id,
+    action: 'update',
+    entityType: 'registration',
+    entityId: registrationId,
+    description: `Restored registration for ${eventName}: ${riderName}`,
   })
 
   return createActionResult()

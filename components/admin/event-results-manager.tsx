@@ -38,6 +38,7 @@ import {
   FileText,
   Mail,
   UserX,
+  UserCheck,
   Trash2,
   RefreshCw,
   Clipboard,
@@ -65,6 +66,7 @@ import {
   deleteResult,
   updateRegistrationTeamName,
   adminCancelRegistration,
+  adminRestoreRegistration,
   revalidateMembership,
   type ResultStatus,
 } from '@/lib/actions/results'
@@ -193,6 +195,7 @@ interface RiderRowProps {
   checkinControls: CheckinEvidenceControl[] | null
   onRegistrationCancelled: (
     registrationId: string,
+    riderId: string,
     riderName: string,
     riderEmail: string | null
   ) => void
@@ -200,6 +203,7 @@ interface RiderRowProps {
 
 function DeleteResultButton({
   resultId,
+  riderId,
   riderName,
   riderEmail,
   isPending,
@@ -207,11 +211,12 @@ function DeleteResultButton({
   onRegistrationCancelled,
 }: {
   resultId: string
+  riderId: string
   riderName: string
   riderEmail: string | null
   isPending: boolean
   registrationId: string | null
-  onRegistrationCancelled: (id: string, name: string, email: string | null) => void
+  onRegistrationCancelled: (id: string, riderId: string, name: string, email: string | null) => void
 }) {
   const router = useRouter()
   const [deleting, startDelete] = useTransition()
@@ -255,7 +260,7 @@ function DeleteResultButton({
                 if (registrationId) {
                   const regRes = await adminCancelRegistration(registrationId)
                   if (regRes.success) {
-                    onRegistrationCancelled(registrationId, riderName, riderEmail)
+                    onRegistrationCancelled(registrationId, riderId, riderName, riderEmail)
                   }
                 }
                 toast.success(`Result deleted for ${riderName}`)
@@ -789,7 +794,12 @@ function RiderRow({
                         startTransition(async () => {
                           const res = await adminCancelRegistration(registrationId)
                           if (res.success) {
-                            onRegistrationCancelled(registrationId, riderName, participant.email)
+                            onRegistrationCancelled(
+                              registrationId,
+                              participant.riderId,
+                              riderName,
+                              participant.email
+                            )
                             toast.success(`Registration cancelled for ${riderName}`)
                           } else {
                             toast.error(res.error || 'Failed to cancel registration')
@@ -806,6 +816,7 @@ function RiderRow({
           {result && eventStatus === 'completed' && (
             <DeleteResultButton
               resultId={result.id}
+              riderId={participant.riderId}
               riderName={riderName}
               riderEmail={participant.email}
               isPending={isPending}
@@ -838,19 +849,27 @@ export function EventResultsManager({
   const firstTimeRiderIdSet = new Set(firstTimeRiderIds)
   const [addRiderOpen, setAddRiderOpen] = useState(false)
   const [isSubmitted, setIsSubmitted] = useState(eventStatus === 'submitted')
-  const [cancelledRegistrationIds, setCancelledRegistrationIds] = useState<Set<string>>(new Set())
+  // Cancelling is optimistic — the row is hidden client-side rather than
+  // re-fetched. `localCancelled` is the single source of truth for that: the
+  // rows it holds are both hidden from the participant list and shown under
+  // "Cancelled". Anything that un-cancels a rider has to drop their entry here,
+  // because router.refresh() preserves client state — fresh server props alone
+  // would still be filtered out.
   const [localCancelled, setLocalCancelled] = useState<CancelledRegistration[]>([])
+  const [restoringId, setRestoringId] = useState<string | null>(null)
+  const managerRouter = useRouter()
+
+  const locallyCancelledRegistrationIds = new Set(localCancelled.map((c) => c.id))
 
   const handleRegistrationCancelled = useCallback(
-    (registrationId: string, riderName: string, riderEmail: string | null) => {
-      setCancelledRegistrationIds((prev) => new Set([...prev, registrationId]))
+    (registrationId: string, riderId: string, riderName: string, riderEmail: string | null) => {
       const [firstName, ...lastParts] = riderName.split(' ')
       const lastName = lastParts.join(' ')
       setLocalCancelled((prev) => [
         ...prev,
         {
           id: registrationId,
-          rider_id: '',
+          rider_id: riderId,
           cancelled_at: new Date().toISOString(),
           riders: { first_name: firstName, last_name: lastName, email: riderEmail },
         },
@@ -859,6 +878,32 @@ export function EventResultsManager({
     []
   )
 
+  // Putting a rider back on the start list needs fresh server data (the
+  // registration row moves out of the cancelled query and into the participant
+  // list), so refresh as well as dropping the optimistic entry.
+  const handleRestoreRegistration = useCallback(
+    async (registrationId: string, riderName: string) => {
+      setRestoringId(registrationId)
+      const res = await adminRestoreRegistration(registrationId)
+      setRestoringId(null)
+      if (res.success) {
+        setLocalCancelled((prev) => prev.filter((c) => c.id !== registrationId))
+        toast.success(`Registration restored for ${riderName}`)
+        managerRouter.refresh()
+      } else {
+        toast.error(res.error || 'Failed to restore registration')
+      }
+    },
+    [managerRouter]
+  )
+
+  // "Add Rider" revives a cancelled registration server-side, so the rider it
+  // reports back must lose their optimistic cancellation too — otherwise they
+  // stay hidden until a full page reload.
+  const handleRiderAdded = useCallback((riderId: string) => {
+    setLocalCancelled((prev) => prev.filter((c) => c.rider_id !== riderId))
+  }, [])
+
   // Create a map of rider_id -> result for quick lookup
   const resultsByRiderId = new Map(results.map((r) => [r.rider_id, r]))
 
@@ -866,7 +911,7 @@ export function EventResultsManager({
   const registeredRiderIds = new Set(registrations.map((r) => r.rider_id))
 
   const participantsFromRegistrations: Participant[] = registrations
-    .filter((reg) => reg.riders && !cancelledRegistrationIds.has(reg.id))
+    .filter((reg) => reg.riders && !locallyCancelledRegistrationIds.has(reg.id))
     .map((reg) => {
       const currentMembership = reg.riders!.rider_memberships?.find((m) => m.season === season)
       const result = resultsByRiderId.get(reg.rider_id)
@@ -1062,6 +1107,7 @@ export function EventResultsManager({
                       <TableHead>Rider</TableHead>
                       <TableHead>Email</TableHead>
                       <TableHead>Cancelled</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody className="block sm:table-row-group">
@@ -1087,6 +1133,50 @@ export function EventResultsManager({
                                 year: 'numeric',
                               })
                             : '—'}
+                        </TableCell>
+                        <TableCell className="block p-0 pt-2 sm:table-cell sm:p-3 sm:text-right">
+                          {(() => {
+                            const riderName = reg.riders
+                              ? `${reg.riders.first_name} ${reg.riders.last_name}`
+                              : 'this rider'
+                            return (
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-7"
+                                    disabled={restoringId !== null}
+                                  >
+                                    {restoringId === reg.id ? (
+                                      <Loader2 className="h-4 w-4 animate-spin sm:mr-1" />
+                                    ) : (
+                                      <UserCheck className="h-4 w-4 sm:mr-1" />
+                                    )}
+                                    Restore
+                                  </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>Restore registration?</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      This puts <strong>{riderName}</strong> back on the
+                                      registration list for this event. No confirmation email is
+                                      sent.
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                    <AlertDialogAction
+                                      onClick={() => handleRestoreRegistration(reg.id, riderName)}
+                                    >
+                                      Restore
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            )
+                          })()}
                         </TableCell>
                       </TableRow>
                     ))}
@@ -1120,6 +1210,7 @@ export function EventResultsManager({
         season={season}
         distanceKm={distanceKm}
         existingRiderIds={existingRiderIds}
+        onRiderAdded={handleRiderAdded}
       />
     </Card>
   )

@@ -476,8 +476,8 @@ describe('addRegistration', () => {
     vi.clearAllMocks()
   })
 
-  it('returns error when registration already exists', async () => {
-    mockModule.__mockExistingResult({ id: 'reg-1' })
+  it('returns error when an active registration already exists', async () => {
+    mockModule.__mockExistingResult({ id: 'reg-1', status: 'registered', management_token: 'tok' })
 
     const result = await addRegistration({
       eventId: 'event-1',
@@ -487,6 +487,38 @@ describe('addRegistration', () => {
     expect(result.success).toBe(false)
     expect(result.error).toBe('This rider is already registered for this event')
   })
+
+  // A rider who cancelled keeps their row (UNIQUE event_id/rider_id), so
+  // re-adding them has to update that row — inserting would hit the constraint
+  // and the organizer would be told they are "already registered".
+  it.each(['cancelled', 'incomplete: membership'])(
+    'revives an existing %s registration instead of inserting',
+    async (status) => {
+      mockModule.__mockExistingResult({ id: 'reg-1', status, management_token: 'tok' })
+      mockModule.__mockUpdateSuccess()
+
+      const result = await addRegistration({
+        eventId: 'event-1',
+        riderId: 'rider-1',
+      })
+
+      expect(result.success).toBe(true)
+
+      const insertCalls = mockModule.__calls.filter(
+        (c) => c.table === 'registrations' && c.method === 'insert'
+      )
+      expect(insertCalls, 'a second registration row was inserted').toHaveLength(0)
+
+      const updateCalls = mockModule.__calls.filter(
+        (c) => c.table === 'registrations' && c.method === 'update'
+      )
+      expect(updateCalls).toHaveLength(1)
+      expect(updateCalls[0].args?.[0]).toMatchObject({
+        status: 'registered',
+        cancelled_at: null,
+      })
+    }
+  )
 
   it('creates registration successfully when no duplicate', async () => {
     mockModule.__mockNoExistingResult()

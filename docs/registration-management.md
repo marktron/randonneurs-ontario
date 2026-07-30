@@ -75,3 +75,28 @@ Admins can cancel a rider's registration from the event detail page (`/admin/eve
 - Rider moves from the active table to a "Cancelled" section below (optimistic UI via local state)
 - Cancelled registrations are also loaded from the database on page load, so they persist across reloads
 - Server action: `adminCancelRegistration` in `lib/actions/results.ts`
+
+## Admin un-cancellation
+
+Riders can un-cancel themselves by re-registering, which revives their existing row. Organizers have two equivalent paths on the event detail page:
+
+- **Restore button** (UserCheck icon) on each row of the "Cancelled" section — confirmation dialog, then the rider returns to the registration list. Server action: `adminRestoreRegistration` in `lib/actions/results.ts`
+- **Add Rider** — selecting a rider whose registration is `cancelled` or `incomplete: membership` revives that row instead of reporting "already registered" (`addRegistration`)
+
+Both paths:
+
+- Reuse the existing row, because `registrations` has a UNIQUE `(event_id, rider_id)`; a second insert would violate it
+- Set `status = 'registered'` and clear `cancelled_at`
+- Preserve `notes`, `team_name`, and `is_team_captain` from the original registration
+- Regenerate `management_token` when it is null (cancellations between 2026-03-18 and 2026-03-27 nulled it), matching `createRegistrationRecord`
+- Bust the `registrations`, `events`, and `event-<slug>` cache tags so the public event page reflects the change immediately
+- Are audit-logged with the admin ID
+- Send **no** email — the rider is not notified, unlike the rider-driven re-registration flow
+
+### Optimistic cancellation state
+
+Admin cancellation hides the rider's row client-side instead of re-fetching, and `router.refresh()` **preserves client state**. So anything that un-cancels a rider must also drop that optimistic entry, or the restored registration stays hidden until a full page reload — even though the server props are correct.
+
+`localCancelled` in `event-results-manager.tsx` is the single source of truth for this: entries in it are hidden from the participant list and shown under "Cancelled". Cancelling appends (with the real `rider_id`); Restore removes by registration id; `AddRiderDialog` reports the added rider through `onRiderAdded`, which removes by rider id.
+
+`adminRestoreRegistration` rejects a registration that is not `cancelled` ("This registration is not cancelled"). Restoring always lands on `registered`; the pre-cancellation status is not recorded, so a row that was `incomplete: membership` before cancellation comes back as a full registration — the same organizer override that "Add Rider" already applies.

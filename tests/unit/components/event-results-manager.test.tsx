@@ -6,7 +6,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, within, fireEvent, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { EventResultsManager } from '@/components/admin/event-results-manager'
-import { updateResult } from '@/lib/actions/results'
+import {
+  updateResult,
+  adminCancelRegistration,
+  adminRestoreRegistration,
+} from '@/lib/actions/results'
 import type { CheckinEvidence } from '@/lib/checkin-evidence'
 
 // Mock server actions used by the rider rows so the component renders cleanly
@@ -16,16 +20,26 @@ vi.mock('@/lib/actions/results', () => ({
   deleteResult: vi.fn(),
   updateRegistrationTeamName: vi.fn(),
   adminCancelRegistration: vi.fn(),
+  adminRestoreRegistration: vi.fn(),
   revalidateMembership: vi.fn(),
+}))
+
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }),
 }))
 
 vi.mock('sonner', () => ({
   toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() },
 }))
 
-// AddRiderDialog has its own complex dependencies — stub it out
+// AddRiderDialog has its own complex dependencies — stub it out, but keep the
+// success callback reachable so tests can drive "rider was added".
 vi.mock('@/components/admin/add-rider-dialog', () => ({
-  AddRiderDialog: () => null,
+  AddRiderDialog: ({ onRiderAdded }: { onRiderAdded?: (riderId: string) => void }) => (
+    <button data-testid="stub-add-rider" onClick={() => onRiderAdded?.('rider-flip')}>
+      stub add rider
+    </button>
+  ),
 }))
 
 vi.mock('@/components/admin/submit-results-button', () => ({
@@ -478,5 +492,86 @@ describe('EventResultsManager — check-in evidence', () => {
     await user.click(screen.getByTitle('View digital check-ins'))
     expect(screen.getByText('Digital card check-ins')).toBeTruthy()
     expect(screen.getByText('Start — 0 km')).toBeTruthy()
+  })
+})
+
+describe('EventResultsManager — un-cancelling in the same page session', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  // Cancelling is optimistic: the row is hidden client-side rather than
+  // re-fetched. router.refresh() preserves client state, so re-adding the rider
+  // has to clear that optimistic entry — otherwise the restored registration
+  // stays hidden until a full page reload.
+  it('returns a rider cancelled this session to the registered list when re-added', async () => {
+    const user = userEvent.setup()
+    vi.mocked(adminCancelRegistration).mockResolvedValue({ success: true })
+
+    const registration = makeRegistration({
+      riderId: 'rider-flip',
+      firstName: 'Fred',
+      lastName: 'Flip',
+    })
+    // A second rider who stays registered, so the participants table is always
+    // rendered and stays the first table on the page.
+    const anchor = makeRegistration({
+      riderId: 'rider-anchor',
+      firstName: 'Ann',
+      lastName: 'Anchor',
+    })
+
+    render(
+      <EventResultsManager
+        {...baseProps}
+        registrations={[anchor, registration]}
+        firstTimeRiderIds={[]}
+      />
+    )
+
+    // Cancel: the rider drops out of the participant table into "Cancelled".
+    const fredRow = screen.getByText('Fred Flip').closest('tr')!
+    await user.click(within(fredRow).getByTitle('Cancel registration'))
+    await user.click(screen.getByRole('button', { name: 'Cancel Registration' }))
+    // The participants table is rendered first, the "Cancelled" table second.
+    const participantsTable = () => screen.getAllByRole('table')[0]
+
+    await waitFor(() => expect(screen.getByText(/Cancelled \(1\)/)).toBeTruthy())
+    expect(within(participantsTable()).queryByText('Fred Flip')).toBeNull()
+
+    // Re-add via the Add Rider dialog. The server now has the rider registered
+    // again, so the component must drop its optimistic cancellation.
+    await user.click(screen.getByTestId('stub-add-rider'))
+
+    await waitFor(() => expect(screen.queryByText(/Cancelled \(/)).toBeNull())
+    expect(within(participantsTable()).getByText('Fred Flip')).toBeTruthy()
+  })
+
+  it('restores a rider from the Cancelled section', async () => {
+    const user = userEvent.setup()
+    vi.mocked(adminRestoreRegistration).mockResolvedValue({ success: true })
+
+    render(
+      <EventResultsManager
+        {...baseProps}
+        registrations={[]}
+        cancelledRegistrations={[
+          {
+            id: 'reg-rider-gone',
+            rider_id: 'rider-gone',
+            cancelled_at: '2026-04-02T00:00:00Z',
+            riders: { first_name: 'Gina', last_name: 'Gone', email: 'gina@example.com' },
+          },
+        ]}
+        firstTimeRiderIds={[]}
+      />
+    )
+
+    await user.click(screen.getByRole('button', { name: /Restore/ }))
+    // Trigger and dialog action share the label; the dialog action renders last.
+    const restoreButtons = screen.getAllByRole('button', { name: /^Restore$/ })
+    await user.click(restoreButtons[restoreButtons.length - 1])
+
+    await waitFor(() => expect(adminRestoreRegistration).toHaveBeenCalledWith('reg-rider-gone'))
   })
 })

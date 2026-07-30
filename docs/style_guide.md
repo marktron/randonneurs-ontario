@@ -94,6 +94,14 @@ Use shadcn primitives, but style them to feel “print” rather than “SaaS”
   - Validation: state what happened and what to do next (“Email is required to send confirmation.”).
   - Status language: “Registration open”, “Waitlist”, “Registration closed”.
 
+### 8b) Search-and-select fields (admin)
+
+Admin rider pickers (`AddRiderDialog`, `AwardAssignForm`) search a list and commit to one record. Once something is picked, the picker must **look different**, not just hold different text:
+
+- Replace the search input and result list with `SelectedRiderCard` (`components/admin/selected-rider-card.tsx`) — tinted surface, `UserCheck` icon, "Selected" badge, and a "Change" button back to search.
+- Never signal selection with colour alone; the icon and badge carry it for non-colour users.
+- Guard the debounced search on the selection (`if (selectedRider) return`). Picking sets the query to the record's name, which otherwise re-runs the search and redraws a one-row list styled identically to the unselected results — indistinguishable from having picked nothing.
+
 ### 9) Accessibility + quality bar
 
 - Contrast passes WCAG AA minimum for all text.
