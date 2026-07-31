@@ -9,6 +9,7 @@ import {
   groupControlsByLeg,
   expandRiderLegCards,
   buildCardLegsFromRows,
+  titleStatesDistance,
 } from '@/lib/controlPoints'
 
 describe('reverseControls', () => {
@@ -403,5 +404,41 @@ describe('expandRiderLegCards', () => {
 
   it('returns empty for no riders', () => {
     expect(expandRiderLegCards([], ['l1'])).toEqual([])
+  })
+})
+
+describe('titleStatesDistance', () => {
+  it('detects a title that already ends with the exact distance', () => {
+    expect(titleStatesDistance('Ottawa 200', 200)).toBe(true)
+    expect(titleStatesDistance('Carleton Place 1000', 1000)).toBe(true)
+  })
+
+  it('accepts a trailing km unit', () => {
+    expect(titleStatesDistance('Ottawa 200 km', 200)).toBe(true)
+    expect(titleStatesDistance('Ottawa 200km', 200)).toBe(true)
+  })
+
+  /**
+   * The load-bearing case. Randonneuring names are nominal ("Ottawa 200")
+   * while the measured route is longer (203.4 km). Those are different
+   * numbers, so the real distance must still be printed.
+   */
+  it('does not suppress when the nominal name and real distance differ', () => {
+    expect(titleStatesDistance('Ottawa 200', 203.4)).toBe(false)
+    expect(titleStatesDistance('PBP 1200', 1219)).toBe(false)
+  })
+
+  it('matches a fractional distance stated in the title', () => {
+    expect(titleStatesDistance('Ottawa 203.4', 203.4)).toBe(true)
+  })
+
+  it('is false for titles with no trailing number', () => {
+    expect(titleStatesDistance('Hard, Short and Long.', 1000)).toBe(false)
+    expect(titleStatesDistance('Leg 1: Gravenhurst', 205.3)).toBe(false)
+    expect(titleStatesDistance('', 200)).toBe(false)
+  })
+
+  it('does not match a number embedded mid-title', () => {
+    expect(titleStatesDistance('200 Loop of Ottawa', 200)).toBe(false)
   })
 })

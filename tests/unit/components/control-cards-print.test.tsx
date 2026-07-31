@@ -69,6 +69,59 @@ describe('ControlCardsPrint — first-time rider indicator', () => {
   })
 })
 
+/**
+ * Event names usually carry the distance already ("Ottawa 200"), and the card
+ * appends "{distance} km" in two places — the front's distance/date line and
+ * the back's middle column header. Appending unconditionally reads as
+ * "Ottawa 200 200 km".
+ */
+describe('ControlCardsPrint — distance already stated in the title', () => {
+  function renderNamed(routeName: string, distance: number) {
+    return render(
+      <ControlCardsPrint
+        event={{ ...baseEvent, routeName, distance }}
+        organizer={baseOrganizer}
+        controls={baseControls}
+        riders={[{ id: 'r1', firstName: 'Solo', lastName: 'Rider' }]}
+        totalAllowableTime={{ hours: 13, minutes: 30 }}
+        formattedDate="Fri, May 15, 2026"
+      />
+    )
+  }
+
+  it('does not repeat the distance in the back header when the name states it', () => {
+    const { container } = renderNamed('Ottawa 200', 200)
+    expect(container.textContent).not.toContain('Ottawa 200 200 km')
+    const backHeaders = Array.from(container.querySelectorAll('.back-header')).map(
+      (el) => el.textContent
+    )
+    expect(backHeaders.some((h) => h?.includes('Ottawa 200'))).toBe(true)
+  })
+
+  it('does not repeat the distance on the front when the name states it', () => {
+    const { container } = renderNamed('Ottawa 200', 200)
+    const distanceLine = container.querySelector('.distance-date')
+    expect(distanceLine?.textContent).toBe('Fri, May 15, 2026')
+  })
+
+  it('still appends the distance when the name does not state it', () => {
+    const { container } = renderNamed('Hard, Short and Long.', 1000)
+    const backHeaders = Array.from(container.querySelectorAll('.back-header')).map(
+      (el) => el.textContent
+    )
+    expect(backHeaders.some((h) => h?.includes('Hard, Short and Long. 1000 km'))).toBe(true)
+    expect(container.querySelector('.distance-date')?.textContent).toContain('1000 km')
+  })
+
+  it('still appends the real distance when the name is only nominal', () => {
+    const { container } = renderNamed('Ottawa 200', 203.4)
+    const backHeaders = Array.from(container.querySelectorAll('.back-header')).map(
+      (el) => el.textContent
+    )
+    expect(backHeaders.some((h) => h?.includes('Ottawa 200 203.4 km'))).toBe(true)
+  })
+})
+
 import type { CardLeg } from '@/types/control-card'
 
 const legA: CardLeg = {
@@ -152,6 +205,14 @@ describe('ControlCardsPrint — collection legs', () => {
     expect(screen.getByText(/Leg 1: Gravenhurst lists 25 controls/)).toBeTruthy()
     // No card pages rendered.
     expect(document.querySelector('.card-page')).toBeNull()
+  })
+
+  it('keeps the appended distance on leg cards, whose names carry no distance', () => {
+    const { container } = renderWithLegs([alice], [legA])
+    const backHeaders = Array.from(container.querySelectorAll('.back-header')).map(
+      (el) => el.textContent
+    )
+    expect(backHeaders.some((h) => h?.includes('Leg 1: Gravenhurst 205.3 km'))).toBe(true)
   })
 
   it('still prints open/close times on single-route cards', () => {

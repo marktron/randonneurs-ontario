@@ -130,6 +130,23 @@ export function backCardLayout(controlCount: number): {
   return { rowsPerColumn, tier }
 }
 
+/**
+ * True when a card title already ends with the event's distance, so appending
+ * "{distance} km" after it would read as "Ottawa 200 200 km".
+ *
+ * Deliberately strict: it only matches a trailing number *equal* to the
+ * distance. Randonneuring names are nominal ("Ottawa 200", "PBP 1200") while
+ * the measured route is usually longer (203.4, 1219) — those are genuinely
+ * different numbers and the real distance still has to be printed. A number
+ * anywhere but the end of the title ("200 Loop of Ottawa") is not a
+ * restatement either.
+ */
+export function titleStatesDistance(title: string, distanceKm: number): boolean {
+  const trailingNumber = title.trim().match(/(\d+(?:\.\d+)?)\s*(?:km)?\.?$/i)
+  if (!trailingNumber) return false
+  return Number(trailingNumber[1]) === distanceKm
+}
+
 // ============================================================================
 // Collection legs (per-leg control cards; see docs/control-cards.md)
 // ============================================================================

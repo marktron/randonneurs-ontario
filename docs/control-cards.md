@@ -99,6 +99,20 @@ The admin flow looks up the event from the DB, so fewer params are needed:
 
 The event name, date, start time, start location, chapter, distance, and RWGPS ID all come from the `events` + `routes` + `chapters` join. Riders come from `registrations` where `status = 'registered'`, including each registration's `management_token` (used to build the result submission QR code).
 
+#### Which name titles the card
+
+`CardEvent.routeName` — the big serif headline on the card front and the middle column header on the back — is **`events.name`**, not `routes.name`. A linked route's name carries RideWithGPS-side edits, version suffixes and distance labels, and one route is often shared by several events, so it drifts from the name riders saw when they registered. The linked route is still used for what it genuinely owns: the `rwgps_id` behind the **Route Map** QR code.
+
+The single exception is a **collection event**, where each printed card covers one leg. `eventFor(leg)` in `ControlCardsPrint` substitutes the leg's name and per-leg distance for that card. See `tests/unit/app/admin-control-cards-print-page.test.tsx`.
+
+The public flow (`/control-cards`) has no event record, so it keeps taking `routeName` from the selected route via the query param.
+
+#### Not restating the distance
+
+The card appends `{distance} km` to the title in two places — the front's distance/date line and the back's middle column header. Event names usually carry the distance already, so appending unconditionally reads as "Ottawa 200 200 km". `titleStatesDistance(title, distanceKm)` in `lib/controlPoints.ts` suppresses the append when the title already ends with that distance.
+
+It is deliberately strict, matching only a **trailing number equal to the distance**. Randonneuring names are nominal while the measured route is longer — "Ottawa 200" at 203.4 km, "PBP 1200" at 1219 km — and those cards must still print the real distance. A number anywhere but the end ("200 Loop of Ottawa") is not a restatement either. Collection leg cards are unaffected: leg names carry no distance, so "Leg 1: Gravenhurst 205.3 km" still prints in full.
+
 ## BRM time calculation (`lib/brmTimes.ts`)
 
 This is the only piece of real domain logic. It implements ACP/BRM control opening and closing rules and should be changed with care — the tests in `tests/unit/lib/brmTimes.test.ts` encode the expected behavior.
@@ -154,7 +168,18 @@ By default `computeControlTimes` truncates distances to whole km before computin
 
 - **Letter portrait**, 2 cards per sheet (front on page 1, back on page 2 — designed for double-sided printing).
 - Front: regulations (left), time/signature fields (middle), event + rider + organizer + QR codes (right).
-- Back: up to 24 controls in 3 columns. Rows per column and typography scale with the control count via `backCardLayout()` in `lib/controlPoints.ts`: `normal` ≤12 controls (4 rows/col, full-size text), `compact` 13–18 (5–6 rows/col), `dense` 19–21 (7 rows/col), `ultra` 22–24 (8 rows/col). The ultra tier renders open/close times on one line (like `Sat 17:14 - Sun 21:36`) and merges the Time and Signature columns into a single **Validation** column at 1/3 of the width, doubling the name cell so long control names (services in brackets, etc.) wrap instead of overflowing; its rows also size to content (`flex-basis: auto`) so a wrapped name takes slack from single-line rows. Other tiers share column height equally (`flex: 1`). Beyond `MAX_CARD_CONTROLS` (24) the print page renders an error panel instead of cards — there is no truncation path. Both forms disable Generate above the cap with an inline error.
+- Back: up to 24 controls in 3 columns. Rows per column and typography scale with the control count via `backCardLayout()` in `lib/controlPoints.ts`: `normal` ≤12 controls (4 rows/col, full-size text), `compact` 13–18 (5–6 rows/col), `dense` 19–21 (7 rows/col), `ultra` 22–24 (8 rows/col). The ultra tier renders open/close times on one line (like `Sat 17:14 - Sun 21:36`) and merges the Time and Signature columns into a single **Validation** column at 1/3 of the width, doubling the name cell so long control names (services in brackets, etc.) wrap instead of overflowing. Beyond `MAX_CARD_CONTROLS` (24) the print page renders an error panel instead of cards — there is no truncation path. Both forms disable Generate above the cap with an inline error.
+
+#### Row sizing and long control names
+
+Three rules in `control-cards-print.css` keep a long control name from breaking the back page. They were added after "Charbonneaus Grocery", "White Lake General Store" and "Athens Fresh Market" wrapped to two lines on a 19-control card and pushed their close times through the row's bottom border into the next control.
+
+- **`.control-row` uses `flex: 1 1 auto`**, not `flex: 1 1 0`. With a `0` basis every row gets an identical share of column height regardless of content, so a row with a wrapped name overflows while single-line rows keep unused space. With an `auto` basis rows size from content and `flex-grow: 1` still spreads the leftover height, so a tall row borrows slack from its neighbours. This is the load-bearing fix and applies at every tier (it was previously scoped to `ultra` only).
+- **The grid is `1.2fr 0.55in 0.8fr`**, not `1fr 0.6in 0.85fr`. The old split left the name cell at ~0.96in, narrow enough that ordinary two-word names wrapped; ~1.09in fits most of them on one line while keeping the Time cell wide enough for `16:15`.
+- **`.control-name` sets `overflow-wrap: anywhere`.** An `fr` track has an automatic `min-content` floor, so a name with no spaces to break at widens the name track and squeezes the Time and Signature cells. `anywhere` is required rather than `break-word` — only `anywhere` lowers the intrinsic `min-content` width that the floor is measured from.
+
+Capacity is still finite: at 7 rows per column there is roughly 4.6in of row space against ~4.3in of single-line content, so about two wrapped names per column fit comfortably. A column where nearly every name wraps would still run past the card edge, and the durable answer there is dropping a tier earlier in `backCardLayout()` rather than more CSS.
+
 - Print styles live in a static stylesheet at `components/admin/control-cards-print.css`, imported by both print layouts so they end up in `<head>` at parse time. `@page { size: letter portrait; margin: 0 }` plus aggressive overrides to hide any ancestor `nav`, `aside`, `header`, or sidebar (important for the admin flow, where the print page still inherits the admin chrome in the component tree). The chrome-hiding rules are also applied in screen media so the print page reads as a clean preview whether visited directly or via the autoprint popup.
 - Fonts (`Noto Sans` + `Noto Serif`) come from `next/font/google` at the root layout, exposed as `var(--font-sans)` and `var(--font-serif)`. The print stylesheet references those CSS variables.
 - Everything in `.no-print` is hidden during print.
@@ -359,7 +384,17 @@ Unit tests cover the pure modules:
 - `tests/unit/lib/rwgps.test.ts` — `cleanControlName`, `extractControls` (source merging, dedupe, POI interpolation, off-route rejection), and `fetchRwgpsControls` (mocked `fetch`).
 - `tests/unit/lib/geo.test.ts` — `haversineMeters` sanity checks.
 
-There are no integration/E2E tests for the print pages themselves — they're layout-heavy and mostly a function of their inputs. If you change the print layout, verify visually in a real print preview; if you change BRM math or RWGPS parsing, update the unit tests red-then-green.
+Component tests cover the rendered DOM:
+
+- `tests/unit/components/control-cards-print.test.tsx` — first-time rider indicator, collection-leg expansion, `MAX_CARD_CONTROLS` error panel.
+
+Back-page **geometry** is covered by a real browser, because jsdom and happy-dom have no layout engine and cannot see a row overflow its border:
+
+- `tests/e2e/control-card-print-layout.spec.ts` — asserts no control row overflows its own box, no two rows overlap, no row extends past the card edge, and that a long unbreakable name does not squeeze the Time/Signature cells. Run with `npm run test:e2e:print-layout`.
+
+That spec uses its own `playwright.config.print-layout.ts` rather than the main Playwright config: `/control-cards/print` is entirely query-param driven and sits outside the `/admin/*` proxy matcher, so it needs no seeded database and should not pull in `tests/e2e/global-setup.ts`. It runs in CI as the `print-layout` job. (The main `tests/e2e` suite is not currently wired into CI, and its `global-setup.ts` cannot run on Node 20 — supabase-js realtime requires a native `WebSocket`.)
+
+If you change the print layout, run that spec and also eyeball a real print preview; if you change BRM math or RWGPS parsing, update the unit tests red-then-green.
 
 ## Common extension points
 

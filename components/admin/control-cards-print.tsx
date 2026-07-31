@@ -11,7 +11,12 @@ import type {
 import { REGULATIONS_TEXT, EVENT_INFO_TEXT } from '@/types/control-card'
 import { QRCodeSVG } from 'qrcode.react'
 import { BoldLabelText } from '@/components/bold-label-text'
-import { backCardLayout, MAX_CARD_CONTROLS, expandRiderLegCards } from '@/lib/controlPoints'
+import {
+  backCardLayout,
+  MAX_CARD_CONTROLS,
+  expandRiderLegCards,
+  titleStatesDistance,
+} from '@/lib/controlPoints'
 
 interface ControlCardsPrintProps {
   event: CardEvent
@@ -373,7 +378,13 @@ function CardFront({
         <div className="card-title">Control Card</div>
         <div className="route-name">{event.routeName}</div>
         <div className="distance-date">
-          {event.distance} km &middot; {formattedDate}
+          {titleStatesDistance(event.routeName, event.distance) ? (
+            formattedDate
+          ) : (
+            <>
+              {event.distance} km &middot; {formattedDate}
+            </>
+          )}
         </div>
 
         <div className="rider-info">
@@ -446,7 +457,9 @@ function CardBack({
               style={{ display: 'flex', justifyContent: 'space-between' }}
             >
               <div style={{ fontWeight: 700 }}>
-                {event.routeName} {event.distance} km
+                {titleStatesDistance(event.routeName, event.distance)
+                  ? event.routeName
+                  : `${event.routeName} ${event.distance} km`}
               </div>
               <div>{formattedDate}</div>
             </div>
