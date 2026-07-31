@@ -1,0 +1,141 @@
+/**
+ * @vitest-environment happy-dom
+ */
+
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { render } from '@testing-library/react'
+
+/**
+ * The printed card's headline identity comes from the event's own name in our
+ * database, not from the linked RWGPS route's name. Route names drift from
+ * what riders were told they signed up for (they carry RWGPS-side edits,
+ * distance suffixes, versioning), and a route is often shared by several
+ * events. The one exception is a collection event, where each printed card is
+ * for a single leg and takes that leg's name.
+ */
+
+const mockRequireAdmin = vi.fn().mockResolvedValue({
+  name: 'Admin Person',
+  phone: '',
+  email: 'admin@example.com',
+})
+vi.mock('@/lib/auth/get-admin', () => ({
+  requireAdmin: () => mockRequireAdmin(),
+}))
+
+vi.mock('@/lib/data/first-time-riders', () => ({
+  getFirstTimeRiderIds: vi.fn().mockResolvedValue([]),
+}))
+
+vi.mock('next/navigation', () => ({
+  notFound: () => {
+    throw new Error('notFound')
+  },
+}))
+
+// qrcode.react renders a <canvas>-free SVG, but keep it trivial for speed.
+vi.mock('qrcode.react', () => ({
+  QRCodeSVG: ({ value }: { value: string }) => <svg data-qr={value} />,
+}))
+
+let eventRow: Record<string, unknown> | null = null
+let controlRows: Record<string, unknown>[] = []
+
+/**
+ * Minimal chainable stand-in for the three queries this page makes:
+ *   events         → .select().eq().single()
+ *   registrations  → .select().eq().eq().order()
+ *   event_controls → .select().eq().order()
+ */
+function makeQueryBuilder(table: string) {
+  const builder = {
+    select: () => builder,
+    eq: () => builder,
+    single: async () => ({ data: table === 'events' ? eventRow : null }),
+    order: async () => ({ data: table === 'event_controls' ? controlRows : [] }),
+  }
+  return builder
+}
+
+vi.mock('@/lib/supabase-server', () => ({
+  getSupabaseAdmin: () => ({ from: (table: string) => makeQueryBuilder(table) }),
+}))
+
+import PrintPage from '@/app/admin/events/[id]/control-cards/print/page'
+
+const CONTROLS = JSON.stringify([
+  { name: 'Start', distance: 0 },
+  { name: 'Finish', distance: 200 },
+])
+
+function renderPage(searchParams: Record<string, string> = {}) {
+  return PrintPage({
+    params: Promise.resolve({ id: 'event-1' }),
+    searchParams: Promise.resolve({ controls: CONTROLS, ...searchParams }),
+  })
+}
+
+beforeEach(() => {
+  controlRows = []
+  eventRow = {
+    id: 'event-1',
+    name: 'Ottawa 200 Brevet',
+    event_date: '2026-08-01',
+    start_time: '06:00',
+    start_location: 'Ottawa',
+    distance_km: 200,
+    event_type: 'brevet',
+    status: 'open',
+    chapters: { id: 'ch-1', name: 'Ottawa' },
+    routes: { id: 'r-1', name: 'Carleton Place 1000 v3 (RWGPS)', rwgps_id: '12345' },
+  }
+})
+
+describe('Admin control-cards print page — card identity', () => {
+  it('titles the card with the event name, not the linked route name', async () => {
+    const { container } = render(await renderPage())
+
+    const routeNames = Array.from(container.querySelectorAll('.route-name')).map(
+      (el) => el.textContent
+    )
+    expect(routeNames.length).toBeGreaterThan(0)
+    for (const name of routeNames) {
+      expect(name).toBe('Ottawa 200 Brevet')
+    }
+    expect(container.textContent).not.toContain('Carleton Place 1000 v3 (RWGPS)')
+  })
+
+  it('uses the event name in the back-page column header too', async () => {
+    const { container } = render(await renderPage())
+
+    const backHeaders = Array.from(container.querySelectorAll('.back-header')).map(
+      (el) => el.textContent
+    )
+    expect(backHeaders.some((h) => h?.includes('Ottawa 200 Brevet 200 km'))).toBe(true)
+  })
+
+  it('still uses the linked route for the Route Map QR code', async () => {
+    const { container } = render(await renderPage())
+
+    expect(container.querySelector('[data-qr="https://ridewithgps.com/routes/12345"]')).toBeTruthy()
+  })
+
+  it('keeps per-leg names on collection events', async () => {
+    controlRows = [
+      { name: 'A Start', distance_km: 0, leg_rwgps_id: '101', leg_name: 'Leg 1: Gravenhurst' },
+      { name: 'A Finish', distance_km: 205.3, leg_rwgps_id: '101', leg_name: 'Leg 1: Gravenhurst' },
+      { name: 'B Start', distance_km: 0, leg_rwgps_id: '102', leg_name: 'Leg 2: Haliburton' },
+      { name: 'B Finish', distance_km: 302.1, leg_rwgps_id: '102', leg_name: 'Leg 2: Haliburton' },
+    ]
+
+    const { container } = render(await renderPage())
+
+    const routeNames = Array.from(container.querySelectorAll('.route-name')).map(
+      (el) => el.textContent
+    )
+    expect(routeNames).toContain('Leg 1: Gravenhurst')
+    expect(routeNames).toContain('Leg 2: Haliburton')
+    // The event name must not leak onto a leg card's headline.
+    expect(routeNames).not.toContain('Ottawa 200 Brevet')
+  })
+})

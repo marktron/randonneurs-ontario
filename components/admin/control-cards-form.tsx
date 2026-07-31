@@ -56,8 +56,10 @@ interface ControlInput {
 
 interface EventInput {
   id: string
+  // The event's own name. There is deliberately no routeName here: the
+  // printed card is titled from the event, and the print page reads the
+  // event straight from the DB (see the control-cards print page).
   name: string
-  routeName: string
   distance: number
   eventDate: string
   startTime: string

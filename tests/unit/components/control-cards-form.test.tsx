@@ -33,7 +33,6 @@ vi.mock('sonner', () => ({
 const event = {
   id: 'event-1',
   name: 'Test Brevet',
-  routeName: 'Test Brevet',
   distance: 200,
   eventDate: '2026-05-15',
   startTime: '06:00',

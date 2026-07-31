@@ -193,7 +193,12 @@ export default async function PrintPage({ params, searchParams }: PrintPageProps
   const cardEvent: CardEvent = {
     id: event.id,
     name: event.name,
-    routeName: event.routes?.name || event.name,
+    // The event's own name, not the linked route's. A route name carries
+    // RWGPS-side edits and version suffixes and is often shared across
+    // events, so it drifts from what riders were told they registered for.
+    // Collection events are the exception and override this per card:
+    // `eventFor(leg)` in ControlCardsPrint substitutes the leg name.
+    routeName: event.name,
     distance: event.distance_km,
     nominalDistance,
     date: startDate,

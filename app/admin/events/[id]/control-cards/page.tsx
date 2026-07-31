@@ -99,7 +99,6 @@ export default async function ControlCardsPage({ params }: ControlCardsPageProps
         event={{
           id: event.id,
           name: event.name,
-          routeName: event.routes?.name || event.name,
           distance: event.distance_km,
           eventDate: event.event_date,
           startTime: event.start_time || '06:00',
