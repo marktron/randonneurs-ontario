@@ -17,6 +17,7 @@
     "test:coverage": "vitest run --coverage",
     "test:integration-real": "vitest run --config vitest.config.integration-real.mts",
     "test:e2e": "playwright test",
+    "test:e2e:print-layout": "playwright test --config=playwright.config.print-layout.ts",
     "test:e2e:ui": "playwright test --ui",
     "prepare": "husky"
   },

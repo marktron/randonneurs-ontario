@@ -31,6 +31,33 @@ jobs:
 
       - run: npm run test:run
 
+  # Real-browser layout checks for the printed control card. These need a
+  # layout engine (jsdom/happy-dom in `verify` has none) but no database: the
+  # /control-cards/print route is query-param driven and sits outside the
+  # /admin/* proxy matcher. Kept in its own job with its own Playwright config
+  # so it doesn't pull in tests/e2e/global-setup.ts and its Supabase client.
+  print-layout:
+    runs-on: ubuntu-latest
+    env:
+      # Placeholders so `next dev` boots without a .env.local. Nothing on this
+      # route talks to Supabase; these only satisfy client-side construction.
+      NEXT_PUBLIC_SUPABASE_URL: http://localhost:54321
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key
+      NEXT_PUBLIC_CURRENT_SEASON: '2026'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - run: npm ci
+
+      - run: npx playwright install --with-deps chromium
+
+      - run: npm run test:e2e:print-layout
+
   # Runs the integration-real suite against a real local Postgres. These tests
   # exercise the actual schema (columns, constraints, triggers, RLS) instead of
   # mocked Supabase, so they catch schema/behaviour drift that the mock-based
