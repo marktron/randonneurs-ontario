@@ -118,6 +118,13 @@ describe('EventCard', () => {
       expect(link).toHaveAttribute('href', 'https://ridewithgps.com/routes/12345')
     })
 
+    it('keeps the Route button hidden until the row is hovered, like scheduled events', () => {
+      render(<EventCard event={cancelledEvent} />)
+      const actions = screen.getByRole('link', { name: /route/i }).closest('div')
+      expect(actions?.className).toContain('md:opacity-0')
+      expect(actions?.className).toContain('md:group-hover:opacity-100')
+    })
+
     it('applies muted styling to the details column', () => {
       render(<EventCard event={cancelledEvent} />)
       const heading = screen.getByRole('heading', { name: /spring 200/i })
