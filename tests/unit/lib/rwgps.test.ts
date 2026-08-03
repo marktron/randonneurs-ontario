@@ -67,13 +67,18 @@ describe('extractControls', () => {
     ])
   })
 
-  it('extracts controls from points_of_interest using track_points to interpolate distance', () => {
+  it('extracts controls from points_of_interest using the POI `distances` array', () => {
     const result = extractControls({
-      track_points: trackPoints,
       points_of_interest: [
-        { name: "CTL Tim Horton's, Ilderton", lat: 43.05, lng: -81.0, poi_type_name: 'control' },
-        { name: 'Foodland', lat: 43.1, lng: -81.0, poi_type_name: 'food' },
-        { name: 'CTL Finish', lat: 43.2, lng: -81.0, poi_type_name: 'control' },
+        {
+          name: "CTL Tim Horton's, Ilderton",
+          lat: 43.05,
+          lng: -81.0,
+          type: 'control',
+          distances: [5000],
+        },
+        { name: 'Foodland', lat: 43.1, lng: -81.0, type: 'food', distances: [10_000] },
+        { name: 'CTL Finish', lat: 43.2, lng: -81.0, type: 'control', distances: [20_000] },
       ],
     })
     expect(result).toEqual([
@@ -84,9 +89,10 @@ describe('extractControls', () => {
 
   it('merges course_points and points_of_interest when they do not overlap', () => {
     const result = extractControls({
-      track_points: trackPoints,
       course_points: [{ n: 'CTL Start', d: 0, t: 'Control' }],
-      points_of_interest: [{ name: 'CTL Middle', lat: 43.1, lng: -81.0, poi_type_name: 'control' }],
+      points_of_interest: [
+        { name: 'CTL Middle', lat: 43.1, lng: -81.0, type: 'control', distances: [10_000] },
+      ],
     })
     expect(result).toEqual([
       { name: 'Start', distance: '0.0' },
@@ -96,11 +102,10 @@ describe('extractControls', () => {
 
   it('dedupes overlapping controls and prefers the POI entry over the course-point', () => {
     const result = extractControls({
-      track_points: trackPoints,
       course_points: [{ n: 'Coursename Halfway', d: 10_050, t: 'Control' }],
       points_of_interest: [
-        // Sits on the same track point, 50m away in cumulative distance from the course point.
-        { name: 'CTL POI Halfway', lat: 43.1, lng: -81.0, poi_type_name: 'control' },
+        // 50 m away along the route from the course point.
+        { name: 'CTL POI Halfway', lat: 43.1, lng: -81.0, type: 'control', distances: [10_000] },
       ],
     })
     expect(result).toEqual([{ name: 'POI Halfway', distance: '10.0' }])
@@ -108,7 +113,6 @@ describe('extractControls', () => {
 
   it('keeps both when the same source has controls > 100 m apart', () => {
     const result = extractControls({
-      track_points: trackPoints,
       course_points: [
         { n: 'CTL A', d: 10_000, t: 'Control' },
         { n: 'CTL B', d: 10_200, t: 'Control' }, // 200 m apart → kept
@@ -122,11 +126,10 @@ describe('extractControls', () => {
 
   it('ignores non-control POI types', () => {
     const result = extractControls({
-      track_points: trackPoints,
       points_of_interest: [
-        { name: 'Rest stop', lat: 43.05, lng: -81.0, poi_type_name: 'food' },
-        { name: 'Parking', lat: 43.1, lng: -81.0, poi_type_name: 'parking' },
-        { name: 'Nice view', lat: 43.15, lng: -81.0, poi_type_name: 'viewpoint' },
+        { name: 'Rest stop', lat: 43.05, lng: -81.0, type: 'food', distances: [5000] },
+        { name: 'Parking', lat: 43.1, lng: -81.0, type: 'parking', distances: [10_000] },
+        { name: 'Nice view', lat: 43.15, lng: -81.0, type: 'viewpoint', distances: [15_000] },
       ],
     })
     expect(result).toEqual([])
@@ -134,11 +137,10 @@ describe('extractControls', () => {
 
   it('imports start and finish POI types as controls', () => {
     const result = extractControls({
-      track_points: trackPoints,
       points_of_interest: [
-        { name: 'Start: Waterloo', lat: 43.0, lng: -81.0, poi_type_name: 'start' },
-        { name: 'CONTROL - Middle', lat: 43.1, lng: -81.0, poi_type_name: 'control' },
-        { name: 'CONTROL Finish A&W', lat: 43.2, lng: -81.0, poi_type_name: 'finish' },
+        { name: 'Start: Waterloo', lat: 43.0, lng: -81.0, type: 'start', distances: [0] },
+        { name: 'CONTROL - Middle', lat: 43.1, lng: -81.0, type: 'control', distances: [10_000] },
+        { name: 'CONTROL Finish A&W', lat: 43.2, lng: -81.0, type: 'finish', distances: [20_000] },
       ],
     })
     expect(result).toEqual([
@@ -152,18 +154,30 @@ describe('extractControls', () => {
     // Matches RWGPS route 48210770 where a bare "Start: ..." POI and an
     // explicit "CONTROL Start A&W" POI both sit at the start line.
     const result = extractControls({
-      track_points: trackPoints,
       points_of_interest: [
-        { name: 'Start: Waterloo', lat: 43.0, lng: -81.0, poi_type_name: 'start' },
-        { name: 'CONTROL Start A&W, Waterloo', lat: 43.0, lng: -81.0, poi_type_name: 'start' },
+        { name: 'Start: Waterloo', lat: 43.0, lng: -81.0, type: 'start', distances: [0] },
+        {
+          name: 'CONTROL Start A&W, Waterloo',
+          lat: 43.0,
+          lng: -81.0,
+          type: 'start',
+          distances: [0],
+        },
         {
           name: 'CONTROL Finish A&W, Waterloo',
           lat: 43.2,
           lng: -81.0,
-          poi_type_name: 'finish',
+          type: 'finish',
+          distances: [20_000],
         },
         // A control-type POI at the very start should outrank the start-type POI
-        { name: 'CONTROL Start (explicit)', lat: 43.0, lng: -81.0, poi_type_name: 'control' },
+        {
+          name: 'CONTROL Start (explicit)',
+          lat: 43.0,
+          lng: -81.0,
+          type: 'control',
+          distances: [0],
+        },
       ],
     })
     expect(result).toEqual([
@@ -173,25 +187,21 @@ describe('extractControls', () => {
   })
 
   it('collapses same-type POIs that are physically co-located, preferring the CONTROL-prefixed name', () => {
-    // Two `start` POIs representing the same parking lot but ~70 m apart
-    // in raw lat/lng. These can interpolate to different track points near
-    // the loop boundary, so they have to be collapsed by physical distance
-    // before interpolation, not just by route distance after.
+    // Two `start` POIs representing the same parking lot but ~70 m apart in
+    // raw lat/lng, with slightly different distances along the route. They
+    // are collapsed by physical distance, so only the CONTROL-prefixed one
+    // (and its own distance) survives.
     const result = extractControls({
-      track_points: [
-        { x: -80.55, y: 43.5, d: 0 },
-        { x: -80.55, y: 43.501, d: 200 },
-        { x: -80.55, y: 43.6, d: 10_000 },
-      ],
       points_of_interest: [
-        { name: 'Start: Waterloo', lat: 43.5, lng: -80.55, poi_type_name: 'start' },
+        { name: 'Start: Waterloo', lat: 43.5, lng: -80.55, type: 'start', distances: [0] },
         {
           name: 'CONTROL Start A&W, Waterloo',
           lat: 43.5006,
           lng: -80.5505,
-          poi_type_name: 'start',
+          type: 'start',
+          distances: [200],
         },
-        { name: 'CONTROL End', lat: 43.6, lng: -80.55, poi_type_name: 'control' },
+        { name: 'CONTROL End', lat: 43.6, lng: -80.55, type: 'control', distances: [10_000] },
       ],
     })
     expect(result).toEqual([
@@ -204,14 +214,10 @@ describe('extractControls', () => {
     // Two legitimately separate controls at two different establishments a
     // few blocks apart must stay distinct.
     const result = extractControls({
-      track_points: [
-        { x: -80.55, y: 43.5, d: 0 },
-        { x: -80.55, y: 43.504, d: 450 }, // ~444 m north
-        { x: -80.55, y: 43.6, d: 10_000 },
-      ],
       points_of_interest: [
-        { name: 'CTL First Stop', lat: 43.5, lng: -80.55, poi_type_name: 'control' },
-        { name: 'CTL Second Stop', lat: 43.504, lng: -80.55, poi_type_name: 'control' },
+        { name: 'CTL First Stop', lat: 43.5, lng: -80.55, type: 'control', distances: [0] },
+        // ~444 m north, and 450 m further along the route.
+        { name: 'CTL Second Stop', lat: 43.504, lng: -80.55, type: 'control', distances: [450] },
       ],
     })
     expect(result).toEqual([
@@ -225,14 +231,9 @@ describe('extractControls', () => {
     // `start` and `finish` types carry different semantics — both belong on
     // the card at their respective route distances (km 0 and km 200).
     const result = extractControls({
-      track_points: [
-        { x: -80.55, y: 43.5, d: 0 },
-        { x: -80.55, y: 43.6, d: 100_000 },
-        { x: -80.55, y: 43.5, d: 200_000 },
-      ],
       points_of_interest: [
-        { name: 'Start A&W', lat: 43.5, lng: -80.55, poi_type_name: 'start' },
-        { name: 'Finish A&W', lat: 43.5, lng: -80.55, poi_type_name: 'finish' },
+        { name: 'Start A&W', lat: 43.5, lng: -80.55, type: 'start', distances: [0, 200_000] },
+        { name: 'Finish A&W', lat: 43.5, lng: -80.55, type: 'finish', distances: [0, 200_000] },
       ],
     })
     expect(result).toEqual([
@@ -243,11 +244,10 @@ describe('extractControls', () => {
 
   it('keeps start/finish POIs when no course-point or control POI collides', () => {
     const result = extractControls({
-      track_points: trackPoints,
       course_points: [{ n: 'CTL Middle', d: 10_000, t: 'Control' }],
       points_of_interest: [
-        { name: 'Start', lat: 43.0, lng: -81.0, poi_type_name: 'start' },
-        { name: 'Finish', lat: 43.2, lng: -81.0, poi_type_name: 'finish' },
+        { name: 'Start', lat: 43.0, lng: -81.0, type: 'start', distances: [0] },
+        { name: 'Finish', lat: 43.2, lng: -81.0, type: 'finish', distances: [20_000] },
       ],
     })
     expect(result).toEqual([
@@ -257,48 +257,42 @@ describe('extractControls', () => {
     ])
   })
 
-  it('drops POIs whose nearest track point is farther than 500 m', () => {
+  it('drops POIs whose distances array is empty (off-route or unplaceable)', () => {
     const result = extractControls({
-      track_points: trackPoints,
       points_of_interest: [
-        // About 111 km north of the nearest track point — definitely off-route.
-        { name: 'CTL Stray', lat: 44.05, lng: -81.0, poi_type_name: 'control' },
+        { name: 'CTL Stray', lat: 44.05, lng: -81.0, type: 'control', distances: [] },
       ],
     })
     expect(result).toEqual([])
   })
 
-  it('drops POIs when track_points is missing', () => {
+  it('drops POIs with no distances field at all', () => {
     const result = extractControls({
-      points_of_interest: [
-        { name: 'CTL Something', lat: 43.05, lng: -81.0, poi_type_name: 'control' },
-      ],
+      points_of_interest: [{ name: 'CTL Something', lat: 43.05, lng: -81.0, type: 'control' }],
     })
     expect(result).toEqual([])
   })
 
   it('returns empty array when there are no controls in either source', () => {
     const result = extractControls({
-      track_points: trackPoints,
       course_points: [{ n: 'Turn', d: 5000, t: 'Left' }],
-      points_of_interest: [{ name: 'Food', lat: 43.05, lng: -81.0, poi_type_name: 'food' }],
+      points_of_interest: [
+        { name: 'Food', lat: 43.05, lng: -81.0, type: 'food', distances: [5000] },
+      ],
     })
     expect(result).toEqual([])
   })
 
-  it('emits one control per route pass when a control POI is visited twice (out-and-back)', () => {
-    // Out-and-back: the route reaches 43.1 and returns, passing 43.05 at
-    // km 5 and again at km 15. One POI there is two controls on the card.
+  it('emits one control per distance when a control POI is passed twice (out-and-back)', () => {
     const result = extractControls({
-      track_points: [
-        { x: -81.0, y: 43.0, d: 0 },
-        { x: -81.0, y: 43.05, d: 5000 },
-        { x: -81.0, y: 43.1, d: 10_000 },
-        { x: -81.0, y: 43.05, d: 15_000 },
-        { x: -81.0, y: 43.0, d: 20_000 },
-      ],
       points_of_interest: [
-        { name: 'CTL Midpoint', lat: 43.05, lng: -81.0, poi_type_name: 'control' },
+        {
+          name: 'CTL Midpoint',
+          lat: 43.05,
+          lng: -81.0,
+          type: 'control',
+          distances: [5000, 15_000],
+        },
       ],
     })
     expect(result).toEqual([
@@ -307,45 +301,39 @@ describe('extractControls', () => {
     ])
   })
 
-  it('emits every pass of a hub control visited at start, middle, and finish', () => {
-    // Cloverleaf route from a hub at 43.0: out north and back, out south and
-    // back. The hub POI is a control at km 0, km 20, and km 40.
+  it('emits every pass of a hub control (RWGPS route 53737237, Waffle 1200)', () => {
+    // The Waffle 1200 is a four-petal cloverleaf from Chatham; RWGPS reports
+    // all five visits in the POI's `distances` array.
     const result = extractControls({
-      track_points: [
-        { x: -81.0, y: 43.0, d: 0 },
-        { x: -81.0, y: 43.1, d: 10_000 },
-        { x: -81.0, y: 43.0, d: 20_000 },
-        { x: -81.0, y: 42.9, d: 30_000 },
-        { x: -81.0, y: 43.0, d: 40_000 },
-      ],
       points_of_interest: [
-        { name: 'CTL Hub', lat: 43.0, lng: -81.0, poi_type_name: 'control' },
-        { name: 'CTL North', lat: 43.1, lng: -81.0, poi_type_name: 'control' },
+        {
+          name: 'Chatham',
+          lat: 42.37963,
+          lng: -82.21737,
+          type: 'control',
+          distances: [0, 355_812.8, 714_587.1, 1_009_806.9, 1_214_016.7],
+        },
+        { name: 'CTL Sarnia', lat: 42.97, lng: -82.4, type: 'control', distances: [460_406.4] },
       ],
     })
     expect(result).toEqual([
-      { name: 'Hub', distance: '0.0' },
-      { name: 'North', distance: '10.0' },
-      { name: 'Hub', distance: '20.0' },
-      { name: 'Hub', distance: '40.0' },
+      { name: 'Chatham', distance: '0.0' },
+      { name: 'Chatham', distance: '355.8' },
+      { name: 'Sarnia', distance: '460.4' },
+      { name: 'Chatham', distance: '714.6' },
+      { name: 'Chatham', distance: '1009.8' },
+      { name: 'Chatham', distance: '1214.0' },
     ])
   })
 
-  it('keeps a start POI only at its first pass and a finish POI only at its last', () => {
-    // Hub route again, but the POIs are typed start/finish: a start label at
-    // a location revisited mid-ride must not spawn mid-ride controls.
-    const hubTrack = [
-      { x: -81.0, y: 43.0, d: 0 },
-      { x: -81.0, y: 43.1, d: 10_000 },
-      { x: -81.0, y: 43.0, d: 20_000 },
-      { x: -81.0, y: 42.9, d: 30_000 },
-      { x: -81.0, y: 43.0, d: 40_000 },
-    ]
+  it('keeps a start POI only at its first distance and a finish POI only at its last', () => {
+    // Hub route whose POIs are typed start/finish: a start label at a
+    // location revisited mid-ride must not spawn mid-ride controls.
+    const hubDistances = [0, 20_000, 40_000]
     const result = extractControls({
-      track_points: hubTrack,
       points_of_interest: [
-        { name: 'Start: Hub', lat: 43.0, lng: -81.0, poi_type_name: 'start' },
-        { name: 'Finish: Hub', lat: 43.0, lng: -81.0, poi_type_name: 'finish' },
+        { name: 'Start: Hub', lat: 43.0, lng: -81.0, type: 'start', distances: hubDistances },
+        { name: 'Finish: Hub', lat: 43.0, lng: -81.0, type: 'finish', distances: hubDistances },
       ],
     })
     expect(result).toEqual([
@@ -354,46 +342,57 @@ describe('extractControls', () => {
     ])
   })
 
-  it('treats a tight turnaround just past a control as a single pass', () => {
-    // The route stays within 500 m of the POI through the turnaround, so the
-    // out and back legs are one visit, not two.
+  it('sorts distances before emitting controls', () => {
     const result = extractControls({
-      track_points: [
-        { x: -81.0, y: 43.0, d: 0 },
-        { x: -81.0, y: 43.05, d: 5000 },
-        { x: -81.0, y: 43.052, d: 5300 }, // turnaround ~220 m past the control
-        { x: -81.0, y: 43.05, d: 5600 },
-        { x: -81.0, y: 43.0, d: 10_600 },
-      ],
       points_of_interest: [
-        { name: 'CTL Turnaround', lat: 43.05, lng: -81.0, poi_type_name: 'control' },
+        {
+          name: 'CTL Unsorted',
+          lat: 43.05,
+          lng: -81.0,
+          type: 'control',
+          distances: [15_000, 5000],
+        },
+        { name: 'Finish: Hub', lat: 43.0, lng: -81.0, type: 'finish', distances: [40_000, 0] },
       ],
     })
-    expect(result).toEqual([{ name: 'Turnaround', distance: '5.0' }])
+    expect(result).toEqual([
+      { name: 'Unsorted', distance: '5.0' },
+      { name: 'Unsorted', distance: '15.0' },
+      { name: 'Finish: Hub', distance: '40.0' },
+    ])
   })
 
   it('handles POIs missing lat or lng gracefully', () => {
     const result = extractControls({
-      track_points: trackPoints,
       points_of_interest: [
-        { name: 'CTL Missing', poi_type_name: 'control' },
-        { name: 'CTL Good', lat: 43.1, lng: -81.0, poi_type_name: 'control' },
+        { name: 'CTL Missing', type: 'control', distances: [5000] },
+        { name: 'CTL Good', lat: 43.1, lng: -81.0, type: 'control', distances: [10_000] },
       ],
     })
     expect(result).toEqual([{ name: 'Good', distance: '10.0' }])
+  })
+
+  it('interpolates course-point coordinates from track_points when x/y are absent', () => {
+    const result = extractControlsWithCoords({
+      track_points: trackPoints,
+      course_points: [{ n: 'CTL Halfway', d: 10_000, t: 'Control' }],
+    })
+    expect(result).toEqual([
+      { name: 'Halfway', distance: '10.0', lat: 43.1, lng: -81.0, notes: null },
+    ])
   })
 })
 
 describe('extractControlsWithCoords notes', () => {
   it("carries a control POI's description into notes", () => {
     const result = extractControlsWithCoords({
-      track_points: trackPoints,
       points_of_interest: [
         {
           name: 'CTL Tim Hortons',
           lat: 43.05,
           lng: -81.0,
-          poi_type_name: 'control',
+          type: 'control',
+          distances: [5000],
           description: 'Get your card signed at the counter.',
         },
       ],
@@ -411,20 +410,21 @@ describe('extractControlsWithCoords notes', () => {
 
   it('trims description whitespace and treats an empty description as null notes', () => {
     const result = extractControlsWithCoords({
-      track_points: trackPoints,
       points_of_interest: [
         {
           name: 'CTL Trimmed',
           lat: 43.05,
           lng: -81.0,
-          poi_type_name: 'control',
+          type: 'control',
+          distances: [5000],
           description: '  spaced out  ',
         },
         {
           name: 'CTL Blank',
           lat: 43.1,
           lng: -81.0,
-          poi_type_name: 'control',
+          type: 'control',
+          distances: [10_000],
           description: '   ',
         },
       ],
@@ -445,14 +445,17 @@ describe('extractControlsWithCoords notes', () => {
 
 describe('fetchRwgpsControls', () => {
   beforeEach(() => {
+    vi.stubEnv('RWGPS_API_KEY', 'test-key')
+    vi.stubEnv('RWGPS_AUTH_TOKEN', 'test-token')
     vi.stubGlobal('fetch', vi.fn())
   })
 
   afterEach(() => {
     vi.unstubAllGlobals()
+    vi.unstubAllEnvs()
   })
 
-  it('fetches from the RWGPS JSON endpoint and returns parsed controls', async () => {
+  it('fetches from the authenticated v1 API and returns parsed controls', async () => {
     const fetchMock = vi.mocked(global.fetch)
     fetchMock.mockResolvedValueOnce({
       ok: true,
@@ -462,8 +465,21 @@ describe('fetchRwgpsControls', () => {
     } as Response)
 
     const controls = await fetchRwgpsControls('47170397')
-    expect(fetchMock).toHaveBeenCalledWith('https://ridewithgps.com/routes/47170397.json')
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://ridewithgps.com/api/v1/routes/47170397.json',
+      expect.objectContaining({
+        headers: { 'x-rwgps-api-key': 'test-key', 'x-rwgps-auth-token': 'test-token' },
+      })
+    )
     expect(controls).toEqual([{ name: 'Start', distance: '0.0' }])
+  })
+
+  it('throws a user-facing error when the API credentials are missing', async () => {
+    vi.stubEnv('RWGPS_API_KEY', '')
+    const fetchMock = vi.mocked(global.fetch)
+
+    await expect(fetchRwgpsControls('1')).rejects.toThrow(/RideWithGPS API .*not configured/i)
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 
   it('unwraps the nested `route` key when present', async () => {
@@ -581,11 +597,14 @@ describe('parseRwgpsRouteRef', () => {
 
 describe('fetchRwgpsRoute', () => {
   beforeEach(() => {
+    vi.stubEnv('RWGPS_API_KEY', 'test-key')
+    vi.stubEnv('RWGPS_AUTH_TOKEN', 'test-token')
     vi.stubGlobal('fetch', vi.fn())
   })
 
   afterEach(() => {
     vi.unstubAllGlobals()
+    vi.unstubAllEnvs()
   })
 
   it('returns name, distanceKm, and controls from the RWGPS JSON', async () => {
@@ -603,7 +622,12 @@ describe('fetchRwgpsRoute', () => {
     } as Response)
 
     const result = await fetchRwgpsRoute('47170397')
-    expect(fetchMock).toHaveBeenCalledWith('https://ridewithgps.com/routes/47170397.json')
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://ridewithgps.com/api/v1/routes/47170397.json',
+      expect.objectContaining({
+        headers: { 'x-rwgps-api-key': 'test-key', 'x-rwgps-auth-token': 'test-token' },
+      })
+    )
     expect(result.name).toBe('Toronto Loop 200')
     expect(result.distanceKm).toBeCloseTo(203.5, 1)
     expect(result.controls).toEqual([
@@ -692,8 +716,19 @@ describe('fetchRwgpsRoute', () => {
 
     await fetchRwgpsRoute('1', 'ABC123')
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://ridewithgps.com/routes/1.json?privacy_code=ABC123'
+      'https://ridewithgps.com/api/v1/routes/1.json?privacy_code=ABC123',
+      expect.objectContaining({
+        headers: { 'x-rwgps-api-key': 'test-key', 'x-rwgps-auth-token': 'test-token' },
+      })
     )
+  })
+
+  it('throws a user-facing error when the API credentials are missing', async () => {
+    vi.stubEnv('RWGPS_AUTH_TOKEN', '')
+    const fetchMock = vi.mocked(global.fetch)
+
+    await expect(fetchRwgpsRoute('1')).rejects.toThrow(/RideWithGPS API .*not configured/i)
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 })
 

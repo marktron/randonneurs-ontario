@@ -60,11 +60,23 @@ interface RwgpsCoursePoint {
   y?: number // lat
 }
 
+/**
+ * Point of interest as returned by the authenticated v1 route API. `type` is
+ * the lowercase machine type ('control', 'start', 'finish', 'restroom', …)
+ * and `distances` holds one cumulative distance (meters from the route start)
+ * per pass the route makes by the POI — five entries for a control the route
+ * visits five times, and an empty array for a POI that isn't on the route.
+ *
+ * The unauthenticated `ridewithgps.com/routes/{id}.json` endpoint reports
+ * neither field (it uses `poi_type_name` and omits distances entirely), which
+ * is why control imports go through the v1 API.
+ */
 interface RwgpsPoi {
   name?: string
   lat?: number
   lng?: number
-  poi_type_name?: string
+  type?: string
+  distances?: number[]
   description?: string
 }
 
@@ -180,10 +192,6 @@ export function cleanControlName(raw: string | undefined): string {
   return name
 }
 
-// Reject POIs whose nearest track point is farther than this; they likely
-// aren't on the route and shouldn't be auto-imported.
-const MAX_POI_OFFROUTE_METERS = 500
-
 // Controls whose cumulative distance differs by less than this are treated
 // as the same control (collapses course-point + waypoint duplicates).
 const DEDUPE_THRESHOLD_METERS = 100
@@ -191,11 +199,10 @@ const DEDUPE_THRESHOLD_METERS = 100
 // Physical-distance threshold for collapsing same-type POIs that represent
 // the same stop (e.g., a "Start: Waterloo" label POI and a "CONTROL Start
 // A&W" control POI, both type `start`, both sitting at the same parking
-// lot). Applied to raw POI lat/lng before distance interpolation, because
-// co-located POIs can otherwise interpolate onto different track points on
-// a loop route and escape the distance-along-route dedupe. Only applies to
-// POIs of the same `poi_type_name`, so legitimate separate controls can
-// still sit within 200 m of each other.
+// lot). Applied to raw POI lat/lng, because co-located POIs can report
+// slightly different distances along the route and escape the
+// distance-along-route dedupe. Only applies to POIs of the same `type`, so
+// legitimate separate controls can still sit within 200 m of each other.
 const POI_PHYSICAL_DEDUPE_METERS = 200
 
 function hasControlNamePrefix(name: string | undefined): boolean {
@@ -250,55 +257,9 @@ function findTrackPointNearestDistance(
   return best
 }
 
-function poiSourceFor(poiTypeName: string | undefined): Source | null {
-  if (!poiTypeName) return null
-  return CONTROL_POI_TYPES[poiTypeName] ?? null
-}
-
-// Along-route gap that separates two visits to the same POI. While the route
-// stays within MAX_POI_OFFROUTE_METERS of the POI, successive in-range track
-// points are at most a few dozen meters apart; leaving the radius for more
-// than this much route and returning is a genuine re-pass.
-const PASS_GAP_METERS = 1000
-
-/**
- * Find every pass the route makes by (lat, lng): each cluster of in-range
- * track points (within MAX_POI_OFFROUTE_METERS, split where the along-route
- * gap exceeds PASS_GAP_METERS) yields its closest point's cumulative
- * distance. Loop and out-and-back routes visit the same physical control
- * more than once, and each visit is its own control on the card.
- *
- * `trackPoints` must be sorted by cumulative distance.
- */
-function findRoutePasses(
-  lat: number,
-  lng: number,
-  trackPoints: RwgpsTrackPoint[]
-): { distanceMeters: number; offsetMeters: number }[] {
-  const passes: { distanceMeters: number; offsetMeters: number }[] = []
-  let current: { distanceMeters: number; offsetMeters: number; lastD: number } | null = null
-  for (const tp of trackPoints) {
-    if (tp.y == null || tp.x == null || tp.d == null) continue
-    const offset = haversineMeters(lat, lng, tp.y, tp.x)
-    if (offset > MAX_POI_OFFROUTE_METERS) continue
-    if (current && tp.d - current.lastD > PASS_GAP_METERS) {
-      passes.push({ distanceMeters: current.distanceMeters, offsetMeters: current.offsetMeters })
-      current = null
-    }
-    if (!current) {
-      current = { distanceMeters: tp.d, offsetMeters: offset, lastD: tp.d }
-    } else {
-      current.lastD = tp.d
-      if (offset < current.offsetMeters) {
-        current.offsetMeters = offset
-        current.distanceMeters = tp.d
-      }
-    }
-  }
-  if (current) {
-    passes.push({ distanceMeters: current.distanceMeters, offsetMeters: current.offsetMeters })
-  }
-  return passes
+function poiSourceFor(poiType: string | undefined): Source | null {
+  if (!poiType) return null
+  return CONTROL_POI_TYPES[poiType] ?? null
 }
 
 function dedupeCoLocatedPois(pois: RwgpsPoi[]): RwgpsPoi[] {
@@ -307,7 +268,7 @@ function dedupeCoLocatedPois(pois: RwgpsPoi[]): RwgpsPoi[] {
     if (p.lat == null || p.lng == null) continue
     const idx = kept.findIndex(
       (k) =>
-        k.poi_type_name === p.poi_type_name &&
+        k.type === p.type &&
         haversineMeters(p.lat!, p.lng!, k.lat!, k.lng!) < POI_PHYSICAL_DEDUPE_METERS
     )
     if (idx === -1) {
@@ -325,35 +286,32 @@ function dedupeCoLocatedPois(pois: RwgpsPoi[]): RwgpsPoi[] {
 }
 
 function parsePoiControls(route: RwgpsRoute): InternalControl[] {
-  const trackPoints = [...(route.track_points ?? [])].sort((a, b) => (a.d ?? 0) - (b.d ?? 0))
-  if (trackPoints.length === 0) return []
-
-  const candidates = (route.points_of_interest ?? []).filter(
-    (p) => poiSourceFor(p.poi_type_name) != null
-  )
+  const candidates = (route.points_of_interest ?? []).filter((p) => poiSourceFor(p.type) != null)
   const pois = dedupeCoLocatedPois(candidates)
 
   const result: InternalControl[] = []
   for (const poi of pois) {
-    const source = poiSourceFor(poi.poi_type_name)
+    const source = poiSourceFor(poi.type)
     if (!source) continue
     if (poi.lat == null || poi.lng == null) continue
-    const allPasses = findRoutePasses(poi.lat, poi.lng, trackPoints)
-    if (allPasses.length === 0) continue
-    // A control POI is a control at every visit. A start/finish POI marks one
+    // No distances means RWGPS couldn't place the POI on the route (it sits
+    // off-route, or was never snapped to the track); skip it.
+    const allDistances = [...(poi.distances ?? [])].sort((a, b) => a - b)
+    if (allDistances.length === 0) continue
+    // A control POI is a control at every pass. A start/finish POI marks one
     // endpoint: on loops the same spot is passed at km 0 and km total (and
     // sometimes mid-ride), so keep only the first pass for `start` and only
     // the last for `finish`.
-    const passes =
-      poi.poi_type_name === 'start'
-        ? [allPasses[0]]
-        : poi.poi_type_name === 'finish'
-          ? [allPasses[allPasses.length - 1]]
-          : allPasses
-    for (const pass of passes) {
+    const distances =
+      poi.type === 'start'
+        ? [allDistances[0]]
+        : poi.type === 'finish'
+          ? [allDistances[allDistances.length - 1]]
+          : allDistances
+    for (const distanceMeters of distances) {
       result.push({
         name: cleanControlName(poi.name),
-        distanceKm: pass.distanceMeters / 1000,
+        distanceKm: distanceMeters / 1000,
         source,
         lat: poi.lat,
         lng: poi.lng,
@@ -389,8 +347,9 @@ function dedupeControls(controls: InternalControl[]): InternalControl[] {
  * Extract, merge, and dedupe controls from an RWGPS route JSON response.
  * Controls may come from two sources:
  *   - `course_points` with `t === 'Control'` (distance comes from `cp.d`)
- *   - `points_of_interest` with `poi_type_name` in {`control`, `start`, `finish`}
- *     (lat/lng only; distance interpolated from nearest `track_points` entry)
+ *   - `points_of_interest` with `type` in {`control`, `start`, `finish`}
+ *     (one control per entry in the POI's `distances` array, so a control the
+ *     route passes several times lands on the card once per pass)
  *
  * When entries collide within 100 m along the route, precedence is
  * control POI > start/finish POI > course point, because POI names tend to
@@ -418,18 +377,39 @@ export function extractControlsWithCoords(route: RwgpsRoute): ParsedControlWithC
 }
 
 /**
+ * Auth headers for the RWGPS v1 API. Throws a user-facing Error when the
+ * credentials are missing — the route fetchers below surface their messages
+ * straight to the organizer, so a misconfigured deployment says so rather
+ * than failing as a bare 401.
+ */
+function rwgpsApiHeaders(): Record<string, string> {
+  const apiKey = process.env.RWGPS_API_KEY
+  const authToken = process.env.RWGPS_AUTH_TOKEN
+  if (!apiKey || !authToken) {
+    throw new Error(
+      'RideWithGPS API access is not configured. Set RWGPS_API_KEY and RWGPS_AUTH_TOKEN.'
+    )
+  }
+  return { 'x-rwgps-api-key': apiKey, 'x-rwgps-auth-token': authToken }
+}
+
+/**
  * Fetch an RWGPS route JSON and return its display name, total distance,
  * and parsed controls — used by the control-cards rwgps validation mode
  * for routes that aren't yet in the database. Throws Error with a
  * user-facing message on any failure.
+ *
+ * Uses the authenticated v1 API: only that endpoint reports each POI's
+ * `distances` array, which is how multi-pass controls get one row per pass.
  */
 export async function fetchRwgpsRoute(
   rwgpsId: string,
   privacyCode?: string | null
 ): Promise<{ name: string; distanceKm: number; controls: ParsedControl[] }> {
-  const base = `https://ridewithgps.com/routes/${rwgpsId}.json`
+  const headers = rwgpsApiHeaders()
+  const base = `https://ridewithgps.com/api/v1/routes/${rwgpsId}.json`
   const url = privacyCode ? `${base}?privacy_code=${encodeURIComponent(privacyCode)}` : base
-  const response = await fetch(url)
+  const response = await fetch(url, { headers })
   if (!response.ok) {
     throw new Error(`Failed to fetch route: ${response.status} ${response.statusText}`)
   }
@@ -460,18 +440,20 @@ export async function fetchRwgpsControls(rwgpsId: string): Promise<ParsedControl
 
 /**
  * fetchRwgpsControls, but preserving coordinates (digital brevet card
- * import). Throws Error with a user-facing message on any failure.
+ * import). Uses the authenticated v1 API for the POI `distances` array.
+ * Throws Error with a user-facing message on any failure.
  */
 export async function fetchRwgpsControlsWithCoords(
   rwgpsId: string
 ): Promise<ParsedControlWithCoords[]> {
-  const url = `https://ridewithgps.com/routes/${rwgpsId}.json`
-  const response = await fetch(url)
+  const headers = rwgpsApiHeaders()
+  const url = `https://ridewithgps.com/api/v1/routes/${rwgpsId}.json`
+  const response = await fetch(url, { headers })
   if (!response.ok) {
     throw new Error(`Failed to fetch route: ${response.status} ${response.statusText}`)
   }
   const data: unknown = await response.json()
-  // RWGPS sometimes nests the route under a `route` key; sometimes it's at the top level.
+  // The v1 API nests the route under a `route` key; tolerate a bare body too.
   const route = (data as { route?: RwgpsRoute }).route ?? (data as RwgpsRoute)
   const controls = extractControlsWithCoords(route)
   if (controls.length === 0) {

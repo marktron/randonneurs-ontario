@@ -299,9 +299,11 @@ true })`) — leg-event printing reads the saved `event_controls` rows, so
 
 Both forms auto-import controls when the route has an `rwgps_id`, on mount (public form: when the user selects a route; admin form: on initial mount **only when the event has no saved `event_controls`** — otherwise it prefills from those, see below). When the admin form auto-imports on mount, it also **auto-saves** the imported rows back to `event_controls` (via the same save flow as the manual button), so an unconfigured event lands in sync with the digital brevet card without a click — a distinct toast ("Controls imported from RWGPS and saved to this event") confirms it. The auto-save is skipped when the event is submitted (controls are frozen — the import still runs so the printed card is populated), and a run-once ref guard keeps React strict-mode's double-invoked mount effect from importing or saving twice. A **manual** "Import from RWGPS" click never auto-saves; it only repopulates the rows and lets the drift affordances persist them. All fetching, parsing, and dedupe logic lives in `lib/rwgps.ts`.
 
-The two forms now differ in **how** they fetch:
+All route fetching goes through the **authenticated v1 API** (`https://ridewithgps.com/api/v1/routes/{id}.json`, with the `x-rwgps-api-key` and `x-rwgps-auth-token` headers from `RWGPS_API_KEY` / `RWGPS_AUTH_TOKEN`). Only the v1 response carries each POI's `distances` array, which is what makes multi-pass controls work (see below); the public `ridewithgps.com/routes/{id}.json` endpoint does not. Because the credentials must stay server-side, the public form's fetches run through the thin server actions in `lib/actions/rwgps.ts` (`loadRwgpsControls`, `loadRwgpsRoute`) rather than from the browser. Those actions return `ActionResult` rather than throwing, since Next.js masks thrown server-action messages in production.
 
-- **Public form** calls `fetchRwgpsControls(rwgpsId)` **client-side** against `https://ridewithgps.com/routes/{id}.json` (RWGPS accepts unauthenticated JSON) and applies `reverseControls()` itself when needed. It strips coordinates.
+The two forms differ in **how** they fetch:
+
+- **Public form** calls the `loadRwgpsControls(rwgpsId)` / `loadRwgpsRoute(rwgpsId, privacyCode)` server actions and applies `reverseControls()` itself when needed. It strips coordinates.
 - **Admin form** calls the `importEventControlsFromRwgps(eventId)` **server action**, which fetches with coordinates (`fetchRwgpsControlsWithCoords`) and applies reversed-event handling server-side. This is the same importer the digital brevet card manager uses, so both produce identical results. Coordinates are kept internally (for save-back to `event_controls`) but never encoded into the print URL.
 
 ### Shared controls with the digital brevet card
@@ -313,26 +315,26 @@ The admin control-cards form treats the saved `event_controls` rows as the singl
 Controls can be encoded two ways in RWGPS, and some routes use both. Both are imported:
 
 1. **Course points** (`course_points[]` with `t === 'Control'`): carry an authoritative distance `cp.d` (meters from start). In GPX these are the per-waypoint cue-sheet entries.
-2. **Waypoints / POIs** (`points_of_interest[]` with `poi_type_name` in `control`, `start`, or `finish`): carry `lat`/`lng` but no distance. In GPX these are the top-level `<wpt>` entries with `<cmt>control</cmt>`. `start` and `finish` are included because the start and finish are always controls on a BRM route, and some organizers only mark the endpoints (not the intermediate controls) as POIs.
+2. **Waypoints / POIs** (`points_of_interest[]` with `type` in `control`, `start`, or `finish`): carry `lat`/`lng` plus a `distances[]` array (meters from the route start, one entry per pass). In GPX these are the top-level `<wpt>` entries with `<cmt>control</cmt>`. `start` and `finish` are included because the start and finish are always controls on a BRM route, and some organizers only mark the endpoints (not the intermediate controls) as POIs. Note the v1 field names: `type` (`control`) and `type_name` (`Control`), not the public endpoint's `poi_type`/`poi_type_name`.
 
-### POI distance interpolation
+### POI distances and multiple passes
 
-Because POIs lack a distance-along-route, `lib/rwgps.ts` interpolates against `track_points[]` by haversine distance (see `lib/geo.ts`). Routes can pass the same physical control more than once (loops, out-and-backs, hub-and-spoke designs — the Waffle 1200 passes Chatham five times), so the interpolator finds every **pass**: track points within **500 m** of the POI are clustered, an along-route gap of more than **1 km** between in-range points starts a new cluster, and each cluster contributes its closest point's `d`.
+Routes can pass the same physical control more than once (loops, out-and-backs, hub-and-spoke designs — the Waffle 1200 passes Chatham five times). The v1 API reports every pass in the POI's `distances` array, e.g. Chatham on route 53737237 comes back as `[0, 355812.8, 714587.1, 1009806.9, 1214016.7]`, so `lib/rwgps.ts` sorts the array and emits one control per entry — no track-point scanning involved.
 
-- A `control`-type POI becomes one control per pass.
-- A `start`-type POI keeps only its **first** pass and a `finish`-type POI only its **last**: on loop routes the same spot is passed at km 0 and km total (and sometimes mid-ride), but an endpoint label marks exactly one visit.
+- A `control`-type POI becomes one control per entry in `distances`.
+- A `start`-type POI keeps only the **first** distance and a `finish`-type POI only the **last**: on loop routes the same spot is passed at km 0 and km total (and sometimes mid-ride), but an endpoint label marks exactly one visit.
 
-A POI with no track point within 500 m is dropped as likely off-route. If the response has no `track_points`, POIs are skipped entirely.
+A POI with an empty or missing `distances` array is skipped: RWGPS reports no distances for POIs that aren't placed on the route (non-control POIs such as restrooms also come back with an empty array, though those are filtered by `type` anyway).
 
-Pass expansion deliberately over-includes: RWGPS POIs carry no distance, sequence, or visit-count fields, so a route that merely rides past a control's location imports an extra row (e.g. the Waffle 1200 passes its Wheatley control at km 919 without stopping — only km 1145 is real). The organizer deletes such rows while reviewing the import. This is the chosen trade-off: an extra visible row beats silently dropping a real visit (the failure mode this design replaced), and the import matcher always attaches the saved row — with its check-ins — to the closest same-name pass, so the phantom row is the unsaved one.
+RWGPS reports a pass wherever the route physically goes by the POI, so a route that merely rides past a control's location without stopping still yields an extra row. The organizer deletes such rows while reviewing the import; the import matcher always attaches the saved row — with its check-ins — to the closest same-name pass, so the extra row is the unsaved one.
 
 ### Dedupe
 
 Two passes:
 
-1. **Physical pre-dedupe** (before interpolation): if two POIs share a `poi_type_name` and are within **200 m** of each other by lat/lng, collapse to one. This targets the common pattern of a bare label POI (`Start: Waterloo`) co-existing with an explicit control POI (`CONTROL Start A&W, Waterloo`) at the same parking lot. Tie-breaker: prefer the entry whose name carries an explicit `CONTROL`/`CTL`/`CTRL` prefix, since that signals organizer intent.
+1. **Physical pre-dedupe**: if two POIs share a `type` and are within **200 m** of each other by lat/lng, collapse to one. This targets the common pattern of a bare label POI (`Start: Waterloo`) co-existing with an explicit control POI (`CONTROL Start A&W, Waterloo`) at the same parking lot. Tie-breaker: prefer the entry whose name carries an explicit `CONTROL`/`CTL`/`CTRL` prefix, since that signals organizer intent.
 
-2. **Route-distance dedupe** (after interpolation): any two controls within **100 m** of each other along the route collapse to one. Precedence is `control`-type POI > `start`/`finish`-type POI > course point, because organizer-curated POI names are typically more descriptive than the short course instruction text. Distance-along-route is the right metric here — it naturally handles loop routes where a legitimate `start` and `finish` sit at the same physical place but should remain distinct controls at km 0 and km N.
+2. **Route-distance dedupe**: any two controls within **100 m** of each other along the route collapse to one. Precedence is `control`-type POI > `start`/`finish`-type POI > course point, because organizer-curated POI names are typically more descriptive than the short course instruction text. Distance-along-route is the right metric here — it naturally handles loop routes where a legitimate `start` and `finish` sit at the same physical place but should remain distinct controls at km 0 and km N.
 
 ### Name cleanup
 
@@ -340,7 +342,7 @@ Common prefixes on control names are stripped from both sources: `CTL - `, `CTL-
 
 ### Errors
 
-`fetchRwgpsControls` throws with a user-facing message when the HTTP request fails or when neither source yields any control. The forms catch and surface the message inline.
+`fetchRwgpsControls` / `fetchRwgpsRoute` throw with a user-facing message when the API credentials are missing, when the HTTP request fails, or when neither source yields any control. The `lib/actions/rwgps.ts` server actions convert those messages into `{ success: false, error }`; the forms surface the message inline.
 
 Manual entry is always available regardless of RWGPS import.
 

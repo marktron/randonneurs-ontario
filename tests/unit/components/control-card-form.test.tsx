@@ -8,12 +8,12 @@ import userEvent from '@testing-library/user-event'
 import { ControlCardForm } from '@/components/control-card-form'
 import type { ActiveRouteWithRwgps } from '@/lib/data/routes'
 
-// The form imports RWGPS fetch helpers at module level; stub them so no
-// network-capable code is pulled into the test environment.
-vi.mock('@/lib/rwgps', () => ({
-  fetchRwgpsControls: vi.fn(),
-  fetchRwgpsRoute: vi.fn(),
-  parseRwgpsRouteRef: vi.fn(),
+// The form imports RWGPS server actions at module level; stub them so no
+// server-only code is pulled into the test environment. `parseRwgpsRouteRef`
+// stays real — it's a pure, client-safe parser from '@/lib/rwgps'.
+vi.mock('@/lib/actions/rwgps', () => ({
+  loadRwgpsControls: vi.fn(async () => ({ success: true, data: [] })),
+  loadRwgpsRoute: vi.fn(async () => ({ success: true, data: null })),
 }))
 
 // rwgpsId: null so picking the route never triggers the RWGPS auto-import effect.

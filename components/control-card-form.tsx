@@ -18,7 +18,8 @@ import {
 } from '@/components/ui/command'
 import { Plus, Trash2, Printer, GripVertical, Download, Loader2, ChevronDown } from 'lucide-react'
 import type { ActiveRouteWithRwgps } from '@/lib/data/routes'
-import { fetchRwgpsControls, fetchRwgpsRoute, parseRwgpsRouteRef } from '@/lib/rwgps'
+import { parseRwgpsRouteRef } from '@/lib/rwgps'
+import { loadRwgpsControls, loadRwgpsRoute } from '@/lib/actions/rwgps'
 import { getSavedRegistrationData } from '@/lib/registration-storage'
 import { MAX_CARD_CONTROLS } from '@/lib/controlPoints'
 
@@ -185,9 +186,13 @@ export function ControlCardForm({ routes, mode = 'picker' }: ControlCardFormProp
     setRwgpsError(null)
 
     try {
-      const parsed = await fetchRwgpsControls(pickerRwgpsId)
+      const result = await loadRwgpsControls(pickerRwgpsId)
+      if (!result.success || !result.data) {
+        setRwgpsError(result.error || 'Failed to fetch route data')
+        return
+      }
       setControls(
-        parsed.map((c) => ({
+        result.data.map((c) => ({
           id: crypto.randomUUID(),
           name: c.name,
           distance: c.distance,
@@ -222,13 +227,18 @@ export function ControlCardForm({ routes, mode = 'picker' }: ControlCardFormProp
     setRwgpsError(null)
 
     try {
-      const result = await fetchRwgpsRoute(ref.id, ref.privacyCode)
-      setManualRouteName(result.name)
-      setManualDistanceKm(result.distanceKm.toFixed(1))
+      const result = await loadRwgpsRoute(ref.id, ref.privacyCode)
+      if (!result.success || !result.data) {
+        setRwgpsError(result.error || 'Failed to fetch route data')
+        return
+      }
+      const route = result.data
+      setManualRouteName(route.name)
+      setManualDistanceKm(route.distanceKm.toFixed(1))
       setRwgpsLoadedId(ref.id)
       setRwgpsLoadedPrivacyCode(ref.privacyCode)
       setControls(
-        result.controls.map((c) => ({
+        route.controls.map((c) => ({
           id: crypto.randomUUID(),
           name: c.name,
           distance: c.distance,
