@@ -43,18 +43,32 @@ export function RegistrationForm({
     form.setError(null)
 
     const formData = new FormData(e.currentTarget)
-    const notes = formData.get('notes') as string
+    const notes = (formData.get('notes') as string) || ''
+    // Stashed on every submit so the follow-up calls (rider match, email
+    // confirmation) can resubmit without the original form event.
+    setPendingNotes(notes)
 
+    submitRegistration(notes)
+  }
+
+  /** `emailOverride` carries the address resolved by the typo confirmation. */
+  function submitRegistration(notes: string, emailOverride?: string) {
     startTransition(async () => {
       const result = await registerForEvent({
         eventId,
         ...form.riderPayload,
+        ...(emailOverride !== undefined && { email: emailOverride, emailConfirmed: true }),
         notes: notes || undefined,
       })
-      form.handleRegistrationResult(result, {
-        onNeedsMatch: () => setPendingNotes(notes || ''),
-      })
+      form.handleRegistrationResult(result)
     })
+  }
+
+  function handleEmailConfirm(accepted: boolean) {
+    submitRegistration(
+      pendingNotes,
+      accepted ? form.acceptEmailSuggestion() : form.keepTypedEmail()
+    )
   }
 
   function handleRiderSelection(riderId: string | null) {
@@ -129,7 +143,11 @@ export function RegistrationForm({
         </Button>
       </form>
 
-      <RegistrationDialogs form={form} onSelectRider={handleRiderSelection} />
+      <RegistrationDialogs
+        form={form}
+        onSelectRider={handleRiderSelection}
+        onConfirmEmail={handleEmailConfirm}
+      />
     </div>
   )
 }

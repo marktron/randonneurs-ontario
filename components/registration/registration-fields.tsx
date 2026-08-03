@@ -90,6 +90,9 @@ export function RiderInfoFields({ form }: FormSectionProps) {
           onChange={(e) => {
             form.setEmail(e.target.value)
             form.setBlurredEmail('')
+            // A previous confirmation only covered the address it was given —
+            // once the rider edits it, the typo guard has to run again.
+            form.setEmailConfirmed(false)
           }}
           onBlur={(e) => form.setBlurredEmail(e.target.value)}
         />

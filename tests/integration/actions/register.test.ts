@@ -470,3 +470,91 @@ describe('spam guards', () => {
     })
   })
 })
+
+/**
+ * Server-side email-typo confirmation guard.
+ *
+ * The inline "Did you mean …?" hint on the form is advisory and blur-gated, so a
+ * rider can submit a typo'd domain without ever seeing it (autofill, or simply
+ * clicking through). These tests pin the server-side backstop: a likely typo is
+ * refused once, with the suggestion attached, until the rider confirms.
+ *
+ * Each case uses a distinct local-part so the per-email rate limiter (10 per 15
+ * minutes) can never couple one test to another.
+ */
+describe('email typo confirmation guard', () => {
+  const contact = {
+    firstName: 'Test',
+    lastName: 'Rider',
+    shareRegistration: false,
+    phone: '416-555-0000',
+    emergencyContactName: 'Emergency Contact',
+    emergencyContactPhone: '555-1234',
+  }
+
+  describe('registerForEvent', () => {
+    it('refuses a likely typo and returns the suggested address', async () => {
+      const result = await registerForEvent({
+        eventId: 'event-typo-1',
+        ...contact,
+        email: 'rider.a@roger.com',
+      })
+
+      expect(result.success).toBe(false)
+      expect(result.emailSuggestion).toBe('rider.a@rogers.com')
+    })
+
+    it('lets the registration through once the rider confirms the typed address', async () => {
+      const result = await registerForEvent({
+        eventId: 'event-typo-2',
+        ...contact,
+        email: 'rider.b@roger.com',
+        emailConfirmed: true,
+      })
+
+      // Proceeds past validation into the event lookup (which the mock fails),
+      // so the address itself is no longer the blocker.
+      expect(result.emailSuggestion).toBeUndefined()
+    })
+
+    it('does not flag an address with no plausible correction', async () => {
+      const result = await registerForEvent({
+        eventId: 'event-typo-3',
+        ...contact,
+        email: 'rider.c@rogers.com',
+      })
+
+      expect(result.emailSuggestion).toBeUndefined()
+    })
+  })
+
+  describe('registerForPermanent', () => {
+    it('refuses a likely typo and returns the suggested address', async () => {
+      const result = await registerForPermanent({
+        routeId: 'route-1',
+        eventDate: '2099-01-01',
+        startTime: '07:00',
+        direction: 'as_posted',
+        ...contact,
+        email: 'rider.d@roger.com',
+      })
+
+      expect(result.success).toBe(false)
+      expect(result.emailSuggestion).toBe('rider.d@rogers.com')
+    })
+  })
+
+  describe('completeRegistrationWithRider', () => {
+    it('refuses a likely typo and returns the suggested address', async () => {
+      const result = await completeRegistrationWithRider({
+        eventId: 'event-typo-4',
+        selectedRiderId: null,
+        ...contact,
+        email: 'rider.e@roger.com',
+      })
+
+      expect(result.success).toBe(false)
+      expect(result.emailSuggestion).toBe('rider.e@rogers.com')
+    })
+  })
+})

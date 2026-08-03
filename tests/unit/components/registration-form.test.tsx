@@ -132,6 +132,7 @@ describe('RegistrationForm', () => {
           notes: undefined,
           emergencyContactName: 'Jane Doe',
           emergencyContactPhone: '555-1234',
+          emailConfirmed: false,
           homepageUrl: '',
         })
       })
@@ -425,6 +426,97 @@ describe('RegistrationForm', () => {
       await user.click(submitButton)
 
       expect(submitButton).toBeDisabled()
+    })
+  })
+
+  /**
+   * The server refuses a suspected typo once and returns `emailSuggestion`. The
+   * form must turn that into a yes/no question and resubmit either way — never
+   * leave the rider on a form that looks like it failed.
+   */
+  describe('email typo confirmation', () => {
+    async function fillAndSubmit(user: ReturnType<typeof userEvent.setup>, email: string) {
+      const { container } = render(<RegistrationForm {...defaultProps} />)
+
+      await user.type(screen.getByLabelText(/first name/i), 'Test')
+      await user.type(screen.getByLabelText(/last name/i), 'Rider')
+      await user.type(screen.getByLabelText(/email/i), email)
+      await user.type(container.querySelector('#emergencyContactName')!, 'Emergency Contact')
+      await user.type(container.querySelector('#emergencyContactPhone')!, '555-1234')
+      await user.type(container.querySelector('#phone')!, '416-555-9999')
+
+      await user.click(screen.getByRole('button', { name: /^register$/i }))
+    }
+
+    beforeEach(() => {
+      // mockReset, not clearAllMocks: the latter leaves queued `…Once` values
+      // in place, so an unconsumed one would leak into the next test and make
+      // the first submit succeed instead of asking for confirmation.
+      mockRegisterForEvent.mockReset()
+      mockRegisterForEvent
+        .mockResolvedValueOnce({ success: false, emailSuggestion: 'rider@rogers.com' })
+        .mockResolvedValue({ success: true })
+    })
+
+    it('asks the rider to confirm instead of showing a bare error', async () => {
+      const user = userEvent.setup()
+      await fillAndSubmit(user, 'rider@roger.com')
+
+      await waitFor(() => {
+        expect(screen.getByTestId('email-confirm-accept')).toBeInTheDocument()
+      })
+      expect(screen.getByTestId('email-confirm-keep')).toBeInTheDocument()
+      // The dialog replaces the error banner — this is a question, not a failure.
+      expect(screen.queryByTestId('registration-error')).not.toBeInTheDocument()
+    })
+
+    it('resubmits with the corrected address when the rider accepts', async () => {
+      const user = userEvent.setup()
+      await fillAndSubmit(user, 'rider@roger.com')
+
+      await waitFor(() => expect(screen.getByTestId('email-confirm-accept')).toBeInTheDocument())
+      await user.click(screen.getByTestId('email-confirm-accept'))
+
+      await waitFor(() => {
+        expect(mockRegisterForEvent).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            email: 'rider@rogers.com',
+            emailConfirmed: true,
+          })
+        )
+      })
+      expect(mockRegisterForEvent).toHaveBeenCalledTimes(2)
+    })
+
+    it('resubmits the typed address when the rider says it is correct', async () => {
+      const user = userEvent.setup()
+      await fillAndSubmit(user, 'rider@roger.com')
+
+      await waitFor(() => expect(screen.getByTestId('email-confirm-keep')).toBeInTheDocument())
+      await user.click(screen.getByTestId('email-confirm-keep'))
+
+      await waitFor(() => {
+        expect(mockRegisterForEvent).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            email: 'rider@roger.com',
+            emailConfirmed: true,
+          })
+        )
+      })
+      expect(mockRegisterForEvent).toHaveBeenCalledTimes(2)
+    })
+
+    it('registers the rider once the confirmation is resolved', async () => {
+      const user = userEvent.setup()
+      await fillAndSubmit(user, 'rider@roger.com')
+
+      await waitFor(() => expect(screen.getByTestId('email-confirm-accept')).toBeInTheDocument())
+      await user.click(screen.getByTestId('email-confirm-accept'))
+
+      await waitFor(() => {
+        expect(screen.getByTestId('registration-success')).toBeInTheDocument()
+      })
+      expect(screen.queryByTestId('email-confirm-accept')).not.toBeInTheDocument()
     })
   })
 })

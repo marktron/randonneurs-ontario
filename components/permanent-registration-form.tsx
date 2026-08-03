@@ -114,6 +114,13 @@ export function PermanentRegistrationForm({ routes }: PermanentRegistrationFormP
       return
     }
 
+    submitRegistration()
+  }
+
+  /** `emailOverride` carries the address resolved by the typo confirmation. */
+  function submitRegistration(emailOverride?: string) {
+    if (!routeId || !eventDate) return
+
     // Format date as YYYY-MM-DD for the server
     const formattedDate = format(eventDate, 'yyyy-MM-dd')
 
@@ -125,6 +132,7 @@ export function PermanentRegistrationForm({ routes }: PermanentRegistrationFormP
         startLocation: startLocation.trim(),
         direction,
         ...form.riderPayload,
+        ...(emailOverride !== undefined && { email: emailOverride, emailConfirmed: true }),
         notes: notes || undefined,
       })
       form.handleRegistrationResult(result, {
@@ -133,6 +141,10 @@ export function PermanentRegistrationForm({ routes }: PermanentRegistrationFormP
         },
       })
     })
+  }
+
+  function handleEmailConfirm(accepted: boolean) {
+    submitRegistration(accepted ? form.acceptEmailSuggestion() : form.keepTypedEmail())
   }
 
   function handleRiderSelection(riderId: string | null) {
@@ -341,7 +353,11 @@ export function PermanentRegistrationForm({ routes }: PermanentRegistrationFormP
         </Button>
       </form>
 
-      <RegistrationDialogs form={form} onSelectRider={handleRiderSelection} />
+      <RegistrationDialogs
+        form={form}
+        onSelectRider={handleRiderSelection}
+        onConfirmEmail={handleEmailConfirm}
+      />
     </div>
   )
 }

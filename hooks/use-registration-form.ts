@@ -29,6 +29,11 @@ export function useRegistrationForm(options: UseRegistrationFormOptions = {}) {
   const [lastName, setLastName] = useState('')
   const [email, setEmail] = useState('')
   const [blurredEmail, setBlurredEmail] = useState('')
+  // Set once the rider resolves the typo confirmation, so the resubmit gets
+  // past the server guard. Cleared whenever they edit the address again.
+  const [emailConfirmed, setEmailConfirmed] = useState(false)
+  // The server's suggested correction; non-null while the confirm dialog is up.
+  const [emailSuggestion, setEmailSuggestion] = useState<string | null>(null)
   const [phone, setPhone] = useState('')
   const [shareRegistration, setShareRegistration] = useState(true)
   const [gender, setGender] = useState<string>('')
@@ -92,7 +97,29 @@ export function useRegistrationForm(options: UseRegistrationFormOptions = {}) {
     shareRegistration,
     emergencyContactName,
     emergencyContactPhone,
+    emailConfirmed,
     homepageUrl,
+  }
+
+  /**
+   * Resolve the email-typo confirmation. Returns the address the caller should
+   * submit — returned rather than read back off state, since the resubmit fires
+   * in the same tick and would otherwise still see the old value.
+   */
+  function acceptEmailSuggestion(): string {
+    const corrected = emailSuggestion ?? email
+    setEmail(corrected)
+    setBlurredEmail('')
+    setEmailConfirmed(true)
+    setEmailSuggestion(null)
+    return corrected
+  }
+
+  /** Keep the address as typed — the rider says the unusual domain is real. */
+  function keepTypedEmail(): string {
+    setEmailConfirmed(true)
+    setEmailSuggestion(null)
+    return email
   }
 
   /**
@@ -135,6 +162,11 @@ export function useRegistrationForm(options: UseRegistrationFormOptions = {}) {
             setLoadingEvents(false)
           })
       }
+    } else if (result.emailSuggestion) {
+      // Ask before writing a likely-undeliverable address. Deliberately not
+      // routed through setError — this is a question, not a failure.
+      setMatchDialogOpen(false)
+      setEmailSuggestion(result.emailSuggestion)
     } else if (result.needsRiderMatch && result.matchCandidates) {
       onNeedsMatch?.(result)
       setMatchCandidates(result.matchCandidates)
@@ -161,6 +193,10 @@ export function useRegistrationForm(options: UseRegistrationFormOptions = {}) {
     setEmail,
     blurredEmail,
     setBlurredEmail,
+    emailConfirmed,
+    setEmailConfirmed,
+    emailSuggestion,
+    setEmailSuggestion,
     phone,
     setPhone,
     gender,
@@ -189,6 +225,8 @@ export function useRegistrationForm(options: UseRegistrationFormOptions = {}) {
     // helpers
     riderPayload,
     handleRegistrationResult,
+    acceptEmailSuggestion,
+    keepTypedEmail,
   }
 }
 

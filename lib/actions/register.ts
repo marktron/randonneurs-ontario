@@ -78,6 +78,8 @@ export interface RegistrationData {
   emergencyContactPhone: string
   teamName?: string
   isTeamCaptain?: boolean
+  /** Set once the rider has confirmed a suspected email typo. */
+  emailConfirmed?: boolean
   /** Honeypot field — must be empty. Non-empty value means bot; we silently drop. */
   homepageUrl?: string
 }
@@ -93,6 +95,11 @@ export interface RegistrationResult {
   pendingData?: RegistrationData
   /** Set when membership verification fails */
   membershipError?: 'no-membership' | 'trial-used'
+  /**
+   * Set when the submitted email looks like a typo of a common provider. The
+   * form asks the rider to confirm and resubmits with `emailConfirmed: true`.
+   */
+  emailSuggestion?: string
 }
 
 // Fields shared by the scheduled-event confirmation email for a given event.
@@ -169,7 +176,7 @@ export async function registerForEvent(data: RegistrationData): Promise<Registra
 
   const validation = validateContactFields(data)
   if (!validation.ok) {
-    return { success: false, error: validation.error }
+    return { success: false, error: validation.error, emailSuggestion: validation.emailSuggestion }
   }
   const {
     trimmedFirstName,
@@ -293,6 +300,8 @@ export interface PermanentRegistrationData {
   notes?: string
   emergencyContactName: string
   emergencyContactPhone: string
+  /** Set once the rider has confirmed a suspected email typo. */
+  emailConfirmed?: boolean
   /** Honeypot field — must be empty. Non-empty value means bot; we silently drop. */
   homepageUrl?: string
 }
@@ -327,7 +336,7 @@ export async function registerForPermanent(
 
   const validation = validateContactFields(data)
   if (!validation.ok) {
-    return { success: false, error: validation.error }
+    return { success: false, error: validation.error, emailSuggestion: validation.emailSuggestion }
   }
   const {
     trimmedFirstName,
@@ -523,6 +532,8 @@ export interface CompleteRegistrationData {
   emergencyContactPhone: string
   teamName?: string
   isTeamCaptain?: boolean
+  /** Set once the rider has confirmed a suspected email typo. */
+  emailConfirmed?: boolean
   /** Honeypot field — must be empty. Non-empty value means bot; we silently drop. */
   homepageUrl?: string
 }
@@ -560,7 +571,7 @@ export async function completeRegistrationWithRider(
 
   const validation = validateContactFields(data)
   if (!validation.ok) {
-    return { success: false, error: validation.error }
+    return { success: false, error: validation.error, emailSuggestion: validation.emailSuggestion }
   }
   const {
     trimmedFirstName,

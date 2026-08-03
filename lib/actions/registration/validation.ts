@@ -7,6 +7,7 @@
  * validation exactly so client-facing behavior is unchanged.
  */
 import { validateEmail, normalizePhone } from '@/lib/utils/validation'
+import { suggestEmailCorrection } from '@/lib/utils/email-typo'
 
 export interface ContactValidationInput {
   firstName: string
@@ -16,6 +17,12 @@ export interface ContactValidationInput {
   notes?: string
   emergencyContactName: string
   emergencyContactPhone: string
+  /**
+   * Set once the rider has explicitly acknowledged a suspected email typo —
+   * either by accepting the suggestion or by confirming the address they typed.
+   * Suppresses the typo guard below so the second submit goes through.
+   */
+  emailConfirmed?: boolean
 }
 
 export interface ValidatedContact {
@@ -30,7 +37,16 @@ export interface ValidatedContact {
 
 export type ContactValidationResult =
   | { ok: true; value: ValidatedContact }
-  | { ok: false; error: string }
+  | {
+      ok: false
+      error: string
+      /**
+       * Set only by the email-typo guard: the address we think the rider meant.
+       * Callers surface this so the form can ask for a yes/no confirmation
+       * rather than showing a dead-end error.
+       */
+      emailSuggestion?: string
+    }
 
 /**
  * Validate the contact fields common to every registration entry point:
@@ -70,6 +86,21 @@ export function validateContactFields(input: ContactValidationInput): ContactVal
   const emailResult = validateEmail(email)
   if (!emailResult.valid) {
     return { ok: false, error: 'Please enter a valid email address' }
+  }
+
+  // A syntactically valid address can still be misaddressed (rogers.com typed
+  // as roger.com), and the rider never sees the confirmation email that would
+  // tell them. Refuse once and make them confirm. Deliberately placed before
+  // the rate limiter so the follow-up submit costs only one attempt.
+  if (!input.emailConfirmed) {
+    const suggestion = suggestEmailCorrection(emailResult.normalized)
+    if (suggestion) {
+      return {
+        ok: false,
+        error: `Did you mean ${suggestion}?`,
+        emailSuggestion: suggestion,
+      }
+    }
   }
 
   const phoneResult = normalizePhone(phone)
