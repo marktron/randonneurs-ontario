@@ -53,6 +53,20 @@ describe('isIgnoredClientError', () => {
     ).toBe(true)
   })
 
+  it('ignores the Android WebView Java bridge invocation error (JAVASCRIPT-NEXTJS-2H)', () => {
+    // An Android autofill/password-manager tool injects a script (scanForForms)
+    // into the page and talks to its host app through a @JavascriptInterface
+    // bridge; when that bridge call fails, the injected script throws. Not our
+    // code (no first-party frames), zero user impact. Unanchored because the
+    // failing bridge method name varies ("Error invoking log: ...").
+    expect(isIgnoredClientError('Error invoking log: Java bridge method invocation error')).toBe(
+      true
+    )
+    expect(
+      isIgnoredClientError('Error: Error invoking log: Java bridge method invocation error')
+    ).toBe(true)
+  })
+
   it('does NOT ignore an unrelated application error', () => {
     expect(isIgnoredClientError('Cannot read properties of undefined')).toBe(false)
   })

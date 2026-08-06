@@ -360,6 +360,15 @@ node`; **Safari/iOS phrases it differently** — a `NotFoundError` DOMException
 pattern `/The object can not be found here\./` (Sentry issue
 `JAVASCRIPT-NEXTJS-29`).
 
+Android WebView tooling is a third source. Autofill/password-manager apps
+inject a script (`scanForForms`) into pages and call back into their host app
+through a `@JavascriptInterface` bridge; when that bridge call fails, the
+injected script throws `Error invoking <method>: Java bridge method invocation
+error` (Sentry issue `JAVASCRIPT-NEXTJS-2H`). The stack contains only the
+injected `<anonymous>` script — no first-party frames — so it is filtered with
+`/Java bridge method invocation error/`, alongside the related
+`/Java object is gone/` pattern for the same class of Android bridge noise.
+
 ### Server `ignoreErrors` list
 
 Server-side request errors reach Sentry through

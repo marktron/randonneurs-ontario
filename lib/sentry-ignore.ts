@@ -7,6 +7,14 @@
 export const clientIgnoreErrors: RegExp[] = [
   /Invalid call to runtime\.sendMessage/,
   /Java object is gone/,
+  // Android WebView autofill/password-manager tools inject a script
+  // (scanForForms) that calls back into their host app via a
+  // @JavascriptInterface bridge; when the bridge call fails the injected script
+  // throws "Error invoking <method>: Java bridge method invocation error". Same
+  // benign profile as "Java object is gone" above: third-party code, no
+  // first-party frames, zero user impact. Unanchored because the failing bridge
+  // method name varies (JAVASCRIPT-NEXTJS-2H).
+  /Java bridge method invocation error/,
   /window\.webkit\.messageHandlers/,
   /Event `Event` \(type=error\) captured as exception/,
   /Non-Error promise rejection captured/,
