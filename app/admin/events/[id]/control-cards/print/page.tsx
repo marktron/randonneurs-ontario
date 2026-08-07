@@ -12,6 +12,7 @@ import {
   createTorontoDate,
 } from '@/lib/brmTimes'
 import { buildCardLegsFromRows, type ControlRowForLegs } from '@/lib/controlPoints'
+import { isDigitalCardEventType } from '@/lib/brevet-card'
 import { SITE_URL } from '@/lib/site-url'
 import type {
   ControlPoint,
@@ -215,6 +216,10 @@ export default async function PrintPage({ params, searchParams }: PrintPageProps
   const baseUrl = SITE_URL
   const registeredRiderIds = selectedRegistrations.filter((r) => r.riders).map((r) => r.riders!.id)
   const firstTimeRiderIdSet = new Set(await getFirstTimeRiderIds(id, registeredRiderIds))
+  // Mirror the /card/[token] availability check so the printed QR never
+  // lands on the "not set up" page: eligible event type + stored controls.
+  const digitalCardAvailable =
+    isDigitalCardEventType(event.event_type) && storedControlRows.length > 0
   const registeredRiders: CardRider[] = selectedRegistrations
     .filter((r) => r.riders)
     .map((r) => ({
@@ -224,6 +229,10 @@ export default async function PrintPage({ params, searchParams }: PrintPageProps
       submissionUrl: r.management_token
         ? `${baseUrl}/registration/manage/${r.management_token}`
         : undefined,
+      cardUrl:
+        digitalCardAvailable && r.management_token
+          ? `${baseUrl}/card/${r.management_token}`
+          : undefined,
       isFirstTimeRider: firstTimeRiderIdSet.has(r.riders!.id),
     }))
 

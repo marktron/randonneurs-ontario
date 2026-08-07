@@ -339,10 +339,21 @@ function CardFront({
           <div style={{ borderBottom: '1px solid #000', height: '0.4in' }}></div>
         </div>
 
+        {rider?.cardUrl && (
+          <div className="digital-card-banner" style={{ marginTop: 'auto' }}>
+            <div className="digital-card-banner-text">
+              New! Try out the
+              <br />
+              digital brevet card
+            </div>
+            <QRCodeSVG value={rider.cardUrl} size={52} />
+          </div>
+        )}
+
         {(rwgpsUrl || rider?.submissionUrl) && (
           <div
             style={{
-              marginTop: 'auto',
+              marginTop: rider?.cardUrl ? undefined : 'auto',
               display: 'flex',
               gap: '0.15in',
               justifyContent: 'space-between',

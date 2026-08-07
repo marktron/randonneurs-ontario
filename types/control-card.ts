@@ -28,6 +28,8 @@ export interface CardRider {
   firstName: string
   lastName: string
   submissionUrl?: string
+  /** Digital brevet card link — set only when the digital card is available. */
+  cardUrl?: string
   /** True when this is the rider's first event (no prior non-DNS results). */
   isFirstTimeRider?: boolean
 }

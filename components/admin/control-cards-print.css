@@ -204,6 +204,30 @@ body:has(.control-cards-print) {
   border: 1px solid #000;
 }
 
+/* Grayscale call-out on the front middle column linking to the rider's
+   digital brevet card. Rendered only when the digital card is available
+   (eligible event type, stored controls, management token). */
+.digital-card-banner {
+  border: 1px solid #000;
+  border-radius: 0.06in;
+  padding: 0.08in;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.1in;
+}
+
+/* Mirrors .field-label so the banner sits in the same typographic family as
+   the QR labels below it, with a slight weight bump for the call-out. */
+.digital-card-banner-text {
+  font-size: 7.5pt;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #525252;
+  line-height: 1.4;
+}
+
 .front-right {
   display: flex;
   flex-direction: column;

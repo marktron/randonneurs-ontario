@@ -122,6 +122,38 @@ describe('ControlCardsPrint — distance already stated in the title', () => {
   })
 })
 
+describe('ControlCardsPrint — digital brevet card banner', () => {
+  it('shows the banner with a QR when the rider has a cardUrl', () => {
+    const { container } = renderWithRiders([
+      {
+        id: 'r1',
+        firstName: 'Digi',
+        lastName: 'Rider',
+        cardUrl: 'https://example.com/card/tok-123',
+      },
+    ])
+
+    const banner = container.querySelector('.digital-card-banner')
+    expect(banner).toBeTruthy()
+    expect(banner?.textContent).toContain('Try out the')
+    expect(banner?.textContent).toContain('digital brevet card')
+    expect(banner?.querySelector('svg')).toBeTruthy()
+  })
+
+  it('omits the banner when the rider has no cardUrl', () => {
+    const { container } = renderWithRiders([{ id: 'r1', firstName: 'Paper', lastName: 'Rider' }])
+
+    expect(screen.queryByText(/digital brevet card/)).toBeNull()
+    expect(container.querySelector('.digital-card-banner')).toBeNull()
+  })
+
+  it('omits the banner on blank cards', () => {
+    const { container } = renderWithRiders([{ id: 'blank-1', firstName: '', lastName: '' }])
+
+    expect(container.querySelector('.digital-card-banner')).toBeNull()
+  })
+})
+
 import type { CardLeg } from '@/types/control-card'
 
 const legA: CardLeg = {

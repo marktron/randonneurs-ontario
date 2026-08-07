@@ -197,6 +197,8 @@ Rendered with `qrcode.react`. Up to two QR codes appear in the bottom of the mid
 - **Route Map** — links to `https://ridewithgps.com/routes/{rwgps_id}`. Only included if the event's linked route has an `rwgps_id`.
 - **Submit Your Results** — links to `/registration/manage/{management_token}`. Admin flow only; requires the registration to have a `management_token`. Size is reduced when both QR codes are present. The manage page redirects to `/results/submit/{token}` once the event has started, calling `createEarlyResult` to mint the pending result row on demand if the event hasn't been switched to "completed" yet (see `docs/registration-management.md`).
 
+Above those, a grayscale **"New! Try out the digital brevet card"** banner with its own QR (linking to `/card/{management_token}`) appears when the digital card would actually be usable — the admin print page mirrors the `/card/[token]` availability check (`CardRider.cardUrl` is set only when the event type passes `isDigitalCardEventType`, the event has stored `event_controls` rows, and the registration has a `management_token`), so the printed QR never lands on the "not set up" page. The public `/control-cards/print` flow has no registration tokens and never shows the banner.
+
 ## Reversed permanent routes
 
 Permanents can be ridden in reverse. The `events.name` convention is to append `(Reversed)` to the route name. The admin control-cards form detects this via `isReversedEvent(name)` and:
