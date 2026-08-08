@@ -70,6 +70,18 @@ async function getRiderResults(riderId: string): Promise<ResultWithEventForRider
   return results
 }
 
+// A registration is only actionable until the event has a result for this
+// rider (any status, including DNS/DNF) — after that the Results table covers it.
+export function filterRegistrationsWithoutResults(
+  registrations: RegistrationWithEvent[],
+  results: ResultWithEventForRider[]
+): RegistrationWithEvent[] {
+  const eventIdsWithResults = new Set(
+    results.map((result) => result.events?.id).filter((id): id is string => id != null)
+  )
+  return registrations.filter((reg) => !reg.events || !eventIdsWithResults.has(reg.events.id))
+}
+
 async function getRiderMemberships(riderId: string): Promise<number[]> {
   const { data } = await getSupabaseAdmin()
     .from('rider_memberships')
@@ -113,7 +125,7 @@ export default async function RiderDetailPage({ params }: RiderPageProps) {
     redirect('/admin')
   }
 
-  const [rider, registrations, results, memberSeasons] = await Promise.all([
+  const [rider, allRegistrations, results, memberSeasons] = await Promise.all([
     getRiderDetails(id),
     getRiderRegistrations(id),
     getRiderResults(id),
@@ -123,6 +135,8 @@ export default async function RiderDetailPage({ params }: RiderPageProps) {
   if (!rider) {
     notFound()
   }
+
+  const registrations = filterRegistrationsWithoutResults(allRegistrations, results)
 
   // Calculate total distance from finished results
   const totalDistance = results
@@ -240,7 +254,7 @@ export default async function RiderDetailPage({ params }: RiderPageProps) {
       <Card>
         <CardHeader>
           <CardTitle>Registrations</CardTitle>
-          <CardDescription>Event registrations for this rider</CardDescription>
+          <CardDescription>Registrations for events without a result yet</CardDescription>
         </CardHeader>
         <CardContent>
           {registrations.length === 0 ? (
