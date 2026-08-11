@@ -56,21 +56,20 @@ export function ResultSubmissionForm({ token, initialData }: ResultSubmissionFor
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
 
+  // A registration with an approved pre-ride runs on its own start; everything
+  // below (day options, elapsed time) must anchor to it, not the event's start.
+  const startDate =
+    initialData.preRideDate != null ? initialData.preRideDate : initialData.eventDate
+  const startTime =
+    initialData.preRideDate != null ? initialData.preRideStartTime : initialData.eventStartTime
+
   // Form state
   const [status, setStatus] = useState<string>(
     initialData.currentStatus === 'pending' ? 'finished' : initialData.currentStatus
   )
-  const dayOptions = getFinishDayOptions(
-    initialData.eventDate,
-    initialData.eventStartTime,
-    initialData.eventDistance
-  )
-  const useClockTimeInput = dayOptions.length > 0 && initialData.eventStartTime !== null
-  const initialFinish = decodeInitialFinish(
-    initialData.finishTime,
-    initialData.eventStartTime,
-    dayOptions.length
-  )
+  const dayOptions = getFinishDayOptions(startDate, startTime, initialData.eventDistance)
+  const useClockTimeInput = dayOptions.length > 0 && startTime !== null
+  const initialFinish = decodeInitialFinish(initialData.finishTime, startTime, dayOptions.length)
   // Clock-time + day mode (used when we know the event's start time)
   const [finishClockTime, setFinishClockTime] = useState(initialFinish.clockTime)
   const [finishDayOffset, setFinishDayOffset] = useState(initialFinish.dayOffset)
@@ -245,12 +244,8 @@ export function ResultSubmissionForm({ token, initialData }: ResultSubmissionFor
 
     let finishTime: string | null = null
     if (status === 'finished') {
-      if (useClockTimeInput && initialData.eventStartTime) {
-        const elapsed = calculateElapsedMinutes(
-          initialData.eventStartTime,
-          finishClockTime,
-          finishDayOffset
-        )
+      if (useClockTimeInput && startTime) {
+        const elapsed = calculateElapsedMinutes(startTime, finishClockTime, finishDayOffset)
         if (elapsed === null) {
           setError('Finish time must be after the event start time.')
           return
@@ -434,9 +429,9 @@ export function ResultSubmissionForm({ token, initialData }: ResultSubmissionFor
         </div>
 
         {/* Finish Time - only show if finished */}
-        {status === 'finished' && useClockTimeInput && initialData.eventStartTime && (
+        {status === 'finished' && useClockTimeInput && startTime && (
           <FinishClockTimeFields
-            startTime={initialData.eventStartTime}
+            startTime={startTime}
             distanceKm={initialData.eventDistance}
             dayOptions={dayOptions}
             clockTime={finishClockTime}

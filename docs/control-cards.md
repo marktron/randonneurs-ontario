@@ -156,6 +156,8 @@ The finish control's close time is **not** calculated from the banded formula ab
 
 Finish detection uses the **route length** (actual km if provided, else nominal), but the overall limit comes from the **nominal** distance. This is intentional: a 208 km route is still a BRM 200 with the 13h30m limit.
 
+`getNominalDistance` clamps anything above 1200 km to the 1300 km band, so this table — and the printed control card's finish close time — stops at 108h 20m regardless of actual route length. `lib/events/finish-time.ts`'s `getAcpTimeLimitMinutes` corrects this for the result-submission flow (see `docs/digital-brevet-card.md` §18) by applying the LRM 12 km/h overall-average rule for anything over 1300 km, but that fix does **not** reach the printed card — a printed card for a 2000 km event still shows a 108h20m close time. Known limitation; fixing it means threading the actual distance through `computeControlTimes`'s finish branch instead of the clamped nominal one.
+
 ### Timezone
 
 All card times are in **America/Toronto**. `createTorontoDate(year, month, day, hour, minute)` constructs a `Date` whose Toronto-local time matches the intended values, regardless of the server's timezone. `formatControlTime(date)` and `formatCardDate(date)` both format via `Intl.DateTimeFormat` with `timeZone: 'America/Toronto'`. If you touch any of this, verify behavior on a non-Toronto server — it's easy to introduce a bug that works locally but not in production.

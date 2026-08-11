@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ResultSubmissionForm } from '@/components/result-submission-form'
 import type { ResultSubmissionData } from '@/lib/actions/rider-results'
@@ -87,6 +87,8 @@ describe('ResultSubmissionForm', () => {
     riderNotes: null,
     submittedAt: null,
     usedDigitalCard: false,
+    preRideDate: null,
+    preRideStartTime: null,
   }
 
   const defaultProps = {
@@ -164,14 +166,18 @@ describe('ResultSubmissionForm', () => {
       expect(screen.getByText(/this event doesn’t have a recorded start time/i)).toBeInTheDocument()
     })
 
-    it('hides the day selector for an early-morning 200 km that fits in a single day', () => {
+    it('still shows a 2-day selector for an early-morning 200 km, covering the buffer day', () => {
       render(<ResultSubmissionForm {...defaultProps} />)
 
-      // 06:00 + 13:30 is still same-day, so we should not render the day radiogroup
-      expect(screen.queryByRole('radiogroup', { name: /finish day/i })).not.toBeInTheDocument()
+      // 06:00 + 13:30 is same-day, but the picker always offers one buffer
+      // day past the cutoff so an over-limit finisher can record their real
+      // finish day — so a 2-button day selector still renders.
+      const group = screen.getByRole('radiogroup', { name: /finish day/i })
+      expect(group).toBeInTheDocument()
+      expect(screen.getAllByRole('radio')).toHaveLength(2)
     })
 
-    it('shows a day selector when the event window crosses midnight', () => {
+    it('shows a day selector when the event window crosses midnight, including the buffer day', () => {
       render(
         <ResultSubmissionForm
           token="test-token-123"
@@ -183,10 +189,11 @@ describe('ResultSubmissionForm', () => {
         />
       )
 
-      // 14:00 + 13:30 = 03:30 next day, so a 2-button day selector should render
+      // 14:00 + 13:30 = 03:30 next day, plus one buffer day past the cutoff,
+      // so a 3-button day selector should render
       const group = screen.getByRole('radiogroup', { name: /finish day/i })
       expect(group).toBeInTheDocument()
-      expect(screen.getAllByRole('radio')).toHaveLength(2)
+      expect(screen.getAllByRole('radio')).toHaveLength(3)
     })
 
     it('shows an OTL warning when the typed finish time exceeds the ACP cutoff', async () => {
@@ -292,6 +299,40 @@ describe('ResultSubmissionForm', () => {
       )
 
       expect(screen.getByText('Control Card Photos')).toBeInTheDocument()
+    })
+  })
+
+  describe('pre-ride anchored results', () => {
+    it('anchors the day picker and elapsed time to the approved pre-ride start, not the event date', async () => {
+      const user = userEvent.setup()
+      render(
+        <ResultSubmissionForm
+          token="test-token-123"
+          initialData={{
+            ...mockInitialData,
+            eventDate: '2026-08-04',
+            eventStartTime: '05:00',
+            eventDistance: 2000,
+            preRideDate: '2026-07-25',
+            preRideStartTime: '05:00',
+          }}
+        />
+      )
+
+      // Day options must span the pre-ride start (Jul 25 … Aug 2), not the
+      // official event date (Aug 4).
+      const group = screen.getByRole('radiogroup', { name: /finish day/i })
+      const buttons = within(group).getAllByRole('radio')
+      expect(buttons[0]).toHaveTextContent(/Jul 25/)
+      expect(buttons[buttons.length - 1]).toHaveTextContent(/Aug 2/)
+      expect(screen.queryByText(/Aug 4/)).not.toBeInTheDocument()
+
+      // Picking a day + time computes elapsed from the 07/25 05:00 pre-ride
+      // start, not the event's 08/04 05:00 start.
+      await user.click(within(group).getByText(/Jul 26/))
+      await user.type(screen.getByLabelText('Finish Time'), '05:00')
+
+      expect(await screen.findByText(/Elapsed: 24h 00m/)).toBeInTheDocument()
     })
   })
 

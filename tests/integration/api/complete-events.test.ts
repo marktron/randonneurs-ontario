@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 // Mock dependencies before imports
 vi.mock('@/lib/supabase-server', () => {
@@ -12,11 +12,19 @@ vi.mock('@/lib/supabase-server', () => {
   }> = []
 
   const createQueryBuilder = () => {
-    const builder: Record<string, ReturnType<typeof vi.fn>> = {}
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const builder: Record<string, any> = {}
 
     builder.select = vi.fn(() => builder)
     builder.eq = vi.fn((field: string, value: string) => {
-      if (field === 'status' && value === 'scheduled') {
+      // The initial scheduled-events listing ends its chain right here with
+      // `.eq('status', 'scheduled')`, so it's awaited directly (thenable).
+      // The per-event completion update chains `.update(...).eq('id',
+      // ...).eq('status', 'scheduled').select('id').maybeSingle()` — the
+      // `__isUpdate` flag (set by `update()`, cleared by `maybeSingle()`)
+      // distinguishes the two so the update chain keeps chaining instead of
+      // short-circuiting here.
+      if (!builder.__isUpdate && field === 'status' && value === 'scheduled') {
         return {
           ...builder,
           then: (resolve: (result: { data: typeof events; error: null }) => void) => {
@@ -26,7 +34,17 @@ vi.mock('@/lib/supabase-server', () => {
       }
       return builder
     })
-    builder.update = vi.fn(() => builder)
+    builder.update = vi.fn(() => {
+      builder.__isUpdate = true
+      return builder
+    })
+    builder.maybeSingle = vi.fn(() => {
+      const wasUpdate = builder.__isUpdate
+      builder.__isUpdate = false
+      return Promise.resolve(
+        wasUpdate ? { data: { id: 'updated' }, error: null } : { data: null, error: null }
+      )
+    })
 
     return builder
   }
@@ -47,6 +65,18 @@ vi.mock('@/lib/supabase-server', () => {
     },
   }
 })
+
+// The route's post-completion side effects (creating pending results,
+// sending submission emails) are exercised by lib/events/complete-event's
+// own tests. Stubbing this boundary here isolates the closing-time logic
+// under test from that unrelated registrations/results/email machinery.
+const mockCreatePendingResultsAndSendEmails = vi
+  .fn()
+  .mockResolvedValue({ resultsCreated: 0, emailsSent: 0, errors: [] })
+vi.mock('@/lib/events/complete-event', () => ({
+  createPendingResultsAndSendEmails: (...args: unknown[]) =>
+    mockCreatePendingResultsAndSendEmails(...args),
+}))
 
 // Import the route handler after mocking
 import { GET } from '@/app/api/cron/complete-events/route'
@@ -153,5 +183,61 @@ describe('closing time calculation', () => {
 
     // 600km: 600/15 = 40 hours
     expect(closeHours(600)).toBeCloseTo(40, 1)
+  })
+})
+
+describe('closing time beyond 1300 km (LRM 12 km/h rule)', () => {
+  const CRON_SECRET = 'test-cron-secret'
+  // 2026-08-04 05:00 Toronto (EDT, UTC-4).
+  const start = new Date('2026-08-04T05:00:00-04:00')
+
+  beforeEach(() => {
+    mockModule.__reset()
+    vi.clearAllMocks()
+    mockCreatePendingResultsAndSendEmails.mockResolvedValue({
+      resultsCreated: 0,
+      emailsSent: 0,
+      errors: [],
+    })
+    vi.stubEnv('CRON_SECRET', CRON_SECRET)
+    mockModule.__addEvent({
+      id: 'event-2000',
+      name: 'Cottage Country Explorer',
+      event_date: '2026-08-04',
+      start_time: '05:00',
+      distance_km: 2000,
+      status: 'scheduled',
+    })
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('does not complete a 2000 km event at start+151h, the banded closeHours() cutoff', async () => {
+    // closeHours(2000) (undefined past 1300 km, but if naively extended)
+    // would close around 151h. The real LRM limit is 2000/12h = 166h40m, so
+    // the event must still be open here.
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date(start.getTime() + 151 * 60 * 60 * 1000))
+
+    const request = new Request('http://localhost/api/cron/complete-events', {
+      headers: { authorization: `Bearer ${CRON_SECRET}` },
+    })
+    const json = await (await GET(request)).json()
+
+    expect(json.completed).toBe(0)
+  })
+
+  it('completes a 2000 km event after start+167h, past the LRM 12 km/h limit', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date(start.getTime() + 167 * 60 * 60 * 1000))
+
+    const request = new Request('http://localhost/api/cron/complete-events', {
+      headers: { authorization: `Bearer ${CRON_SECRET}` },
+    })
+    const json = await (await GET(request)).json()
+
+    expect(json.completed).toBe(1)
   })
 })

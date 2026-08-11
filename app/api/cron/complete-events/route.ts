@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { closeHours, createTorontoDate } from '@/lib/brmTimes'
+import { getAcpTimeLimitMinutes } from '@/lib/events/finish-time'
 import { createPendingResultsAndSendEmails } from '@/lib/events/complete-event'
 import { logError } from '@/lib/errors'
 import type { EventForCronCompletion, EventUpdate } from '@/types/queries'
@@ -28,8 +29,11 @@ function calculateClosingTime(event: EventForCronCompletion): Date {
   // Create start datetime in Toronto timezone (handles EST/EDT correctly)
   const startDate = createTorontoDate(year, month - 1, day, hours, minutes)
 
-  // Calculate closing time by adding closeHours to start time
-  const closingMinutes = closeHours(distance_km) * 60
+  // closeHours' banded closing speeds are only defined through 1300 km;
+  // beyond that the LRM overall limit (12 km/h global average) applies, so
+  // defer to the same ACP/LRM time limit the result-submission form uses.
+  const closingMinutes =
+    distance_km > 1300 ? getAcpTimeLimitMinutes(distance_km) : closeHours(distance_km) * 60
   const closingDate = new Date(startDate.getTime() + closingMinutes * 60 * 1000)
 
   return closingDate

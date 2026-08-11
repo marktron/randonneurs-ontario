@@ -44,6 +44,11 @@ export interface ResultSubmissionData {
   submittedAt: string | null
   canSubmit: boolean // false if event is already 'submitted'
   usedDigitalCard: boolean // true if the rider has any control_checkins for this event
+  // The registration's approved pre-ride start, when set. Both null if the
+  // rider registered on the official date, or if there's no registration row
+  // at all (e.g. an admin-created result for an unregistered rider).
+  preRideDate: string | null
+  preRideStartTime: string | null
 }
 
 /**
@@ -128,9 +133,11 @@ export async function getResultByToken(token: string): Promise<ActionResult<Resu
   // unregistered rider, or a query error) must not fail the whole action —
   // it just leaves the photo section visible, which was the prior behavior.
   let usedDigitalCard = false
+  let preRideDate: string | null = null
+  let preRideStartTime: string | null = null
   const { data: registration, error: registrationError } = await supabase
     .from('registrations')
-    .select('id, control_checkins(id)')
+    .select('id, control_checkins(id), pre_ride_date, pre_ride_start_time')
     .eq('event_id', event.id)
     .eq('rider_id', rider.id)
     .maybeSingle()
@@ -141,8 +148,14 @@ export async function getResultByToken(token: string): Promise<ActionResult<Resu
       context: { eventId: event.id, riderId: rider.id },
     })
   } else if (registration) {
-    const typedRegistration = registration as { control_checkins: { id: string }[] | null }
+    const typedRegistration = registration as {
+      control_checkins: { id: string }[] | null
+      pre_ride_date: string | null
+      pre_ride_start_time: string | null
+    }
     usedDigitalCard = (typedRegistration.control_checkins?.length ?? 0) > 0
+    preRideDate = typedRegistration.pre_ride_date
+    preRideStartTime = typedRegistration.pre_ride_start_time
   }
 
   return {
@@ -169,6 +182,8 @@ export async function getResultByToken(token: string): Promise<ActionResult<Resu
       submittedAt: typedResult.submitted_at,
       canSubmit,
       usedDigitalCard,
+      preRideDate,
+      preRideStartTime,
     },
   }
 }

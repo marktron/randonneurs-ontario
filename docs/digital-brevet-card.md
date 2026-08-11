@@ -810,7 +810,7 @@ per-cell flags are per-rider.
   times and the pre-event banner all follow the pre-ride start.
 - `/registration/manage/[token]` shows the pre-ride date/time with a "Pre-ride" badge.
 
-### Emails and results (no changes needed)
+### Emails and results
 
 - The finish email is check-in-driven (`handleFinishIfFinalControl`) and fires when the
   pre-rider checks in at the final control — with an elapsed time computed from the
@@ -824,8 +824,45 @@ per-cell flags are per-rider.
   scheduled event has started, or an organizer can enter the result for them).
 - Results/season stay keyed to the event's `event_date` — pre-rides are days ahead, never
   a different season.
+- The manual result-submission form (`/results/submit/[token]`) **does** anchor to the
+  pre-ride start: `getResultByToken` (`lib/actions/rider-results.ts`) fetches the
+  registration's `pre_ride_date`/`pre_ride_start_time` and the form picks between the
+  pre-ride start and the event start with the same "pre-ride wins if set" rule as
+  `resolveRiderStart`, before computing day options and elapsed time. See §18.
 
 ### Printed control cards
 
 No changes: `/control-cards` (and the admin variant) already accepts an arbitrary
 `eventDate`/`startTime`, so a pre-ride's paper card is just a different query string.
+
+## 18. Result submission for long (>1300 km) and pre-ride events
+
+Two gaps in the original result-submission form (`components/result-submission-form.tsx`,
+action `getResultByToken` in `lib/actions/rider-results.ts`) blocked riders on 1400+ km
+events and pre-riders from recording their real finish:
+
+- **LRM overall limit beyond 1300 km.** `getNominalDistance` clamps anything over 1200 km
+  to the 1300 km band, so `FINISH_LIMITS_MIN[1300]` (108h20m) was being used as the ACP
+  limit for every longer distance too. Per the LRM rules, randonnées of 1400 km and up are
+  limited to a straight 12 km/h overall average instead (2000 km → 166h40m). `getAcpTimeLimitMinutes`
+  in `lib/events/finish-time.ts` now branches on `distanceKm > 1300` to compute
+  `distanceKm / 12` hours directly, rather than reading the banded table. This limit feeds
+  both the result form's day picker/OTL warning and `calculateClosingTime` in
+  `/api/cron/complete-events`, which previously auto-completed 1400+ km events using
+  `closeHours()` (only defined through 1300 km) and closed a 2000 km event ~17 hours early.
+  The printed control card's finish clamp is untouched — see the note in
+  `docs/control-cards.md` under "Finish clamping".
+- **Day picker stops exactly at the strict cutoff.** `getFinishDayOptions` now always adds
+  one buffer day past the computed cutoff window, because the form already accepts (and
+  flags, in amber) a finish time past the ACP/LRM limit — riders who actually take longer
+  than the limit still need a day option to select. This shifts every day-count by one
+  (e.g. an early-morning 200 km now offers 2 day buttons instead of 1) but never removes
+  the elapsed-time fallback for events with no recorded start time.
+- **Pre-ride anchoring.** `getResultByToken` now also selects the registration's
+  `pre_ride_date`/`pre_ride_start_time` and returns them on `ResultSubmissionData`. The
+  form computes an effective `startDate`/`startTime` — the pre-ride start when set,
+  otherwise the event's — and uses it everywhere the event date/start time previously fed
+  `getFinishDayOptions`, `decodeInitialFinish`, and `FinishClockTimeFields`, mirroring
+  `resolveRiderStart` in `lib/brevet-card.ts`. A registration lookup failure or a missing
+  registration row (e.g. an admin-created result for an unregistered rider) leaves both
+  fields `null`, falling back to the event's own start exactly as before.

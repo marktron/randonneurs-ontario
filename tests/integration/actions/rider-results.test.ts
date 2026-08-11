@@ -81,15 +81,26 @@ vi.mock('@/lib/supabase-server', () => {
       })
     },
     // Controls the registrations lookup used by getResultByToken to derive
-    // usedDigitalCard. checkinIds: null means no registration row was found;
-    // an array (possibly empty) means a registration was found with that
-    // many control_checkins.
-    __mockRegistration: (checkinIds: string[] | null) => {
+    // usedDigitalCard and the pre-ride start. checkinIds: null means no
+    // registration row was found; an array (possibly empty) means a
+    // registration was found with that many control_checkins. preRide
+    // defaults to no pre-ride (both fields null).
+    __mockRegistration: (
+      checkinIds: string[] | null,
+      preRide: { pre_ride_date: string | null; pre_ride_start_time: string | null } = {
+        pre_ride_date: null,
+        pre_ride_start_time: null,
+      }
+    ) => {
       queryBuilder.maybeSingle.mockResolvedValueOnce({
         data:
           checkinIds === null
             ? null
-            : { id: 'reg-1', control_checkins: checkinIds.map((id) => ({ id })) },
+            : {
+                id: 'reg-1',
+                control_checkins: checkinIds.map((id) => ({ id })),
+                ...preRide,
+              },
         error: null,
       })
     },
@@ -125,7 +136,10 @@ const mockModule = await vi.importMock<{
   __mockResultFound: (result: unknown) => void
   __mockResultNotFound: () => void
   __mockUpdateSuccess: () => void
-  __mockRegistration: (checkinIds: string[] | null) => void
+  __mockRegistration: (
+    checkinIds: string[] | null,
+    preRide?: { pre_ride_date: string | null; pre_ride_start_time: string | null }
+  ) => void
   __mockRegistrationLookupError: () => void
 }>('@/lib/supabase-server')
 
@@ -292,6 +306,39 @@ describe('getResultByToken', () => {
 
     expect(result.success).toBe(true)
     expect(result.data?.usedDigitalCard).toBe(false)
+  })
+
+  it('returns the registration pre-ride start when the rider had an approved pre-ride', async () => {
+    mockModule.__mockResultFound(baseResultRow)
+    mockModule.__mockRegistration([], { pre_ride_date: '2026-07-25', pre_ride_start_time: '05:00' })
+
+    const result = await getResultByToken('valid-token')
+
+    expect(result.success).toBe(true)
+    expect(result.data?.preRideDate).toBe('2026-07-25')
+    expect(result.data?.preRideStartTime).toBe('05:00')
+  })
+
+  it('returns null pre-ride fields when the registration has no pre-ride', async () => {
+    mockModule.__mockResultFound(baseResultRow)
+    mockModule.__mockRegistration([])
+
+    const result = await getResultByToken('valid-token')
+
+    expect(result.success).toBe(true)
+    expect(result.data?.preRideDate).toBeNull()
+    expect(result.data?.preRideStartTime).toBeNull()
+  })
+
+  it('returns null pre-ride fields when there is no registration row (admin-created result)', async () => {
+    mockModule.__mockResultFound(baseResultRow)
+    mockModule.__mockRegistration(null)
+
+    const result = await getResultByToken('valid-token')
+
+    expect(result.success).toBe(true)
+    expect(result.data?.preRideDate).toBeNull()
+    expect(result.data?.preRideStartTime).toBeNull()
   })
 })
 

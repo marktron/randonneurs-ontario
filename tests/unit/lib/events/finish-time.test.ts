@@ -21,6 +21,14 @@ describe('getAcpTimeLimitMinutes', () => {
   it('rounds populaires up to the 200 km limit', () => {
     expect(getAcpTimeLimitMinutes(120)).toBe(13 * 60 + 30)
   })
+
+  it('uses the LRM 12 km/h global average for events beyond 1300 km', () => {
+    // LRM rule: randonnées of 1400 km and up are limited to distance/12 hours,
+    // not a further extension of the ACP banded table.
+    expect(getAcpTimeLimitMinutes(1400)).toBe(7000)
+    expect(getAcpTimeLimitMinutes(1900)).toBe(9500)
+    expect(getAcpTimeLimitMinutes(2000)).toBe(10000)
+  })
 })
 
 describe('getFinishDayOptions', () => {
@@ -28,36 +36,44 @@ describe('getFinishDayOptions', () => {
     expect(getFinishDayOptions('2026-05-15', null, 200)).toEqual([])
   })
 
-  it('returns same-day only for an early-morning 200 km that finishes within the day', () => {
+  it('returns same-day plus a buffer day for an early-morning 200 km that finishes within the day', () => {
+    // 06:00 + 13:30 = 19:30 same day, plus one buffer day past the cutoff so
+    // an over-limit finisher can still record their real day.
     const opts = getFinishDayOptions('2026-05-16', '06:00', 200)
-    expect(opts).toHaveLength(1)
-    expect(opts[0].offset).toBe(0)
-    expect(opts[0].date).toBe('2026-05-16')
-  })
-
-  it('returns same-day + next-day for a 200 km that crosses midnight at the cutoff', () => {
-    // 14:00 + 13:30 = 03:30 next day
-    const opts = getFinishDayOptions('2026-05-16', '14:00', 200)
-    expect(opts).toHaveLength(2)
+    expect(opts.map((o) => o.offset)).toEqual([0, 1])
     expect(opts[0].date).toBe('2026-05-16')
     expect(opts[1].date).toBe('2026-05-17')
   })
 
-  it('returns three days for a 600 km starting late evening', () => {
-    // 22:00 + 40:00 = 14:00 day+2
-    const opts = getFinishDayOptions('2026-05-16', '22:00', 600)
-    expect(opts.map((o) => o.offset)).toEqual([0, 1, 2])
+  it('returns same-day, next-day, and a buffer day for a 200 km that crosses midnight at the cutoff', () => {
+    // 14:00 + 13:30 = 03:30 next day, plus one buffer day past the cutoff
+    const opts = getFinishDayOptions('2026-05-16', '14:00', 200)
+    expect(opts).toHaveLength(3)
+    expect(opts[0].date).toBe('2026-05-16')
+    expect(opts[1].date).toBe('2026-05-17')
+    expect(opts[2].date).toBe('2026-05-18')
   })
 
-  it('returns four days for a 1000 km', () => {
-    // 06:00 + 75:00 = 09:00 day+3
-    const opts = getFinishDayOptions('2026-05-16', '06:00', 1000)
+  it('returns four days for a 600 km starting late evening, including the buffer day', () => {
+    // 22:00 + 40:00 = 14:00 day+2, plus one buffer day past the cutoff
+    const opts = getFinishDayOptions('2026-05-16', '22:00', 600)
     expect(opts.map((o) => o.offset)).toEqual([0, 1, 2, 3])
   })
 
-  it('crosses month boundaries correctly', () => {
+  it('returns five days for a 1000 km, including the buffer day', () => {
+    // 06:00 + 75:00 = 09:00 day+3, plus one buffer day past the cutoff
+    const opts = getFinishDayOptions('2026-05-16', '06:00', 1000)
+    expect(opts.map((o) => o.offset)).toEqual([0, 1, 2, 3, 4])
+  })
+
+  it('crosses month boundaries correctly, including the buffer day', () => {
     const opts = getFinishDayOptions('2026-05-31', '22:00', 600)
-    expect(opts.map((o) => o.date)).toEqual(['2026-05-31', '2026-06-01', '2026-06-02'])
+    expect(opts.map((o) => o.date)).toEqual([
+      '2026-05-31',
+      '2026-06-01',
+      '2026-06-02',
+      '2026-06-03',
+    ])
   })
 
   it('produces a short, human label for each day', () => {
@@ -69,6 +85,24 @@ describe('getFinishDayOptions', () => {
     expect(opts[0].label).toMatch(/16/)
     expect(opts[1].label).toMatch(/Sun/)
     expect(opts[1].label).toMatch(/17/)
+  })
+
+  it('offers 9 days for a 2000 km, spanning the LRM cutoff plus the buffer day', () => {
+    const opts = getFinishDayOptions('2026-08-04', '05:00', 2000)
+    expect(opts).toHaveLength(9)
+    expect(opts[0].date).toBe('2026-08-04')
+    expect(opts[8].date).toBe('2026-08-12')
+  })
+
+  it('lets an over-limit finisher pick a day past the strict cutoff', () => {
+    // 05:00 start + 166h40m LRM limit lands the cutoff moment at 03:40 on
+    // 2026-08-11 — the last day option must extend one day beyond that so a
+    // rider who finishes late can still record their real finish day.
+    const opts = getFinishDayOptions('2026-08-04', '05:00', 2000)
+    const cutoffDay = '2026-08-11'
+    const lastOption = opts[opts.length - 1]
+    expect(lastOption.date).toBe('2026-08-12')
+    expect(lastOption.date > cutoffDay).toBe(true)
   })
 })
 

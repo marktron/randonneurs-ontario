@@ -12,15 +12,21 @@ export interface FinishDayOption {
 
 /** Strict ACP elapsed-time limit in minutes for the route's distance. */
 export function getAcpTimeLimitMinutes(distanceKm: number): number {
+  // LRM rule: randonnées of 1400 km and up are limited to an overall 12 km/h
+  // global average, not a further extension of the ACP banded table (which
+  // only defines limits through 1300 km).
+  if (distanceKm > 1300) {
+    return Math.round((distanceKm / 12) * 60)
+  }
   return FINISH_LIMITS_MIN[getNominalDistance(distanceKm)]
 }
 
 /**
  * Calendar days a rider could plausibly choose as their finish day, from the
- * event date through the latest possible finish at the strict ACP cutoff.
- * Returns at minimum a single entry (same day). Returns an empty array if the
- * event has no start time recorded — callers should fall back to an
- * elapsed-time input in that case.
+ * event date through one day past the strict ACP/LRM cutoff (so over-limit
+ * finishes can still be recorded). Returns an empty array if the event has no
+ * start time recorded — callers should fall back to an elapsed-time input in
+ * that case.
  */
 export function getFinishDayOptions(
   eventDate: string,
@@ -33,8 +39,11 @@ export function getFinishDayOptions(
 
   const limitMin = getAcpTimeLimitMinutes(distanceKm)
   const totalMin = sh * 60 + sm + limitMin
-  // Number of distinct calendar days the start..cutoff window spans.
-  const dayCount = Math.floor(totalMin / (24 * 60)) + 1
+  // Number of distinct calendar days the start..cutoff window spans, plus one
+  // extra day: riders may finish past the ACP/LRM cutoff and still need to
+  // record their real finish (the form flags over-limit elapsed but accepts
+  // it), so the picker must offer a day beyond the strict-limit window.
+  const dayCount = Math.floor(totalMin / (24 * 60)) + 1 + 1
 
   const startDate = parseLocalDate(eventDate)
   const options: FinishDayOption[] = []
