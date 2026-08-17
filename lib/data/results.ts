@@ -89,6 +89,8 @@ const getAvailableYearsInner = cache(async (urlSlug: string): Promise<number[]> 
         .from('events')
         .select('id, season, results(season)')
         .eq('collection', urlSlug)
+        .neq('event_type', 'permanent')
+        .neq('event_type', 'fleche')
         .limit(2000)
     )
     events = result.data
@@ -112,6 +114,11 @@ const getAvailableYearsInner = cache(async (urlSlug: string): Promise<number[]> 
         .from('events')
         .select('id, season, results(season), chapters!inner(slug)')
         .eq('chapters.slug', dbSlug)
+        // Permanents and fleches have their own results pages; without this a
+        // season with only permanents becomes a phantom year link on the
+        // chapter page (getChapterResults excludes them, so the page is empty).
+        .neq('event_type', 'permanent')
+        .neq('event_type', 'fleche')
 
       // Filter for PBP events if requested
       if (urlSlug === 'pbp') {
@@ -197,6 +204,8 @@ const getChapterResultsInner = cache(
       `
           )
           .eq('collection', urlSlug)
+          .neq('event_type', 'permanent')
+          .neq('event_type', 'fleche')
           .gte('event_date', `${year}-01-01`)
           .lte('event_date', `${year}-12-31`)
           .order('event_date', { ascending: false })

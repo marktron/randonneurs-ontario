@@ -210,6 +210,29 @@ describe('getAvailableYears', () => {
     expect(result[0]).toBeGreaterThanOrEqual(result[1])
   })
 
+  it('excludes permanent and fleche events from chapter year navigation', async () => {
+    // Permanents/fleches have their own results pages (/results/[year]/permanent,
+    // /results/[year]/fleche). Without this filter, a season where a chapter has
+    // only permanents produces a phantom year link whose page shows no results.
+    mockModule.__mockEventsFound([])
+
+    await getAvailableYears('toronto')
+
+    expect(mockModule.__queryBuilder.neq).toHaveBeenCalledWith('event_type', 'permanent')
+    expect(mockModule.__queryBuilder.neq).toHaveBeenCalledWith('event_type', 'fleche')
+  })
+
+  it('excludes permanent and fleche events from collection year navigation', async () => {
+    // 'granite-anvil' maps to dbSlug null in the mock, exercising the collection branch.
+    mockModule.__mockEventsFound([])
+
+    await getAvailableYears('granite-anvil')
+
+    expect(mockModule.__queryBuilder.eq).toHaveBeenCalledWith('collection', 'granite-anvil')
+    expect(mockModule.__queryBuilder.neq).toHaveBeenCalledWith('event_type', 'permanent')
+    expect(mockModule.__queryBuilder.neq).toHaveBeenCalledWith('event_type', 'fleche')
+  })
+
   it('throws on a persistent query error instead of caching empty years', async () => {
     // Regression: returning [] here would let unstable_cache hide a chapter's
     // years until revalidation (see JAVASCRIPT-NEXTJS-25).
@@ -271,6 +294,27 @@ describe('getChapterResults', () => {
 
     expect(mockModule.__queryBuilder.gte).toHaveBeenCalledWith('event_date', '2025-01-01')
     expect(mockModule.__queryBuilder.lte).toHaveBeenCalledWith('event_date', '2025-12-31')
+  })
+
+  it('excludes permanent and fleche events from chapter results', async () => {
+    // Permanents/fleches are displayed on their own results pages, never under
+    // a geographic chapter's page.
+    mockModule.__mockEventsFound([])
+
+    await getChapterResults('toronto', 2025)
+
+    expect(mockModule.__queryBuilder.neq).toHaveBeenCalledWith('event_type', 'permanent')
+    expect(mockModule.__queryBuilder.neq).toHaveBeenCalledWith('event_type', 'fleche')
+  })
+
+  it('excludes permanent and fleche events from collection results', async () => {
+    mockModule.__mockEventsFound([])
+
+    await getChapterResults('granite-anvil', 2025)
+
+    expect(mockModule.__queryBuilder.eq).toHaveBeenCalledWith('collection', 'granite-anvil')
+    expect(mockModule.__queryBuilder.neq).toHaveBeenCalledWith('event_type', 'permanent')
+    expect(mockModule.__queryBuilder.neq).toHaveBeenCalledWith('event_type', 'fleche')
   })
 
   it('orders events reverse chronologically (most recent first)', async () => {

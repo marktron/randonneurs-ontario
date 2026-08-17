@@ -134,6 +134,13 @@ export async function getRiderResults(riderSlug: string)
 export async function getAvailableYears(): Promise<number[]>
 ```
 
+**Permanent and fleche events never appear under a chapter's results.** They
+have dedicated pages (`/results/[year]/permanent`, `/results/[year]/fleche`), so
+`getChapterResults` and `getAvailableYears` filter `event_type IN (permanent,
+fleche)` out of both the chapter-based and collection-based queries. The year
+filter also prevents phantom year links: without it, a season where a chapter
+had only permanents would appear in the year navigation with an empty page.
+
 **DNS results are excluded from public output.** Both `getChapterResults` and
 `getRiderResults` filter out results with `status = 'dns'` before transforming —
 DNS is internal bookkeeping (who registered but never started) and is not shown
