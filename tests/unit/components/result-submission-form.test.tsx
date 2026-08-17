@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { render, screen, waitFor, within, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ResultSubmissionForm } from '@/components/result-submission-form'
 import type { ResultSubmissionData } from '@/lib/actions/rider-results'
@@ -235,11 +235,101 @@ describe('ResultSubmissionForm', () => {
       render(<ResultSubmissionForm {...defaultProps} />)
 
       // With "finished" pre-selected, the form requires finish time inputs
-      // Submitting without filling them should trigger HTML5 validation
       const submitButton = screen.getByRole('button', { name: /submit your result/i })
       await user.click(submitButton)
 
       // Form should not submit without required fields
+      expect(mockSubmitRiderResult).not.toHaveBeenCalled()
+    })
+
+    it('submits when a complete finish time is entered', async () => {
+      const user = userEvent.setup()
+      render(<ResultSubmissionForm {...defaultProps} />)
+
+      await user.type(screen.getByLabelText('Finish Time'), '20:00')
+      await user.click(screen.getByRole('button', { name: /submit your result/i }))
+
+      await waitFor(() => {
+        expect(mockSubmitRiderResult).toHaveBeenCalledWith(
+          expect.objectContaining({ status: 'finished', finishTime: '12:00' })
+        )
+      })
+    })
+  })
+
+  describe('finish time validation', () => {
+    it('shows an inline error naming AM/PM when the finish time is empty on submit', async () => {
+      const user = userEvent.setup()
+      render(<ResultSubmissionForm {...defaultProps} />)
+
+      await user.click(screen.getByRole('button', { name: /submit your result/i }))
+
+      expect(
+        await screen.findByText(/enter your finish time, including AM or PM/i)
+      ).toBeInTheDocument()
+      expect(mockSubmitRiderResult).not.toHaveBeenCalled()
+    })
+
+    it('calls out a partially-entered time (missing AM/PM) on submit', async () => {
+      const user = userEvent.setup()
+      render(<ResultSubmissionForm {...defaultProps} />)
+
+      // Simulate a desktop browser where the rider typed the hour and minute
+      // but never set the AM/PM segment: value stays "" and badInput is true.
+      const timeInput = screen.getByLabelText('Finish Time')
+      Object.defineProperty(timeInput, 'validity', {
+        value: { badInput: true },
+        configurable: true,
+      })
+
+      await user.click(screen.getByRole('button', { name: /submit your result/i }))
+
+      expect(await screen.findByText(/set AM or PM/i)).toBeInTheDocument()
+      expect(mockSubmitRiderResult).not.toHaveBeenCalled()
+    })
+
+    it('shows a live hint when the rider leaves the field with a partial time', async () => {
+      render(<ResultSubmissionForm {...defaultProps} />)
+
+      const timeInput = screen.getByLabelText('Finish Time')
+      Object.defineProperty(timeInput, 'validity', {
+        value: { badInput: true },
+        configurable: true,
+      })
+      fireEvent.blur(timeInput)
+
+      expect(await screen.findByText(/set AM or PM/i)).toBeInTheDocument()
+      expect(mockSubmitRiderResult).not.toHaveBeenCalled()
+    })
+
+    it('clears the inline error once the rider fixes the time', async () => {
+      const user = userEvent.setup()
+      render(<ResultSubmissionForm {...defaultProps} />)
+
+      await user.click(screen.getByRole('button', { name: /submit your result/i }))
+      expect(
+        await screen.findByText(/enter your finish time, including AM or PM/i)
+      ).toBeInTheDocument()
+
+      await user.type(screen.getByLabelText('Finish Time'), '20:00')
+
+      expect(
+        screen.queryByText(/enter your finish time, including AM or PM/i)
+      ).not.toBeInTheDocument()
+    })
+
+    it('requires elapsed hours and minutes when the event has no start time', async () => {
+      const user = userEvent.setup()
+      render(
+        <ResultSubmissionForm
+          token="test-token-123"
+          initialData={{ ...mockInitialData, eventStartTime: null }}
+        />
+      )
+
+      await user.click(screen.getByRole('button', { name: /submit your result/i }))
+
+      expect(await screen.findByText(/enter your elapsed time/i)).toBeInTheDocument()
       expect(mockSubmitRiderResult).not.toHaveBeenCalled()
     })
   })

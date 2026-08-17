@@ -79,6 +79,7 @@ export function ResultSubmissionForm({ token, initialData }: ResultSubmissionFor
   const [gpxUrl, setGpxUrl] = useState(initialData.gpxUrl || '')
   const [riderNotes, setRiderNotes] = useState(initialData.riderNotes || '')
   const [error, setError] = useState<string | null>(null)
+  const [finishTimeError, setFinishTimeError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
   const [upcomingEvents, setUpcomingEvents] = useState<UpcomingEvent[]>([])
   const [suggestedEvents, setSuggestedEvents] = useState<UpcomingEvent[]>([])
@@ -236,6 +237,14 @@ export function ResultSubmissionForm({ token, initialData }: ResultSubmissionFor
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     setError(null)
+    setFinishTimeError(null)
+
+    // The form is noValidate: the native bubbles ("Invalid value") are too
+    // vague for the one failure riders actually hit — typing the hour and
+    // minute in the time input while the AM/PM segment is still placeholder
+    // text that looks filled in. Validate here with messages that name the
+    // missing piece instead.
+    const formEl = e.currentTarget
 
     if (!status) {
       setError('Please select your finish status')
@@ -245,14 +254,34 @@ export function ResultSubmissionForm({ token, initialData }: ResultSubmissionFor
     let finishTime: string | null = null
     if (status === 'finished') {
       if (useClockTimeInput && startTime) {
+        if (!finishClockTime) {
+          const timeInput = formEl.elements.namedItem('finishClockTime')
+          const isPartial = timeInput instanceof HTMLInputElement && timeInput.validity.badInput
+          setFinishTimeError(
+            isPartial
+              ? 'Your finish time is incomplete — set AM or PM to complete it.'
+              : 'Please enter your finish time, including AM or PM.'
+          )
+          if (timeInput instanceof HTMLInputElement) timeInput.focus()
+          return
+        }
         const elapsed = calculateElapsedMinutes(startTime, finishClockTime, finishDayOffset)
         if (elapsed === null) {
-          setError('Finish time must be after the event start time.')
+          setFinishTimeError('Finish time must be after the event start time.')
           return
         }
         finishTime = formatElapsedForSubmission(elapsed)
       } else if (finishHours && finishMinutes) {
         finishTime = `${finishHours}:${finishMinutes.padStart(2, '0')}`
+      } else {
+        setError('Please enter your elapsed time (hours and minutes).')
+        return
+      }
+
+      const urlInput = formEl.elements.namedItem('gpxUrl')
+      if (urlInput instanceof HTMLInputElement && urlInput.validity.typeMismatch) {
+        setError('The activity link doesn’t look like a valid URL — check it and try again.')
+        return
       }
     }
 
@@ -406,7 +435,7 @@ export function ResultSubmissionForm({ token, initialData }: ResultSubmissionFor
         </div>
       ) : null}
 
-      <form className="space-y-6" onSubmit={handleSubmit}>
+      <form className="space-y-6" onSubmit={handleSubmit} noValidate>
         {error && (
           <div role="alert" className="p-3 rounded-lg bg-destructive/10 text-destructive text-sm">
             {error}
@@ -435,7 +464,11 @@ export function ResultSubmissionForm({ token, initialData }: ResultSubmissionFor
             distanceKm={initialData.eventDistance}
             dayOptions={dayOptions}
             clockTime={finishClockTime}
-            onClockTimeChange={setFinishClockTime}
+            onClockTimeChange={(value) => {
+              setFinishClockTime(value)
+              setFinishTimeError(null)
+            }}
+            error={finishTimeError}
             dayOffset={finishDayOffset}
             onDayOffsetChange={setFinishDayOffset}
             disabled={isPending}
@@ -491,6 +524,7 @@ export function ResultSubmissionForm({ token, initialData }: ResultSubmissionFor
             <Label htmlFor="gpxUrl">Strava or GPS Activity Link</Label>
             <Input
               id="gpxUrl"
+              name="gpxUrl"
               type="url"
               placeholder="https://www.strava.com/activities/…"
               value={gpxUrl}
@@ -640,6 +674,7 @@ interface FinishClockTimeFieldsProps {
   dayOptions: ReturnType<typeof getFinishDayOptions>
   clockTime: string
   onClockTimeChange: (value: string) => void
+  error: string | null
   dayOffset: number
   onDayOffsetChange: (value: number) => void
   disabled: boolean
@@ -651,10 +686,15 @@ function FinishClockTimeFields({
   dayOptions,
   clockTime,
   onClockTimeChange,
+  error,
   dayOffset,
   onDayOffsetChange,
   disabled,
 }: FinishClockTimeFieldsProps) {
+  // True while the native time input holds a partial entry — typically the
+  // hour and minute typed but AM/PM still an unset placeholder, which reads
+  // as filled in even though the input's value is still empty.
+  const [hasPartialEntry, setHasPartialEntry] = useState(false)
   const elapsedMinutes = clockTime ? calculateElapsedMinutes(startTime, clockTime, dayOffset) : null
   const limitMinutes = getAcpTimeLimitMinutes(distanceKm)
   const isOverLimit = elapsedMinutes !== null && elapsedMinutes > limitMinutes
@@ -697,13 +737,29 @@ function FinishClockTimeFields({
       )}
       <Input
         id="finishClockTime"
+        name="finishClockTime"
         type="time"
         value={clockTime}
-        onChange={(e) => onClockTimeChange(e.target.value)}
+        onChange={(e) => {
+          onClockTimeChange(e.target.value)
+          setHasPartialEntry(e.target.value === '' && e.target.validity.badInput)
+        }}
+        onBlur={(e) => setHasPartialEntry(e.target.value === '' && e.target.validity.badInput)}
         disabled={disabled}
         required
+        aria-invalid={error ? true : undefined}
+        aria-describedby={error || hasPartialEntry ? 'finishClockTimeMessage' : undefined}
         className="tabular-nums"
       />
+      {error ? (
+        <p id="finishClockTimeMessage" role="alert" className="text-xs text-destructive">
+          {error}
+        </p>
+      ) : hasPartialEntry ? (
+        <p id="finishClockTimeMessage" className="text-xs text-amber-600 dark:text-amber-400">
+          Set AM or PM to complete your finish time.
+        </p>
+      ) : null}
       {elapsedMinutes !== null && (
         <p
           className={
