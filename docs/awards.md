@@ -270,3 +270,49 @@ now-unearned award from the whole series.
 **Known limitation.** The trigger fires on `results` changes only; editing an
 event's `collection` or date does not re-reconcile results pointing at it
 (matches First Brevet).
+
+### Super Randonneur
+
+Super Randonneur (SR) is assigned automatically by a database trigger for the
+**current season only**. Closed seasons (2025 and earlier, and any season once
+the calendar year rolls over) are frozen and hand-curated.
+
+**Rule.** A qualifying ride is a **finished `brevet`** result at exactly 200, 300,
+400, or 600 km. SR needs the **full set** — one 200, one 300, one 400, and one 600
+— in a single season. There is **no substitution**: a longer ride never stands in
+for a shorter one, so `200, 300, 600, 600` does not qualify, and neither does
+`200, 300, 400, 1000`. A 1000/1200/1300 km brevet contributes nothing to SR.
+SR can be earned an unlimited number of times per season. With `nX` = count of
+qualifying rides at exactly X km, the number of SRs is
+`LEAST(n200, n300, n400, n600)`. Permanents, flèches, and populaires never count.
+
+**Mechanics.** `trg_results_super_randonneur` (in
+`supabase/migrations/20260820120000_auto_assign_super_randonneur.sql`) fires on every
+INSERT, DELETE, and status/event_id/distance_km/rider_id/season UPDATE on
+`results`. It calls `reconcile_super_randonneur_for_rider_season(rider_id, season)`,
+which no-ops unless `season` is the live calendar year, then adds or removes
+**auto-assigned** `rider_awards` rows (`auto_assigned = true`) so their count
+equals the computed SR count.
+
+**Manual rows and off-club rides.** Auto rows never touch manual rows
+(`auto_assigned = false`). When a rider's qualifying ride was ridden at another
+club, the site shows fewer than four qualifying rides, so the auto count is short
+— an admin assigns the missing SR by hand. Auto and manual rows are additive.
+**Operational rule:** in the current season, only manually add an SR for off-club
+series _beyond_ what is auto-computed, to avoid double-counting.
+
+**Status changes / deletions.** Flipping a qualifying result to `dnf` or deleting
+it re-runs the reconciler and removes the now-unsupported auto SR.
+
+**Deploying mid-season.** The trigger only fires when a result row changes, so
+results submitted before it existed would otherwise sit unawarded. A one-time
+companion migration
+(`supabase/migrations/20260820120100_super_randonneur_current_season_backfill.sql`)
+reconciles every rider holding a current-season brevet result at an SR distance,
+which grants the award to those who already completed a series and is a no-op for
+everyone else. It only ever reaches the live season — the reconciler it calls is
+season-gated — so history is untouched.
+
+**Known limitation.** The trigger fires on `results` changes only; editing an
+event's `event_type` or `event_date` does not re-reconcile results pointing at it
+(matches First Brevet).

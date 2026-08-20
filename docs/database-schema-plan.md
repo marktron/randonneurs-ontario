@@ -234,21 +234,21 @@ CREATE INDEX idx_riders_slug ON riders(slug);
 
 ## Key Design Decisions
 
-| Decision                        | Rationale                                                                                      |
-| ------------------------------- | ---------------------------------------------------------------------------------------------- |
-| **Single `riders` table**       | No user auth means we don't need separate members vs riders. All participants go in one table. |
-| **`events` replaces `brevets`** | More generic name supports all event types (Brevets, Populaires, Fleches, Permanents)          |
-| **Permanents as events**        | Permanent rides use `event_type='permanent'` rather than a separate table                      |
-| **`season` computed column**    | Automatic year extraction from event_date, saves manual data entry                             |
-| **`INTERVAL` for finish_time**  | Native PostgreSQL type for durations, enables queries like "all sub-12-hour finishes"          |
-| **Supabase Auth for admins**    | Admins use Supabase Auth; riders do not have accounts                                          |
-| **No membership tracking**      | Membership is managed externally via CCN Bikes                                                 |
-| **In-app registration**         | Registration happens at `/register`, creating entries in `registrations` table                 |
-| **Route collections**           | Simple `collection` column on routes (e.g., "200km-brevets", "devil-week")                     |
-| **RWGPS ID only**               | Store RideWithGPS route ID, construct full URL as needed                                       |
-| **No route versioning**         | Significant route changes get a new route name instead                                         |
-| **Manual award assignment**     | Awards assigned manually for now; automatic calculation is future work                         |
-| **Soft status fields**          | Events use `status` instead of deleting, preserving history                                    |
+| Decision                        | Rationale                                                                                                                                                                                                         |
+| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Single `riders` table**       | No user auth means we don't need separate members vs riders. All participants go in one table.                                                                                                                    |
+| **`events` replaces `brevets`** | More generic name supports all event types (Brevets, Populaires, Fleches, Permanents)                                                                                                                             |
+| **Permanents as events**        | Permanent rides use `event_type='permanent'` rather than a separate table                                                                                                                                         |
+| **`season` computed column**    | Automatic year extraction from event_date, saves manual data entry                                                                                                                                                |
+| **`INTERVAL` for finish_time**  | Native PostgreSQL type for durations, enables queries like "all sub-12-hour finishes"                                                                                                                             |
+| **Supabase Auth for admins**    | Admins use Supabase Auth; riders do not have accounts                                                                                                                                                             |
+| **No membership tracking**      | Membership is managed externally via CCN Bikes                                                                                                                                                                    |
+| **In-app registration**         | Registration happens at `/register`, creating entries in `registrations` table                                                                                                                                    |
+| **Route collections**           | Simple `collection` column on routes (e.g., "200km-brevets", "devil-week")                                                                                                                                        |
+| **RWGPS ID only**               | Store RideWithGPS route ID, construct full URL as needed                                                                                                                                                          |
+| **No route versioning**         | Significant route changes get a new route name instead                                                                                                                                                            |
+| **Manual award assignment**     | Awards assigned manually by default. **First Brevet** and **Super Randonneur** are auto-assigned by `results` triggers; SR is current-season-only and coexists with manual rows via `rider_awards.auto_assigned`. |
+| **Soft status fields**          | Events use `status` instead of deleting, preserving history                                                                                                                                                       |
 
 ---
 
