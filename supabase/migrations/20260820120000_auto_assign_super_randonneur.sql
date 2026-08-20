@@ -7,7 +7,9 @@
 -- unlimited number of times per season. Auto-assigned rows are marked
 -- auto_assigned = true and reconciled by a trigger on `results`. Manual rows
 -- (auto_assigned = false) are never touched. Only the live calendar season is
--- reconciled; closed seasons and history are frozen. No backfill.
+-- reconciled; closed seasons and history are frozen and never backfilled. The
+-- current season's already-submitted results are picked up once by the sibling
+-- migration 20260820120100_super_randonneur_current_season_backfill.sql.
 
 -- 1. Mark auto-assigned award rows so the reconciler never clobbers manual ones.
 ALTER TABLE rider_awards
@@ -119,4 +121,5 @@ ON results
 FOR EACH ROW
 EXECUTE FUNCTION trg_results_reconcile_super_randonneur();
 
--- No backfill: only the current season is auto-managed; history stays as-is.
+-- No historical backfill: only the current season is auto-managed; history
+-- stays as-is. See the sibling current-season reconcile migration.

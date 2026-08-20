@@ -287,7 +287,7 @@ qualifying rides at exactly X km, the number of SRs is
 `LEAST(n200, n300, n400, n600)`. Permanents, flèches, and populaires never count.
 
 **Mechanics.** `trg_results_super_randonneur` (in
-`supabase/migrations/20260622201058_auto_assign_super_randonneur.sql`) fires on every
+`supabase/migrations/20260820120000_auto_assign_super_randonneur.sql`) fires on every
 INSERT, DELETE, and status/event_id/distance_km/rider_id/season UPDATE on
 `results`. It calls `reconcile_super_randonneur_for_rider_season(rider_id, season)`,
 which no-ops unless `season` is the live calendar year, then adds or removes
@@ -303,6 +303,15 @@ series _beyond_ what is auto-computed, to avoid double-counting.
 
 **Status changes / deletions.** Flipping a qualifying result to `dnf` or deleting
 it re-runs the reconciler and removes the now-unsupported auto SR.
+
+**Deploying mid-season.** The trigger only fires when a result row changes, so
+results submitted before it existed would otherwise sit unawarded. A one-time
+companion migration
+(`supabase/migrations/20260820120100_super_randonneur_current_season_backfill.sql`)
+reconciles every rider holding a current-season brevet result at an SR distance,
+which grants the award to those who already completed a series and is a no-op for
+everyone else. It only ever reaches the live season — the reconciler it calls is
+season-gated — so history is untouched.
 
 **Known limitation.** The trigger fires on `results` changes only; editing an
 event's `event_type` or `event_date` does not re-reconcile results pointing at it
