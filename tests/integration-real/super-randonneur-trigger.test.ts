@@ -142,6 +142,31 @@ describe('Super Randonneur auto-assignment trigger', () => {
     expect(await autoSrCount(IDS.rider, CURRENT_SEASON)).toBe(1)
   })
 
+  it('grants the SR as soon as the last pending result is marked finished', async () => {
+    await seedRider(IDS.rider, SLUGS.rider)
+    // complete-event.ts creates result rows as `pending`; riders (or an admin)
+    // flip them to `finished` afterwards. Nothing is earned until the last one.
+    const ids: string[] = []
+    for (const d of [200, 300, 400, 600]) {
+      ids.push(await seedResult(IDS.rider, d, CURRENT_SEASON, { status: 'pending' }))
+    }
+    expect(await autoSrCount(IDS.rider, CURRENT_SEASON)).toBe(0)
+
+    for (const id of ids.slice(0, 3)) {
+      await checked(
+        supabase.from('results').update({ status: 'finished' }).eq('id', id),
+        'finish result'
+      )
+    }
+    expect(await autoSrCount(IDS.rider, CURRENT_SEASON)).toBe(0)
+
+    await checked(
+      supabase.from('results').update({ status: 'finished' }).eq('id', ids[3]),
+      'finish final result'
+    )
+    expect(await autoSrCount(IDS.rider, CURRENT_SEASON)).toBe(1)
+  })
+
   it('does not substitute a longer ride for a shorter slot: 200/400/400/600 earns nothing', async () => {
     await seedRider(IDS.rider, SLUGS.rider)
     for (const d of [200, 400, 400, 600]) {
