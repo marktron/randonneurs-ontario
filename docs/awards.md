@@ -313,6 +313,14 @@ which grants the award to those who already completed a series and is a no-op fo
 everyone else. It only ever reaches the live season — the reconciler it calls is
 season-gated — so history is untouched.
 
+Run `scripts/preflight-sr-current-season.ts` (read-only) **before** that deploy.
+The reconciler ignores manual rows and treats them as additive, on the assumption
+that a manual row means an off-club series _beyond_ the computable count. An SR
+assigned by hand for the current season before the trigger existed breaks that
+assumption — the reconcile adds an auto row on top and the rider holds two SRs
+for one series. The preflight lists those overlaps so they can be cleared, or
+confirmed as genuine off-club extras, first.
+
 **Known limitation.** The trigger fires on `results` changes only; editing an
 event's `event_type` or `event_date` does not re-reconcile results pointing at it
 (matches First Brevet).
