@@ -321,6 +321,14 @@ assumption — the reconcile adds an auto row on top and the rider holds two SRs
 for one series. The preflight lists those overlaps so they can be cleared, or
 confirmed as genuine off-club extras, first.
 
+**Cache invalidation.** SR is season-scoped, so it surfaces on `/awards`,
+`/records` and rider pages, which cache for 24h under the `awards`, `records` and
+`riders` tags. The trigger writes inside Postgres, so nothing in the app knows an
+award changed — `revalidateResultsTags()` therefore busts those tags on every
+results change. Anything that writes `rider_awards` outside a server action (a
+migration, a psql session) bypasses this entirely and needs a manual
+`POST /api/revalidate` with `{"tags":["awards","records"]}`.
+
 **Known limitation.** The trigger fires on `results` changes only; editing an
 event's `event_type` or `event_date` does not re-reconcile results pointing at it
 (matches First Brevet).

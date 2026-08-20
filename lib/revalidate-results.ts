@@ -10,6 +10,10 @@ import type { EventForResultsRevalidation } from '@/types/queries'
  * rider self-service submission (`lib/actions/rider-results.ts`) so the two
  * paths can never drift on which tags a results change must bust. Duplicating
  * this tag list is exactly how rider submissions stopped appearing publicly.
+ *
+ * This covers the award caches too, because Postgres triggers on `results` can
+ * grant or withdraw awards as a side effect of a results change. Anything that
+ * derives from a result belongs here, not just the results pages themselves.
  */
 export async function revalidateResultsTags(eventId: string) {
   // Get event info including season, chapter, and event_type.
@@ -28,6 +32,17 @@ export async function revalidateResultsTags(eventId: string) {
     // path revalidation; passing a named profile like 'max' only schedules a
     // background refresh and leaves stale pages served in the meantime.
     revalidateTag('results', { expire: 0 })
+
+    // A results change can also change AWARDS, without any award action running:
+    // `trg_results_super_randonneur` grants season-scoped Super Randonneur rows
+    // from inside Postgres whenever a result is inserted, deleted, or has its
+    // status/distance/rider/season updated. Those rows surface on /awards,
+    // /records and rider pages, which cache for 24h under these tags and are
+    // otherwise only busted by the admin award actions. Without this, an
+    // auto-granted SR stays invisible until the TTL lapses.
+    revalidateTag('awards', { expire: 0 })
+    revalidateTag('records', { expire: 0 })
+    revalidateTag('riders', { expire: 0 })
 
     if (typedEvent.season) {
       // Year-specific cache spans all chapters for the season.
