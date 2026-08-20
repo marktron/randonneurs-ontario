@@ -1,5 +1,13 @@
 # Auto-assign Super Randonneur Implementation Plan
 
+> **⚠️ Superseded (2026-08-20).** Every SR count formula in this plan uses the
+> longer-ride-substitution rule (`LEAST(n600, ⌊n400/2⌋, ⌊n300/3⌋, ⌊n200/4⌋)`).
+> That rule was wrong: SR requires the exact set 200 + 300 + 400 + 600, i.e.
+> `LEAST(n200, n300, n400, n600)`. This file is kept as an execution record —
+> do not copy its SQL or tests. See
+> `docs/superpowers/specs/2026-06-22-auto-assign-super-randonneur-design.md` and
+> `supabase/migrations/20260622201058_auto_assign_super_randonneur.sql`.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Automatically grant the Super Randonneur (SR) award to riders who complete a qualifying brevet series in the current season, via a Postgres trigger on `results`, mirroring the existing First Brevet automation.

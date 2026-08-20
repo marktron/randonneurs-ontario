@@ -277,13 +277,14 @@ Super Randonneur (SR) is assigned automatically by a database trigger for the
 **current season only**. Closed seasons (2025 and earlier, and any season once
 the calendar year rolls over) are frozen and hand-curated.
 
-**Rule.** A qualifying ride is a **finished `brevet`** result of at least 200 km.
-SR needs one ride for each slot {≥200, ≥300, ≥400, ≥600} in a season; a longer
-ride substitutes for any shorter slot (so `200, 400, 400, 600` qualifies, as does
-`200, 300, 600, 1000`). SR can be earned an unlimited number of times per season.
-With `nX` = count of qualifying rides ≥ X km, the number of SRs is
-`LEAST(n600, ⌊n400/2⌋, ⌊n300/3⌋, ⌊n200/4⌋)`. Permanents, flèches, and populaires
-never count.
+**Rule.** A qualifying ride is a **finished `brevet`** result at exactly 200, 300,
+400, or 600 km. SR needs the **full set** — one 200, one 300, one 400, and one 600
+— in a single season. There is **no substitution**: a longer ride never stands in
+for a shorter one, so `200, 300, 600, 600` does not qualify, and neither does
+`200, 300, 400, 1000`. A 1000/1200/1300 km brevet contributes nothing to SR.
+SR can be earned an unlimited number of times per season. With `nX` = count of
+qualifying rides at exactly X km, the number of SRs is
+`LEAST(n200, n300, n400, n600)`. Permanents, flèches, and populaires never count.
 
 **Mechanics.** `trg_results_super_randonneur` (in
 `supabase/migrations/20260622201058_auto_assign_super_randonneur.sql`) fires on every

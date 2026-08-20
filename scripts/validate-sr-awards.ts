@@ -1,6 +1,7 @@
 // Read-only validation of the Super Randonneur formula against closed seasons.
 // For every (rider, season < current calendar year), compare recorded SR rows
-// to the computed SR count. computed <= recorded is expected (off-club rides);
+// to the computed SR count. computed <= recorded is expected (off-club rides,
+// plus closed-season rows curated under the old substitution understanding);
 // computed > recorded is a red flag.
 //
 // Usage:
@@ -25,10 +26,13 @@ const supabase = createClient(url, key, {
 })
 
 const CURRENT_YEAR = new Date().getFullYear()
+const SR_DISTANCES = [200, 300, 400, 600] as const
 
+// SR requires the exact set 200 + 300 + 400 + 600 — a longer ride never
+// substitutes for a shorter one — so the number of SRs is the count of the
+// scarcest of the four distances. Rides at any other distance never count.
 function srCount(distances: number[]): number {
-  const n = (t: number) => distances.filter((d) => d >= t).length
-  return Math.min(n(600), Math.floor(n(400) / 2), Math.floor(n(300) / 3), Math.floor(n(200) / 4))
+  return Math.min(...SR_DISTANCES.map((d) => distances.filter((x) => x === d).length))
 }
 
 async function fetchAllQualifyingResults(): Promise<
@@ -43,7 +47,7 @@ async function fetchAllQualifyingResults(): Promise<
       .select('rider_id, season, distance_km, events!inner(event_type)')
       .eq('status', 'finished')
       .eq('events.event_type', 'brevet')
-      .gte('distance_km', 200)
+      .in('distance_km', SR_DISTANCES)
       .lt('season', CURRENT_YEAR)
       .range(from, from + pageSize - 1)
     if (error) throw new Error(`fetch results: ${error.message}`)
@@ -127,7 +131,8 @@ async function main() {
 
   console.log('\n--- summary ---')
   console.log(`matches:    ${matches}`)
-  console.log(`shortfalls: ${shortfalls} (expected — off-club rides)`)
+  console.log(`shortfalls: ${shortfalls} (expected — off-club rides, and closed-season rows`)
+  console.log('             granted under the retired substitution rule)')
   console.log(`RED FLAGS:  ${redFlags} (computed > recorded — investigate)`)
   if (redFlags > 0) process.exitCode = 1
 }

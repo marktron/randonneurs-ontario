@@ -1,8 +1,9 @@
 -- Auto-assign the Super Randonneur (SR) award for the current season.
 --
 -- SR is season-scoped (rider_awards). A rider earns it once per complete set of
--- finished `brevet` results covering the slots {>=200, >=300, >=400, >=600} in a
--- season; longer rides substitute for shorter slots, and it can be earned an
+-- finished `brevet` results at 200, 300, 400, and 600 km in a season. The set
+-- must be exact: a longer ride never substitutes for a shorter one (a 1000 km
+-- brevet fills neither the 600 slot nor any other). SR can be earned an
 -- unlimited number of times per season. Auto-assigned rows are marked
 -- auto_assigned = true and reconciled by a trigger on `results`. Manual rows
 -- (auto_assigned = false) are never touched. Only the live calendar season is
@@ -39,13 +40,14 @@ BEGIN
     RETURN;
   END IF;
 
-  -- Target SR count: max disjoint sets coverable by this season's qualifying
-  -- finished brevets, honoring longer-for-shorter substitution.
+  -- Target SR count: how many complete 200/300/400/600 sets this season's
+  -- qualifying finished brevets cover, i.e. the count of the scarcest of the
+  -- four distances. No substitution, so each distance is matched exactly.
   SELECT COALESCE(LEAST(
-           COUNT(*) FILTER (WHERE r.distance_km >= 600),
-           COUNT(*) FILTER (WHERE r.distance_km >= 400) / 2,
-           COUNT(*) FILTER (WHERE r.distance_km >= 300) / 3,
-           COUNT(*) FILTER (WHERE r.distance_km >= 200) / 4
+           COUNT(*) FILTER (WHERE r.distance_km = 200),
+           COUNT(*) FILTER (WHERE r.distance_km = 300),
+           COUNT(*) FILTER (WHERE r.distance_km = 400),
+           COUNT(*) FILTER (WHERE r.distance_km = 600)
          ), 0)
   INTO v_target
   FROM results r
@@ -54,7 +56,7 @@ BEGIN
     AND r.season     = p_season
     AND r.status     = 'finished'
     AND e.event_type = 'brevet'
-    AND r.distance_km >= 200;
+    AND r.distance_km IN (200, 300, 400, 600);
 
   SELECT COUNT(*) INTO v_current
   FROM rider_awards

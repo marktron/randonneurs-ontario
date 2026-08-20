@@ -1,5 +1,13 @@
 # Task 1 Report — Migration: column, reconcile function, trigger
 
+> **⚠️ Superseded (2026-08-20).** Every SR count formula in this plan uses the
+> longer-ride-substitution rule (`LEAST(n600, ⌊n400/2⌋, ⌊n300/3⌋, ⌊n200/4⌋)`).
+> That rule was wrong: SR requires the exact set 200 + 300 + 400 + 600, i.e.
+> `LEAST(n200, n300, n400, n600)`. This file is kept as an execution record —
+> do not copy its SQL or tests. See
+> `docs/superpowers/specs/2026-06-22-auto-assign-super-randonneur-design.md` and
+> `supabase/migrations/20260622201058_auto_assign_super_randonneur.sql`.
+
 ## What Was Implemented
 
 Implemented Task 1 of the auto-assign Super Randonneur plan exactly as specified.

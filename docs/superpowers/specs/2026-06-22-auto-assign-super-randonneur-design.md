@@ -23,46 +23,44 @@ A result counts toward SR when **all** of:
 
 - `results.status = 'finished'`
 - `events.event_type = 'brevet'` (permanents, flèches, populaires never count)
-- `results.distance_km >= 200`
+- `results.distance_km` is exactly one of 200, 300, 400, 600
 - it falls in the target season (`results.season`, a calendar year)
 
 `results.distance_km` is the canonical distance field (it is also what the
 records/devil-week functions bucket on). `results.season` is the calendar year
 (`EXTRACT(YEAR FROM event_date)`).
 
-### Substitution rule and the count formula
+### No substitution: the exact set
 
-A longer ride may substitute for any shorter required distance (e.g.
-`200, 400, 400, 600` earns SR — the second 400 fills the 300 slot; so does
-`200, 300, 600, 1000` — the 1000 fills the 400 slot). A ride longer than 600 is
-never _required_, only ever a substitute.
+SR requires the **exact set** 200 + 300 + 400 + 600 within one season. A longer
+ride never substitutes for a shorter one, in either direction of the earlier
+confusion: `200, 300, 600, 600` does not qualify (the second 600 does not fill
+the 400 slot), and neither does `200, 300, 400, 1000` (the 1000 does not fill the
+600 slot). Rides at any other distance — 1000, 1200, 1300 — contribute nothing.
 
-SR is earned an **unlimited** number of times per season. The number of SRs is
-the maximum number of disjoint complete sets, where each set assigns one ride to
-each of the four slots {≥200, ≥300, ≥400, ≥600}, each ride used at most once.
-
-Let `nX` = count of qualifying rides with `distance_km >= X`. Because the slot
-thresholds are nested, greedy assignment (largest rides to the largest slots) is
-optimal, giving:
+SR is earned an **unlimited** number of times per season. Since each of the four
+slots can only be filled by a ride at its own distance, the number of complete
+sets is simply the count of the scarcest of the four distances. With `nX` = count
+of qualifying rides at exactly X km:
 
 ```
-SR_count = LEAST( n600, floor(n400 / 2), floor(n300 / 3), floor(n200 / 4) )
+SR_count = LEAST( n200, n300, n400, n600 )
 ```
-
-Derivation: a ride with `d >= t` is the only kind that can fill any slot whose
-threshold is `>= t`. The slots with threshold `>= 600` number 1, `>= 400`
-number 2, `>= 300` number 3, `>= 200` number 4. For `k` complete sets each of
-those slot-groups needs enough eligible rides, i.e. `n600 >= k`, `n400 >= 2k`,
-`n300 >= 3k`, `n200 >= 4k`. The largest feasible `k` is the formula above.
 
 Worked examples:
 
-| Rides                      | n600 | n400 | n300 | n200 | SR_count         |
-| -------------------------- | ---- | ---- | ---- | ---- | ---------------- |
-| 200, 400, 400, 600         | 1    | 3    | 3    | 4    | `min(1,1,1,1)=1` |
-| 200, 300, 600, 1000        | 2    | 2    | 3    | 4    | `min(2,1,1,1)=1` |
-| 2× each 200/300/400/600    | 2    | 4    | 6    | 8    | `min(2,2,2,2)=2` |
-| 3×200, 2×300, 2×400, 1×600 | 1    | 3    | 5    | 8    | `min(1,1,1,2)=1` |
+| Rides                      | n200 | n300 | n400 | n600 | SR_count           |
+| -------------------------- | ---- | ---- | ---- | ---- | ------------------ |
+| 200, 300, 400, 600         | 1    | 1    | 1    | 1    | `min(1,1,1,1)=1`   |
+| 200, 400, 400, 600         | 1    | 0    | 2    | 1    | `min(1,0,2,1)=0`   |
+| 200, 300, 600, 1000        | 1    | 1    | 0    | 1    | `min(1,1,0,1)=0`   |
+| 200, 300, 400, 600 + 1000  | 1    | 1    | 1    | 1    | `min(1,1,1,1)=1`   |
+| 2× each 200/300/400/600    | 2    | 2    | 2    | 2    | `min(2,2,2,2)=2`   |
+| 3×200, 2×300, 2×400, 1×600 | 3    | 2    | 2    | 1    | `min(3,2,2,1)=1`   |
+
+**History.** An earlier version of this spec allowed a longer ride to substitute
+for a shorter slot, giving `LEAST(n600, ⌊n400/2⌋, ⌊n300/3⌋, ⌊n200/4⌋)`. That was
+wrong — the club rule requires the full set — and it was corrected on 2026-08-20.
 
 ## Scope: current season only
 
@@ -147,14 +145,13 @@ auto SR count for the selected rider/season in the admin award form.
          AND r.distance_km >= 200
      )
      SELECT LEAST(
-       COUNT(*) FILTER (WHERE d >= 600),
-       COUNT(*) FILTER (WHERE d >= 400) / 2,
-       COUNT(*) FILTER (WHERE d >= 300) / 3,
-       COUNT(*) FILTER (WHERE d >= 200) / 4
+       COUNT(*) FILTER (WHERE d = 200),
+       COUNT(*) FILTER (WHERE d = 300),
+       COUNT(*) FILTER (WHERE d = 400),
+       COUNT(*) FILTER (WHERE d = 600)
      ) FROM q;
      ```
-     (`COUNT(*)` is `bigint`; `/ 2` etc. are integer division → floor for
-     non-negative values. Empty set → `target_k = 0`.)
+     (Empty set → `target_k = 0`.)
    - count current auto rows `cur` for (rider, SR award, season,
      `auto_assigned = true`).
    - if `target_k > cur`: insert `target_k - cur` rows
@@ -197,27 +194,29 @@ For each (rider, season < current year), compare **recorded** SR count
   explained by off-chapter rides not shown on the site (3 such cases).
 - `computed > recorded` flags a divergence to investigate.
 
-**Outcome (2026-06).** The run surfaced **34** `computed > recorded` cases.
-Investigation (confirmed with the club) showed the **formula is correct** and
-the historical _data_ was wrong: a prior calculation dropped the
-longer-ride-substitutes-for-shorter rule for rides over 600 km, so riders who
-completed a series using a 1000/1200/1300 km ride as a substitute were never
-credited. All 34 are genuine missing awards (each +1 SR). They are corrected by
-a one-time backfill (below); the trigger itself is unchanged. Re-running the
-validation after the backfill should report 0 `computed > recorded` cases.
+**Outcome (2026-06, superseded).** The first run — against the old
+substitution formula — surfaced 34 `computed > recorded` cases and they were read
+as missing awards. That reading depended on the substitution rule, which was
+wrong. Under the exact-set rule those 34 cases disappear, and the direction
+reverses: closed seasons curated under the substitution understanding now show up
+as `computed < recorded` shortfalls, indistinguishable from genuine off-club
+rides. No historical write was ever justified.
 
 The script is run manually against prod data; its output is reported back, not
 asserted in CI (CI has no historical data).
 
-## One-time historical backfill
+## Closed seasons stay frozen
 
-The forward-only trigger does not touch closed seasons, so the 34 pre-existing
-gaps are corrected once by `scripts/backfill-sr-2026-correction.ts`. For each
-closed (rider, season) where the Option-A `SR_count` exceeds the recorded count,
-it inserts the difference as `rider_awards` rows (`auto_assigned = false`, with a
-provenance note). It is **dry-run by default**, requires `--apply` to write,
-never deletes (off-chapter overages are left alone), and is idempotent
-(re-running computes a zero delta). An admin runs it against prod.
+There is **no** historical backfill. Closed seasons are hand-curated and remain
+as recorded — the trigger is forward-only and touches the live season alone.
+
+`scripts/backfill-sr-2026-correction.ts`, which would have inserted the 34 rows
+above, is retired and deleted. In its place,
+`scripts/audit-sr-substitution-rows.ts` is **read-only**: it reports (1) any rows
+carrying the retired backfill's `note`, which are unambiguously invalid because
+each was granted specifically for >600 km substitution, and (2) closed-season SR
+rows the site's own results cannot account for — a review signal only, since a
+genuine off-club ride looks identical. Acting on either is an admin decision.
 
 ## Testing
 
@@ -226,8 +225,8 @@ Trigger + schema changes require the **real-DB** suite
 events at the relevant distances, and finished results, then assert auto SR
 rows:
 
-- formula scenarios from the table above (incl. substitution and the
-  min-limited case);
+- formula scenarios from the table above (incl. the near-miss sets that would
+  have qualified under substitution, and the scarcest-distance case);
 - repeated series → multiple auto SRs (unlimited);
 - a result flipping to `dnf` / being deleted reduces the auto count;
 - a manual row (`auto_assigned = false`) is never deleted and does not change
@@ -243,7 +242,7 @@ gate and satisfying the "no hardcoded dates" rule.
 ## Docs
 
 - `docs/awards.md`: move SR under "Automatically Assigned Awards", document the
-  substitution rule, the count formula, brevet-only, current-season-only, and
+  exact-set rule, the count formula, brevet-only, current-season-only, and
   the off-chapter manual exception.
 - `docs/database-schema-plan.md`: update the "Manual award assignment" note to
   reflect that First Brevet and SR are now auto-assigned.
@@ -251,7 +250,7 @@ gate and satisfying the "no hardcoded dates" rule.
 ## Out of scope
 
 - Completed Devil Week automation (separate follow-up).
-- Ongoing reconciliation of closed-season SR data by the trigger (it stays
-  forward-only; the one-time backfill script above is the only historical write).
+- Any write to closed-season SR data. The trigger stays forward-only and no
+  script writes history; the audit script is read-only.
 - The optional admin-form "current auto SR count" display.
 - Re-reconciling on event edits (matches First Brevet's existing limitation).

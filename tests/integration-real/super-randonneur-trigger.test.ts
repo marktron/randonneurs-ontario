@@ -142,12 +142,12 @@ describe('Super Randonneur auto-assignment trigger', () => {
     expect(await autoSrCount(IDS.rider, CURRENT_SEASON)).toBe(1)
   })
 
-  it('honors substitution: 200/400/400/600 earns one SR', async () => {
+  it('does not substitute a longer ride for a shorter slot: 200/400/400/600 earns nothing', async () => {
     await seedRider(IDS.rider, SLUGS.rider)
     for (const d of [200, 400, 400, 600]) {
       await seedResult(IDS.rider, d, CURRENT_SEASON)
     }
-    expect(await autoSrCount(IDS.rider, CURRENT_SEASON)).toBe(1)
+    expect(await autoSrCount(IDS.rider, CURRENT_SEASON)).toBe(0)
   })
 
   it('does not grant SR for a prior (closed) season', async () => {
@@ -174,7 +174,7 @@ describe('Super Randonneur auto-assignment trigger', () => {
     expect(await autoSrCount(IDS.rider, CURRENT_SEASON)).toBe(2)
   })
 
-  it('is limited by the rarest distance: 3x200 2x300 2x400 1x600 -> 1 SR', async () => {
+  it('is limited by the scarcest distance: 3x200 2x300 2x400 1x600 -> 1 SR', async () => {
     await seedRider(IDS.rider, SLUGS.rider)
     for (const d of [200, 200, 200, 300, 300, 400, 400, 600]) {
       await seedResult(IDS.rider, d, CURRENT_SEASON)
@@ -182,9 +182,25 @@ describe('Super Randonneur auto-assignment trigger', () => {
     expect(await autoSrCount(IDS.rider, CURRENT_SEASON)).toBe(1)
   })
 
-  it('substitution with a ride over 600: 200/300/600/1000 -> 1 SR', async () => {
+  it('does not let a ride over 600 stand in for a missing distance: 200/300/600/1000 earns nothing', async () => {
     await seedRider(IDS.rider, SLUGS.rider)
     for (const d of [200, 300, 600, 1000]) {
+      await seedResult(IDS.rider, d, CURRENT_SEASON)
+    }
+    expect(await autoSrCount(IDS.rider, CURRENT_SEASON)).toBe(0)
+  })
+
+  it('does not let a 1000 fill the 600 slot: 200/300/400/1000 earns nothing', async () => {
+    await seedRider(IDS.rider, SLUGS.rider)
+    for (const d of [200, 300, 400, 1000]) {
+      await seedResult(IDS.rider, d, CURRENT_SEASON)
+    }
+    expect(await autoSrCount(IDS.rider, CURRENT_SEASON)).toBe(0)
+  })
+
+  it('ignores rides outside the set: a full series plus a 1000 and a 1200 is still one SR', async () => {
+    await seedRider(IDS.rider, SLUGS.rider)
+    for (const d of [200, 300, 400, 600, 1000, 1200]) {
       await seedResult(IDS.rider, d, CURRENT_SEASON)
     }
     expect(await autoSrCount(IDS.rider, CURRENT_SEASON)).toBe(1)
