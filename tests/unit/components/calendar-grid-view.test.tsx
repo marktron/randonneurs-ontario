@@ -154,3 +154,43 @@ describe('cancelled events', () => {
     expect(container.querySelector('.bg-yellow-600')).toBeNull()
   })
 })
+
+describe('hrefFor', () => {
+  it('defaults to the public registration link', () => {
+    render(<CalendarGridView events={[sampleEvents[0]]} />)
+    expect(
+      screen
+        .getAllByRole('link')
+        .some((l) => l.getAttribute('href') === '/register/spring-100-2026-04-15')
+    ).toBe(true)
+  })
+
+  it('uses a custom link builder when provided', () => {
+    const withId: Event = { ...sampleEvents[0], id: 'evt-1' }
+    render(<CalendarGridView events={[withId]} hrefFor={(e) => `/admin/events/${e.id}`} />)
+    const hrefs = screen.getAllByRole('link').map((l) => l.getAttribute('href'))
+    expect(hrefs).toContain('/admin/events/evt-1')
+    expect(hrefs).not.toContain('/register/spring-100-2026-04-15')
+  })
+})
+
+describe('draft events', () => {
+  const draft: Event = {
+    slug: 'draft-200-fixture',
+    date: '2026-04-15',
+    name: 'Draft 200',
+    type: 'Brevet',
+    distance: '200',
+    startLocation: 'TBD',
+    startTime: '07:00',
+    status: 'draft',
+    chapterName: 'Toronto',
+  }
+
+  it('renders a Draft chip and no medal background', () => {
+    const { container } = render(<CalendarGridView events={[draft]} />)
+    expect(screen.getAllByText(/draft/i).length).toBeGreaterThan(0)
+    expect(container.querySelector('.bg-yellow-600')).toBeNull()
+    expect(container.querySelector('.border-dashed')).not.toBeNull()
+  })
+})

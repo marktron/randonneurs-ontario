@@ -1,3 +1,5 @@
+'use client'
+
 import { useMemo } from 'react'
 import Link from 'next/link'
 import { Badge } from '@/components/ui/badge'
@@ -100,7 +102,15 @@ function eventLinkLabel(event: Event, date: Date): string {
   return `${event.name}, ${event.distance} km, ${formatDateLong(date)}, ${formatTime(event.startTime)}${event.chapterName ? `, ${event.chapterName}` : ''}`
 }
 
-export function CalendarGridView({ events }: { events: Event[] }) {
+interface CalendarGridViewProps {
+  events: Event[]
+  /** Builds each event's link. Defaults to the public registration page. */
+  hrefFor?: (event: Event) => string
+}
+
+const defaultHrefFor = (event: Event) => `/register/${event.slug}`
+
+export function CalendarGridView({ events, hrefFor = defaultHrefFor }: CalendarGridViewProps) {
   const grids = useMemo(() => buildMonthGrids(events), [events])
   const todayKey = useMemo(() => toDateKey(new Date()), [])
 
@@ -157,13 +167,15 @@ export function CalendarGridView({ events }: { events: Event[] }) {
                               </div>
                               {dayEvents?.map((event, ei) => {
                                 const isCancelled = event.status === 'cancelled'
-                                const medalCell = isCancelled
-                                  ? null
-                                  : distanceMedalCellClass(event.distance)
+                                const isDraft = event.status === 'draft'
+                                const medalCell =
+                                  isCancelled || isDraft
+                                    ? null
+                                    : distanceMedalCellClass(event.distance)
                                 return (
                                   <Link
                                     key={ei}
-                                    href={`/register/${event.slug}`}
+                                    href={hrefFor(event)}
                                     aria-label={eventLinkLabel(event, date)}
                                     className="block mb-1 last:mb-0"
                                   >
@@ -171,9 +183,11 @@ export function CalendarGridView({ events }: { events: Event[] }) {
                                       className={`rounded px-1.5 py-1 text-[11px] leading-tight border ${
                                         isCancelled
                                           ? 'border-border/40 bg-muted/40 opacity-60'
-                                          : medalCell
-                                            ? `border-transparent ${medalCell} hover:opacity-90 transition-opacity`
-                                            : 'border-border/40 bg-muted/70 hover:bg-muted transition-colors'
+                                          : isDraft
+                                            ? 'border-dashed border-border bg-background text-muted-foreground hover:bg-muted/50 transition-colors'
+                                            : medalCell
+                                              ? `border-transparent ${medalCell} hover:opacity-90 transition-opacity`
+                                              : 'border-border/40 bg-muted/70 hover:bg-muted transition-colors'
                                       }`}
                                     >
                                       <div className="font-medium truncate">
@@ -181,6 +195,11 @@ export function CalendarGridView({ events }: { events: Event[] }) {
                                         {isCancelled && (
                                           <span className="ml-1 font-normal text-muted-foreground">
                                             (cancelled)
+                                          </span>
+                                        )}
+                                        {isDraft && (
+                                          <span className="ml-1 font-normal uppercase tracking-wider text-[9px]">
+                                            Draft
                                           </span>
                                         )}
                                       </div>
@@ -262,7 +281,9 @@ export function CalendarGridView({ events }: { events: Event[] }) {
                                         className={`w-1 h-1 rounded-full ${
                                           event.status === 'cancelled'
                                             ? 'bg-muted-foreground opacity-60'
-                                            : 'bg-primary'
+                                            : event.status === 'draft'
+                                              ? 'bg-muted-foreground'
+                                              : 'bg-primary'
                                         }`}
                                       />
                                     ))}
@@ -287,6 +308,7 @@ export function CalendarGridView({ events }: { events: Event[] }) {
                             weekday: 'short',
                           })
                           const isCancelled = event.status === 'cancelled'
+                          const isDraft = event.status === 'draft'
                           const rowContent = (
                             <>
                               <span className="text-xs text-muted-foreground tabular-nums shrink-0 w-10 text-center">
@@ -299,11 +321,18 @@ export function CalendarGridView({ events }: { events: Event[] }) {
                                     (cancelled)
                                   </span>
                                 )}
+                                {isDraft && (
+                                  <span className="ml-1 font-normal text-muted-foreground">
+                                    (draft)
+                                  </span>
+                                )}
                               </span>
                               <Badge
                                 variant="outline"
                                 className={`text-[10px] tracking-wider shrink-0 ml-auto ${
-                                  isCancelled ? '' : (distanceMedalCellClass(event.distance) ?? '')
+                                  isCancelled || isDraft
+                                    ? 'border-dashed'
+                                    : (distanceMedalCellClass(event.distance) ?? '')
                                 }`}
                               >
                                 {event.distance} km
@@ -313,7 +342,7 @@ export function CalendarGridView({ events }: { events: Event[] }) {
                           return (
                             <Link
                               key={`${toDateKey(date)}-${ei}`}
-                              href={`/register/${event.slug}`}
+                              href={hrefFor(event)}
                               aria-label={eventLinkLabel(event, date)}
                               className={`flex items-center gap-2 text-sm py-1.5 -mx-1 px-1 rounded ${
                                 isCancelled ? 'opacity-60' : 'active:bg-muted/50'
