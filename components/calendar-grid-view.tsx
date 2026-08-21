@@ -99,7 +99,9 @@ function formatDateLong(date: Date): string {
 }
 
 function eventLinkLabel(event: Event, date: Date): string {
-  return `${event.name}, ${event.distance} km, ${formatDateLong(date)}, ${formatTime(event.startTime)}${event.chapterName ? `, ${event.chapterName}` : ''}`
+  // Screen readers get the same draft/cancelled cue the chip gives sighted users.
+  const state = event.status === 'draft' || event.status === 'cancelled' ? `, ${event.status}` : ''
+  return `${event.name}, ${event.distance} km, ${formatDateLong(date)}, ${formatTime(event.startTime)}${event.chapterName ? `, ${event.chapterName}` : ''}${state}`
 }
 
 interface CalendarGridViewProps {
