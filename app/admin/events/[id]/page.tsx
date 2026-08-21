@@ -13,6 +13,7 @@ import { SendResultRemindersButton } from '@/components/admin/send-result-remind
 import { getEventCheckinsForAdmin } from '@/lib/actions/control-checkins'
 import { getEventControlsForAdmin } from '@/lib/actions/event-controls'
 import { buildCheckinEvidence } from '@/lib/checkin-evidence'
+import { buildBackUrl } from '@/lib/admin/event-list-urls'
 import type { EventStatus } from '@/lib/actions/events'
 import type {
   EventDetailForAdmin,
@@ -125,21 +126,6 @@ interface EventPageProps {
     from_when?: string
     from_view?: string
   }>
-}
-
-function buildBackUrl(
-  fromSeason?: string,
-  fromChapter?: string,
-  fromWhen?: string,
-  fromView?: string
-): string {
-  const params = new URLSearchParams()
-  if (fromSeason) params.set('season', fromSeason)
-  if (fromChapter) params.set('chapter', fromChapter)
-  if (fromWhen) params.set('when', fromWhen)
-  if (fromView === 'grid') params.set('view', 'grid')
-  const qs = params.toString()
-  return `/admin/events${qs ? `?${qs}` : ''}`
 }
 
 export default async function EventDetailPage({ params, searchParams }: EventPageProps) {

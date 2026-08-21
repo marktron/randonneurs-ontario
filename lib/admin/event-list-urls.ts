@@ -12,6 +12,11 @@ import type { DateFilter, AdminEventsView } from '@/components/admin/event-filte
 
 const currentSeason = getCurrentSeasonLabel()
 
+/** Parse the `?view=` search param; anything other than 'grid' falls back to 'list'. */
+export function parseAdminEventsView(view: string | undefined): AdminEventsView {
+  return view === 'grid' ? 'grid' : 'list'
+}
+
 /** Link to an event's admin detail page, preserving the list's filter state. */
 export function buildEventDetailUrl(
   eventId: string,
@@ -43,6 +48,22 @@ export function buildPageUrl(
   if (dateFilter !== 'all') params.set('when', dateFilter)
   if (page > 1) params.set('page', String(page))
   if (view !== 'list') params.set('view', view)
+  const qs = params.toString()
+  return `/admin/events${qs ? `?${qs}` : ''}`
+}
+
+/** Link back to the admin events list from an event detail page, restoring the from_* filter state. */
+export function buildBackUrl(
+  fromSeason?: string,
+  fromChapter?: string,
+  fromWhen?: string,
+  fromView?: string
+): string {
+  const params = new URLSearchParams()
+  if (fromSeason) params.set('season', fromSeason)
+  if (fromChapter) params.set('chapter', fromChapter)
+  if (fromWhen) params.set('when', fromWhen)
+  if (fromView === 'grid') params.set('view', 'grid')
   const qs = params.toString()
   return `/admin/events${qs ? `?${qs}` : ''}`
 }
