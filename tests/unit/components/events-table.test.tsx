@@ -62,4 +62,15 @@ describe('EventsTable', () => {
     expect(statusCell.className).toContain('absolute')
     expect(statusCell.className).toContain('sm:static')
   })
+
+  it('renders a Draft badge for draft events', () => {
+    render(
+      <EventsTable
+        events={[{ ...events[0], id: 'event-2', status: 'draft' } as EventForAdminList]}
+        buildEventDetailUrl={(id) => `/admin/events/${id}`}
+      />
+    )
+
+    expect(screen.getByText('Draft')).toBeTruthy()
+  })
 })
