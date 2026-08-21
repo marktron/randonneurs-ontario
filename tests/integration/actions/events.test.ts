@@ -720,6 +720,53 @@ describe('createEvent', () => {
         expect(result.data?.id).toBe('new-event-id')
       }
     })
+
+    it('inserts status draft and skips ERW sync when status is draft', async () => {
+      mockModule.__mockInsertSuccess({ id: 'new-draft-id' })
+      mockModule.__mockEventFound({ slug: 'toronto' }) // chapter revalidation
+
+      const result = await createEvent({
+        name: 'Next Season Brevet',
+        chapterId: 'chapter-1',
+        routeId: 'route-1',
+        eventType: 'brevet',
+        distanceKm: 200,
+        eventDate: `${CURRENT_SEASON + 1}-06-15`,
+        status: 'draft',
+      })
+
+      expect(result.success).toBe(true)
+
+      const insertCalls = mockModule.__calls.filter(
+        (c) => c.table === 'events' && c.method === 'insert'
+      )
+      expect(insertCalls).toHaveLength(1)
+      expect((insertCalls[0].args![0] as Record<string, unknown>).status).toBe('draft')
+
+      const { createErwEvent: mockCreateErw } = await import('@/lib/erw/client')
+      expect(mockCreateErw).not.toHaveBeenCalled()
+    })
+
+    it('defaults status to scheduled when omitted', async () => {
+      mockModule.__mockInsertSuccess({ id: 'new-event-id' })
+      mockModule.__mockEventFound({ rwgps_id: null }) // route lookup
+      mockModule.__mockUpdateSuccess() // ERW column update
+      mockModule.__mockEventFound({ slug: 'toronto' })
+
+      await createEvent({
+        name: 'Test Brevet',
+        chapterId: 'chapter-1',
+        routeId: 'route-1',
+        eventType: 'brevet',
+        distanceKm: 200,
+        eventDate: `${CURRENT_SEASON + 1}-06-15`,
+      })
+
+      const insertCalls = mockModule.__calls.filter(
+        (c) => c.table === 'events' && c.method === 'insert'
+      )
+      expect((insertCalls[0].args![0] as Record<string, unknown>).status).toBe('scheduled')
+    })
   })
 
   describe('error handling', () => {

@@ -10,7 +10,8 @@ import { parseLocalDate, createSlug, formatFinishTimeHm } from '@/lib/utils'
 import { getUrlSlugFromDbSlug } from '@/lib/chapter-config'
 import { createPendingResultsAndSendEmails } from '@/lib/events/complete-event'
 import { sendResultSubmissionReminders } from '@/lib/events/send-result-reminders'
-import { createErwEvent, updateErwEvent, deleteErwEvent } from '@/lib/erw/client'
+import { syncNewEventToErw } from '@/lib/events/erw-sync'
+import { updateErwEvent, deleteErwEvent } from '@/lib/erw/client'
 import { isErwSyncEnabled } from '@/lib/erw/config'
 import { logAuditEvent } from '@/lib/audit-log'
 import { generateAcpXlsx, generateAcpCsv } from '@/lib/email/results-spreadsheet'
@@ -74,6 +75,8 @@ export interface CreateEventData {
   startLocation?: string | null
   description?: string | null // Markdown-formatted description
   imageUrl?: string | null // URL to event image from Supabase Storage
+  /** Drafts are hidden from the public site until published. Defaults to 'scheduled'. */
+  status?: 'draft' | 'scheduled'
 }
 
 export async function createEvent(data: CreateEventData): Promise<ActionResult<{ id: string }>> {
@@ -91,7 +94,9 @@ export async function createEvent(data: CreateEventData): Promise<ActionResult<{
       startLocation,
       description,
       imageUrl,
+      status,
     } = data
+    const initialStatus = status ?? 'scheduled'
 
     // Validate required fields
     if (!name.trim() || !chapterId || !eventDate || !distanceKm) {
@@ -128,7 +133,7 @@ export async function createEvent(data: CreateEventData): Promise<ActionResult<{
       start_location: startLocation || null,
       description: description || null,
       image_url: imageUrl || null,
-      status: 'scheduled',
+      status: initialStatus,
       // Note: season is a generated column computed from event_date
     }
 
@@ -156,37 +161,20 @@ export async function createEvent(data: CreateEventData): Promise<ActionResult<{
 
     const typedNewEvent = newEvent as EventIdOnly
 
-    // Sync to Epic Ride Weather (skip permanents, skip outside Vercel production)
-    if (eventType !== 'permanent' && isErwSyncEnabled()) {
-      let rwgpsId: string | null = null
-      if (routeId) {
-        const { data: route } = await getSupabaseAdmin()
-          .from('routes')
-          .select('rwgps_id')
-          .eq('id', routeId)
-          .single()
-        rwgpsId = route?.rwgps_id ?? null
-      }
-
-      const erwResult = await createErwEvent({
+    // Sync to Epic Ride Weather on publish only. Drafts sync when they are
+    // published (updateEventStatus / publishSeasonDrafts).
+    if (initialStatus === 'scheduled') {
+      await syncNewEventToErw({
+        id: typedNewEvent.id,
         name: name.trim(),
-        description: description || '',
-        distanceKm,
-        eventDate,
-        startTime: startTime || null,
+        description: description || null,
+        distance_km: distanceKm,
+        event_date: eventDate,
+        start_time: startTime || null,
         slug,
-        rwgpsId,
+        route_id: routeId || null,
+        event_type: eventType,
       })
-
-      if (erwResult.success && erwResult.data) {
-        await getSupabaseAdmin()
-          .from('events')
-          .update({
-            erw_event_id: erwResult.data.erwEventId,
-            erw_canonical_url: erwResult.data.canonicalUrl,
-          })
-          .eq('id', typedNewEvent.id)
-      }
     }
 
     // Revalidate admin pages (still use revalidatePath for admin routes)
