@@ -34,7 +34,18 @@ vi.mock('next/navigation', () => ({
 
 // Mock PageHero since it uses next/image
 vi.mock('@/components/page-hero', () => ({
-  PageHero: ({ title }: { title: string }) => <div data-testid="page-hero">{title}</div>,
+  PageHero: ({ title, eyebrow }: { title: string; eyebrow?: string }) => (
+    <div data-testid="page-hero">
+      {eyebrow && <span data-testid="page-hero-eyebrow">{eyebrow}</span>}
+      {title}
+    </div>
+  ),
+}))
+
+// Mock lib/season since the real helper reads NEXT_PUBLIC_CURRENT_SEASON
+vi.mock('@/lib/season', () => ({
+  getCurrentSeason: () => 2031,
+  getCurrentSeasonLabel: () => '2031',
 }))
 
 // Mock page-shell
@@ -99,6 +110,11 @@ describe('CalendarPage', () => {
 
   beforeEach(() => {
     localStorage.clear()
+  })
+
+  it('shows the current season in the hero eyebrow', () => {
+    render(<CalendarPage {...defaultProps} />)
+    expect(screen.getByTestId('page-hero-eyebrow')).toHaveTextContent('2031 Season')
   })
 
   it('defaults the hero h1 to the chapter name when no title override is given', () => {
