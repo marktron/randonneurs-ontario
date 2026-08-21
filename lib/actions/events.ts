@@ -60,7 +60,7 @@ async function revalidateCalendarTags(chapterId: string, eventType: string, even
   }
 }
 
-export type EventStatus = 'scheduled' | 'completed' | 'cancelled' | 'submitted'
+export type EventStatus = 'draft' | 'scheduled' | 'completed' | 'cancelled' | 'submitted'
 export type EventType = 'brevet' | 'populaire' | 'fleche' | 'permanent'
 
 export interface CreateEventData {
