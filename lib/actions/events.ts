@@ -434,6 +434,12 @@ export async function updateEventStatus(
     if (status === 'draft' && typedEvent.status !== 'draft') {
       return { success: false, error: 'Published events cannot be moved back to draft' }
     }
+    // A draft is invisible to the public; the only status move that makes sense
+    // is publishing it. Cancelled/completed would leak it (public reads include
+    // cancelled, and completed skips the ERW sync + shows up in results).
+    if (typedEvent.status === 'draft' && status !== 'scheduled') {
+      return { success: false, error: 'Drafts can only be published (or deleted)' }
+    }
     const isPublishingDraft = typedEvent.status === 'draft' && status === 'scheduled'
 
     const updateData: EventUpdate = { status }
@@ -548,6 +554,10 @@ export async function publishSeasonDrafts(
 
     if (!isSuperAdmin(admin.role)) {
       return { success: false, error: 'Only super admins can publish a season' }
+    }
+
+    if (!Number.isInteger(season)) {
+      return { success: false, error: 'Invalid season' }
     }
 
     const { data, error } = await getSupabaseAdmin()

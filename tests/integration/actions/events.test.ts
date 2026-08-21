@@ -1352,6 +1352,38 @@ describe('updateEventStatus', () => {
     expect(updateCalls).toHaveLength(0)
   })
 
+  it.each(['cancelled', 'completed'] as const)(
+    'refuses to move a draft to %s without touching the database',
+    async (target) => {
+      mockModule.__mockEventFound({
+        id: 'event-1',
+        name: 'Next Season 200',
+        event_date: `${CURRENT_SEASON + 1}-06-15`,
+        distance_km: 200,
+        chapter_id: 'chapter-1',
+        event_type: 'brevet',
+        status: 'draft',
+        erw_event_id: null,
+        slug: 'next-season-200-200km',
+        description: null,
+        start_time: '07:00',
+        route_id: null,
+        chapters: { name: 'Toronto', slug: 'toronto' },
+      })
+
+      const result = await updateEventStatus('event-1', target)
+
+      expect(result.success).toBe(false)
+      expect(result.error).toBe('Drafts can only be published (or deleted)')
+      const updateCalls = mockModule.__calls.filter(
+        (c) => c.table === 'events' && c.method === 'update'
+      )
+      expect(updateCalls).toHaveLength(0)
+      const { createPendingResultsAndSendEmails } = await import('@/lib/events/complete-event')
+      expect(createPendingResultsAndSendEmails).not.toHaveBeenCalled()
+    }
+  )
+
   it('does not sync to ERW when a scheduled event is re-saved as scheduled', async () => {
     mockModule.__mockEventFound({
       id: 'event-1',
@@ -1477,6 +1509,19 @@ describe('publishSeasonDrafts', () => {
     expect(result.error).toBe('Only super admins can publish a season')
     expect(mockModule.__calls.filter((c) => c.method === 'update')).toHaveLength(0)
   })
+
+  it.each([NaN, 2026.5, Infinity])(
+    'rejects a non-integer season (%s) without touching the database',
+    async (season) => {
+      vi.mocked(requireAdmin).mockResolvedValueOnce(superAdmin)
+
+      const result = await publishSeasonDrafts(season)
+
+      expect(result.success).toBe(false)
+      expect(result.error).toBe('Invalid season')
+      expect(mockModule.__calls.filter((c) => c.method === 'update')).toHaveLength(0)
+    }
+  )
 
   it('publishes only draft rows of the given season and syncs each to ERW', async () => {
     vi.mocked(requireAdmin).mockResolvedValueOnce(superAdmin)

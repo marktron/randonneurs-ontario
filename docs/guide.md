@@ -67,6 +67,8 @@ Create next season's events as drafts (the default when the date is in a future 
 - **One at a time**: open the event and change its status from Draft to Scheduled. This also creates the Epic Ride Weather page.
 - **Whole season** (super admins only): on the Events page, select the season and click **Publish <year> season (N drafts)**. A confirmation lists the draft count per chapter. Every draft in that season becomes Scheduled.
 
+Scheduled is a draft's only status move — the dropdown offers nothing else, and Cancelled and Completed are refused. To discard a draft, delete it.
+
 Publishing cannot be undone from the site — cancel individual events instead. The `NEXT_PUBLIC_CURRENT_SEASON` setting is unrelated: it only changes which season the admin filters, records, and membership pages default to.
 
 ### The event detail page

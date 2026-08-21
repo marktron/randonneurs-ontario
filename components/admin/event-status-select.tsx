@@ -32,6 +32,9 @@ const STATUS_OPTIONS: { value: Exclude<EventStatus, 'submitted' | 'draft'>; labe
   { value: 'cancelled', label: 'Cancelled' },
 ]
 
+/** Publishing is a draft's only status move — see `updateEventStatus`. */
+const DRAFT_STATUS_OPTIONS = STATUS_OPTIONS.filter((opt) => opt.value === 'scheduled')
+
 interface EventStatusSelectProps {
   eventId: string
   initialStatus: EventStatus
@@ -114,8 +117,10 @@ export function EventStatusSelect({
             <SelectValue />
           </SelectTrigger>
           <SelectContent position="popper" sideOffset={4}>
+            {/* A draft can only be published; cancelling or completing it would
+                leak the event publicly. Discard by deleting it instead. */}
             {isDraft && <SelectItem value="draft">Draft</SelectItem>}
-            {STATUS_OPTIONS.map((opt) => (
+            {(isDraft ? DRAFT_STATUS_OPTIONS : STATUS_OPTIONS).map((opt) => (
               <SelectItem key={opt.value} value={opt.value}>
                 {opt.label}
               </SelectItem>
