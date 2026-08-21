@@ -12,8 +12,9 @@ import {
 } from '@/components/admin/event-filters'
 import { AdminPagination } from '@/components/admin/admin-pagination'
 import { PublishSeasonButton } from '@/components/admin/publish-season-button'
-import { CalendarGridView } from '@/components/calendar-grid-view'
+import { AdminEventsGrid } from '@/components/admin/admin-events-grid'
 import { mapEventForGrid } from '@/lib/admin/map-event-for-grid'
+import { buildEventDetailUrl, buildPageUrl } from '@/lib/admin/event-list-urls'
 import { Plus } from 'lucide-react'
 import Link from 'next/link'
 import { getCurrentSeasonLabel } from '@/lib/season'
@@ -21,39 +22,6 @@ import type { EventForAdminList } from '@/types/queries'
 
 const currentSeason = getCurrentSeasonLabel()
 const PAGE_SIZE = 50
-
-function buildEventDetailUrl(
-  eventId: string,
-  season: string,
-  chapterId: string | null,
-  dateFilter: DateFilter,
-  view: AdminEventsView
-): string {
-  const params = new URLSearchParams()
-  if (season !== currentSeason) params.set('from_season', season)
-  if (chapterId) params.set('from_chapter', chapterId)
-  if (dateFilter !== 'all') params.set('from_when', dateFilter)
-  if (view !== 'list') params.set('from_view', view)
-  const qs = params.toString()
-  return `/admin/events/${eventId}${qs ? `?${qs}` : ''}`
-}
-
-function buildPageUrl(
-  page: number,
-  season: string,
-  chapterParam: string | undefined,
-  dateFilter: DateFilter,
-  view: AdminEventsView
-): string {
-  const params = new URLSearchParams()
-  if (season !== currentSeason) params.set('season', season)
-  if (chapterParam) params.set('chapter', chapterParam)
-  if (dateFilter !== 'all') params.set('when', dateFilter)
-  if (page > 1) params.set('page', String(page))
-  if (view !== 'list') params.set('view', view)
-  const qs = params.toString()
-  return `/admin/events${qs ? `?${qs}` : ''}`
-}
 
 async function getAvailableSeasons(): Promise<string[]> {
   const { data } = await getSupabaseAdmin().rpc('get_distinct_event_seasons')
@@ -245,9 +213,12 @@ export default async function AdminEventsPage({ searchParams }: AdminEventsPageP
         events.length === 0 ? (
           <p className="rounded-md border p-8 text-center text-muted-foreground">No events found</p>
         ) : (
-          <CalendarGridView
+          <AdminEventsGrid
             events={events.map(mapEventForGrid)}
-            hrefFor={(e) => buildEventDetailUrl(e.id!, season, chapterId, dateFilter, view)}
+            season={season}
+            chapterId={chapterId}
+            dateFilter={dateFilter}
+            view={view}
           />
         )
       ) : (
