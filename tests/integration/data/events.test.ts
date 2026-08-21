@@ -397,6 +397,14 @@ describe('getEventBySlug', () => {
     expect(result).toBeNull()
   })
 
+  it('excludes draft events from the slug lookup', async () => {
+    mockModule.__mockEventNotFound()
+
+    await getEventBySlug('some-draft-slug')
+
+    expect(mockModule.__queryBuilder.neq).toHaveBeenCalledWith('status', 'draft')
+  })
+
   it('returns event details with relations', async () => {
     const mockEvent = {
       id: 'event-1',

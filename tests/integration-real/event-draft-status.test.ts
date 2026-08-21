@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { createClient, SupabaseClient } from '@supabase/supabase-js'
 import { getTestSupabase, checked } from './helpers/supabase'
 import { TORONTO_CHAPTER_ID } from './registration/helpers'
+import { getEventBySlug } from '@/lib/data/events'
 
 // Draft events must be invisible to the anon role (the public site) and
 // rejected values must still be rejected by the CHECK constraint.
@@ -94,5 +95,13 @@ describe('events_select_public RLS', () => {
   it('service role still sees drafts', async () => {
     const { data } = await admin.from('events').select('id').eq('id', IDS.draftEvent).single()
     expect(data?.id).toBe(IDS.draftEvent)
+  })
+})
+
+describe('getEventBySlug', () => {
+  it('returns null for a draft and the event for a scheduled one', async () => {
+    expect(await getEventBySlug(SLUGS.draft)).toBeNull()
+    const scheduled = await getEventBySlug(SLUGS.scheduled)
+    expect(scheduled?.slug).toBe(SLUGS.scheduled)
   })
 })
