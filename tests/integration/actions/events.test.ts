@@ -1281,7 +1281,19 @@ describe('updateEventStatus', () => {
   })
 
   it('returns error when result deletion fails during cancellation', async () => {
-    // Mock delete to return an error (the first .then() call is the delete operation)
+    mockModule.__mockEventFound({
+      id: 'event-1',
+      name: 'Test Event',
+      event_date: '2025-06-15',
+      distance_km: 200,
+      chapter_id: 'chapter-1',
+      event_type: 'brevet',
+      status: 'scheduled',
+      chapters: { name: 'Toronto' },
+    })
+    // Mock delete to return an error (the delete runs after the event fetch,
+    // which resolves via .single() rather than .then(), so this is still the
+    // first .then() call).
     mockModule.__queryBuilder.then.mockImplementationOnce((resolve) => {
       resolve({ data: null, error: { message: 'FK constraint' } })
     })
@@ -1383,6 +1395,39 @@ describe('updateEventStatus', () => {
       expect(createPendingResultsAndSendEmails).not.toHaveBeenCalled()
     }
   )
+
+  it('refuses to move a draft to cancelled without deleting results', async () => {
+    mockModule.__mockEventFound({
+      id: 'event-1',
+      name: 'Next Season 200',
+      event_date: `${CURRENT_SEASON + 1}-06-15`,
+      distance_km: 200,
+      chapter_id: 'chapter-1',
+      event_type: 'brevet',
+      status: 'draft',
+      erw_event_id: null,
+      slug: 'next-season-200-200km',
+      description: null,
+      start_time: '07:00',
+      route_id: null,
+      chapters: { name: 'Toronto', slug: 'toronto' },
+    })
+
+    const result = await updateEventStatus('event-1', 'cancelled')
+
+    expect(result.success).toBe(false)
+    expect(result.error).toBe('Drafts can only be published (or deleted)')
+
+    const deleteCalls = mockModule.__calls.filter(
+      (c) => c.table === 'results' && c.method === 'delete'
+    )
+    expect(deleteCalls).toHaveLength(0)
+
+    const updateCalls = mockModule.__calls.filter(
+      (c) => c.table === 'events' && c.method === 'update'
+    )
+    expect(updateCalls).toHaveLength(0)
+  })
 
   it('does not sync to ERW when a scheduled event is re-saved as scheduled', async () => {
     mockModule.__mockEventFound({
