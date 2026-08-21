@@ -236,6 +236,12 @@ export async function registerForPermanent(
 export async function createEvent(data: EventFormData)
 export async function updateEvent(id: string, data: EventFormData)
 export async function deleteEvent(id: string)
+
+// Super-admin only: flips every draft event in a season to scheduled, syncs
+// Epic Ride Weather via lib/events/erw-sync.ts for each, audit-logs, and
+// busts `chapter-<slug>`, `events`, `event-<slug>` per event, `permanents`
+// (if any), `slugs`, and the admin event paths.
+export async function publishSeasonDrafts(season: number)
 ```
 
 ### lib/actions/routes.ts (Admin)
@@ -386,6 +392,7 @@ All tables have RLS enabled. Key policies:
 
 - `chapters`, `routes`, `events`, `results`, `awards` - anyone can read
 - `public_riders` view - riders without emails (only those with at least one result)
+- `events` public select is further scoped to `status IS DISTINCT FROM 'draft'` - draft events are invisible to the anon key; admin pages read through the service role.
 
 ### Protected Data
 
@@ -470,6 +477,8 @@ public event page (`/register/[slug]`) keeps rendering a stale RWGPS embed after
 a route edit. For the same reason, `revalidateRoutesTags` always busts the
 shared `routes`/`events` tags even when the route has no `chapter_id` (the
 chapter-scoped `chapter-${urlSlug}` bust is the only part gated on the chapter).
+`getEventBySlug` filters `status <> 'draft'`; publishing busts `event-${slug}`
+so a previously-404 `/register/[slug]` page is regenerated.
 
 #### Page rendering strategy
 
