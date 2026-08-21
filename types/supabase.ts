@@ -318,7 +318,7 @@ export type Database = {
           slug: string
           start_location: string | null
           start_time: string | null
-          status: string | null
+          status: string
           updated_at: string | null
         }
         Insert: {

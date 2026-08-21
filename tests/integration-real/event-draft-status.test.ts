@@ -44,22 +44,24 @@ const IDS = {
   draftEvent: '00000000-2222-4000-a000-00000000d001',
   scheduledEvent: '00000000-2222-4000-a000-00000000d002',
   otherSeasonDraft: '00000000-2222-4000-a000-00000000d003',
+  nullStatusEvent: '00000000-2222-4000-a000-00000000d004',
 }
 const SLUGS = {
   draft: `inttest-draft-event-200km-${SEASON}-05-02`,
   scheduled: `inttest-scheduled-event-200km-${SEASON}-05-09`,
   otherSeasonDraft: `inttest-other-draft-200km-${SEASON - 1}-05-02`,
+  nullStatus: `inttest-null-status-200km-${SEASON}-05-16`,
 }
 
 async function cleanup(): Promise<void> {
   await admin
     .from('events')
     .delete()
-    .in('id', [IDS.draftEvent, IDS.scheduledEvent, IDS.otherSeasonDraft])
+    .in('id', [IDS.draftEvent, IDS.scheduledEvent, IDS.otherSeasonDraft, IDS.nullStatusEvent])
   await admin
     .from('events')
     .delete()
-    .in('slug', [SLUGS.draft, SLUGS.scheduled, SLUGS.otherSeasonDraft])
+    .in('slug', [SLUGS.draft, SLUGS.scheduled, SLUGS.otherSeasonDraft, SLUGS.nullStatus])
 }
 
 beforeAll(async () => {
@@ -113,6 +115,23 @@ describe('events_status_check', () => {
       .eq('id', IDS.draftEvent)
     expect(error).not.toBeNull()
     expect(error?.code).toBe('23514') // check_violation
+  })
+})
+
+describe('events.status NOT NULL', () => {
+  it('rejects inserting an event with status: null', async () => {
+    const { error } = await admin.from('events').insert({
+      id: IDS.nullStatusEvent,
+      slug: SLUGS.nullStatus,
+      name: 'Inttest Null Status Event',
+      chapter_id: TORONTO_CHAPTER_ID,
+      event_type: 'brevet',
+      distance_km: 200,
+      event_date: `${SEASON}-05-16`,
+      status: null,
+    })
+    expect(error).not.toBeNull()
+    expect(error?.code).toBe('23502') // not_null_violation
   })
 })
 
