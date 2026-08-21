@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/select'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { getCurrentSeasonLabel } from '@/lib/season'
+import { ListIcon, CalendarDaysIcon } from 'lucide-react'
 
 interface Chapter {
   id: string
@@ -20,6 +21,7 @@ interface Chapter {
 }
 
 export type DateFilter = 'all' | 'past' | 'upcoming'
+export type AdminEventsView = 'list' | 'grid'
 
 interface EventFiltersProps {
   season: string
@@ -27,6 +29,7 @@ interface EventFiltersProps {
   chapters: Chapter[]
   seasons: string[]
   dateFilter: DateFilter
+  view: AdminEventsView
 }
 
 // Match the order used in the main site navbar
@@ -38,6 +41,7 @@ function buildFilterUrl(
   season: string,
   chapterId: string | null,
   dateFilter: DateFilter,
+  view: AdminEventsView,
   explicitAll: boolean = false
 ) {
   const params = new URLSearchParams()
@@ -49,6 +53,7 @@ function buildFilterUrl(
     params.set('chapter', 'all')
   }
   if (dateFilter !== 'all') params.set('when', dateFilter)
+  if (view !== 'list') params.set('view', view)
   const qs = params.toString()
   return `/admin/events${qs ? `?${qs}` : ''}`
 }
@@ -59,6 +64,7 @@ export function EventFilters({
   chapters,
   seasons,
   dateFilter,
+  view,
 }: EventFiltersProps) {
   const router = useRouter()
 
@@ -72,17 +78,22 @@ export function EventFilters({
     .sort((a, b) => a.name.localeCompare(b.name))
 
   const handleSeasonChange = (value: string) => {
-    router.push(buildFilterUrl(value, chapterId, dateFilter))
+    router.push(buildFilterUrl(value, chapterId, dateFilter, view))
   }
 
   const handleChapterChange = (value: string) => {
     const isAll = value === 'all'
-    router.push(buildFilterUrl(season, isAll ? null : value, dateFilter, isAll))
+    router.push(buildFilterUrl(season, isAll ? null : value, dateFilter, view, isAll))
   }
 
   const handleDateFilterChange = (value: string) => {
     if (!value) return // ToggleGroup sends empty string on re-click; ignore it
-    router.push(buildFilterUrl(season, chapterId, value as DateFilter))
+    router.push(buildFilterUrl(season, chapterId, value as DateFilter, view))
+  }
+
+  const handleViewChange = (value: string) => {
+    if (value !== 'list' && value !== 'grid') return
+    router.push(buildFilterUrl(season, chapterId, dateFilter, value))
   }
 
   // Find current chapter name for display
@@ -152,6 +163,25 @@ export function EventFilters({
         <ToggleGroupItem value="past">Past</ToggleGroupItem>
         <ToggleGroupItem value="upcoming">Upcoming</ToggleGroupItem>
         <ToggleGroupItem value="all">All events</ToggleGroupItem>
+      </ToggleGroup>
+
+      <ToggleGroup
+        type="single"
+        value={view}
+        onValueChange={handleViewChange}
+        variant="outline"
+        size="sm"
+        aria-label="Events view"
+        className="sm:ml-auto"
+      >
+        <ToggleGroupItem value="list" aria-label="List view">
+          <ListIcon className="size-4" />
+          <span className="ml-1 text-sm">List</span>
+        </ToggleGroupItem>
+        <ToggleGroupItem value="grid" aria-label="Grid view">
+          <CalendarDaysIcon className="size-4" />
+          <span className="ml-1 text-sm">Grid</span>
+        </ToggleGroupItem>
       </ToggleGroup>
     </div>
   )
