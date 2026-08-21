@@ -396,19 +396,6 @@ export async function updateEventStatus(
   try {
     const admin = await requireAdmin()
 
-    // If cancelling, delete all results for this event first
-    if (status === 'cancelled') {
-      const { error: deleteError } = await getSupabaseAdmin()
-        .from('results')
-        .delete()
-        .eq('event_id', eventId)
-
-      if (deleteError) {
-        console.error('Error deleting results:', deleteError)
-        return { success: false, error: 'Failed to delete results' }
-      }
-    }
-
     // Fetch event details before updating (needed for completion emails)
     const { data: event, error: fetchError } = await getSupabaseAdmin()
       .from('events')
@@ -441,6 +428,21 @@ export async function updateEventStatus(
       return { success: false, error: 'Drafts can only be published (or deleted)' }
     }
     const isPublishingDraft = typedEvent.status === 'draft' && status === 'scheduled'
+
+    // If cancelling, delete all results for this event. Runs after the fetch +
+    // draft guard above so a refused request (e.g. draft -> cancelled) never
+    // deletes anything.
+    if (status === 'cancelled') {
+      const { error: deleteError } = await getSupabaseAdmin()
+        .from('results')
+        .delete()
+        .eq('event_id', eventId)
+
+      if (deleteError) {
+        console.error('Error deleting results:', deleteError)
+        return { success: false, error: 'Failed to delete results' }
+      }
+    }
 
     const updateData: EventUpdate = { status }
     if (options?.description !== undefined) {

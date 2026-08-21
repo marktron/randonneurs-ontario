@@ -77,7 +77,7 @@ CREATE TABLE events (
   external_register_url TEXT,       -- For CCN Bikes links
 
   -- Status
-  status TEXT DEFAULT 'scheduled' CHECK (status IN ('draft', 'scheduled', 'cancelled', 'completed', 'submitted')),
+  status TEXT NOT NULL DEFAULT 'scheduled' CHECK (status IN ('draft', 'scheduled', 'cancelled', 'completed', 'submitted')),
 
   -- Metadata
   season INT GENERATED ALWAYS AS (EXTRACT(YEAR FROM event_date)) STORED,

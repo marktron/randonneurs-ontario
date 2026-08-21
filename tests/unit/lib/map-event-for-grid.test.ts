@@ -38,7 +38,6 @@ describe('mapEventForGrid', () => {
   it('passes scheduled and cancelled through and folds other statuses to scheduled', () => {
     expect(mapEventForGrid({ ...base, status: 'cancelled' }).status).toBe('cancelled')
     expect(mapEventForGrid({ ...base, status: 'completed' }).status).toBe('scheduled')
-    expect(mapEventForGrid({ ...base, status: null }).status).toBe('scheduled')
   })
 
   it('capitalises event types', () => {
