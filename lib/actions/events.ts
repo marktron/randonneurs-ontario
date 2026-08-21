@@ -10,7 +10,8 @@ import { parseLocalDate, createSlug, formatFinishTimeHm } from '@/lib/utils'
 import { getUrlSlugFromDbSlug } from '@/lib/chapter-config'
 import { createPendingResultsAndSendEmails } from '@/lib/events/complete-event'
 import { sendResultSubmissionReminders } from '@/lib/events/send-result-reminders'
-import { createErwEvent, updateErwEvent, deleteErwEvent } from '@/lib/erw/client'
+import { syncNewEventToErw } from '@/lib/events/erw-sync'
+import { updateErwEvent, deleteErwEvent } from '@/lib/erw/client'
 import { isErwSyncEnabled } from '@/lib/erw/config'
 import { logAuditEvent } from '@/lib/audit-log'
 import { generateAcpXlsx, generateAcpCsv } from '@/lib/email/results-spreadsheet'
@@ -60,7 +61,7 @@ async function revalidateCalendarTags(chapterId: string, eventType: string, even
   }
 }
 
-export type EventStatus = 'scheduled' | 'completed' | 'cancelled' | 'submitted'
+export type EventStatus = 'draft' | 'scheduled' | 'completed' | 'cancelled' | 'submitted'
 export type EventType = 'brevet' | 'populaire' | 'fleche' | 'permanent'
 
 export interface CreateEventData {
@@ -74,6 +75,8 @@ export interface CreateEventData {
   startLocation?: string | null
   description?: string | null // Markdown-formatted description
   imageUrl?: string | null // URL to event image from Supabase Storage
+  /** Drafts are hidden from the public site until published. Defaults to 'scheduled'. */
+  status?: 'draft' | 'scheduled'
 }
 
 export async function createEvent(data: CreateEventData): Promise<ActionResult<{ id: string }>> {
@@ -91,7 +94,9 @@ export async function createEvent(data: CreateEventData): Promise<ActionResult<{
       startLocation,
       description,
       imageUrl,
+      status,
     } = data
+    const initialStatus = status ?? 'scheduled'
 
     // Validate required fields
     if (!name.trim() || !chapterId || !eventDate || !distanceKm) {
@@ -128,7 +133,7 @@ export async function createEvent(data: CreateEventData): Promise<ActionResult<{
       start_location: startLocation || null,
       description: description || null,
       image_url: imageUrl || null,
-      status: 'scheduled',
+      status: initialStatus,
       // Note: season is a generated column computed from event_date
     }
 
@@ -156,37 +161,20 @@ export async function createEvent(data: CreateEventData): Promise<ActionResult<{
 
     const typedNewEvent = newEvent as EventIdOnly
 
-    // Sync to Epic Ride Weather (skip permanents, skip outside Vercel production)
-    if (eventType !== 'permanent' && isErwSyncEnabled()) {
-      let rwgpsId: string | null = null
-      if (routeId) {
-        const { data: route } = await getSupabaseAdmin()
-          .from('routes')
-          .select('rwgps_id')
-          .eq('id', routeId)
-          .single()
-        rwgpsId = route?.rwgps_id ?? null
-      }
-
-      const erwResult = await createErwEvent({
+    // Sync to Epic Ride Weather on publish only. Drafts sync when they are
+    // published (updateEventStatus / publishSeasonDrafts).
+    if (initialStatus === 'scheduled') {
+      await syncNewEventToErw({
+        id: typedNewEvent.id,
         name: name.trim(),
-        description: description || '',
-        distanceKm,
-        eventDate,
-        startTime: startTime || null,
+        description: description || null,
+        distance_km: distanceKm,
+        event_date: eventDate,
+        start_time: startTime || null,
         slug,
-        rwgpsId,
+        route_id: routeId || null,
+        event_type: eventType,
       })
-
-      if (erwResult.success && erwResult.data) {
-        await getSupabaseAdmin()
-          .from('events')
-          .update({
-            erw_event_id: erwResult.data.erwEventId,
-            erw_canonical_url: erwResult.data.canonicalUrl,
-          })
-          .eq('id', typedNewEvent.id)
-      }
     }
 
     // Revalidate admin pages (still use revalidatePath for admin routes)
@@ -425,7 +413,7 @@ export async function updateEventStatus(
     const { data: event, error: fetchError } = await getSupabaseAdmin()
       .from('events')
       .select(
-        'id, name, event_date, distance_km, chapter_id, event_type, status, erw_event_id, chapters(name, slug)'
+        'id, name, event_date, distance_km, chapter_id, event_type, status, erw_event_id, slug, description, start_time, route_id, chapters(name, slug)'
       )
       .eq('id', eventId)
       .single()
@@ -435,7 +423,24 @@ export async function updateEventStatus(
       return { success: false, error: 'Event not found' }
     }
 
-    const typedEvent = event as EventWithChapterName & { erw_event_id: string | null }
+    const typedEvent = event as EventWithChapterName & {
+      erw_event_id: string | null
+      slug: string
+      description: string | null
+      start_time: string | null
+      route_id: string | null
+    }
+
+    if (status === 'draft' && typedEvent.status !== 'draft') {
+      return { success: false, error: 'Published events cannot be moved back to draft' }
+    }
+    // A draft is invisible to the public; the only status move that makes sense
+    // is publishing it. Cancelled/completed would leak it (public reads include
+    // cancelled, and completed skips the ERW sync + shows up in results).
+    if (typedEvent.status === 'draft' && status !== 'scheduled') {
+      return { success: false, error: 'Drafts can only be published (or deleted)' }
+    }
+    const isPublishingDraft = typedEvent.status === 'draft' && status === 'scheduled'
 
     const updateData: EventUpdate = { status }
     if (options?.description !== undefined) {
@@ -455,6 +460,21 @@ export async function updateEventStatus(
         .from('events')
         .update({ erw_event_id: null, erw_canonical_url: null })
         .eq('id', eventId)
+    }
+
+    // Publishing a draft: create the ERW event now (drafts never synced on create)
+    if (isPublishingDraft) {
+      await syncNewEventToErw({
+        id: typedEvent.id,
+        name: typedEvent.name,
+        description: typedEvent.description,
+        distance_km: typedEvent.distance_km,
+        event_date: typedEvent.event_date,
+        start_time: typedEvent.start_time,
+        slug: typedEvent.slug,
+        route_id: typedEvent.route_id,
+        event_type: typedEvent.event_type,
+      })
     }
 
     // If transitioning to "completed", create pending results and send emails
@@ -484,7 +504,8 @@ export async function updateEventStatus(
 
     // Revalidate cache tags for calendar pages
     if (event) {
-      await revalidateCalendarTags(event.chapter_id, event.event_type)
+      await revalidateCalendarTags(event.chapter_id, event.event_type, typedEvent.slug)
+      revalidateTag('slugs', { expire: 0 })
     }
 
     await logAuditEvent({
@@ -499,6 +520,104 @@ export async function updateEventStatus(
   } catch (error) {
     console.error('Error in updateEventStatus:', error)
     return { success: false, error: 'An unexpected error occurred' }
+  }
+}
+
+export interface PublishSeasonResult {
+  published: number
+  erwFailures: number
+}
+
+interface PublishedDraftRow {
+  id: string
+  name: string
+  description: string | null
+  distance_km: number
+  event_date: string
+  start_time: string | null
+  slug: string
+  route_id: string | null
+  event_type: string
+  chapter_id: string
+}
+
+/**
+ * Publish every draft event in a season at once (super-admin only).
+ * Flips status draft -> scheduled, syncs each non-permanent to ERW, and
+ * busts the public calendar caches for every affected chapter.
+ */
+export async function publishSeasonDrafts(
+  season: number
+): Promise<ActionResult<PublishSeasonResult>> {
+  try {
+    const admin = await requireAdmin()
+
+    if (!isSuperAdmin(admin.role)) {
+      return { success: false, error: 'Only super admins can publish a season' }
+    }
+
+    if (!Number.isInteger(season)) {
+      return { success: false, error: 'Invalid season' }
+    }
+
+    const { data, error } = await getSupabaseAdmin()
+      .from('events')
+      .update({ status: 'scheduled' })
+      .eq('season', season)
+      .eq('status', 'draft')
+      .select(
+        'id, name, description, distance_km, event_date, start_time, slug, route_id, event_type, chapter_id'
+      )
+
+    if (error) {
+      return handleSupabaseError(
+        error,
+        { operation: 'publishSeasonDrafts' },
+        'Failed to publish season'
+      )
+    }
+
+    const published = (data ?? []) as PublishedDraftRow[]
+
+    let erwFailures = 0
+    for (const row of published) {
+      const outcome = await syncNewEventToErw(row)
+      if (outcome === 'failed') erwFailures++
+    }
+
+    // Revalidate public caches once per affected chapter, plus every event slug
+    const chapterTypes = new Map<string, string>()
+    for (const row of published) {
+      if (!chapterTypes.has(row.chapter_id)) chapterTypes.set(row.chapter_id, row.event_type)
+    }
+    for (const [chapterId, eventType] of chapterTypes) {
+      await revalidateCalendarTags(chapterId, eventType)
+    }
+    for (const row of published) {
+      revalidateTag(`event-${row.slug}`, { expire: 0 })
+    }
+    if (published.some((row) => row.event_type === 'permanent')) {
+      revalidateTag('permanents', { expire: 0 })
+    }
+    revalidateTag('slugs', { expire: 0 })
+    revalidatePath('/admin/events')
+    revalidatePath('/admin')
+
+    await logAuditEvent({
+      adminId: admin.id,
+      action: 'status_change',
+      entityType: 'event',
+      entityId: String(season),
+      description: `Published ${published.length} draft event${published.length === 1 ? '' : 's'} for the ${season} season`,
+    })
+
+    return createActionResult({ published: published.length, erwFailures })
+  } catch (error) {
+    return handleActionError(
+      error,
+      { operation: 'publishSeasonDrafts' },
+      'Failed to publish season'
+    )
   }
 }
 

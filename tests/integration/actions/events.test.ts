@@ -184,6 +184,7 @@ import {
   updateEventStatus,
   submitEventResults,
   sendResultReminderEmails,
+  publishSeasonDrafts,
 } from '@/lib/actions/events'
 import { sendResultSubmissionReminders } from '@/lib/events/send-result-reminders'
 import { requireAdmin } from '@/lib/auth/get-admin'
@@ -720,6 +721,53 @@ describe('createEvent', () => {
         expect(result.data?.id).toBe('new-event-id')
       }
     })
+
+    it('inserts status draft and skips ERW sync when status is draft', async () => {
+      mockModule.__mockInsertSuccess({ id: 'new-draft-id' })
+      mockModule.__mockEventFound({ slug: 'toronto' }) // chapter revalidation
+
+      const result = await createEvent({
+        name: 'Next Season Brevet',
+        chapterId: 'chapter-1',
+        routeId: 'route-1',
+        eventType: 'brevet',
+        distanceKm: 200,
+        eventDate: `${CURRENT_SEASON + 1}-06-15`,
+        status: 'draft',
+      })
+
+      expect(result.success).toBe(true)
+
+      const insertCalls = mockModule.__calls.filter(
+        (c) => c.table === 'events' && c.method === 'insert'
+      )
+      expect(insertCalls).toHaveLength(1)
+      expect((insertCalls[0].args![0] as Record<string, unknown>).status).toBe('draft')
+
+      const { createErwEvent: mockCreateErw } = await import('@/lib/erw/client')
+      expect(mockCreateErw).not.toHaveBeenCalled()
+    })
+
+    it('defaults status to scheduled when omitted', async () => {
+      mockModule.__mockInsertSuccess({ id: 'new-event-id' })
+      mockModule.__mockEventFound({ rwgps_id: null }) // route lookup
+      mockModule.__mockUpdateSuccess() // ERW column update
+      mockModule.__mockEventFound({ slug: 'toronto' })
+
+      await createEvent({
+        name: 'Test Brevet',
+        chapterId: 'chapter-1',
+        routeId: 'route-1',
+        eventType: 'brevet',
+        distanceKm: 200,
+        eventDate: `${CURRENT_SEASON + 1}-06-15`,
+      })
+
+      const insertCalls = mockModule.__calls.filter(
+        (c) => c.table === 'events' && c.method === 'insert'
+      )
+      expect((insertCalls[0].args![0] as Record<string, unknown>).status).toBe('scheduled')
+    })
   })
 
   describe('error handling', () => {
@@ -1249,6 +1297,113 @@ describe('updateEventStatus', () => {
     )
     expect(updateCalls).toHaveLength(0)
   })
+
+  it('publishing a draft (draft -> scheduled) syncs the event to ERW', async () => {
+    mockModule.__mockEventFound({
+      id: 'event-1',
+      name: 'Next Season 200',
+      event_date: `${CURRENT_SEASON + 1}-06-15`,
+      distance_km: 200,
+      chapter_id: 'chapter-1',
+      event_type: 'brevet',
+      status: 'draft',
+      erw_event_id: null,
+      slug: 'next-season-200-200km',
+      description: null,
+      start_time: '07:00',
+      route_id: null,
+      chapters: { name: 'Toronto', slug: 'toronto' },
+    })
+    mockModule.__mockUpdateSuccess() // status update
+    mockModule.__mockUpdateSuccess() // ERW column update
+    mockModule.__mockEventFound({ slug: 'toronto' }) // revalidation
+
+    const result = await updateEventStatus('event-1', 'scheduled')
+
+    expect(result.success).toBe(true)
+    const { createErwEvent: mockCreateErw } = await import('@/lib/erw/client')
+    expect(mockCreateErw).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'Next Season 200', slug: 'next-season-200-200km' })
+    )
+    const { createPendingResultsAndSendEmails } = await import('@/lib/events/complete-event')
+    expect(createPendingResultsAndSendEmails).not.toHaveBeenCalled()
+  })
+
+  it('refuses to move a published event back to draft', async () => {
+    mockModule.__mockEventFound({
+      id: 'event-1',
+      name: 'Test Event',
+      event_date: `${CURRENT_SEASON + 1}-06-15`,
+      distance_km: 200,
+      chapter_id: 'chapter-1',
+      event_type: 'brevet',
+      status: 'scheduled',
+      erw_event_id: null,
+      chapters: { name: 'Toronto', slug: 'toronto' },
+    })
+
+    const result = await updateEventStatus('event-1', 'draft')
+
+    expect(result.success).toBe(false)
+    expect(result.error).toBe('Published events cannot be moved back to draft')
+    const updateCalls = mockModule.__calls.filter(
+      (c) => c.table === 'events' && c.method === 'update'
+    )
+    expect(updateCalls).toHaveLength(0)
+  })
+
+  it.each(['cancelled', 'completed'] as const)(
+    'refuses to move a draft to %s without touching the database',
+    async (target) => {
+      mockModule.__mockEventFound({
+        id: 'event-1',
+        name: 'Next Season 200',
+        event_date: `${CURRENT_SEASON + 1}-06-15`,
+        distance_km: 200,
+        chapter_id: 'chapter-1',
+        event_type: 'brevet',
+        status: 'draft',
+        erw_event_id: null,
+        slug: 'next-season-200-200km',
+        description: null,
+        start_time: '07:00',
+        route_id: null,
+        chapters: { name: 'Toronto', slug: 'toronto' },
+      })
+
+      const result = await updateEventStatus('event-1', target)
+
+      expect(result.success).toBe(false)
+      expect(result.error).toBe('Drafts can only be published (or deleted)')
+      const updateCalls = mockModule.__calls.filter(
+        (c) => c.table === 'events' && c.method === 'update'
+      )
+      expect(updateCalls).toHaveLength(0)
+      const { createPendingResultsAndSendEmails } = await import('@/lib/events/complete-event')
+      expect(createPendingResultsAndSendEmails).not.toHaveBeenCalled()
+    }
+  )
+
+  it('does not sync to ERW when a scheduled event is re-saved as scheduled', async () => {
+    mockModule.__mockEventFound({
+      id: 'event-1',
+      name: 'Test Event',
+      event_date: `${CURRENT_SEASON + 1}-06-15`,
+      distance_km: 200,
+      chapter_id: 'chapter-1',
+      event_type: 'brevet',
+      status: 'scheduled',
+      erw_event_id: 'erw-existing',
+      chapters: { name: 'Toronto', slug: 'toronto' },
+    })
+    mockModule.__mockUpdateSuccess()
+    mockModule.__mockEventFound({ slug: 'toronto' })
+
+    await updateEventStatus('event-1', 'scheduled')
+
+    const { createErwEvent: mockCreateErw } = await import('@/lib/erw/client')
+    expect(mockCreateErw).not.toHaveBeenCalled()
+  })
 })
 
 describe('sendResultReminderEmails', () => {
@@ -1325,5 +1480,136 @@ describe('sendResultReminderEmails', () => {
 
     expect(result.success).toBe(false)
     expect(result.error).toContain('Failed to send')
+  })
+})
+
+describe('publishSeasonDrafts', () => {
+  beforeEach(() => {
+    mockModule.__reset()
+    vi.clearAllMocks()
+  })
+
+  const superAdmin = {
+    id: 'admin-1',
+    email: 'admin@test.com',
+    name: 'Super Admin',
+    role: 'super_admin',
+    chapter_id: null,
+    phone: null,
+    created_at: null,
+    updated_at: null,
+  }
+
+  it('rejects non-super-admins without touching the database', async () => {
+    vi.mocked(requireAdmin).mockResolvedValueOnce({ ...superAdmin, role: 'admin' })
+
+    const result = await publishSeasonDrafts(CURRENT_SEASON + 1)
+
+    expect(result.success).toBe(false)
+    expect(result.error).toBe('Only super admins can publish a season')
+    expect(mockModule.__calls.filter((c) => c.method === 'update')).toHaveLength(0)
+  })
+
+  it.each([NaN, 2026.5, Infinity])(
+    'rejects a non-integer season (%s) without touching the database',
+    async (season) => {
+      vi.mocked(requireAdmin).mockResolvedValueOnce(superAdmin)
+
+      const result = await publishSeasonDrafts(season)
+
+      expect(result.success).toBe(false)
+      expect(result.error).toBe('Invalid season')
+      expect(mockModule.__calls.filter((c) => c.method === 'update')).toHaveLength(0)
+    }
+  )
+
+  it('publishes only draft rows of the given season and syncs each to ERW', async () => {
+    vi.mocked(requireAdmin).mockResolvedValueOnce(superAdmin)
+    // UPDATE ... RETURNING rows (resolved via `then`)
+    mockModule.__queryBuilder.then.mockImplementationOnce((resolve) => {
+      resolve({
+        data: [
+          {
+            id: 'e1',
+            name: 'A 200',
+            description: null,
+            distance_km: 200,
+            event_date: `${CURRENT_SEASON + 1}-05-02`,
+            start_time: '07:00',
+            slug: 'a-200',
+            route_id: null,
+            event_type: 'brevet',
+            chapter_id: 'chapter-1',
+          },
+          {
+            id: 'e2',
+            name: 'B Perm',
+            description: null,
+            distance_km: 200,
+            event_date: `${CURRENT_SEASON + 1}-05-09`,
+            start_time: null,
+            slug: 'b-perm',
+            route_id: null,
+            event_type: 'permanent',
+            chapter_id: 'chapter-1',
+          },
+        ],
+        error: null,
+      })
+    })
+    mockModule.__mockUpdateSuccess() // ERW column write for e1
+    mockModule.__mockEventFound({ slug: 'toronto' }) // chapter revalidation
+
+    const result = await publishSeasonDrafts(CURRENT_SEASON + 1)
+
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data).toEqual({ published: 2, erwFailures: 0 })
+    }
+
+    const eqCalls = mockModule.__calls.filter((c) => c.table === 'events' && c.method === 'eq')
+    expect(eqCalls.map((c) => c.args)).toEqual(
+      expect.arrayContaining([
+        ['season', CURRENT_SEASON + 1],
+        ['status', 'draft'],
+      ])
+    )
+
+    const { createErwEvent: mockCreateErw } = await import('@/lib/erw/client')
+    expect(mockCreateErw).toHaveBeenCalledTimes(1) // permanent skipped
+    expect(mockCreateErw).toHaveBeenCalledWith(expect.objectContaining({ slug: 'a-200' }))
+  })
+
+  it('counts ERW failures without failing the publish', async () => {
+    vi.mocked(requireAdmin).mockResolvedValueOnce(superAdmin)
+    mockModule.__queryBuilder.then.mockImplementationOnce((resolve) => {
+      resolve({
+        data: [
+          {
+            id: 'e1',
+            name: 'A 200',
+            description: null,
+            distance_km: 200,
+            event_date: `${CURRENT_SEASON + 1}-05-02`,
+            start_time: null,
+            slug: 'a-200',
+            route_id: null,
+            event_type: 'brevet',
+            chapter_id: 'chapter-1',
+          },
+        ],
+        error: null,
+      })
+    })
+    const { createErwEvent: mockCreateErw } = await import('@/lib/erw/client')
+    vi.mocked(mockCreateErw).mockResolvedValueOnce({ success: false, error: 'boom' })
+    mockModule.__mockEventFound({ slug: 'toronto' })
+
+    const result = await publishSeasonDrafts(CURRENT_SEASON + 1)
+
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data).toEqual({ published: 1, erwFailures: 1 })
+    }
   })
 })

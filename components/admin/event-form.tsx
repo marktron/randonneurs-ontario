@@ -41,7 +41,8 @@ import { AlertCircle, Loader2, CalendarIcon, ChevronDownIcon } from 'lucide-reac
 import { createEvent, updateEvent, type EventType } from '@/lib/actions/events'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
-import { getCurrentSeasonLabel } from '@/lib/season'
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
+import { getCurrentSeason, getCurrentSeasonLabel } from '@/lib/season'
 import type { ChapterOption } from '@/types/ui'
 import type { ActiveRoute } from '@/lib/data/routes'
 import { ImageUpload } from '@/components/admin/image-upload'
@@ -80,6 +81,19 @@ const EVENT_TYPES: { value: EventType; label: string }[] = [
   { value: 'permanent', label: 'Permanent' },
 ]
 
+type Visibility = 'draft' | 'published'
+
+/** Events dated in a season after the current one start hidden. */
+function defaultVisibilityFor(year: number | undefined): Visibility {
+  if (year === undefined) return 'published'
+  return year > getCurrentSeason() ? 'draft' : 'published'
+}
+
+/** Year from an ISO `YYYY-MM-DD` date string, without going through `Date`. */
+function yearFromIsoDate(isoDate: string): number {
+  return parseInt(isoDate.slice(0, 4), 10)
+}
+
 export function EventForm({
   chapters,
   routes,
@@ -108,6 +122,10 @@ export function EventForm({
     event?.eventDate ? new Date(event.eventDate + 'T00:00:00') : undefined
   )
   const [datePickerOpen, setDatePickerOpen] = useState(false)
+  const [visibility, setVisibility] = useState<Visibility>(() =>
+    defaultVisibilityFor(event?.eventDate ? yearFromIsoDate(event.eventDate) : undefined)
+  )
+  const [visibilityTouched, setVisibilityTouched] = useState(false)
   const [startTime, setStartTime] = useState(event?.startTime || '')
   const [startLocation, setStartLocation] = useState(event?.startLocation || '')
   const [description, setDescription] = useState(event?.description || '')
@@ -189,10 +207,11 @@ export function EventForm({
           startLocation: startLocation.trim() || null,
           description: description.trim() || null,
           imageUrl: imageUrl || null,
+          status: visibility === 'draft' ? 'draft' : 'scheduled',
         })
 
         if (result.success) {
-          toast.success('Event created successfully')
+          toast.success(visibility === 'draft' ? 'Draft saved' : 'Event created successfully')
           router.push('/admin/events')
         } else {
           setError(result.error || 'Failed to create event')
@@ -488,6 +507,8 @@ export function EventForm({
                       onSelect={(date) => {
                         setEventDate(date)
                         setDatePickerOpen(false)
+                        if (!visibilityTouched)
+                          setVisibility(defaultVisibilityFor(date?.getFullYear()))
                       }}
                     />
                   </PopoverContent>
@@ -550,6 +571,38 @@ export function EventForm({
                 disabled={isPending}
               />
             </div>
+
+            {mode === 'create' && (
+              <fieldset className="space-y-2">
+                <legend className="text-sm font-medium">Visibility</legend>
+                <RadioGroup
+                  value={visibility}
+                  onValueChange={(v) => {
+                    setVisibility(v as Visibility)
+                    setVisibilityTouched(true)
+                  }}
+                  disabled={isPending}
+                  className="flex flex-col gap-2 sm:flex-row sm:gap-6"
+                >
+                  <div className="flex items-center gap-2">
+                    <RadioGroupItem value="draft" id="visibility-draft" />
+                    <Label htmlFor="visibility-draft" className="font-normal">
+                      Draft (hidden from public)
+                    </Label>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <RadioGroupItem value="published" id="visibility-published" />
+                    <Label htmlFor="visibility-published" className="font-normal">
+                      Published
+                    </Label>
+                  </div>
+                </RadioGroup>
+                <p className="text-xs text-muted-foreground">
+                  Drafts stay off the public calendar and iCal feed until you publish them from the
+                  event page (or publish the whole season).
+                </p>
+              </fieldset>
+            )}
 
             <div className="flex gap-4 pt-4">
               <Button type="submit" disabled={isPending}>

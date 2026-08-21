@@ -505,6 +505,7 @@ const getEventBySlugInner = cache(async (slug: string): Promise<EventDetails | n
     `
     )
     .eq('slug', slug)
+    .neq('status', 'draft')
     .single()
 
   if (error || !event) {

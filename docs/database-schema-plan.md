@@ -77,7 +77,7 @@ CREATE TABLE events (
   external_register_url TEXT,       -- For CCN Bikes links
 
   -- Status
-  status TEXT DEFAULT 'scheduled' CHECK (status IN ('scheduled', 'cancelled', 'completed')),
+  status TEXT DEFAULT 'scheduled' CHECK (status IN ('draft', 'scheduled', 'cancelled', 'completed', 'submitted')),
 
   -- Metadata
   season INT GENERATED ALWAYS AS (EXTRACT(YEAR FROM event_date)) STORED,
@@ -87,6 +87,8 @@ CREATE TABLE events (
   UNIQUE(chapter_id, slug, event_date)
 );
 ```
+
+`draft` rows are excluded by the public RLS select policy — only admin reads (service role) can see them.
 
 ### 4. riders
 

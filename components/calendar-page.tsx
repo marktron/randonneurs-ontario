@@ -6,6 +6,7 @@ import dynamic from 'next/dynamic'
 import { ListIcon, CalendarDaysIcon } from 'lucide-react'
 import { PageShell } from '@/components/page-shell'
 import { PageHero } from '@/components/page-hero'
+import { getCurrentSeasonLabel } from '@/lib/season'
 import { EventList, type Event } from '@/components/event-card'
 import { CalendarGridView } from '@/components/calendar-grid-view'
 import {
@@ -123,7 +124,7 @@ export function CalendarPage({
     <PageShell>
       <PageHero
         image={coverImage}
-        eyebrow="2026 Season"
+        eyebrow={`${getCurrentSeasonLabel()} Season`}
         title={title ?? chapter}
         description={description}
       />

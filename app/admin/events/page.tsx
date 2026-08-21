@@ -1,11 +1,20 @@
 import { requireAdmin } from '@/lib/auth/get-admin'
+import { isSuperAdmin } from '@/lib/auth/roles'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { getChapters } from '@/lib/actions/admin-users'
 import { getEventRiderCounts } from '@/lib/data/event-rider-counts'
 import { EventsTable } from '@/components/admin/events-table'
 import { Button } from '@/components/ui/button'
-import { EventFilters, type DateFilter } from '@/components/admin/event-filters'
+import {
+  EventFilters,
+  type DateFilter,
+  type AdminEventsView,
+} from '@/components/admin/event-filters'
 import { AdminPagination } from '@/components/admin/admin-pagination'
+import { PublishSeasonButton } from '@/components/admin/publish-season-button'
+import { AdminEventsGrid } from '@/components/admin/admin-events-grid'
+import { mapEventForGrid } from '@/lib/admin/map-event-for-grid'
+import { buildEventDetailUrl, buildPageUrl } from '@/lib/admin/event-list-urls'
 import { Plus } from 'lucide-react'
 import Link from 'next/link'
 import { getCurrentSeasonLabel } from '@/lib/season'
@@ -13,35 +22,6 @@ import type { EventForAdminList } from '@/types/queries'
 
 const currentSeason = getCurrentSeasonLabel()
 const PAGE_SIZE = 50
-
-function buildEventDetailUrl(
-  eventId: string,
-  season: string,
-  chapterId: string | null,
-  dateFilter: DateFilter
-): string {
-  const params = new URLSearchParams()
-  if (season !== currentSeason) params.set('from_season', season)
-  if (chapterId) params.set('from_chapter', chapterId)
-  if (dateFilter !== 'all') params.set('from_when', dateFilter)
-  const qs = params.toString()
-  return `/admin/events/${eventId}${qs ? `?${qs}` : ''}`
-}
-
-function buildPageUrl(
-  page: number,
-  season: string,
-  chapterParam: string | undefined,
-  dateFilter: DateFilter
-): string {
-  const params = new URLSearchParams()
-  if (season !== currentSeason) params.set('season', season)
-  if (chapterParam) params.set('chapter', chapterParam)
-  if (dateFilter !== 'all') params.set('when', dateFilter)
-  if (page > 1) params.set('page', String(page))
-  const qs = params.toString()
-  return `/admin/events${qs ? `?${qs}` : ''}`
-}
 
 async function getAvailableSeasons(): Promise<string[]> {
   const { data } = await getSupabaseAdmin().rpc('get_distinct_event_seasons')
@@ -51,12 +31,39 @@ async function getAvailableSeasons(): Promise<string[]> {
   return data.map((row: { season: number }) => row.season.toString())
 }
 
+interface DraftCountRow {
+  chapter_id: string
+  chapters: { name: string } | null
+}
+
+/** Drafts per chapter for the season (all chapters, regardless of the chapter filter). */
+async function getDraftCountsBySeason(
+  season: string
+): Promise<{ chapterName: string; count: number }[]> {
+  const { data } = await getSupabaseAdmin()
+    .from('events')
+    .select('chapter_id, chapters (name)')
+    .eq('status', 'draft')
+    .gte('event_date', `${season}-01-01`)
+    .lte('event_date', `${season}-12-31`)
+
+  const counts = new Map<string, number>()
+  for (const row of (data as DraftCountRow[] | null) ?? []) {
+    const name = row.chapters?.name ?? 'Unknown'
+    counts.set(name, (counts.get(name) ?? 0) + 1)
+  }
+  return Array.from(counts, ([chapterName, count]) => ({ chapterName, count })).sort((a, b) =>
+    a.chapterName.localeCompare(b.chapterName)
+  )
+}
+
 async function getEvents(
   season: string,
   dateFilter: DateFilter,
   chapterId?: string,
   chapterSlug?: string,
-  page: number = 1
+  page: number = 1,
+  pageSize: number | null = PAGE_SIZE
 ): Promise<{ events: EventForAdminList[]; totalCount: number }> {
   const startDate = `${season}-01-01`
   const endDate = `${season}-12-31`
@@ -81,17 +88,7 @@ async function getEvents(
     return q
   }
 
-  // Get total count with same filters
-  let countQuery = getSupabaseAdmin().from('events').select('id', { count: 'exact', head: true })
-
-  countQuery = applyDateFilter(countQuery)
-  countQuery = applyChapterFilter(countQuery)
-
-  const { count } = await countQuery
-  const totalCount = count ?? 0
-
-  // Get paginated data
-  const offset = (page - 1) * PAGE_SIZE
+  // Get data (all matching rows when pageSize is null, e.g. grid view)
   let query = getSupabaseAdmin()
     .from('events')
     .select(
@@ -99,6 +96,7 @@ async function getEvents(
       id,
       name,
       event_date,
+      start_time,
       distance_km,
       event_type,
       status,
@@ -111,9 +109,26 @@ async function getEvents(
   query = applyDateFilter(query)
   query = applyChapterFilter(query)
 
-  const { data } = await query.range(offset, offset + PAGE_SIZE - 1)
+  if (pageSize !== null) {
+    const offset = (page - 1) * pageSize
+    query = query.range(offset, offset + pageSize - 1)
+  }
+
+  const { data } = await query
 
   const events = (data as EventForAdminList[]) ?? []
+
+  let totalCount: number
+  if (pageSize === null) {
+    // Grid view fetches the whole filtered season; no separate count query needed.
+    totalCount = events.length
+  } else {
+    let countQuery = getSupabaseAdmin().from('events').select('id', { count: 'exact', head: true })
+    countQuery = applyDateFilter(countQuery)
+    countQuery = applyChapterFilter(countQuery)
+    const { count } = await countQuery
+    totalCount = count ?? 0
+  }
 
   if (events.length === 0) return { events, totalCount }
 
@@ -127,7 +142,13 @@ async function getEvents(
 }
 
 interface AdminEventsPageProps {
-  searchParams: Promise<{ season?: string; chapter?: string; page?: string; when?: string }>
+  searchParams: Promise<{
+    season?: string
+    chapter?: string
+    page?: string
+    when?: string
+    view?: string
+  }>
 }
 
 export default async function AdminEventsPage({ searchParams }: AdminEventsPageProps) {
@@ -145,14 +166,19 @@ export default async function AdminEventsPage({ searchParams }: AdminEventsPageP
   const chapterSlug = chapterId ? chapters.find((c) => c.id === chapterId)?.slug : undefined
   const dateFilter: DateFilter =
     params.when === 'past' || params.when === 'upcoming' ? params.when : 'all'
+  const view: AdminEventsView = params.view === 'grid' ? 'grid' : 'list'
   const page = Math.max(1, parseInt(params.page || '1', 10))
-  const { events, totalCount } = await getEvents(
-    season,
-    dateFilter,
-    chapterId || undefined,
-    chapterSlug,
-    page
-  )
+  const [{ events, totalCount }, draftCounts] = await Promise.all([
+    getEvents(
+      season,
+      dateFilter,
+      chapterId || undefined,
+      chapterSlug,
+      page,
+      view === 'grid' ? null : PAGE_SIZE
+    ),
+    isSuperAdmin(admin.role) ? getDraftCountsBySeason(season) : Promise.resolve([]),
+  ])
 
   return (
     <div className="space-y-6">
@@ -162,6 +188,9 @@ export default async function AdminEventsPage({ searchParams }: AdminEventsPageP
           <p className="text-muted-foreground">Manage event registrations and results</p>
         </div>
         <div className="flex flex-wrap items-center gap-2 self-start">
+          {isSuperAdmin(admin.role) && (
+            <PublishSeasonButton season={Number(season)} draftCounts={draftCounts} />
+          )}
           <Button asChild>
             <Link href="/admin/events/new">
               <Plus className="h-4 w-4 mr-2" />
@@ -177,23 +206,39 @@ export default async function AdminEventsPage({ searchParams }: AdminEventsPageP
         chapters={chapters}
         seasons={seasons}
         dateFilter={dateFilter}
+        view={view}
       />
 
-      <EventsTable
-        events={events}
-        buildEventDetailUrl={(eventId) =>
-          buildEventDetailUrl(eventId, season, chapterId, dateFilter)
-        }
-      />
-
-      {totalCount > 0 && (
-        <AdminPagination
-          page={page}
-          pageSize={PAGE_SIZE}
-          totalCount={totalCount}
-          buildPageUrl={(p) => buildPageUrl(p, season, params.chapter, dateFilter)}
-          label="events"
-        />
+      {view === 'grid' ? (
+        events.length === 0 ? (
+          <p className="rounded-md border p-8 text-center text-muted-foreground">No events found</p>
+        ) : (
+          <AdminEventsGrid
+            events={events.map(mapEventForGrid)}
+            season={season}
+            chapterId={chapterId}
+            dateFilter={dateFilter}
+            view={view}
+          />
+        )
+      ) : (
+        <>
+          <EventsTable
+            events={events}
+            buildEventDetailUrl={(eventId) =>
+              buildEventDetailUrl(eventId, season, chapterId, dateFilter, view)
+            }
+          />
+          {totalCount > 0 && (
+            <AdminPagination
+              page={page}
+              pageSize={PAGE_SIZE}
+              totalCount={totalCount}
+              buildPageUrl={(p) => buildPageUrl(p, season, params.chapter, dateFilter, view)}
+              label="events"
+            />
+          )}
+        </>
       )}
     </div>
   )

@@ -34,6 +34,7 @@ async function getChapters() {
 
 interface EventForEdit extends EventFormData {
   erwCanonicalUrl: string | null
+  status: string | null
 }
 
 async function getEvent(eventId: string): Promise<EventForEdit | null> {
@@ -52,6 +53,7 @@ async function getEvent(eventId: string): Promise<EventForEdit | null> {
       start_location,
       description,
       image_url,
+      status,
       erw_canonical_url
     `
     )
@@ -60,7 +62,10 @@ async function getEvent(eventId: string): Promise<EventForEdit | null> {
 
   if (!event) return null
 
-  const e = event as EventDetailForEdit & { erw_canonical_url: string | null }
+  const e = event as EventDetailForEdit & {
+    erw_canonical_url: string | null
+    status: string | null
+  }
   return {
     id: e.id,
     name: e.name,
@@ -74,6 +79,7 @@ async function getEvent(eventId: string): Promise<EventForEdit | null> {
     description: e.description,
     imageUrl: e.image_url,
     erwCanonicalUrl: e.erw_canonical_url,
+    status: e.status,
   }
 }
 
@@ -112,7 +118,8 @@ export default async function EditEventPage({ params }: EditEventPageProps) {
           event={event}
           mode="edit"
           headerAction={
-            event.eventType !== 'permanent' ? (
+            // Drafts have no ERW page yet — publishing creates it.
+            event.eventType !== 'permanent' && event.status !== 'draft' ? (
               <ErwSyncButton eventId={event.id!} erwCanonicalUrl={event.erwCanonicalUrl} />
             ) : undefined
           }

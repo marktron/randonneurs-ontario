@@ -169,3 +169,81 @@ describe('EventStatusSelect cancel flow', () => {
     })
   })
 })
+
+describe('EventStatusSelect draft handling', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockUpdateEventStatus.mockResolvedValue({ success: true })
+  })
+
+  it('offers Draft as an option only while the event is a draft', async () => {
+    const user = userEvent.setup()
+    render(
+      <EventStatusSelect
+        eventId="event-1"
+        initialStatus="draft"
+        resultsCount={0}
+        initialDescription={null}
+      />
+    )
+
+    await user.click(screen.getByRole('combobox'))
+    expect(await screen.findByRole('option', { name: /draft/i })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: /scheduled/i })).toBeInTheDocument()
+  })
+
+  it('does not offer Draft for a scheduled event', async () => {
+    const user = userEvent.setup()
+    render(
+      <EventStatusSelect
+        eventId="event-1"
+        initialStatus="scheduled"
+        resultsCount={0}
+        initialDescription={null}
+      />
+    )
+
+    await user.click(screen.getByRole('combobox'))
+    await screen.findByRole('option', { name: /completed/i })
+    expect(screen.queryByRole('option', { name: /draft/i })).toBeNull()
+  })
+
+  it('offers no destination other than Scheduled while the event is a draft', async () => {
+    const user = userEvent.setup()
+    render(
+      <EventStatusSelect
+        eventId="event-1"
+        initialStatus="draft"
+        resultsCount={0}
+        initialDescription={null}
+      />
+    )
+
+    await user.click(screen.getByRole('combobox'))
+    await screen.findByRole('option', { name: /scheduled/i })
+    expect(screen.queryByRole('option', { name: /cancelled/i })).toBeNull()
+    expect(screen.queryByRole('option', { name: /completed/i })).toBeNull()
+    expect(screen.getAllByRole('option').map((o) => o.textContent)).toEqual(['Draft', 'Scheduled'])
+  })
+
+  it('publishes a draft by choosing Scheduled', async () => {
+    const user = userEvent.setup()
+    render(
+      <EventStatusSelect
+        eventId="event-1"
+        initialStatus="draft"
+        resultsCount={0}
+        initialDescription={null}
+      />
+    )
+
+    await user.click(screen.getByRole('combobox'))
+    await user.click(await screen.findByRole('option', { name: /scheduled/i }))
+
+    await waitFor(() =>
+      expect(mockUpdateEventStatus).toHaveBeenCalledWith('event-1', 'scheduled', undefined)
+    )
+    const { toast } = await import('sonner')
+    expect(toast.success).toHaveBeenCalledWith('Event published')
+  })
+})

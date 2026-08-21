@@ -54,6 +54,14 @@ The selected view is saved to `localStorage` under the key `ro-calendar-view`. O
 
 This follows the same localStorage pattern used elsewhere in the app (e.g., `ro-registration` for saved form data).
 
+## Admin usage
+
+`/admin/events?view=grid` renders the same `CalendarGridView` for the whole filtered season (no pagination). The admin page passes `hrefFor` so cells link to `/admin/events/[id]` (carrying the list filters as `from_*` params, including `from_view`) instead of `/register/[slug]`. Admin rows are adapted with `lib/admin/map-event-for-grid.ts`.
+
+## Draft events
+
+`Event.status` may be `'draft'`. Public data reads never emit it (drafts are filtered by status and hidden by RLS), so it only appears in admin. Draft cells use a dashed border, muted text, a `Draft` label, and no medal fill; the mobile dot is muted and the row shows `(draft)`.
+
 ## Key files
 
 | File                                                | Purpose                                                  |
@@ -61,5 +69,7 @@ This follows the same localStorage pattern used elsewhere in the app (e.g., `ro-
 | `components/calendar-page.tsx`                      | Main calendar page component with view toggle and filter |
 | `components/calendar-grid-view.tsx`                 | Grid view component                                      |
 | `components/event-card.tsx`                         | List view components (EventCard, EventList)              |
+| `components/admin/event-filters.tsx`                | Admin List/Grid toggle                                   |
+| `lib/admin/map-event-for-grid.ts`                   | Admin row → `Event` adapter                              |
 | `tests/unit/components/calendar-page.test.tsx`      | Tests for view toggle, localStorage, and filtering       |
 | `tests/unit/components/calendar-grid-view.test.tsx` | Tests for grid view rendering                            |

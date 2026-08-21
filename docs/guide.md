@@ -29,14 +29,17 @@ The [Events](/admin/events) page shows a filterable table of all events. You can
 
 Each row shows the event name, chapter, date, distance, rider count, and status badge:
 
-| Status    | Meaning                                          |
-| --------- | ------------------------------------------------ |
-| Scheduled | Upcoming, not yet happened                       |
-| Completed | Past the event date, awaiting results            |
-| Submitted | Results submitted to VP of Brevet Administration |
-| Cancelled | Won't happen                                     |
+| Status    | Meaning                                                                                                    |
+| --------- | ---------------------------------------------------------------------------------------------------------- |
+| Draft     | Planned for a future season; hidden from the public site, iCal feed, and Epic Ride Weather until published |
+| Scheduled | Upcoming, not yet happened                                                                                 |
+| Completed | Past the event date, awaiting results                                                                      |
+| Submitted | Results submitted to VP of Brevet Administration                                                           |
+| Cancelled | Won't happen                                                                                               |
 
 Click any row to open the event detail page.
+
+Use the **List / Grid** toggle on the right of the filters to switch between the table and a month-by-month calendar grid (the same grid as the public calendar). Drafts appear in the grid with a dashed outline and a "Draft" label. Clicking a day's event opens its detail page.
 
 On phones, event rows stack into cards — name and type up top with the status badge in the corner, and the date and distance below — instead of scrolling sideways. The digital brevet card page's Controls and Check-ins tables stack the same way, with a labelled line per field or control.
 
@@ -53,8 +56,20 @@ Click "New Event" in the top right of the Events page. The form asks for:
 7. **Start time and location**: optional but helpful for riders.
 8. **Description**: optional, supports Markdown formatting.
 9. **Event image**: optional photo to display with the event.
+10. **Visibility**: Draft or Published. Events dated in a season after the current one default to Draft so next season can be planned without anything appearing publicly. Current-season events default to Published.
 
 One thing to know: you can't create new brevets for the current season. This is by design. The brevet schedule is set at the start of the year and approved by ACP. You can still edit existing brevets, and you can create populaires, permanents, and fleches for any season. If you need to add a new brevet during the season, contact Mark Allen.
+
+### Planning next season with drafts
+
+Create next season's events as drafts (the default when the date is in a future season). Drafts are only visible in the admin site. To make them live:
+
+- **One at a time**: open the event and change its status from Draft to Scheduled. This also creates the Epic Ride Weather page.
+- **Whole season** (super admins only): on the Events page, select the season and click **Publish <year> season (N drafts)**. A confirmation lists the draft count per chapter. Every draft in that season becomes Scheduled.
+
+Scheduled is a draft's only status move — the dropdown offers nothing else, and Cancelled and Completed are refused. To discard a draft, delete it.
+
+Publishing cannot be undone from the site — cancel individual events instead. The `NEXT_PUBLIC_CURRENT_SEASON` setting is unrelated: it only changes which season the admin filters, records, and membership pages default to.
 
 ### The event detail page
 

@@ -230,7 +230,14 @@ export type EventWithChapterName = Pick<
  */
 export type EventForAdminList = Pick<
   Event,
-  'id' | 'name' | 'event_date' | 'distance_km' | 'event_type' | 'status' | 'chapter_id'
+  | 'id'
+  | 'name'
+  | 'event_date'
+  | 'distance_km'
+  | 'event_type'
+  | 'status'
+  | 'chapter_id'
+  | 'start_time'
 > & {
   chapters: Pick<Chapter, 'name'> | null
   rider_count?: number

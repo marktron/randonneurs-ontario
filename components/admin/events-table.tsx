@@ -8,27 +8,12 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { Badge } from '@/components/ui/badge'
+import { EventStatusBadge } from '@/components/admin/event-status-badge'
 import type { EventForAdminList } from '@/types/queries'
 
 interface EventsTableProps {
   events: EventForAdminList[]
   buildEventDetailUrl: (eventId: string) => string
-}
-
-function getStatusBadge(status: string) {
-  switch (status) {
-    case 'scheduled':
-      return <Badge variant="secondary">Scheduled</Badge>
-    case 'completed':
-      return <Badge>Completed</Badge>
-    case 'submitted':
-      return <Badge className="bg-green-600 hover:bg-green-600">Submitted</Badge>
-    case 'cancelled':
-      return <Badge variant="destructive">Cancelled</Badge>
-    default:
-      return <Badge variant="outline">{status}</Badge>
-  }
 }
 
 export function EventsTable({ events, buildEventDetailUrl }: EventsTableProps) {
@@ -85,7 +70,7 @@ export function EventsTable({ events, buildEventDetailUrl }: EventsTableProps) {
                   {event.rider_count ?? 0}
                 </TableCell>
                 <TableCell className="absolute top-4 right-4 block p-0 sm:static sm:table-cell sm:p-3">
-                  {getStatusBadge(event.status ?? 'scheduled')}
+                  <EventStatusBadge status={event.status} />
                 </TableCell>
               </ClickableTableRow>
             ))

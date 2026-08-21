@@ -26,11 +26,14 @@ import { updateEventStatus, type EventStatus } from '@/lib/actions/events'
 import { toast } from 'sonner'
 import { Loader2, Check, AlertTriangle } from 'lucide-react'
 
-const STATUS_OPTIONS: { value: Exclude<EventStatus, 'submitted'>; label: string }[] = [
+const STATUS_OPTIONS: { value: Exclude<EventStatus, 'submitted' | 'draft'>; label: string }[] = [
   { value: 'scheduled', label: 'Scheduled' },
   { value: 'completed', label: 'Completed' },
   { value: 'cancelled', label: 'Cancelled' },
 ]
+
+/** Publishing is a draft's only status move — see `updateEventStatus`. */
+const DRAFT_STATUS_OPTIONS = STATUS_OPTIONS.filter((opt) => opt.value === 'scheduled')
 
 interface EventStatusSelectProps {
   eventId: string
@@ -48,6 +51,7 @@ export function EventStatusSelect({
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [status, setStatus] = useState<EventStatus>(initialStatus)
+  const isDraft = status === 'draft'
   const [showSaved, setShowSaved] = useState(false)
   const [showCancelDialog, setShowCancelDialog] = useState(false)
   const [draftDescription, setDraftDescription] = useState(initialDescription ?? '')
@@ -67,6 +71,9 @@ export function EventStatusSelect({
       const result = await updateEventStatus(eventId, newStatus, options)
       if (result.success) {
         setStatus(newStatus)
+        if (isDraft && newStatus === 'scheduled') {
+          toast.success('Event published')
+        }
         setShowSaved(true)
         setTimeout(() => setShowSaved(false), 1500)
         router.refresh()
@@ -110,7 +117,10 @@ export function EventStatusSelect({
             <SelectValue />
           </SelectTrigger>
           <SelectContent position="popper" sideOffset={4}>
-            {STATUS_OPTIONS.map((opt) => (
+            {/* A draft can only be published; cancelling or completing it would
+                leak the event publicly. Discard by deleting it instead. */}
+            {isDraft && <SelectItem value="draft">Draft</SelectItem>}
+            {(isDraft ? DRAFT_STATUS_OPTIONS : STATUS_OPTIONS).map((opt) => (
               <SelectItem key={opt.value} value={opt.value}>
                 {opt.label}
               </SelectItem>

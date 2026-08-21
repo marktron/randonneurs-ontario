@@ -59,6 +59,12 @@ vi.mock('date-fns', () => ({
   }),
 }))
 
+const CURRENT_SEASON = new Date().getFullYear()
+vi.mock('@/lib/season', () => ({
+  getCurrentSeason: () => CURRENT_SEASON,
+  getCurrentSeasonLabel: () => String(CURRENT_SEASON),
+}))
+
 describe('EventForm', () => {
   const mockChapters: ChapterOption[] = [
     { id: 'chapter-1', name: 'Toronto' },
@@ -229,6 +235,82 @@ describe('EventForm', () => {
 
       expect(screen.getByLabelText(/event name/i)).toBeInTheDocument()
       expect(screen.getByRole('button', { name: /create event/i })).toBeInTheDocument()
+    })
+  })
+
+  describe('visibility (create mode)', () => {
+    function futureSeasonEvent() {
+      return {
+        id: 'new',
+        name: 'Next Season 200',
+        chapterId: 'chapter-1',
+        routeId: null,
+        eventType: 'brevet',
+        distanceKm: 200,
+        eventDate: `${CURRENT_SEASON + 1}-06-15`,
+        startTime: null,
+        startLocation: null,
+        description: null,
+        imageUrl: null,
+      }
+    }
+
+    it('defaults to Draft when the date is in a future season', () => {
+      // Seed the date through `event` while keeping create mode
+      render(<EventForm chapters={mockChapters} routes={mockRoutes} event={futureSeasonEvent()} />)
+
+      expect(screen.getByRole('radio', { name: /draft/i })).toBeChecked()
+      expect(screen.getByRole('radio', { name: /published/i })).not.toBeChecked()
+    })
+
+    it('defaults to Published when the date is in the current season', () => {
+      render(
+        <EventForm
+          chapters={mockChapters}
+          routes={mockRoutes}
+          event={{
+            ...futureSeasonEvent(),
+            eventType: 'populaire',
+            eventDate: `${CURRENT_SEASON}-06-15`,
+          }}
+        />
+      )
+
+      expect(screen.getByRole('radio', { name: /published/i })).toBeChecked()
+    })
+
+    it('submits status draft to createEvent', async () => {
+      const user = userEvent.setup()
+      render(<EventForm chapters={mockChapters} routes={mockRoutes} event={futureSeasonEvent()} />)
+
+      await user.click(screen.getByRole('button', { name: /create event/i }))
+
+      await waitFor(() => expect(mockCreateEvent).toHaveBeenCalled())
+      expect(mockCreateEvent.mock.calls[0][0]).toMatchObject({ status: 'draft' })
+    })
+
+    it('submits status scheduled when Published is chosen', async () => {
+      const user = userEvent.setup()
+      render(<EventForm chapters={mockChapters} routes={mockRoutes} event={futureSeasonEvent()} />)
+
+      await user.click(screen.getByRole('radio', { name: /published/i }))
+      await user.click(screen.getByRole('button', { name: /create event/i }))
+
+      await waitFor(() => expect(mockCreateEvent).toHaveBeenCalled())
+      expect(mockCreateEvent.mock.calls[0][0]).toMatchObject({ status: 'scheduled' })
+    })
+
+    it('is not shown in edit mode', () => {
+      render(
+        <EventForm
+          chapters={mockChapters}
+          routes={mockRoutes}
+          event={futureSeasonEvent()}
+          mode="edit"
+        />
+      )
+
+      expect(screen.queryByRole('radio', { name: /draft/i })).toBeNull()
     })
   })
 })

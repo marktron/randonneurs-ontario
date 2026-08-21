@@ -24,7 +24,7 @@ export async function syncEventToErw(
     const { data: event, error } = await getSupabaseAdmin()
       .from('events')
       .select(
-        'id, slug, name, description, distance_km, event_date, start_time, event_type, erw_event_id, route_id'
+        'id, slug, name, description, distance_km, event_date, start_time, event_type, status, erw_event_id, route_id'
       )
       .eq('id', eventId)
       .single()
@@ -35,6 +35,12 @@ export async function syncEventToErw(
 
     if (event.event_type === 'permanent') {
       return { success: false, error: 'Permanent events cannot be synced to Epic Ride Weather' }
+    }
+
+    // Drafts are hidden from the public site; pushing one to ERW would publish
+    // it there. Publishing the event syncs it automatically.
+    if (event.status === 'draft') {
+      return { success: false, error: 'Publish the event before syncing to Epic Ride Weather' }
     }
 
     let rwgpsId: string | null = null
