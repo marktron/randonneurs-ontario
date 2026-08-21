@@ -1,8 +1,26 @@
+import { vi } from 'vitest'
+
+vi.mock('@/lib/auth/get-admin', () => ({
+  requireAdmin: vi.fn().mockResolvedValue({
+    id: '00000000-2222-4000-a000-00000000a0a0',
+    email: 'inttest-super@example.com',
+    name: 'Inttest Super',
+    role: 'super_admin',
+    chapter_id: null,
+    phone: null,
+    created_at: null,
+    updated_at: null,
+  }),
+  getAdmin: vi.fn().mockResolvedValue(null),
+}))
+vi.mock('@/lib/audit-log', () => ({ logAuditEvent: vi.fn(async () => {}) }))
+
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { createClient, SupabaseClient } from '@supabase/supabase-js'
 import { getTestSupabase, checked } from './helpers/supabase'
 import { TORONTO_CHAPTER_ID } from './registration/helpers'
 import { getEventBySlug } from '@/lib/data/events'
+import { publishSeasonDrafts } from '@/lib/actions/events'
 
 // Draft events must be invisible to the anon role (the public site) and
 // rejected values must still be rejected by the CHECK constraint.
@@ -25,15 +43,23 @@ const SEASON = 2099 // far-future season isolates fixtures from real data
 const IDS = {
   draftEvent: '00000000-2222-4000-a000-00000000d001',
   scheduledEvent: '00000000-2222-4000-a000-00000000d002',
+  otherSeasonDraft: '00000000-2222-4000-a000-00000000d003',
 }
 const SLUGS = {
   draft: `inttest-draft-event-200km-${SEASON}-05-02`,
   scheduled: `inttest-scheduled-event-200km-${SEASON}-05-09`,
+  otherSeasonDraft: `inttest-other-draft-200km-${SEASON - 1}-05-02`,
 }
 
 async function cleanup(): Promise<void> {
-  await admin.from('events').delete().in('id', [IDS.draftEvent, IDS.scheduledEvent])
-  await admin.from('events').delete().in('slug', [SLUGS.draft, SLUGS.scheduled])
+  await admin
+    .from('events')
+    .delete()
+    .in('id', [IDS.draftEvent, IDS.scheduledEvent, IDS.otherSeasonDraft])
+  await admin
+    .from('events')
+    .delete()
+    .in('slug', [SLUGS.draft, SLUGS.scheduled, SLUGS.otherSeasonDraft])
 }
 
 beforeAll(async () => {
@@ -59,6 +85,16 @@ beforeAll(async () => {
         distance_km: 200,
         event_date: `${SEASON}-05-09`,
         status: 'scheduled',
+      },
+      {
+        id: IDS.otherSeasonDraft,
+        slug: SLUGS.otherSeasonDraft,
+        name: 'Inttest Other Draft Event',
+        chapter_id: TORONTO_CHAPTER_ID,
+        event_type: 'brevet',
+        distance_km: 200,
+        event_date: `${SEASON - 1}-05-02`,
+        status: 'draft',
       },
     ]),
     'seed draft + scheduled events'
@@ -103,5 +139,29 @@ describe('getEventBySlug', () => {
     expect(await getEventBySlug(SLUGS.draft)).toBeNull()
     const scheduled = await getEventBySlug(SLUGS.scheduled)
     expect(scheduled?.slug).toBe(SLUGS.scheduled)
+  })
+})
+
+// This describe mutates IDS.draftEvent's status, so it must stay last in the
+// file (Vitest runs describes in file order).
+describe('publishSeasonDrafts', () => {
+  it('publishes drafts of the given season only, and the anon role can then read them', async () => {
+    const result = await publishSeasonDrafts(SEASON)
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data?.published).toBe(1)
+    }
+
+    const { data: rows } = await admin
+      .from('events')
+      .select('id, status')
+      .in('id', [IDS.draftEvent, IDS.scheduledEvent, IDS.otherSeasonDraft])
+    const byId = Object.fromEntries((rows ?? []).map((r) => [r.id, r.status]))
+    expect(byId[IDS.draftEvent]).toBe('scheduled')
+    expect(byId[IDS.scheduledEvent]).toBe('scheduled')
+    expect(byId[IDS.otherSeasonDraft]).toBe('draft')
+
+    const { data: anonRows } = await anon.from('events').select('id').eq('id', IDS.draftEvent)
+    expect(anonRows?.map((r) => r.id)).toEqual([IDS.draftEvent])
   })
 })

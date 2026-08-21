@@ -184,6 +184,7 @@ import {
   updateEventStatus,
   submitEventResults,
   sendResultReminderEmails,
+  publishSeasonDrafts,
 } from '@/lib/actions/events'
 import { sendResultSubmissionReminders } from '@/lib/events/send-result-reminders'
 import { requireAdmin } from '@/lib/auth/get-admin'
@@ -1447,5 +1448,123 @@ describe('sendResultReminderEmails', () => {
 
     expect(result.success).toBe(false)
     expect(result.error).toContain('Failed to send')
+  })
+})
+
+describe('publishSeasonDrafts', () => {
+  beforeEach(() => {
+    mockModule.__reset()
+    vi.clearAllMocks()
+  })
+
+  const superAdmin = {
+    id: 'admin-1',
+    email: 'admin@test.com',
+    name: 'Super Admin',
+    role: 'super_admin',
+    chapter_id: null,
+    phone: null,
+    created_at: null,
+    updated_at: null,
+  }
+
+  it('rejects non-super-admins without touching the database', async () => {
+    vi.mocked(requireAdmin).mockResolvedValueOnce({ ...superAdmin, role: 'admin' })
+
+    const result = await publishSeasonDrafts(CURRENT_SEASON + 1)
+
+    expect(result.success).toBe(false)
+    expect(result.error).toBe('Only super admins can publish a season')
+    expect(mockModule.__calls.filter((c) => c.method === 'update')).toHaveLength(0)
+  })
+
+  it('publishes only draft rows of the given season and syncs each to ERW', async () => {
+    vi.mocked(requireAdmin).mockResolvedValueOnce(superAdmin)
+    // UPDATE ... RETURNING rows (resolved via `then`)
+    mockModule.__queryBuilder.then.mockImplementationOnce((resolve) => {
+      resolve({
+        data: [
+          {
+            id: 'e1',
+            name: 'A 200',
+            description: null,
+            distance_km: 200,
+            event_date: `${CURRENT_SEASON + 1}-05-02`,
+            start_time: '07:00',
+            slug: 'a-200',
+            route_id: null,
+            event_type: 'brevet',
+            chapter_id: 'chapter-1',
+          },
+          {
+            id: 'e2',
+            name: 'B Perm',
+            description: null,
+            distance_km: 200,
+            event_date: `${CURRENT_SEASON + 1}-05-09`,
+            start_time: null,
+            slug: 'b-perm',
+            route_id: null,
+            event_type: 'permanent',
+            chapter_id: 'chapter-1',
+          },
+        ],
+        error: null,
+      })
+    })
+    mockModule.__mockUpdateSuccess() // ERW column write for e1
+    mockModule.__mockEventFound({ slug: 'toronto' }) // chapter revalidation
+
+    const result = await publishSeasonDrafts(CURRENT_SEASON + 1)
+
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data).toEqual({ published: 2, erwFailures: 0 })
+    }
+
+    const eqCalls = mockModule.__calls.filter((c) => c.table === 'events' && c.method === 'eq')
+    expect(eqCalls.map((c) => c.args)).toEqual(
+      expect.arrayContaining([
+        ['season', CURRENT_SEASON + 1],
+        ['status', 'draft'],
+      ])
+    )
+
+    const { createErwEvent: mockCreateErw } = await import('@/lib/erw/client')
+    expect(mockCreateErw).toHaveBeenCalledTimes(1) // permanent skipped
+    expect(mockCreateErw).toHaveBeenCalledWith(expect.objectContaining({ slug: 'a-200' }))
+  })
+
+  it('counts ERW failures without failing the publish', async () => {
+    vi.mocked(requireAdmin).mockResolvedValueOnce(superAdmin)
+    mockModule.__queryBuilder.then.mockImplementationOnce((resolve) => {
+      resolve({
+        data: [
+          {
+            id: 'e1',
+            name: 'A 200',
+            description: null,
+            distance_km: 200,
+            event_date: `${CURRENT_SEASON + 1}-05-02`,
+            start_time: null,
+            slug: 'a-200',
+            route_id: null,
+            event_type: 'brevet',
+            chapter_id: 'chapter-1',
+          },
+        ],
+        error: null,
+      })
+    })
+    const { createErwEvent: mockCreateErw } = await import('@/lib/erw/client')
+    vi.mocked(mockCreateErw).mockResolvedValueOnce({ success: false, error: 'boom' })
+    mockModule.__mockEventFound({ slug: 'toronto' })
+
+    const result = await publishSeasonDrafts(CURRENT_SEASON + 1)
+
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data).toEqual({ published: 1, erwFailures: 1 })
+    }
   })
 })

@@ -517,6 +517,100 @@ export async function updateEventStatus(
   }
 }
 
+export interface PublishSeasonResult {
+  published: number
+  erwFailures: number
+}
+
+interface PublishedDraftRow {
+  id: string
+  name: string
+  description: string | null
+  distance_km: number
+  event_date: string
+  start_time: string | null
+  slug: string
+  route_id: string | null
+  event_type: string
+  chapter_id: string
+}
+
+/**
+ * Publish every draft event in a season at once (super-admin only).
+ * Flips status draft -> scheduled, syncs each non-permanent to ERW, and
+ * busts the public calendar caches for every affected chapter.
+ */
+export async function publishSeasonDrafts(
+  season: number
+): Promise<ActionResult<PublishSeasonResult>> {
+  try {
+    const admin = await requireAdmin()
+
+    if (!isSuperAdmin(admin.role)) {
+      return { success: false, error: 'Only super admins can publish a season' }
+    }
+
+    const { data, error } = await getSupabaseAdmin()
+      .from('events')
+      .update({ status: 'scheduled' })
+      .eq('season', season)
+      .eq('status', 'draft')
+      .select(
+        'id, name, description, distance_km, event_date, start_time, slug, route_id, event_type, chapter_id'
+      )
+
+    if (error) {
+      return handleSupabaseError(
+        error,
+        { operation: 'publishSeasonDrafts' },
+        'Failed to publish season'
+      )
+    }
+
+    const published = (data ?? []) as PublishedDraftRow[]
+
+    let erwFailures = 0
+    for (const row of published) {
+      const outcome = await syncNewEventToErw(row)
+      if (outcome === 'failed') erwFailures++
+    }
+
+    // Revalidate public caches once per affected chapter, plus every event slug
+    const chapterTypes = new Map<string, string>()
+    for (const row of published) {
+      if (!chapterTypes.has(row.chapter_id)) chapterTypes.set(row.chapter_id, row.event_type)
+    }
+    for (const [chapterId, eventType] of chapterTypes) {
+      await revalidateCalendarTags(chapterId, eventType)
+    }
+    for (const row of published) {
+      revalidateTag(`event-${row.slug}`, { expire: 0 })
+    }
+    if (published.some((row) => row.event_type === 'permanent')) {
+      revalidateTag('permanents', { expire: 0 })
+    }
+    revalidateTag('slugs', { expire: 0 })
+    revalidatePath('/admin/events')
+    revalidatePath('/admin')
+
+    await logAuditEvent({
+      adminId: admin.id,
+      action: 'status_change',
+      entityType: 'event',
+      entityId: String(season),
+      description: `Published ${published.length} draft event${published.length === 1 ? '' : 's'} for the ${season} season`,
+    })
+
+    return createActionResult({ published: published.length, erwFailures })
+  } catch (error) {
+    return handleActionError(
+      error,
+      { operation: 'publishSeasonDrafts' },
+      'Failed to publish season'
+    )
+  }
+}
+
 /**
  * Sends result submission reminder emails to registered riders whose result
  * is still pending for a completed event.
