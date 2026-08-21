@@ -413,7 +413,7 @@ export async function updateEventStatus(
     const { data: event, error: fetchError } = await getSupabaseAdmin()
       .from('events')
       .select(
-        'id, name, event_date, distance_km, chapter_id, event_type, status, erw_event_id, chapters(name, slug)'
+        'id, name, event_date, distance_km, chapter_id, event_type, status, erw_event_id, slug, description, start_time, route_id, chapters(name, slug)'
       )
       .eq('id', eventId)
       .single()
@@ -423,7 +423,18 @@ export async function updateEventStatus(
       return { success: false, error: 'Event not found' }
     }
 
-    const typedEvent = event as EventWithChapterName & { erw_event_id: string | null }
+    const typedEvent = event as EventWithChapterName & {
+      erw_event_id: string | null
+      slug: string
+      description: string | null
+      start_time: string | null
+      route_id: string | null
+    }
+
+    if (status === 'draft' && typedEvent.status !== 'draft') {
+      return { success: false, error: 'Published events cannot be moved back to draft' }
+    }
+    const isPublishingDraft = typedEvent.status === 'draft' && status === 'scheduled'
 
     const updateData: EventUpdate = { status }
     if (options?.description !== undefined) {
@@ -443,6 +454,21 @@ export async function updateEventStatus(
         .from('events')
         .update({ erw_event_id: null, erw_canonical_url: null })
         .eq('id', eventId)
+    }
+
+    // Publishing a draft: create the ERW event now (drafts never synced on create)
+    if (isPublishingDraft) {
+      await syncNewEventToErw({
+        id: typedEvent.id,
+        name: typedEvent.name,
+        description: typedEvent.description,
+        distance_km: typedEvent.distance_km,
+        event_date: typedEvent.event_date,
+        start_time: typedEvent.start_time,
+        slug: typedEvent.slug,
+        route_id: typedEvent.route_id,
+        event_type: typedEvent.event_type,
+      })
     }
 
     // If transitioning to "completed", create pending results and send emails
@@ -472,7 +498,8 @@ export async function updateEventStatus(
 
     // Revalidate cache tags for calendar pages
     if (event) {
-      await revalidateCalendarTags(event.chapter_id, event.event_type)
+      await revalidateCalendarTags(event.chapter_id, event.event_type, typedEvent.slug)
+      revalidateTag('slugs', { expire: 0 })
     }
 
     await logAuditEvent({
