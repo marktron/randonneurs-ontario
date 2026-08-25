@@ -57,6 +57,15 @@ describe('email templates render ride name via formatRideName', () => {
     expect(email.html).not.toMatch(/120\s+120/)
   })
 
+  it('permanent registration subject is prefixed with Permanent', () => {
+    const email = buildRegistrationConfirmationEmail({
+      ...baseRegistration,
+      eventName: 'Gentle Start 120',
+      eventType: 'Permanent',
+    })
+    expect(email.subject).toBe('Permanent Registration Received: Gentle Start 120')
+  })
+
   it('result submission subject uses the formatted ride name', () => {
     const email = buildResultSubmissionRequestEmail({
       ...baseResult,

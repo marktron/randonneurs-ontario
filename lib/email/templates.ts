@@ -38,7 +38,8 @@ export function buildRegistrationConfirmationEmail(data: RegistrationEmailData):
   html: string
 } {
   const rideName = formatRideName(data.eventName, data.eventDistance)
-  const subject = `Registration Received: ${rideName}`
+  const isPermanent = data.eventType.toLowerCase() === 'permanent'
+  const subject = `${isPermanent ? 'Permanent ' : ''}Registration Received: ${rideName}`
 
   // Escape user-supplied values for safe HTML interpolation
   const safe = {
