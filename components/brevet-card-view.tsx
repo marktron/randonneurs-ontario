@@ -103,7 +103,7 @@ function manualLocationMessage(diagnostic: LocationFailureDiagnostic): string {
     return 'GPS did not get a fix after waiting. Try again outdoors if you can. You can still check in — the organizer will see it was recorded without GPS.'
   }
   if (diagnostic.reason === 'position_unavailable') {
-    return 'Your phone reported that its location is temporarily unavailable. Try again outdoors if you can. You can still check in — the organizer will see it was recorded without GPS.'
+    return 'Your phone could not pin down a usable location. Try again outdoors if you can. You can still check in — the organizer will see it was recorded without GPS.'
   }
   return 'Location is not available in this browser. You can still check in — the organizer will see it was recorded without GPS.'
 }

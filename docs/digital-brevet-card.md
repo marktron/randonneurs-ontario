@@ -326,8 +326,11 @@ be fixed at home rather than at the start line with the organizer's help.
   `handleLocationTest`'s own code-1 branch already does. Codes 2/3
   (`POSITION_UNAVAILABLE` / `TIMEOUT`) do not abort the first acquisition
   stage; the longer high-accuracy stage can still succeed before the overall
-  deadline. If it does not, the ordinary no-GPS dialog explains that the
-  organizer will review the check-in.
+  deadline. A reading whose accuracy exceeds the usable bound (100 km) is
+  also treated as `position_unavailable` — location worked and simply could
+  not place the rider — not `request_error`. If it does not succeed before
+  the deadline, the ordinary no-GPS dialog explains that the organizer will
+  review the check-in.
 - **Proactive.** On mount, in secure contexts only, the card queries
   `navigator.permissions` for `geolocation`. `denied` renders a blocked
   banner above the control list with the same fix steps and a "Try again"

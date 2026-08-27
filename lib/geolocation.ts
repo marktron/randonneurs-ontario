@@ -76,7 +76,17 @@ function failureReason(error: GeolocationPositionError): LocationFailureReason {
   return 'request_error'
 }
 
-function positionFix(position: GeolocationPosition): GeolocationFix | null {
+type PositionRejection = 'malformed' | 'too_coarse'
+
+/**
+ * A usable fix, or why the reading cannot be used. The two rejections are
+ * different failures: a malformed reading is a broken API response, while a
+ * fix coarser than MAX_USABLE_LOCATION_ACCURACY_M means location worked and
+ * simply could not place the rider.
+ */
+function positionFix(
+  position: GeolocationPosition
+): { ok: true; fix: GeolocationFix } | { ok: false; rejection: PositionRejection } {
   const { latitude, longitude, accuracy } = position.coords
   if (
     !Number.isFinite(latitude) ||
@@ -86,15 +96,16 @@ function positionFix(position: GeolocationPosition): GeolocationFix | null {
     longitude < -180 ||
     longitude > 180 ||
     !Number.isFinite(accuracy) ||
-    accuracy < 0 ||
-    accuracy > MAX_USABLE_LOCATION_ACCURACY_M
+    accuracy < 0
   ) {
-    return null
+    return { ok: false, rejection: 'malformed' }
+  }
+  if (accuracy > MAX_USABLE_LOCATION_ACCURACY_M) {
+    return { ok: false, rejection: 'too_coarse' }
   }
   return {
-    lat: latitude,
-    lng: longitude,
-    accuracyM: Math.round(accuracy),
+    ok: true,
+    fix: { lat: latitude, lng: longitude, accuracyM: Math.round(accuracy) },
   }
 }
 
@@ -181,12 +192,16 @@ export function acquireGeolocation({
 
     const considerPosition = (position: GeolocationPosition) => {
       if (settled) return
-      const fix = positionFix(position)
-      if (!fix) {
+      const candidate = positionFix(position)
+      if (!candidate.ok) {
         if (stage === 'quick') startHighAccuracy()
-        else highAccuracyFailure = 'request_error'
+        else {
+          highAccuracyFailure =
+            candidate.rejection === 'too_coarse' ? 'position_unavailable' : 'request_error'
+        }
         return
       }
+      const fix = candidate.fix
 
       if (bestFix === null || fix.accuracyM < bestFix.accuracyM) bestFix = fix
       if (bestFix.accuracyM <= usefulAccuracyM) {

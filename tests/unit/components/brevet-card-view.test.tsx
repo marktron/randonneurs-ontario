@@ -553,6 +553,46 @@ describe('BrevetCard geolocation hard failures', () => {
     // The locating spinner must not be stuck on the button.
     expect(screen.getByRole('button', { name: /check in/i })).toBeEnabled()
   })
+
+  it('records a too-coarse fix as position_unavailable with honest rider copy', async () => {
+    vi.useFakeTimers()
+    try {
+      const coarse = {
+        coords: { latitude: 43.65, longitude: -79.38, accuracy: 200_000 },
+      } as GeolocationPosition
+      Object.defineProperty(navigator, 'geolocation', {
+        value: {
+          getCurrentPosition: (success: PositionCallback) => success(coarse),
+          watchPosition: (success: PositionCallback) => {
+            success(coarse)
+            return 55
+          },
+          clearWatch: vi.fn(),
+        },
+        configurable: true,
+      })
+      mockCheckIn.mockResolvedValue(checkinOk('ctrl-1', 'manual'))
+
+      const { unmount } = render(<BrevetCard token={TOKEN} initialData={makeData()} />)
+      fireEvent.click(screen.getByRole('button', { name: /^check in$/i }))
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(45_000)
+      })
+
+      const dialog = screen.getByRole('alertdialog')
+      expect(dialog).toHaveTextContent(/could not pin down a usable location/i)
+      expect(dialog).not.toHaveTextContent(/not available in this browser/i)
+
+      fireEvent.click(within(dialog).getByRole('button', { name: /check in anyway/i }))
+      expect(mockCheckIn.mock.calls[0][1]).toMatchObject({
+        controlId: 'ctrl-1',
+        locationFailure: { reason: 'position_unavailable', stage: 'high_accuracy' },
+      })
+      unmount()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })
 
 describe('BrevetCard permission-denied help', () => {

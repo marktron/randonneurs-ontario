@@ -259,11 +259,33 @@ describe('acquireGeolocation', () => {
     expect(vi.getTimerCount()).toBe(0)
   })
 
+  it('reports position_unavailable when every reading is too coarse to use', async () => {
+    const coarse = position(MAX_USABLE_LOCATION_ACCURACY_M + 1)
+    let watchSuccess!: PositionCallback
+    const geolocation = {
+      getCurrentPosition: vi.fn((success: PositionCallback) => success(coarse)),
+      watchPosition: vi.fn((success: PositionCallback) => {
+        watchSuccess = success
+        return 49
+      }),
+      clearWatch: vi.fn(),
+    }
+
+    const pending = acquireGeolocation({ geolocation, context: 'browser' })
+    watchSuccess(coarse)
+    await vi.advanceTimersByTimeAsync(HIGH_ACCURACY_TIMEOUT_MS)
+
+    await expect(pending).resolves.toMatchObject({
+      ok: false,
+      diagnostic: { reason: 'position_unavailable', stage: 'high_accuracy' },
+    })
+    expect(geolocation.clearWatch).toHaveBeenCalledWith(49)
+  })
+
   it.each([
-    ['accuracy above the server bound', position(MAX_USABLE_LOCATION_ACCURACY_M + 1)],
     ['latitude outside the valid range', position(10, 91, -79.38)],
     ['longitude outside the valid range', position(10, 43.65, 181)],
-  ])('does not return a fix with %s', async (_label, invalidPosition) => {
+  ])('reports request_error for a malformed position (%s)', async (_label, invalidPosition) => {
     let watchSuccess!: PositionCallback
     const geolocation = {
       getCurrentPosition: vi.fn((success: PositionCallback) => success(invalidPosition)),
