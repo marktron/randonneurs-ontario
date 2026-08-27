@@ -161,7 +161,10 @@ Design notes:
   renormalized 1-based on every save) and never moves a time
   _backward_ — a pre-open tap at any later control keeps the claimed
   tap time and still reads back with the `early` flag at that control's
-  own window.
+  own window. Because the clamp can put `checked_in_at` ahead of "now",
+  a GPS retry (§7) — which echoes the stored time back — is exempt from
+  the future-tap guard; the value it carries is server-issued, and the
+  upgrade never rewrites `checked_in_at`.
 - Controls are **copied per event**, not attached to `routes`: events
   sometimes run routes reversed (`lib/controlPoints.ts`), organizers adjust
   controls per running, and permanents self-schedule.
@@ -242,9 +245,11 @@ Design notes:
   dialog copy — title "Before the start", body "You're checking in
   before the start. Your check-in will be recorded at the official
   start time (⟨time⟩)." — since the recorded time is the start, not the
-  tap (see §6, `resolveRecordedCheckinTime`). The client computes and
-  displays this clamped time before sending, and the server re-clamps
-  independently on receipt regardless of what the client sent.
+  tap (see §6, `resolveRecordedCheckinTime`). The client runs the same
+  rule only to pick that copy — it **sends the tap time** and lets the
+  server apply the clamp. Sending the clamped time would be a check-in
+  claiming to be from the future, which `checkInAtControl` rejects
+  outright once the start is more than `MAX_CLOCK_SKEW_MS` away.
 - **Timing rules**: check-in is allowed before open and after close — the
   device records reality; flags mark early/late and organizers adjudicate,
   exactly like a paper card with an odd time written on it. (Blocking would

@@ -6,9 +6,8 @@
 import { createClient } from '@supabase/supabase-js'
 import { loadEnvConfig } from '@next/env'
 import { unlinkSync } from 'fs'
-import { join } from 'path'
 import WebSocket from 'ws'
-import { E2E_IDS } from './helpers/test-data'
+import { E2E_DATA_FILE, E2E_IDS } from './helpers/test-data'
 
 export default async function globalTeardown() {
   loadEnvConfig(process.cwd(), true /* development */)
@@ -79,7 +78,7 @@ export default async function globalTeardown() {
 
   // Clean up data file
   try {
-    unlinkSync(join(__dirname, '.e2e-data.json'))
+    unlinkSync(E2E_DATA_FILE)
   } catch {
     // Already gone — fine
   }

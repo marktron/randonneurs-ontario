@@ -6,10 +6,9 @@
  */
 import { createClient } from '@supabase/supabase-js'
 import { loadEnvConfig } from '@next/env'
-import { writeFileSync } from 'fs'
-import { join } from 'path'
+import { unlinkSync, writeFileSync } from 'fs'
 import WebSocket from 'ws'
-import { E2E_IDS, type E2ETestData } from './helpers/test-data'
+import { E2E_DATA_FILE, E2E_IDS, type E2ETestData } from './helpers/test-data'
 
 const TORONTO_CHAPTER_ID = 'ad83d0b9-4d25-472b-9d3e-5732730d761c'
 const ADMIN_EMAIL = 'admin@test.com'
@@ -37,9 +36,27 @@ export default async function globalSetup() {
   // Load env files — force development mode so .env.development.local is included
   loadEnvConfig(process.cwd(), true /* development */)
 
+  // Never let a previous (or interrupted) run's tokens stand in for this
+  // one's: getTestData() cannot tell a fresh file from a stale one.
+  try {
+    unlinkSync(E2E_DATA_FILE)
+  } catch {
+    // Absent is the normal case.
+  }
+
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
   if (!supabaseUrl || !serviceKey) {
+    // Returning here writes no data file, so every seeded test calls
+    // test.skip() and the run reports success having exercised nothing — a
+    // CI job that gates on this suite would be green for the wrong reason
+    // (CLAUDE.md: no suite may be excluded from CI). Fail loudly there; keep
+    // the escape hatch for a contributor with no local Supabase stack.
+    if (process.env.CI) {
+      throw new Error(
+        '[e2e-setup] Missing SUPABASE env vars — refusing to run the E2E suite unseeded in CI'
+      )
+    }
     console.warn('[e2e-setup] Missing SUPABASE env vars — skipping seed')
     return
   }
@@ -394,7 +411,6 @@ export default async function globalSetup() {
     },
   }
 
-  const outPath = join(__dirname, '.e2e-data.json')
-  writeFileSync(outPath, JSON.stringify(testData, null, 2))
+  writeFileSync(E2E_DATA_FILE, JSON.stringify(testData, null, 2))
   console.log('[e2e-setup] Test data seeded successfully')
 }

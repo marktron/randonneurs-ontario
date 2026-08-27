@@ -41,7 +41,8 @@ export interface E2ETestData {
   }
 }
 
-const DATA_FILE = join(__dirname, '..', '.e2e-data.json')
+/** Single definition of the seed handoff file, shared by setup/teardown/tests. */
+export const E2E_DATA_FILE = join(__dirname, '..', '.e2e-data.json')
 
 /**
  * Read the test data file written by globalSetup.
@@ -49,7 +50,7 @@ const DATA_FILE = join(__dirname, '..', '.e2e-data.json')
  */
 export function getTestData(): E2ETestData | null {
   try {
-    const raw = readFileSync(DATA_FILE, 'utf-8')
+    const raw = readFileSync(E2E_DATA_FILE, 'utf-8')
     return JSON.parse(raw) as E2ETestData
   } catch {
     return null

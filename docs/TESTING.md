@@ -741,6 +741,15 @@ The rest of the Playwright suite — the full `chromium` project in
 `playwright.config.ts`, covering everything outside the digital brevet card —
 is not yet wired into CI.
 
+> **The e2e gate must not be able to pass by skipping.** Every seeded card test
+> begins `if (!card) test.skip(...)`, and `getTestData()` returns null whenever
+> `tests/e2e/.e2e-data.json` is missing. So a `globalSetup` that quietly gives
+> up — e.g. step 3 above stops exporting the env var names it reads — would
+> leave the whole job green having exercised nothing. `globalSetup` therefore
+> **throws** instead of returning when `process.env.CI` is set and the Supabase
+> env vars are absent, and it deletes any leftover data file up front so a
+> previous run's tokens can never stand in for this one's.
+
 > **Why both?** The mock suite asserts input validation and call shapes; it
 > mocks Supabase so aggressively it ignores tables, columns, and filters. The
 > `integration-real` job is what proves the app actually works against the

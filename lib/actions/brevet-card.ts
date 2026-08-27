@@ -543,7 +543,13 @@ export async function checkInAtControl(token: string, input: CheckinInput): Prom
     }
 
     // Reject taps claiming to be from the future beyond plausible clock skew.
-    if (checkedInAt.getTime() > Date.now() + MAX_CLOCK_SKEW_MS) {
+    // A GPS upgrade is exempt: it echoes back this server's own recorded
+    // time, which is legitimately ahead for a pre-start tap at the first
+    // control (resolveRecordedCheckinTime records the official start). The
+    // upgrade UPDATE never writes checked_in_at, so nothing is persisted
+    // from this value either way.
+    const isGpsUpgrade = input.expectedManualReceivedAt !== undefined
+    if (!isGpsUpgrade && checkedInAt.getTime() > Date.now() + MAX_CLOCK_SKEW_MS) {
       return { success: false, error: 'Check-in time is in the future' }
     }
 

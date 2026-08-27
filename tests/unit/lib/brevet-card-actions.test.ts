@@ -604,6 +604,64 @@ describe('checkInAtControl input validation', () => {
     ).toHaveLength(0)
   })
 
+  it('upgrades a pre-start first-control row whose recorded time is still ahead', async () => {
+    // Riders tap the start control when they arrive, so the row's recorded
+    // time is the official start — genuinely in the future while they wait.
+    // A GPS retry echoes that server-issued time back and must not be
+    // mistaken for a device clock claiming to be from the future.
+    const soon = torontoNowParts(30 * 60 * 1000)
+    const reg = makeRegistration()
+    reg.events.event_date = soon.date
+    reg.events.start_time = soon.time
+    tables.registrations = { singleResponse: { data: reg, error: null } }
+    tables.event_controls = { singleResponse: { data: makeControlRow(), error: null } }
+
+    const recordedStart = computeEventStart(soon.date, soon.time).toISOString()
+    const originalReceivedAt = new Date(Date.now() - 20_000).toISOString()
+    tables.control_checkins = {
+      updateResponse: {
+        data: {
+          control_id: 'ctrl-1',
+          checked_in_at: recordedStart,
+          received_at: originalReceivedAt,
+          method: 'gps',
+          distance_to_control_m: 0,
+        },
+        error: null,
+      },
+    }
+
+    const result = await checkInAtControl(TOKEN, {
+      controlId: 'ctrl-1',
+      checkedInAt: recordedStart,
+      lat: 43.65,
+      lng: -79.38,
+      accuracyM: 8,
+      expectedManualReceivedAt: originalReceivedAt,
+    })
+
+    expect(result.success).toBe(true)
+    expect(result.data).toMatchObject({
+      upgradedFromManual: true,
+      checkin: { checkedInAt: recordedStart, method: 'gps' },
+    })
+  })
+
+  it('still rejects a first check-in claiming a time from the future', async () => {
+    tables.registrations = { singleResponse: { data: makeRegistration(), error: null } }
+    tables.event_controls = { singleResponse: { data: makeControlRow(), error: null } }
+
+    const result = await checkInAtControl(TOKEN, {
+      controlId: 'ctrl-1',
+      checkedInAt: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
+      lat: 43.65,
+      lng: -79.38,
+    })
+
+    expect(result.success).toBe(false)
+    expect((result as { error?: string }).error).toBe('Check-in time is in the future')
+  })
+
   it('does not let a stale GPS retry upgrade a replacement manual row', async () => {
     tables.registrations = { singleResponse: { data: makeRegistration(), error: null } }
     tables.event_controls = { singleResponse: { data: makeControlRow(), error: null } }

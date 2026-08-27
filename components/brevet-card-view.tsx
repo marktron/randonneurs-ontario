@@ -259,6 +259,8 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
     control: CardControl
     opensAt: string
     entry: OutboxEntry
+    /** The "gathering at the start line" case, not a control that is shut. */
+    atStart: boolean
   } | null>(null)
   const flushInFlight = useRef(false)
   const flushRequested = useRef(false)
@@ -500,23 +502,31 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
    * Record the check-in, but if the (final, post-redirect) target control
    * hasn't opened yet, confirm first. Applies to every method.
    *
-   * Same rule the server applies (server re-clamps regardless): a pre-start
-   * tap at the first control records the official start, not the tap time.
+   * A pre-start tap at the first control is recorded at the official start,
+   * not the tap time — but the server does that clamp itself. Send the tap
+   * time and mirror the rule only in the confirm copy: a payload carrying
+   * the (future) start time is a tap claiming to be from the future, which
+   * the server rejects outright.
    */
   const enqueueOrConfirmEarly = useCallback(
     (control: CardControl, entry: OutboxEntry) => {
       const tappedAt = new Date(entry.checkedInAt)
-      const recordedAt = resolveRecordedCheckinTime(
-        tappedAt,
-        new Date(event.startsAt),
-        control.id === controls[0]?.id
-      )
-      const clamped = { ...entry, checkedInAt: recordedAt.toISOString() }
+      const recordsOfficialStart =
+        resolveRecordedCheckinTime(
+          tappedAt,
+          new Date(event.startsAt),
+          control.id === controls[0]?.id
+        ).getTime() !== tappedAt.getTime()
       if (control.opensAt !== null && tappedAt.getTime() < new Date(control.opensAt).getTime()) {
-        setEarlyConfirm({ control, opensAt: control.opensAt, entry: clamped })
+        setEarlyConfirm({
+          control,
+          opensAt: control.opensAt,
+          entry,
+          atStart: recordsOfficialStart,
+        })
         return
       }
-      enqueueCheckin(clamped)
+      enqueueCheckin(entry)
     },
     [enqueueCheckin, controls, event.startsAt]
   )
@@ -919,11 +929,7 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
     return () => window.clearInterval(id)
   }, [event.startsAt])
 
-  // The early-confirm entry was clamped iff its time equals the start —
-  // that is exactly the "gathering at the start line" case.
-  const earlyConfirmAtStart =
-    earlyConfirm !== null &&
-    earlyConfirm.entry.checkedInAt === new Date(event.startsAt).toISOString()
+  const earlyConfirmAtStart = earlyConfirm?.atStart === true
 
   return (
     <div className="content-container pt-12 md:pt-20 max-w-2xl pb-16 space-y-6">

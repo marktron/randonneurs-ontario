@@ -983,4 +983,60 @@ describe('digital brevet card check-in (real DB)', () => {
       new Date(row!.checked_in_at).getTime()
     )
   })
+
+  it('adds GPS to a pre-start first-control row recorded at the start time (real DB)', async () => {
+    // A row at the start control is recorded at the official start, so its
+    // checked_in_at sits in the future while riders wait at the line. The GPS
+    // retry echoes that server-issued time back; reading it as a device clock
+    // claiming to be from the future would refuse the upgrade and drop the fix.
+    await checked(
+      supabase
+        .from('control_checkins')
+        .delete()
+        .eq('registration_id', IDS.regSoon)
+        .eq('control_id', IDS.controlSoonStart),
+      'clear pre-start check-in'
+    )
+
+    const manual = await checkInAtControl(soonToken, {
+      controlId: IDS.controlSoonStart,
+      checkedInAt: new Date().toISOString(),
+      locationFailure: {
+        reason: 'timeout',
+        stage: 'high_accuracy',
+        elapsedMs: 45_000,
+        context: 'browser',
+      },
+    })
+    expect(manual.success).toBe(true)
+    expect(manual.data!.checkin.method).toBe('manual')
+    const recordedAt = new Date(manual.data!.checkin.checkedInAt).getTime()
+    expect(recordedAt).toBe(soonEventStart.getTime())
+    expect(recordedAt).toBeGreaterThan(Date.now())
+
+    const upgraded = await checkInAtControl(soonToken, {
+      controlId: IDS.controlSoonStart,
+      checkedInAt: manual.data!.checkin.checkedInAt,
+      lat: CONTROL_LAT,
+      lng: CONTROL_LNG,
+      accuracyM: 10,
+      expectedManualReceivedAt: manual.data!.checkin.receivedAt,
+    })
+
+    expect(upgraded.success).toBe(true)
+    expect(upgraded.data!.upgradedFromManual).toBe(true)
+
+    const { data: upgradedRow } = await supabase
+      .from('control_checkins')
+      .select('method, lat, checked_in_at, location_failure_reason')
+      .eq('registration_id', IDS.regSoon)
+      .eq('control_id', IDS.controlSoonStart)
+      .single()
+
+    expect(upgradedRow!.method).toBe('gps')
+    expect(upgradedRow!.lat).not.toBeNull()
+    expect(upgradedRow!.location_failure_reason).toBeNull()
+    // The upgrade enriches the row; it never rewrites the recorded start.
+    expect(new Date(upgradedRow!.checked_in_at).getTime()).toBe(soonEventStart.getTime())
+  })
 })

@@ -1442,7 +1442,7 @@ describe('BrevetCard early-window confirm', () => {
 })
 
 describe('BrevetCard pre-start first-control check-in', () => {
-  it('confirms with start-time copy and records the start time, not the tap time', async () => {
+  it('confirms with start-time copy and sends the tap time for the server to clamp', async () => {
     stubGeolocation(43.65, -79.38)
     const data = makePreStartData()
     mockCheckIn.mockResolvedValue(checkinOk('ctrl-1'))
@@ -1459,12 +1459,13 @@ describe('BrevetCard pre-start first-control check-in', () => {
 
     await user.click(within(dialog).getByRole('button', { name: /^check in$/i }))
 
-    await waitFor(() => {
-      expect(mockCheckIn).toHaveBeenCalledWith(
-        TOKEN,
-        expect.objectContaining({ controlId: 'ctrl-1', checkedInAt: data.event.startsAt })
-      )
-    })
+    await waitFor(() => expect(mockCheckIn).toHaveBeenCalled())
+    // The server clamps this forward to the official start itself. Sending
+    // the clamped time instead would be a tap claiming to be from the
+    // future, which checkInAtControl rejects outright.
+    const sent = mockCheckIn.mock.calls[0][1] as { checkedInAt: string }
+    expect(sent.checkedInAt).not.toBe(data.event.startsAt)
+    expect(new Date(sent.checkedInAt).getTime()).toBeLessThanOrEqual(Date.now())
   })
 
   it('keeps the existing copy for a later control that has not opened', async () => {
