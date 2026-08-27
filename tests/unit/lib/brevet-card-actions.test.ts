@@ -514,6 +514,27 @@ describe('checkInAtControl input validation', () => {
     expect(mockHandleFinish).toHaveBeenCalledTimes(1)
   })
 
+  it('reports "Failed to record check-in" when a 23505 conflict\'s row has vanished by the time of the fallback fetch', async () => {
+    tables.registrations = { singleResponse: { data: makeRegistration(), error: null } }
+    tables.event_controls = { singleResponse: { data: makeControlRow(), error: null } }
+    const nowIso = new Date().toISOString()
+    tables.control_checkins = {
+      insertResponse: { data: null, error: { code: '23505' } },
+      maybeSingleResponse: { data: null, error: null },
+    }
+
+    const result = await checkInAtControl(TOKEN, {
+      controlId: 'ctrl-1',
+      checkedInAt: nowIso,
+      lat: 43.65,
+      lng: -79.38,
+    })
+
+    expect(result.success).toBe(false)
+    expect((result as { error?: string }).error).toBe('Failed to record check-in')
+    expect(result.retryable).toBe(true)
+  })
+
   it('atomically upgrades a recent manual check-in without replacing its timestamps', async () => {
     tables.registrations = { singleResponse: { data: makeRegistration(), error: null } }
     tables.event_controls = { singleResponse: { data: makeControlRow(), error: null } }
