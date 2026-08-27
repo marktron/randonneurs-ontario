@@ -7,6 +7,7 @@ import { createClient } from '@supabase/supabase-js'
 import { loadEnvConfig } from '@next/env'
 import { unlinkSync } from 'fs'
 import { join } from 'path'
+import WebSocket from 'ws'
 import { E2E_IDS } from './helpers/test-data'
 
 export default async function globalTeardown() {
@@ -15,6 +16,10 @@ export default async function globalTeardown() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
   if (!supabaseUrl || !serviceKey) return
+
+  if (typeof globalThis.WebSocket === 'undefined') {
+    ;(globalThis as unknown as { WebSocket: typeof WebSocket }).WebSocket = WebSocket
+  }
 
   const supabase = createClient(supabaseUrl, serviceKey, {
     auth: { autoRefreshToken: false, persistSession: false },
@@ -29,7 +34,10 @@ export default async function globalTeardown() {
 
   // Digital brevet card data (check-ins/controls cascade from events, but
   // delete explicitly so interrupted runs can't leave orphans)
-  await supabase.from('control_checkins').delete().eq('registration_id', E2E_IDS.activeRegistration)
+  await supabase
+    .from('control_checkins')
+    .delete()
+    .in('registration_id', [E2E_IDS.activeRegistration, E2E_IDS.webkitActiveRegistration])
   await supabase.from('event_controls').delete().eq('event_id', E2E_IDS.activeEvent)
 
   // Results
@@ -45,7 +53,7 @@ export default async function globalTeardown() {
   await supabase.from('routes').delete().eq('id', E2E_IDS.route)
 
   // Rider
-  await supabase.from('riders').delete().eq('id', E2E_IDS.rider)
+  await supabase.from('riders').delete().in('id', [E2E_IDS.rider, E2E_IDS.webkitRider])
 
   // News items created during admin tests
   await supabase.from('news').delete().ilike('title', 'Test Announcement%')

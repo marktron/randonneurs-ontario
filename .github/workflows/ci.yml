@@ -105,6 +105,18 @@ jobs:
 
       - run: npm run test:integration-real
 
+      # The affected production path is Safari/WebKit on an older iPhone.
+      # Keep this focused on the digital card: the dependency project runs
+      # read-only WebKit smoke tests first, then this project performs a real
+      # GPS check-in, server sync, and reload on a separate registration.
+      - name: Install WebKit browser
+        run: npx playwright install --with-deps webkit
+
+      - name: Test digital card on iPhone WebKit
+        run: >-
+          npx playwright test tests/e2e/brevet-card.spec.ts
+          --project=webkit-card-mutation
+
       - name: Stop Supabase
         if: always()
         run: supabase stop

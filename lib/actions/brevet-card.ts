@@ -27,6 +27,13 @@ import {
   type CheckinFlags,
 } from '@/lib/brevet-card'
 import { handleFinishIfFinalControl, revertFinishIfFinalControl } from '@/lib/events/finish-result'
+import {
+  MAX_LOCATION_FAILURE_ELAPSED_MS,
+  isLocationContext,
+  isLocationFailureReason,
+  isLocationFailureStage,
+  type LocationFailureDiagnostic,
+} from '@/lib/location-diagnostics'
 import type { ActionResult } from '@/types/actions'
 import type { CheckinMethod, ControlCheckinInsert } from '@/types/queries'
 
@@ -330,19 +337,51 @@ export async function getBrevetCardByToken(token: string): Promise<BrevetCardDat
 // Write: check in at a control
 // ============================================================================
 
-export interface CheckinInput {
+interface CheckinInputBase {
   controlId: string
   /** ISO timestamp from the device clock at tap time. */
   checkedInAt: string
-  lat?: number
-  lng?: number
-  accuracyM?: number
 }
+
+interface GpsCheckinInput extends CheckinInputBase {
+  lat: number
+  lng: number
+  accuracyM?: number
+  /**
+   * Server-issued receipt timestamp of the manual row a GPS retry intends to
+   * enrich. This prevents a delayed retry from upgrading a replacement row
+   * created after Undo.
+   */
+  expectedManualReceivedAt?: string
+  locationFailure?: never
+}
+
+interface ManualCheckinInput extends CheckinInputBase {
+  lat?: never
+  lng?: never
+  accuracyM?: never
+  expectedManualReceivedAt?: never
+  /** Bounded, privacy-conscious context for a coordinate-less check-in. */
+  locationFailure?: LocationFailureDiagnostic
+}
+
+/** Coordinates are an all-or-none pair at compile time and at runtime. */
+export type CheckinInput = GpsCheckinInput | ManualCheckinInput
 
 export interface CheckinOutcome {
   checkin: CardCheckin
   /** True when this rider had already checked in at this control. */
   alreadyExisted: boolean
+  /** True when a recent manual check-in was atomically enriched with this GPS fix. */
+  upgradedFromManual: boolean
+}
+
+interface PersistedCheckinRow {
+  control_id: string
+  checked_in_at: string
+  received_at: string
+  method: string
+  distance_to_control_m: number | null
 }
 
 /**
@@ -373,7 +412,19 @@ export async function checkInAtControl(token: string, input: CheckinInput): Prom
       return { success: false, error: 'Invalid check-in time' }
     }
 
-    const hasCoords = typeof input.lat === 'number' && typeof input.lng === 'number'
+    const hasLat = input.lat !== undefined
+    const hasLng = input.lng !== undefined
+
+    // Coordinates are a pair. Treat null/non-number runtime input as invalid
+    // too, even though the TypeScript boundary advertises optional numbers.
+    if (
+      hasLat !== hasLng ||
+      (hasLat && (typeof input.lat !== 'number' || typeof input.lng !== 'number'))
+    ) {
+      return { success: false, error: 'Latitude and longitude must be provided together' }
+    }
+
+    const hasCoords = hasLat && hasLng
     if (hasCoords) {
       if (
         !Number.isFinite(input.lat!) ||
@@ -386,12 +437,48 @@ export async function checkInAtControl(token: string, input: CheckinInput): Prom
         return { success: false, error: 'Invalid GPS coordinates' }
       }
       if (
-        typeof input.accuracyM === 'number' &&
-        (!Number.isFinite(input.accuracyM) ||
+        input.accuracyM !== undefined &&
+        (typeof input.accuracyM !== 'number' ||
+          !Number.isFinite(input.accuracyM) ||
           input.accuracyM < 0 ||
           input.accuracyM > MAX_GPS_ACCURACY_M)
       ) {
         return { success: false, error: 'Invalid GPS accuracy' }
+      }
+    } else if (input.accuracyM !== undefined) {
+      return { success: false, error: 'GPS accuracy requires latitude and longitude' }
+    }
+
+    if (input.expectedManualReceivedAt !== undefined) {
+      if (!hasCoords) {
+        return { success: false, error: 'A manual check-in identity requires GPS coordinates' }
+      }
+      if (
+        typeof input.expectedManualReceivedAt !== 'string' ||
+        Number.isNaN(new Date(input.expectedManualReceivedAt).getTime())
+      ) {
+        return { success: false, error: 'Invalid manual check-in identity' }
+      }
+    }
+
+    if (hasCoords && input.locationFailure !== undefined) {
+      return { success: false, error: 'Location failure details require a manual check-in' }
+    }
+
+    if (input.locationFailure !== undefined) {
+      const diagnostic = input.locationFailure
+      if (
+        diagnostic === null ||
+        typeof diagnostic !== 'object' ||
+        !isLocationFailureReason(diagnostic.reason) ||
+        !isLocationFailureStage(diagnostic.stage) ||
+        !isLocationContext(diagnostic.context) ||
+        typeof diagnostic.elapsedMs !== 'number' ||
+        !Number.isInteger(diagnostic.elapsedMs) ||
+        diagnostic.elapsedMs < 0 ||
+        diagnostic.elapsedMs > MAX_LOCATION_FAILURE_ELAPSED_MS
+      ) {
+        return { success: false, error: 'Invalid location failure details' }
       }
     }
 
@@ -532,54 +619,133 @@ export async function checkInAtControl(token: string, input: CheckinInput): Prom
       lng: hasCoords ? input.lng : null,
       accuracy_m: hasCoords && typeof input.accuracyM === 'number' ? input.accuracyM : null,
       distance_to_control_m: distanceToControl,
+      location_failure_reason: input.locationFailure?.reason ?? null,
+      location_failure_stage: input.locationFailure?.stage ?? null,
+      location_failure_elapsed_ms: input.locationFailure?.elapsedMs ?? null,
+      location_failure_context: input.locationFailure?.context ?? null,
     }
 
-    const { data: inserted, error: insertError } = await supabase
-      .from('control_checkins')
-      .insert(insertData)
-      .select('control_id, checked_in_at, received_at, method, distance_to_control_m')
-      .single()
-
-    let row = inserted as {
-      control_id: string
-      checked_in_at: string
-      received_at: string
-      method: string
-      distance_to_control_m: number | null
-    } | null
+    let row: PersistedCheckinRow | null = null
     let alreadyExisted = false
+    let upgradedFromManual = false
 
-    if (insertError) {
-      // Unique violation (registration_id, control_id) — the offline outbox
-      // retried a check-in that already landed. Return the existing row.
-      if (insertError.code === '23505') {
+    if (input.expectedManualReceivedAt !== undefined) {
+      // Upgrade requests are update-only. They must never insert: if Undo
+      // removes the target before a delayed request arrives, an INSERT would
+      // silently resurrect the rider's deleted check-in.
+      const upgradeCutoff = new Date(Date.now() - RIDER_UNDO_WINDOW_MS).toISOString()
+      const { data: upgraded, error: upgradeError } = await supabase
+        .from('control_checkins')
+        .update({
+          method: 'gps',
+          lat: input.lat,
+          lng: input.lng,
+          accuracy_m: input.accuracyM ?? null,
+          distance_to_control_m: distanceToControl,
+          location_failure_reason: null,
+          location_failure_stage: null,
+          location_failure_elapsed_ms: null,
+          location_failure_context: null,
+        })
+        .eq('registration_id', reg.id)
+        .eq('control_id', control.id)
+        .eq('method', 'manual')
+        .eq('received_at', input.expectedManualReceivedAt)
+        .gte('received_at', upgradeCutoff)
+        .select('control_id, checked_in_at, received_at, method, distance_to_control_m')
+        .maybeSingle()
+
+      if (upgradeError) {
+        return {
+          ...handleSupabaseError(
+            upgradeError,
+            {
+              operation: 'checkInAtControl.upgradeManual',
+              context: { controlId: control.id },
+            },
+            'Failed to record check-in'
+          ),
+          retryable: true,
+        }
+      }
+
+      if (upgraded) {
+        row = upgraded as PersistedCheckinRow
+        upgradedFromManual = true
+      } else {
+        // The target may have aged out, been corrected by an organizer, or
+        // been replaced after Undo. Return the current winner when one
+        // exists, but never apply the stale GPS evidence to it.
         const { data: existing, error: existingError } = await supabase
           .from('control_checkins')
           .select('control_id, checked_in_at, received_at, method, distance_to_control_m')
           .eq('registration_id', reg.id)
           .eq('control_id', control.id)
-          .single()
+          .maybeSingle()
 
-        if (existingError || !existing) {
+        if (existingError) {
           return {
             ...handleSupabaseError(
               existingError,
-              { operation: 'checkInAtControl.fetchExisting', context: { controlId: control.id } },
+              {
+                operation: 'checkInAtControl.fetchUpgradeTarget',
+                context: { controlId: control.id },
+              },
               'Failed to record check-in'
             ),
             retryable: true,
           }
         }
-        row = existing as typeof row
-        alreadyExisted = true
-      } else {
-        return {
-          ...handleSupabaseError(
-            insertError,
-            { operation: 'checkInAtControl', context: { controlId: control.id } },
-            'Failed to record check-in'
-          ),
-          retryable: true,
+        if (!existing) {
+          return {
+            success: false,
+            error: 'The saved check-in was removed before GPS could be added',
+          }
+        }
+        row = existing as PersistedCheckinRow
+      }
+      alreadyExisted = true
+    } else {
+      const { data: inserted, error: insertError } = await supabase
+        .from('control_checkins')
+        .insert(insertData)
+        .select('control_id, checked_in_at, received_at, method, distance_to_control_m')
+        .single()
+
+      row = inserted as PersistedCheckinRow | null
+
+      if (insertError) {
+        // Unique violation (registration_id, control_id) — the offline outbox
+        // retried a check-in that already landed. Return the existing row.
+        if (insertError.code === '23505') {
+          const { data: existing, error: existingError } = await supabase
+            .from('control_checkins')
+            .select('control_id, checked_in_at, received_at, method, distance_to_control_m')
+            .eq('registration_id', reg.id)
+            .eq('control_id', control.id)
+            .single()
+
+          if (existingError || !existing) {
+            return {
+              ...handleSupabaseError(
+                existingError,
+                { operation: 'checkInAtControl.fetchExisting', context: { controlId: control.id } },
+                'Failed to record check-in'
+              ),
+              retryable: true,
+            }
+          }
+          row = existing as PersistedCheckinRow
+          alreadyExisted = true
+        } else {
+          return {
+            ...handleSupabaseError(
+              insertError,
+              { operation: 'checkInAtControl', context: { controlId: control.id } },
+              'Failed to record check-in'
+            ),
+            retryable: true,
+          }
         }
       }
     }
@@ -627,6 +793,7 @@ export async function checkInAtControl(token: string, input: CheckinInput): Prom
         flags: deriveCheckinFlags(row, control, window),
       },
       alreadyExisted,
+      upgradedFromManual,
     })
   } catch (error) {
     // Unexpected failures (DB down, network to Supabase) are transient.

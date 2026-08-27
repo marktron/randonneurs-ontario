@@ -9,6 +9,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 type FromCall = {
   table: string
   ops: string[]
+  selectColumns?: string
   insertPayload?: unknown
   updatePayload?: unknown
 }
@@ -44,8 +45,9 @@ const mockFrom = vi.fn((table: string) => {
   const state = tables[table] ?? {}
 
   const builder: Record<string, unknown> = {
-    select: vi.fn(() => {
+    select: vi.fn((columns?: string) => {
       call.ops.push('select')
+      call.selectColumns = columns
       return builder
     }),
     eq: vi.fn(() => {
@@ -184,6 +186,10 @@ describe('getEventCheckinsForAdmin', () => {
             lng: -79.3832,
             accuracy_m: 10,
             distance_to_control_m: 20,
+            location_failure_reason: null,
+            location_failure_stage: null,
+            location_failure_elapsed_ms: null,
+            location_failure_context: null,
             note: null,
           },
         ],
@@ -202,6 +208,7 @@ describe('getEventCheckinsForAdmin', () => {
     expect(rider1?.checkins[0].id).toBe('chk-1')
     expect(rider1?.checkins[0].lat).toBe(43.6532)
     expect(rider1?.checkins[0].lng).toBe(-79.3832)
+    expect(rider1?.checkins[0].locationFailureReason).toBeNull()
     const rider2 = result.data?.find((r) => r.registrationId === 'reg-2')
     expect(rider2?.managementToken).toBeNull()
     expect(rider2?.checkins).toHaveLength(0)
@@ -209,6 +216,70 @@ describe('getEventCheckinsForAdmin', () => {
     // Check-ins are filtered by control_id, not by an unbounded registration_id list.
     const checkinCall = fromCalls.find((c) => c.table === 'control_checkins')
     expect(checkinCall?.ops).toContain('in')
+  })
+
+  it('maps bounded no-GPS diagnostics for organizer review', async () => {
+    setupEvent()
+    tables.event_controls = {
+      selectResponse: {
+        data: [{ id: 'control-1', distance_km: 50, radius_m: 500, leg_name: null }],
+        error: null,
+      },
+    }
+    tables.registrations = {
+      selectResponse: {
+        data: [
+          {
+            id: 'reg-1',
+            rider_id: 'rider-1',
+            management_token: null,
+            riders: { first_name: 'Jane', last_name: 'Doe' },
+            pre_ride_date: null,
+            pre_ride_start_time: null,
+          },
+        ],
+        error: null,
+      },
+    }
+    tables.control_checkins = {
+      selectResponse: {
+        data: [
+          {
+            id: 'chk-1',
+            control_id: 'control-1',
+            registration_id: 'reg-1',
+            checked_in_at: '2026-07-11T09:00:00.000Z',
+            received_at: '2026-07-11T09:00:01.000Z',
+            method: 'manual',
+            lat: null,
+            lng: null,
+            accuracy_m: null,
+            distance_to_control_m: null,
+            location_failure_reason: 'timeout',
+            location_failure_stage: 'high_accuracy',
+            location_failure_elapsed_ms: 42150,
+            location_failure_context: 'embedded',
+            note: null,
+          },
+        ],
+        error: null,
+      },
+    }
+
+    const result = await getEventCheckinsForAdmin('event-1')
+
+    expect(result.success).toBe(true)
+    expect(result.data![0].checkins[0]).toMatchObject({
+      locationFailureReason: 'timeout',
+      locationFailureStage: 'high_accuracy',
+      locationElapsedMs: 42150,
+      locationContext: 'embedded',
+    })
+    const checkinCall = fromCalls.find((call) => call.table === 'control_checkins')
+    expect(checkinCall?.selectColumns).toContain('location_failure_elapsed_ms')
+    expect(checkinCall?.selectColumns).toContain('location_failure_context')
+    expect(checkinCall?.selectColumns).not.toContain(', location_elapsed_ms')
+    expect(checkinCall?.selectColumns).not.toContain(', location_context')
   })
 
   it('derives no early/late flags for check-ins at leg-tagged controls', async () => {
@@ -555,6 +626,12 @@ describe('adminSetCheckin', () => {
       method: 'admin',
       note: 'Corrected per rider report',
     })
+    // The original phone diagnostic remains evidence even after an organizer
+    // corrects the check-in time.
+    expect(updateCall?.updatePayload).not.toHaveProperty('location_failure_reason')
+    expect(updateCall?.updatePayload).not.toHaveProperty('location_failure_stage')
+    expect(updateCall?.updatePayload).not.toHaveProperty('location_failure_elapsed_ms')
+    expect(updateCall?.updatePayload).not.toHaveProperty('location_failure_context')
     expect(
       fromCalls.find((c) => c.table === 'control_checkins' && c.ops.includes('insert'))
     ).toBeUndefined()

@@ -426,6 +426,37 @@ describe('BrevetCard check-in sync', () => {
     })
   })
 
+  it.each([
+    ['null accuracy', null],
+    ['accuracy above the current server bound', 100_001],
+  ])('recovers a legacy GPS outbox entry with %s', async (_label, accuracyM) => {
+    window.localStorage.setItem(
+      `brevet-card-outbox-${TOKEN}`,
+      JSON.stringify([
+        {
+          controlId: 'ctrl-1',
+          checkedInAt: new Date().toISOString(),
+          lat: 43.65,
+          lng: -79.38,
+          accuracyM,
+        },
+      ])
+    )
+    mockCheckIn.mockResolvedValue(checkinOk('ctrl-1'))
+
+    render(<BrevetCard token={TOKEN} initialData={makeData()} />)
+
+    await waitFor(() => expect(mockCheckIn).toHaveBeenCalledTimes(1))
+    expect(mockCheckIn).toHaveBeenCalledWith(
+      TOKEN,
+      expect.objectContaining({ controlId: 'ctrl-1', lat: 43.65, lng: -79.38 })
+    )
+    expect(mockCheckIn.mock.calls[0][1]).not.toHaveProperty('accuracyM')
+    await waitFor(() => {
+      expect(window.localStorage.getItem(`brevet-card-outbox-${TOKEN}`)).toBeNull()
+    })
+  })
+
   it('still syncs immediately when localStorage writes are blocked', async () => {
     // Private mode / quota exceeded: setItem throws. The tap must still
     // reach the server from in-memory state.
@@ -589,18 +620,31 @@ describe('BrevetCard permission-denied help', () => {
   })
 
   it('keeps the generic no-GPS dialog for position-unavailable and timeout', async () => {
-    for (const code of [2, 3]) {
-      stubGeolocationError(code)
+    vi.useFakeTimers()
+    try {
+      for (const code of [2, 3]) {
+        stubGeolocationError(code)
 
-      const user = userEvent.setup()
-      const { unmount } = render(<BrevetCard token={TOKEN} initialData={makeData()} />)
+        const { unmount } = render(<BrevetCard token={TOKEN} initialData={makeData()} />)
 
-      await user.click(screen.getByRole('button', { name: /^check in$/i }))
+        fireEvent.click(screen.getByRole('button', { name: /^check in$/i }))
 
-      const dialog = await screen.findByRole('alertdialog')
-      expect(dialog).toHaveTextContent(/could not be determined/i)
-      expect(dialog).not.toHaveTextContent(/location is blocked/i)
-      unmount()
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(0)
+        })
+        expect(screen.getByText(/waiting for precise gps/i)).toBeInTheDocument()
+
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(45_000)
+        })
+
+        const dialog = screen.getByRole('alertdialog')
+        expect(dialog).toHaveTextContent(/check in without gps/i)
+        expect(dialog).not.toHaveTextContent(/location is blocked/i)
+        unmount()
+      }
+    } finally {
+      vi.useRealTimers()
     }
   })
 
@@ -624,6 +668,371 @@ describe('BrevetCard permission-denied help', () => {
 
     expect(screen.queryByText(/location works on this phone/i)).toBeNull()
     expect(await screen.findByText(/location is blocked for this browser/i)).toBeInTheDocument()
+  })
+})
+
+describe('BrevetCard location diagnostics and GPS retry', () => {
+  function dataWithFreshManualCheckin(): BrevetCardData {
+    const data = makeData()
+    const receivedAt = new Date(Date.now() - 60_000).toISOString()
+    data.checkins = [
+      {
+        controlId: 'ctrl-1',
+        checkedInAt: receivedAt,
+        receivedAt,
+        method: 'manual',
+        distanceToControlM: null,
+        flags: { ...NO_FLAGS, noGps: true },
+      },
+    ]
+    return data
+  }
+
+  it('preserves tap time and sends bounded diagnostics after the full GPS wait', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-08-26T16:00:00Z'))
+    const data = makeData()
+    const tappedAt = new Date().toISOString()
+    stubGeolocationError(3)
+    mockCheckIn.mockResolvedValue(checkinOk('ctrl-1', 'manual'))
+    const { unmount } = render(<BrevetCard token={TOKEN} initialData={data} />)
+
+    try {
+      fireEvent.click(screen.getByRole('button', { name: /^check in$/i }))
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(45_000)
+      })
+
+      const dialog = screen.getByRole('alertdialog')
+      fireEvent.click(within(dialog).getByRole('button', { name: /check in anyway/i }))
+
+      expect(mockCheckIn).toHaveBeenCalledWith(TOKEN, {
+        controlId: 'ctrl-1',
+        checkedInAt: tappedAt,
+        locationFailure: {
+          reason: 'timeout',
+          stage: 'high_accuracy',
+          elapsedMs: 45_000,
+          context: 'browser',
+        },
+      })
+    } finally {
+      unmount()
+      vi.useRealTimers()
+    }
+  })
+
+  it('upgrades a recent manual check-in with GPS while preserving its original time', async () => {
+    const data = dataWithFreshManualCheckin()
+    const originalCheckedInAt = data.checkins[0].checkedInAt
+    mockCheckIn.mockResolvedValue({
+      success: true,
+      data: {
+        checkin: {
+          controlId: 'ctrl-1',
+          checkedInAt: originalCheckedInAt,
+          receivedAt: new Date().toISOString(),
+          method: 'gps',
+          distanceToControlM: 12,
+          flags: { ...NO_FLAGS },
+        },
+        alreadyExisted: true,
+        upgradedFromManual: true,
+      },
+    })
+
+    const user = userEvent.setup()
+    render(<BrevetCard token={TOKEN} initialData={data} />)
+
+    await user.click(await screen.findByRole('button', { name: /retry gps/i }))
+
+    await waitFor(() => {
+      expect(mockCheckIn).toHaveBeenCalledWith(
+        TOKEN,
+        expect.objectContaining({
+          controlId: 'ctrl-1',
+          checkedInAt: originalCheckedInAt,
+          lat: 43.65,
+          lng: -79.38,
+          accuracyM: 10,
+          expectedManualReceivedAt: data.checkins[0].receivedAt,
+        })
+      )
+    })
+    expect(await screen.findByText(/gps was added to your saved check-in/i)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /retry gps/i })).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /^undo$/i }))
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /^check in$/i })).toBeInTheDocument()
+    })
+    expect(screen.queryByText(/gps was added to your saved check-in/i)).not.toBeInTheDocument()
+  })
+
+  it('explains when a late GPS retry cannot replace the saved manual evidence', async () => {
+    const data = dataWithFreshManualCheckin()
+    mockCheckIn.mockResolvedValue({
+      success: true,
+      data: {
+        checkin: data.checkins[0],
+        alreadyExisted: true,
+        upgradedFromManual: false,
+      },
+    })
+
+    const user = userEvent.setup()
+    render(<BrevetCard token={TOKEN} initialData={data} />)
+    await user.click(await screen.findByRole('button', { name: /retry gps/i }))
+
+    expect(
+      await screen.findByText(/gps could not replace the saved manual check-in/i)
+    ).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /retry gps/i })).toBeInTheDocument()
+  })
+
+  it('disables Undo while a GPS retry is still acquiring a precise fix', async () => {
+    const data = dataWithFreshManualCheckin()
+    const clearWatch = vi.fn()
+    Object.defineProperty(navigator, 'geolocation', {
+      value: {
+        getCurrentPosition: (success: PositionCallback) => {
+          setTimeout(
+            () =>
+              success({
+                coords: { latitude: 43.65, longitude: -79.38, accuracy: 1_000 },
+              } as GeolocationPosition),
+            0
+          )
+        },
+        watchPosition: vi.fn(() => 71),
+        clearWatch,
+      },
+      configurable: true,
+    })
+
+    const user = userEvent.setup()
+    const { unmount } = render(<BrevetCard token={TOKEN} initialData={data} />)
+    await user.click(await screen.findByRole('button', { name: /retry gps/i }))
+
+    expect(await screen.findByText(/waiting for precise gps/i)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^undo$/i })).toBeDisabled()
+
+    unmount()
+    expect(clearWatch).toHaveBeenCalledWith(71)
+    expect(mockCheckIn).not.toHaveBeenCalled()
+  })
+
+  it('does not resurrect a manual check-in undone while its GPS upgrade is syncing', async () => {
+    const data = dataWithFreshManualCheckin()
+    let resolveUpgrade!: (value: Awaited<ReturnType<typeof checkInAtControl>>) => void
+    mockCheckIn.mockImplementation(
+      () =>
+        new Promise<Awaited<ReturnType<typeof checkInAtControl>>>((resolve) => {
+          resolveUpgrade = resolve
+        })
+    )
+
+    const user = userEvent.setup()
+    render(<BrevetCard token={TOKEN} initialData={data} />)
+    await user.click(await screen.findByRole('button', { name: /retry gps/i }))
+
+    await screen.findByText(/gps fix saved — waiting to sync/i)
+    expect(screen.getByRole('button', { name: /gps queued/i })).toBeDisabled()
+    await user.click(screen.getByRole('button', { name: /^undo$/i }))
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /^check in$/i })).toBeInTheDocument()
+    })
+    expect(mockUndo).toHaveBeenCalledTimes(1)
+
+    resolveUpgrade({
+      success: true,
+      data: {
+        checkin: {
+          controlId: 'ctrl-1',
+          checkedInAt: data.checkins[0].checkedInAt,
+          receivedAt: new Date().toISOString(),
+          method: 'gps',
+          distanceToControlM: 12,
+          flags: { ...NO_FLAGS },
+        },
+        alreadyExisted: true,
+        upgradedFromManual: true,
+      },
+    })
+
+    await waitFor(() => expect(mockUndo).toHaveBeenCalledTimes(2))
+    expect(screen.getByRole('button', { name: /^check in$/i })).toBeInTheDocument()
+    expect(screen.queryByText(/gps was added/i)).not.toBeInTheDocument()
+  })
+
+  it('does not let a stale recovered acknowledgement delete a newer GPS retry', async () => {
+    const data = dataWithFreshManualCheckin()
+    window.localStorage.setItem(
+      `brevet-card-outbox-${TOKEN}`,
+      JSON.stringify([
+        {
+          controlId: 'ctrl-1',
+          checkedInAt: data.checkins[0].checkedInAt,
+          locationFailure: {
+            reason: 'timeout',
+            stage: 'high_accuracy',
+            elapsedMs: 45_000,
+            context: 'browser',
+          },
+        },
+      ])
+    )
+
+    let resolveRecovered!: (value: Awaited<ReturnType<typeof checkInAtControl>>) => void
+    mockCheckIn
+      .mockImplementationOnce(
+        () =>
+          new Promise<Awaited<ReturnType<typeof checkInAtControl>>>((resolve) => {
+            resolveRecovered = resolve
+          })
+      )
+      .mockResolvedValueOnce({
+        success: true,
+        data: {
+          checkin: {
+            ...data.checkins[0],
+            method: 'gps',
+            distanceToControlM: 12,
+            flags: { ...NO_FLAGS },
+          },
+          alreadyExisted: true,
+          upgradedFromManual: true,
+        },
+      })
+
+    const user = userEvent.setup()
+    render(<BrevetCard token={TOKEN} initialData={data} />)
+    await waitFor(() => expect(mockCheckIn).toHaveBeenCalledTimes(1))
+
+    await user.click(screen.getByRole('button', { name: /retry gps/i }))
+    expect(await screen.findByText(/gps fix saved — waiting to sync/i)).toBeInTheDocument()
+
+    resolveRecovered({
+      success: true,
+      data: {
+        checkin: data.checkins[0],
+        alreadyExisted: true,
+        upgradedFromManual: false,
+      },
+    })
+
+    await waitFor(() => expect(mockCheckIn).toHaveBeenCalledTimes(2))
+    expect(mockCheckIn.mock.calls[1][1]).toMatchObject({
+      controlId: 'ctrl-1',
+      lat: 43.65,
+      lng: -79.38,
+      expectedManualReceivedAt: data.checkins[0].receivedAt,
+    })
+    expect(await screen.findByText(/gps was added to your saved check-in/i)).toBeInTheDocument()
+    expect(window.localStorage.getItem(`brevet-card-outbox-${TOKEN}`)).toBeNull()
+  })
+
+  it('uses a check-in that syncs while another control is waiting for GPS', async () => {
+    const data = makeTwoControlData()
+    window.localStorage.setItem(
+      `brevet-card-outbox-${TOKEN}`,
+      JSON.stringify([{ controlId: 'ctrl-a', checkedInAt: new Date().toISOString() }])
+    )
+    let resolveRecovered!: (value: Awaited<ReturnType<typeof checkInAtControl>>) => void
+    mockCheckIn.mockImplementationOnce(
+      () =>
+        new Promise<Awaited<ReturnType<typeof checkInAtControl>>>((resolve) => {
+          resolveRecovered = resolve
+        })
+    )
+
+    let watchSuccess!: PositionCallback
+    Object.defineProperty(navigator, 'geolocation', {
+      value: {
+        getCurrentPosition: (success: PositionCallback) =>
+          success({
+            coords: { latitude: 43.65, longitude: -79.38, accuracy: 1_000 },
+          } as GeolocationPosition),
+        watchPosition: vi.fn((success: PositionCallback) => {
+          watchSuccess = success
+          return 81
+        }),
+        clearWatch: vi.fn(),
+      },
+      configurable: true,
+    })
+
+    const user = userEvent.setup()
+    render(<BrevetCard token={TOKEN} initialData={data} />)
+    await waitFor(() => expect(mockCheckIn).toHaveBeenCalledTimes(1))
+    await user.click(screen.getByRole('button', { name: /^check in$/i }))
+    expect(await screen.findByText(/waiting for precise gps/i)).toBeInTheDocument()
+
+    await act(async () => resolveRecovered(checkinOk('ctrl-a')))
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /^undo$/i })).toBeInTheDocument()
+    })
+
+    act(() => {
+      watchSuccess({
+        coords: { latitude: 43.65, longitude: -79.38, accuracy: 10 },
+      } as GeolocationPosition)
+    })
+
+    const dialog = await screen.findByRole('alertdialog')
+    expect(dialog).toHaveTextContent(/already checked into/i)
+    expect(dialog).not.toHaveTextContent(/check in at exeter$/i)
+  })
+
+  it("does not cancel another control's active GPS lookup when undoing a saved check-in", async () => {
+    const data = makeTwoControlData()
+    const receivedAt = new Date(Date.now() - 60_000).toISOString()
+    data.checkins = [
+      {
+        controlId: 'ctrl-a',
+        checkedInAt: receivedAt,
+        receivedAt,
+        method: 'manual',
+        distanceToControlM: null,
+        flags: { ...NO_FLAGS, noGps: true },
+      },
+    ]
+
+    const clearWatch = vi.fn()
+    Object.defineProperty(navigator, 'geolocation', {
+      value: {
+        getCurrentPosition: (success: PositionCallback) => {
+          setTimeout(
+            () =>
+              success({
+                coords: { latitude: 43.7, longitude: -79.38, accuracy: 1_000 },
+              } as GeolocationPosition),
+            0
+          )
+        },
+        watchPosition: vi.fn(() => 73),
+        clearWatch,
+      },
+      configurable: true,
+    })
+
+    const user = userEvent.setup()
+    const { unmount } = render(<BrevetCard token={TOKEN} initialData={data} />)
+
+    await user.click(screen.getByRole('button', { name: /^check in$/i }))
+    expect(await screen.findByText(/waiting for precise gps/i)).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /^undo$/i }))
+    await waitFor(() => {
+      expect(mockUndo).toHaveBeenCalledWith(TOKEN, { controlId: 'ctrl-a' })
+    })
+
+    expect(clearWatch).not.toHaveBeenCalled()
+    expect(screen.getByText(/waiting for precise gps/i)).toBeInTheDocument()
+
+    unmount()
+    expect(clearWatch).toHaveBeenCalledWith(73)
   })
 })
 
@@ -805,6 +1214,51 @@ describe('BrevetCard early-window confirm', () => {
       )
     })
   })
+
+  it('uses the original tap time when GPS resolves after the control opens', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-08-26T16:00:00Z'))
+    const data = makeTwoControlData()
+    data.controls[1].opensAt = new Date(Date.now() + 30_000).toISOString()
+    data.controls[1].closesAt = new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString()
+    let watchSuccess!: PositionCallback
+    const clearWatch = vi.fn()
+    Object.defineProperty(navigator, 'geolocation', {
+      value: {
+        getCurrentPosition: (success: PositionCallback) =>
+          success({
+            coords: { latitude: 43.7, longitude: -79.38, accuracy: 1_000 },
+          } as GeolocationPosition),
+        watchPosition: vi.fn((success: PositionCallback) => {
+          watchSuccess = success
+          return 79
+        }),
+        clearWatch,
+      },
+      configurable: true,
+    })
+    mockCheckIn.mockResolvedValue(checkinOk('ctrl-b'))
+    const { unmount } = render(<BrevetCard token={TOKEN} initialData={data} />)
+
+    try {
+      fireEvent.click(screen.getAllByRole('button', { name: /^check in$/i })[1])
+      expect(screen.getByText(/waiting for precise gps/i)).toBeInTheDocument()
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(35_000)
+        watchSuccess({
+          coords: { latitude: 43.7, longitude: -79.38, accuracy: 10 },
+        } as GeolocationPosition)
+      })
+
+      const dialog = screen.getByRole('alertdialog')
+      expect(dialog).toHaveTextContent(/doesn't open until/i)
+      expect(mockCheckIn).not.toHaveBeenCalled()
+    } finally {
+      unmount()
+      vi.useRealTimers()
+    }
+  })
 })
 
 describe('BrevetCard pre-start first-control check-in', () => {
@@ -897,6 +1351,7 @@ describe('BrevetCard undo', () => {
       />
     )
     expect(screen.queryByRole('button', { name: /^undo$/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /retry gps/i })).not.toBeInTheDocument()
   })
 
   it('undoes a pending outbox entry by emptying the outbox (offline-safe)', async () => {
@@ -919,6 +1374,40 @@ describe('BrevetCard undo', () => {
     expect(window.localStorage.getItem(`brevet-card-outbox-${TOKEN}`)).toBeNull()
     // A retry may already have reached the server: best-effort undo it there too.
     expect(mockUndo).toHaveBeenCalledWith(TOKEN, { controlId: 'ctrl-1' })
+  })
+
+  it('does not send a later queued entry after it is undone behind a slow request', async () => {
+    const data = makeTwoControlData()
+    window.localStorage.setItem(
+      `brevet-card-outbox-${TOKEN}`,
+      JSON.stringify([
+        { controlId: 'ctrl-a', checkedInAt: new Date().toISOString() },
+        { controlId: 'ctrl-b', checkedInAt: new Date().toISOString() },
+      ])
+    )
+    let resolveFirst!: (value: Awaited<ReturnType<typeof checkInAtControl>>) => void
+    mockCheckIn.mockImplementationOnce(
+      () =>
+        new Promise<Awaited<ReturnType<typeof checkInAtControl>>>((resolve) => {
+          resolveFirst = resolve
+        })
+    )
+
+    const user = userEvent.setup()
+    render(<BrevetCard token={TOKEN} initialData={data} />)
+    await waitFor(() => expect(mockCheckIn).toHaveBeenCalledTimes(1))
+    await waitFor(() => {
+      expect(screen.getAllByRole('button', { name: /^undo$/i })).toHaveLength(2)
+    })
+
+    await user.click(screen.getAllByRole('button', { name: /^undo$/i })[1])
+    expect(mockUndo).toHaveBeenCalledWith(TOKEN, { controlId: 'ctrl-b' })
+
+    await act(async () => resolveFirst(checkinOk('ctrl-a')))
+    await waitFor(() => {
+      expect(window.localStorage.getItem(`brevet-card-outbox-${TOKEN}`)).toBeNull()
+    })
+    expect(mockCheckIn).toHaveBeenCalledTimes(1)
   })
 
   it('does not resurrect a check-in undone while its sync was in flight', async () => {
@@ -1129,6 +1618,39 @@ describe('BrevetCard proactive location check', () => {
     await user.click(await screen.findByRole('button', { name: /test your location/i }))
 
     expect(await screen.findByText(/location is blocked for this browser/i)).toBeInTheDocument()
+  })
+
+  it('tells riders in an embedded iOS browser to retry in Safari after no fix', async () => {
+    const originalUserAgent = Object.getOwnPropertyDescriptor(navigator, 'userAgent')
+    Object.defineProperty(navigator, 'userAgent', {
+      value:
+        'Mozilla/5.0 (iPhone; CPU iPhone OS 16_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148',
+      configurable: true,
+    })
+    stubPermissions('prompt')
+    Object.defineProperty(navigator, 'geolocation', {
+      value: {
+        getCurrentPosition: () => {
+          throw new DOMException('blocked by host', 'NotAllowedError')
+        },
+        watchPosition: () => {
+          throw new DOMException('blocked by host', 'NotAllowedError')
+        },
+        clearWatch: vi.fn(),
+      },
+      configurable: true,
+    })
+
+    try {
+      const user = userEvent.setup()
+      render(<BrevetCard token={TOKEN} initialData={makeData()} />)
+      await user.click(await screen.findByRole('button', { name: /test your location/i }))
+
+      expect(await screen.findByText(/open this card in safari/i)).toBeInTheDocument()
+    } finally {
+      if (originalUserAgent) Object.defineProperty(navigator, 'userAgent', originalUserAgent)
+      else Reflect.deleteProperty(navigator, 'userAgent')
+    }
   })
 
   it('offers the test affordance when the Permissions API is unavailable', async () => {

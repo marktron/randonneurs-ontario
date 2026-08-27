@@ -4,10 +4,11 @@
  * Creates an admin user, route, events, rider, and results so that
  * previously-skipping tests can actually run.
  */
-import { createClient, SupabaseClient } from '@supabase/supabase-js'
+import { createClient } from '@supabase/supabase-js'
 import { loadEnvConfig } from '@next/env'
 import { writeFileSync } from 'fs'
 import { join } from 'path'
+import WebSocket from 'ws'
 import { E2E_IDS, type E2ETestData } from './helpers/test-data'
 
 const TORONTO_CHAPTER_ID = 'ad83d0b9-4d25-472b-9d3e-5732730d761c'
@@ -41,6 +42,13 @@ export default async function globalSetup() {
   if (!supabaseUrl || !serviceKey) {
     console.warn('[e2e-setup] Missing SUPABASE env vars — skipping seed')
     return
+  }
+
+  // Newer supabase-js initializes Realtime eagerly. Node 20 (still used by
+  // CI) has no native WebSocket, so provide the same test-only transport as
+  // the real-database Vitest setup.
+  if (typeof globalThis.WebSocket === 'undefined') {
+    ;(globalThis as unknown as { WebSocket: typeof WebSocket }).WebSocket = WebSocket
   }
 
   const supabase = createClient(supabaseUrl, serviceKey, {
@@ -169,15 +177,20 @@ export default async function globalSetup() {
 
   // ── 4. Rider ────────────────────────────────────────────────────────
   await checked(
-    supabase.from('riders').upsert(
+    supabase.from('riders').upsert([
       {
         id: E2E_IDS.rider,
         slug: 'e2e-test-rider',
         first_name: 'E2E',
         last_name: 'TestRider',
       },
-      { onConflict: 'id' }
-    ),
+      {
+        id: E2E_IDS.webkitRider,
+        slug: 'e2e-test-webkit-rider',
+        first_name: 'WebKit',
+        last_name: 'TestRider',
+      },
+    ]),
     'riders upsert'
   )
 
@@ -296,24 +309,38 @@ export default async function globalSetup() {
   )
 
   await checked(
-    supabase.from('registrations').insert({
-      id: E2E_IDS.activeRegistration,
-      event_id: E2E_IDS.activeEvent,
-      rider_id: E2E_IDS.rider,
-    }),
-    'insert active registration'
+    supabase.from('registrations').insert([
+      {
+        id: E2E_IDS.activeRegistration,
+        event_id: E2E_IDS.activeEvent,
+        rider_id: E2E_IDS.rider,
+      },
+      {
+        id: E2E_IDS.webkitActiveRegistration,
+        event_id: E2E_IDS.activeEvent,
+        rider_id: E2E_IDS.webkitRider,
+      },
+    ]),
+    'insert active registrations'
   )
 
-  const activeReg = await checked(
+  const activeRegs = await checked(
     supabase
       .from('registrations')
-      .select('management_token')
-      .eq('id', E2E_IDS.activeRegistration)
-      .single(),
-    'read active management_token'
+      .select('id, management_token')
+      .in('id', [E2E_IDS.activeRegistration, E2E_IDS.webkitActiveRegistration]),
+    'read active management tokens'
   )
-  if (!activeReg?.management_token) {
-    throw new Error('[e2e-setup] Active registration management_token is null after insert')
+  const activeTokenById = new Map(
+    (activeRegs as { id: string; management_token: string | null }[]).map((registration) => [
+      registration.id,
+      registration.management_token,
+    ])
+  )
+  const activeManagementToken = activeTokenById.get(E2E_IDS.activeRegistration)
+  const webkitManagementToken = activeTokenById.get(E2E_IDS.webkitActiveRegistration)
+  if (!activeManagementToken || !webkitManagementToken) {
+    throw new Error('[e2e-setup] Active registration management token is null after insert')
   }
 
   // ── 7. Write data file for test workers ─────────────────────────────
@@ -335,7 +362,8 @@ export default async function globalSetup() {
     },
     brevetCard: {
       eventId: E2E_IDS.activeEvent,
-      managementToken: activeReg.management_token,
+      managementToken: activeManagementToken,
+      webkitManagementToken,
       controlLat: CONTROL_LAT,
       controlLng: CONTROL_LNG,
     },

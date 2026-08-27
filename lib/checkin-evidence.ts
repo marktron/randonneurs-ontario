@@ -1,5 +1,10 @@
 import type { CheckinFlags } from '@/lib/brevet-card'
 import type { AdminCheckinGridRider } from '@/lib/actions/control-checkins'
+import type {
+  LocationContext,
+  LocationFailureReason,
+  LocationFailureStage,
+} from '@/lib/location-diagnostics'
 
 /**
  * Shared presentation helpers for digital-card check-ins, used by both the
@@ -54,12 +59,73 @@ export function formatCheckinDistanceCompact(
   return `${formatDistanceMetres(distanceToControlM)} from control${accuracyLabel}`
 }
 
+const FAILURE_REASON_LABELS: Record<LocationFailureReason, string> = {
+  insecure_context: 'Location requires a secure connection',
+  unsupported: 'Location is not supported by this browser',
+  permission_denied: 'Location permission was denied',
+  position_unavailable: 'Location was unavailable',
+  timeout: 'Location timed out',
+  request_error: 'Location request failed',
+}
+
+const FAILURE_STAGE_LABELS: Record<LocationFailureStage, string> = {
+  preflight: 'preflight',
+  quick: 'the quick attempt',
+  high_accuracy: 'the high-accuracy attempt',
+}
+
+const LOCATION_CONTEXT_LABELS: Record<LocationContext, string> = {
+  browser: 'browser',
+  standalone: 'standalone web app',
+  embedded: 'embedded browser',
+}
+
+function formatLocationElapsed(elapsedMs: number): string {
+  if (elapsedMs < 1000) return `${Math.round(elapsedMs)} ms`
+  const seconds = elapsedMs / 1000
+  return `${seconds < 10 ? seconds.toFixed(1) : Math.round(seconds)} s`
+}
+
+/**
+ * Turns the bounded diagnostic stored with a no-GPS check-in into a concise
+ * organizer-facing explanation. Legacy/manual rows without diagnostics have
+ * no summary rather than an invented cause.
+ */
+export function formatLocationFailureSummary(diagnostic: {
+  locationFailureReason: LocationFailureReason | null
+  locationFailureStage: LocationFailureStage | null
+  locationElapsedMs: number | null
+  locationContext: LocationContext | null
+}): string | null {
+  if (!diagnostic.locationFailureReason) return null
+
+  let summary = FAILURE_REASON_LABELS[diagnostic.locationFailureReason]
+  if (diagnostic.locationFailureStage) {
+    summary += ` during ${FAILURE_STAGE_LABELS[diagnostic.locationFailureStage]}`
+  }
+  if (
+    diagnostic.locationElapsedMs != null &&
+    Number.isFinite(diagnostic.locationElapsedMs) &&
+    diagnostic.locationElapsedMs >= 0
+  ) {
+    summary += ` after ${formatLocationElapsed(diagnostic.locationElapsedMs)}`
+  }
+  if (diagnostic.locationContext) {
+    summary += ` (${LOCATION_CONTEXT_LABELS[diagnostic.locationContext]})`
+  }
+  return summary
+}
+
 export interface CheckinEvidenceCheckin {
   checkedInAt: string
   method: string
   flags: CheckinFlags
   distanceToControlM: number | null
   accuracyM: number | null
+  locationFailureReason: LocationFailureReason | null
+  locationFailureStage: LocationFailureStage | null
+  locationElapsedMs: number | null
+  locationContext: LocationContext | null
   note: string | null
 }
 
@@ -100,6 +166,10 @@ export function buildCheckinEvidence(
               flags: checkin.flags,
               distanceToControlM: checkin.distanceToControlM,
               accuracyM: checkin.accuracyM,
+              locationFailureReason: checkin.locationFailureReason,
+              locationFailureStage: checkin.locationFailureStage,
+              locationElapsedMs: checkin.locationElapsedMs,
+              locationContext: checkin.locationContext,
               note: checkin.note,
             }
           : null,

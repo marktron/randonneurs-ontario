@@ -15,6 +15,7 @@ import { cn } from '@/lib/utils'
 import {
   FLAG_LABELS,
   formatCheckinDistanceCompact,
+  formatLocationFailureSummary,
   type CheckinEvidenceControl,
 } from '@/lib/checkin-evidence'
 
@@ -49,6 +50,7 @@ export function CheckinEvidenceDialog({
           {controls.map((control, index) => {
             const { checkin } = control
             const activeFlags = checkin ? FLAG_LABELS.filter(({ key }) => checkin.flags[key]) : []
+            const locationFailureSummary = checkin ? formatLocationFailureSummary(checkin) : null
             return (
               <li key={index} className={cn('text-sm', !checkin && 'text-muted-foreground/60')}>
                 <div className="flex items-baseline justify-between gap-2">
@@ -81,6 +83,11 @@ export function CheckinEvidenceDialog({
                 {checkin?.distanceToControlM != null && (
                   <p className="mt-1 text-xs text-muted-foreground">
                     {formatCheckinDistanceCompact(checkin.distanceToControlM, checkin.accuracyM)}
+                  </p>
+                )}
+                {locationFailureSummary && (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    No GPS: {locationFailureSummary}
                   </p>
                 )}
                 {checkin?.note && (

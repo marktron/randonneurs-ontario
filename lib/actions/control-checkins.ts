@@ -19,6 +19,11 @@ import { assertEventMutable } from '@/lib/actions/event-mutability'
 import { handleActionError, handleSupabaseError, createActionResult } from '@/lib/errors'
 import type { ActionResult } from '@/types/actions'
 import type { ControlCheckinInsert } from '@/types/queries'
+import type {
+  LocationContext,
+  LocationFailureReason,
+  LocationFailureStage,
+} from '@/lib/location-diagnostics'
 
 // ============================================================================
 // Types
@@ -35,6 +40,11 @@ export interface AdminCheckin {
   lng: number | null
   accuracyM: number | null
   distanceToControlM: number | null
+  /** Bounded, privacy-conscious diagnostic recorded when GPS acquisition failed. */
+  locationFailureReason: LocationFailureReason | null
+  locationFailureStage: LocationFailureStage | null
+  locationElapsedMs: number | null
+  locationContext: LocationContext | null
   note: string | null
   flags: CheckinFlags
 }
@@ -146,7 +156,7 @@ export async function getEventCheckinsForAdmin(
     const { data: checkinRows, error: checkinError } = await supabase
       .from('control_checkins')
       .select(
-        'id, control_id, registration_id, checked_in_at, received_at, method, lat, lng, accuracy_m, distance_to_control_m, note'
+        'id, control_id, registration_id, checked_in_at, received_at, method, lat, lng, accuracy_m, distance_to_control_m, location_failure_reason, location_failure_stage, location_failure_elapsed_ms, location_failure_context, note'
       )
       .in(
         'control_id',
@@ -172,6 +182,10 @@ export async function getEventCheckinsForAdmin(
       lng: number | null
       accuracy_m: number | null
       distance_to_control_m: number | null
+      location_failure_reason: LocationFailureReason | null
+      location_failure_stage: LocationFailureStage | null
+      location_failure_elapsed_ms: number | null
+      location_failure_context: LocationContext | null
       note: string | null
     }[]
 
@@ -207,6 +221,10 @@ export async function getEventCheckinsForAdmin(
         lng: checkin.lng,
         accuracyM: checkin.accuracy_m,
         distanceToControlM: checkin.distance_to_control_m,
+        locationFailureReason: checkin.location_failure_reason ?? null,
+        locationFailureStage: checkin.location_failure_stage ?? null,
+        locationElapsedMs: checkin.location_failure_elapsed_ms ?? null,
+        locationContext: checkin.location_failure_context ?? null,
         note: checkin.note,
         flags: deriveCheckinFlags(checkin, control, window),
       }
@@ -295,6 +313,9 @@ export async function adminSetCheckin(input: {
       .maybeSingle()
 
     if (existing) {
+      // Preserve the rider's original coordinates and location-failure
+      // diagnostic as evidence. An admin correction changes the adjudicated
+      // time/method/note, but should not erase what the phone reported.
       const { error: updateError } = await supabase
         .from('control_checkins')
         .update({

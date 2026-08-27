@@ -14,6 +14,8 @@ export const E2E_IDS = {
   activeRegistration: '00000000-e2e0-4000-a000-000000000009',
   activeControlStart: '00000000-e2e0-4000-a000-00000000000a',
   activeControlFinish: '00000000-e2e0-4000-a000-00000000000b',
+  webkitRider: '00000000-e2e0-4000-a000-00000000000c',
+  webkitActiveRegistration: '00000000-e2e0-4000-a000-00000000000d',
 }
 
 export interface E2ETestData {
@@ -29,6 +31,7 @@ export interface E2ETestData {
   brevetCard: {
     eventId: string
     managementToken: string
+    webkitManagementToken: string
     controlLat: number
     controlLng: number
   }

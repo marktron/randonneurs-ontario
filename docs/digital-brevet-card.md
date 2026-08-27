@@ -92,8 +92,8 @@ CREATE TABLE event_controls (
   position      INTEGER NOT NULL,              -- display/sequence order
   name          TEXT NOT NULL,
   distance_km   NUMERIC(6,1) NOT NULL,         -- open/close computed from this, never stored
-  lat           DOUBLE PRECISION,              -- nullable: no coords ⇒ GPS check-in unavailable,
-  lng           DOUBLE PRECISION,              --   manual check-in only
+  lat           DOUBLE PRECISION,              -- nullable: rider GPS is still recorded, but
+  lng           DOUBLE PRECISION,              --   radius/distance checks are unavailable
   radius_m      INTEGER NOT NULL DEFAULT 500,
   notes         TEXT,
   created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -112,6 +112,10 @@ CREATE TABLE control_checkins (
   lng             DOUBLE PRECISION,
   accuracy_m      NUMERIC,
   distance_to_control_m NUMERIC,               -- computed server-side at ingest
+  location_failure_reason TEXT,                 -- bounded no-GPS diagnostic (never raw browser text)
+  location_failure_stage TEXT,                  -- preflight / quick / high_accuracy
+  location_failure_elapsed_ms INTEGER,          -- bounded client-observed duration
+  location_failure_context TEXT,                -- browser / standalone / embedded
   note            TEXT,                        -- rider or admin note
   created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
   UNIQUE (registration_id, control_id)         -- one check-in per rider per control;
@@ -128,7 +132,19 @@ Design notes:
   rescheduled.
 - **`UNIQUE (registration_id, control_id)` doubles as the idempotency
   key.** Offline retries of the same check-in hit the conflict and return
-  the existing row — no separate client UUID needed.
+  the existing row — no separate client UUID needed. One narrow enrichment
+  is allowed: a GPS retry carries the server-issued `received_at` identity
+  of the manual row the rider saw. Within the rider undo window it may
+  atomically upgrade only that exact row to `gps`, retaining its original
+  `checked_in_at`. Upgrade requests are update-only, so a delayed retry can
+  never recreate a row removed with Undo or modify a replacement row.
+- **Location-failure diagnostics are bounded and privacy-conscious.** A
+  coordinate-less rider check-in stores a reason, acquisition stage, elapsed
+  milliseconds, and broad browsing context. Raw browser error messages and
+  user-agent strings are never stored. The schema enforces all-or-none
+  diagnostics and paired coordinates. Complete coordinate pairs on legacy
+  `manual` rows are retained as organizer evidence; current rider writes
+  derive `gps` whenever coordinates are present.
 - **Anomalies are derived, not stored**: out-of-radius
   (`distance_to_control_m > radius_m`), no-GPS (`method = 'manual'`),
   early/late (`checked_in_at` vs computed window), late sync
@@ -183,14 +199,21 @@ Design notes:
 - **Check in** button on any un-checked control (the next expected one is
   emphasized, but out-of-order check-ins are allowed and merely flagged —
   see Open question 3):
-  1. Request geolocation (high accuracy, short timeout).
+  1. Try a quick cached/balanced location request (5 seconds), then continue
+     with a longer high-accuracy request (up to 45 seconds) while retaining
+     the best usable fix.
+     Permission denial stops immediately; timeout/position-unavailable errors
+     continue until the overall acquisition deadline.
   2. Got a fix → send `{ token, controlId, checkedInAt, lat, lng, accuracy }`
      to the server action. Server validates the token, recomputes distance
      with `haversineMeters()`, inserts with `method='gps'`.
-  3. No fix / denied / out of radius → offer "Check in anyway" which
-     submits `method='manual'` (with coords if we have them). Recorded,
-     flagged, never blocked. The UI says it will be reviewed by the
-     organizer.
+  3. No fix / denied → offer "Check in without GPS". The coordinate-less
+     check-in is stored as `method='manual'`, together with the bounded final
+     failure reason/stage/timing/context for organizer review.
+  4. A fix outside the tapped control's radius can still be recorded with
+     GPS after confirmation; it is flagged out-of-radius, not converted to a
+     manual check-in. If the control itself has no saved coordinates, the
+     rider's GPS fix is still stored, but distance/radius cannot be derived.
 - **Wrong-control detection (GPS check-ins)**: after a fix is obtained but
   before recording, if the fix falls _outside_ the tapped control's radius
   but _inside_ another control's radius, the rider is warned before anything
@@ -240,6 +263,13 @@ Design notes:
   entry locally (works offline), with a best-effort server undo in case a
   retry already landed. **After the window, admins remain the only
   correction path** (edit/delete in the check-in grid).
+- **Retry GPS after a manual check-in:** during that same window, the rider
+  can retry location acquisition. A successful retry upgrades the existing
+  row from `manual` to `gps`, clears the failure diagnostic, and keeps the
+  original check-in time. The request includes that row's server receipt
+  timestamp as an optimistic-lock identity and is never allowed to insert a
+  replacement. This repairs the evidence without changing when the rider
+  first checked in, racing Undo, or creating a second row.
 - After the finish control is checked: "Submit your result →
   `/results/submit/[token]`" (token already shared between the two flows;
   if no result row exists yet the existing `createEarlyResult` path covers
@@ -262,10 +292,12 @@ Riders get the card link days before the event (the confirmation email and
 the registration-manage page), so a blocked location permission can usually
 be fixed at home rather than at the start line with the organizer's help.
 
-- **Tap-time.** `handleCheckIn`'s `getCurrentPosition` error callback
-  classifies the failure. Code 1 (`PERMISSION_DENIED`) opens a "Location is
-  blocked" dialog with platform-specific fix steps (`lib/location-help.ts`:
-  iOS Safari, iOS Chrome, Android, or a generic fallback for anything else,
+- **Tap-time.** The staged acquisition classifies each failure and retains
+  the final bounded reason/stage/timing/context for a manual check-in. Code 1
+  (`PERMISSION_DENIED`) opens a "Location is blocked" dialog with
+  platform-specific fix steps (`lib/location-help.ts`:
+  iOS Safari, iOS Chrome, embedded iOS (with an Open in Safari handoff),
+  Android, or a generic fallback for anything else,
   chosen from the user agent by `detectPlatform`), a **Try again** action
   (re-runs the same check-in attempt) and a **Check in without GPS** action
   (records `method='manual'`, the same outcome as the ordinary manual
@@ -275,9 +307,10 @@ be fixed at home rather than at the start line with the organizer's help.
   `PermissionStatus` update) doesn't leave a stale "Location works on this
   phone" note showing under the blocked dialog; this mirrors what
   `handleLocationTest`'s own code-1 branch already does. Codes 2/3
-  (`POSITION_UNAVAILABLE` / `TIMEOUT`) fall through to the existing generic
-  manual dialog unchanged — GPS is failing, not blocked, so there's no
-  settings fix to offer.
+  (`POSITION_UNAVAILABLE` / `TIMEOUT`) do not abort the first acquisition
+  stage; the longer high-accuracy stage can still succeed before the overall
+  deadline. If it does not, the ordinary no-GPS dialog explains that the
+  organizer will review the check-in.
 - **Proactive.** On mount, in secure contexts only, the card queries
   `navigator.permissions` for `geolocation`. `denied` renders a blocked
   banner above the control list with the same fix steps and a "Try again"
@@ -452,8 +485,13 @@ never changes between events.
   limit + 6 h] with a clear message (prevents accidental test check-ins
   from polluting real data). The **claimed tap time is bounded too**:
   `checked_in_at` may not be in the future (beyond clock skew) or before
-  check-in opened — riders can't backdate outside the window. Then insert,
-  `ON CONFLICT` → return existing check-in (idempotent). Transient failures
+  check-in opened — riders can't backdate outside the window. Normal writes
+  insert, with a unique conflict returning the existing check-in
+  (idempotent). GPS enrichment requests take a separate update-only path:
+  they match registration, control, `method='manual'`, undo window, and the
+  expected `received_at` identity before upgrading atomically to `gps` and
+  clearing the location-failure diagnostic. A missing target is terminal,
+  never an insert. Transient failures
   (rate limit, DB errors) are marked `retryable: true` so the client outbox
   keeps them queued; only outright rejections are dropped client-side.
   While verifying the tapped control belongs to the event, it also fetches
@@ -564,8 +602,9 @@ with no result row yet (e.g. an abandon with no DNF entered). Clicking it
 opens a read-only summary: one row per control with the check-in time
 (Toronto), method badge for manual/admin entries, warning badges (early,
 late, radius, no gps, late sync), GPS distance to the control, and any
-note. Corrections are not made here — the dialog links to the Digital
-Cards grid, which owns editing.
+note. For a no-GPS row with diagnostics, it also shows a concise cause,
+acquisition stage, elapsed time, and browsing context. Corrections are not
+made here — the dialog links to the Digital Cards grid, which owns editing.
 
 ### Live grid (bottom section)
 
@@ -578,6 +617,9 @@ Cards grid, which owns editing.
 - Click a cell to add / correct / delete a check-in (`method='admin'`,
   note required, audit-logged). Blocked once the event status is
   `submitted`, mirroring results.
+- Correcting an existing row preserves its original coordinates and bounded
+  location-failure diagnostic as evidence; the correction changes only the
+  adjudicated time, method, and note.
 - When correcting an existing check-in that has a GPS fix, the dialog shows
   a small map (plain Leaflet + OpenStreetMap tiles, no `react-leaflet`) with
   the rider's recorded point, the control's saved location and radius (when
@@ -604,6 +646,9 @@ Cards grid, which owns editing.
 - The site-wide `Permissions-Policy` header must allow `geolocation=(self)`
   (`next.config.ts`) — an empty allowlist silently blocks the browser
   Geolocation API and every check-in degrades to no-GPS.
+- No-GPS diagnostics use fixed enums and a bounded elapsed duration. Raw
+  user-agent strings and browser-provided error messages are deliberately not
+  accepted or persisted.
 - GPS spoofing is possible and **out of scope to prevent** — the paper
   equivalent (forged signatures) is too. The system's job is to make honest
   riding effortless and leave an audit trail (`received_at`, accuracy,
@@ -634,8 +679,12 @@ Cards grid, which owns editing.
   schema + token flows, so per CLAUDE.md the real-DB suite is mandatory —
   token lookup, check-in insert, idempotent conflict behaviour, RLS/anon
   denial on both tables, cascade deletes.
-- **E2E** (`tests/e2e/`): card page render + mocked-geolocation check-in
-  happy path (Playwright supports `context.setGeolocation`).
+- **E2E** (`tests/e2e/`): card page render in desktop Chromium and an iPhone
+  8 Plus-sized WebKit project. WebKit exercises both the proactive location
+  test and a real mocked-GPS check-in followed by reload. The mutation runs
+  in a dependent project against a dedicated WebKit registration; Chromium
+  uses a separate registration, preventing browser projects from checking in
+  against the same rider/control concurrently.
 - Screenshot policy: the card page is gated by seeded token state → falls
   under the documented screenshot exception; rely on e2e + note it.
 - Docs: this file graduates to the feature doc; add an operational section
@@ -696,7 +745,7 @@ Each step lands as its own commit; the branch stays shippable throughout.
 | Admin check-in actions  | `lib/actions/control-checkins.ts` — grid read, set/delete corrections                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | Check-in evidence modal | `lib/checkin-evidence.ts` — shared check-in labels and evidence join helper; `components/admin/checkin-evidence-dialog.tsx` — read-only evidence dialog on admin event page. See §9.                                                                                                                                                                                                                                                                                                                                                       |
 | RWGPS coordinates       | `lib/rwgps.ts` — `extractControlsWithCoords`, `fetchRwgpsControlsWithCoords`                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
-| Rider page              | `app/card/[token]/page.tsx` + `components/brevet-card-view.tsx` (outbox lives here); location permission help in `lib/location-help.ts` — see "Location permission help" above                                                                                                                                                                                                                                                                                                                                                             |
+| Rider page              | `app/card/[token]/page.tsx` + `components/brevet-card-view.tsx` (outbox lives here); staged acquisition and bounded diagnostic types in `lib/geolocation.ts` / `lib/location-diagnostics.ts`; permission help in `lib/location-help.ts` — see "Location permission help" above                                                                                                                                                                                                                                                             |
 | Admin page              | `app/admin/events/[id]/brevet-card/page.tsx` + `components/admin/event-controls-manager.tsx` + `components/admin/event-checkins-grid.tsx` + `components/admin/checkin-map.tsx` (correction-dialog map)                                                                                                                                                                                                                                                                                                                                     |
 | Email                   | `lib/email/templates.ts` (`digitalCardUrl`), wired in `lib/actions/registration/finalize.ts`                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | Tests                   | `tests/unit/lib/brevet-card.test.ts`, `tests/unit/lib/brevet-card-actions.test.ts`, `tests/unit/components/brevet-card-view.test.tsx`, `tests/unit/lib/location-help.test.ts`, `tests/integration-real/brevet-card/checkin.test.ts`, `tests/integration-real/brevet-card/undo.test.ts`, `tests/e2e/brevet-card.spec.ts`, `tests/unit/events/finish-result.test.ts`, `tests/integration-real/brevet-card/finish-result.test.ts`, `tests/unit/events/send-result-reminders.test.ts`, `tests/unit/components/result-submission-form.test.tsx` |
@@ -706,7 +755,8 @@ Each step lands as its own commit; the branch stays shippable throughout.
 1. Open the event in the admin and click **Digital Cards**.
 2. Click **Import from RWGPS** (or add rows manually), review names,
    distances, and coordinates, then **Save controls**. Controls without
-   coordinates still work — riders just check in without GPS (flagged).
+   coordinates still accept and store the rider's GPS fix; only the
+   distance/radius comparison is unavailable.
 3. Riders reach their card from the registration-confirmation email or
    their registration-manage page; the URL is
    `/card/{management_token}` — same token family as result submission.
@@ -720,6 +770,9 @@ Each step lands as its own commit; the branch stays shippable throughout.
      corrections).
      Flags are advisories for validation, not verdicts — treat them like an
      odd-looking time on a paper card.
+     The results-table Evidence dialog gives the bounded failure cause,
+     acquisition stage, elapsed time, and browser context when available;
+     older manual rows simply have no diagnostic detail.
 5. Click any cell to add, correct, or delete a check-in; a note is
    required and every correction is audit-logged. Once the event is marked
    `submitted`, check-ins freeze — including control edits (`saveEventControls`
@@ -765,7 +818,8 @@ printed control card.
 - **Coordinates never travel through the print URL** — only `{name, distance}`
   is encoded. Rows added by hand in the print form carry no coordinates until
   an admin sets them in the digital brevet card manager; such controls still
-  work (riders check in without GPS, flagged `no gps`).
+  store rider GPS evidence, but cannot calculate distance or an out-of-radius
+  flag until the control location is configured.
 
 ## 17. Pre-rides
 

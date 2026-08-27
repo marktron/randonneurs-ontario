@@ -21,16 +21,41 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
+      grepInvert: /@card-mutation/,
       use: { ...devices['Desktop Chrome'] },
+    },
+    {
+      // Exercise the card on the closest Playwright profile to the affected
+      // iPhone 8 Plus. Keep this project focused so the rest of the seeded,
+      // mutation-heavy E2E suite is not duplicated across browser engines.
+      name: 'webkit-iphone-8-plus',
+      testMatch: /brevet-card\.spec\.ts/,
+      grepInvert: /@card-mutation/,
+      use: { ...devices['iPhone 8 Plus'] },
+    },
+    {
+      // The one card test that writes to the shared seed runs only after the
+      // WebKit smoke tests have exercised a pristine registration.
+      name: 'chromium-card-mutation',
+      testMatch: /brevet-card\.spec\.ts/,
+      grep: /@card-mutation/,
+      dependencies: ['webkit-iphone-8-plus'],
+      use: { ...devices['Desktop Chrome'] },
+    },
+    {
+      // Run the real check-in/outbox/server-action path on the affected
+      // browser profile too. It uses a separate seeded registration so the
+      // Chromium mutation and read-only smoke tests cannot race it.
+      name: 'webkit-card-mutation',
+      testMatch: /brevet-card\.spec\.ts/,
+      grep: /@card-mutation/,
+      dependencies: ['webkit-iphone-8-plus'],
+      use: { ...devices['iPhone 8 Plus'] },
     },
     // Uncomment to test in additional browsers
     // {
     //   name: 'firefox',
     //   use: { ...devices['Desktop Firefox'] },
-    // },
-    // {
-    //   name: 'webkit',
-    //   use: { ...devices['Desktop Safari'] },
     // },
   ],
   webServer: {
