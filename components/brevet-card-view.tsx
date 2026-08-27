@@ -865,6 +865,11 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
   const finishDone = finishControl ? checkins.has(finishControl.id) : false
   const doneCount = controls.filter((c) => checkins.has(c.id) || queuedControlIds.has(c.id)).length
 
+  // One AbortController is shared by every acquisition, so a second tap
+  // cancels the first control's lookup and loses it entirely. Only one
+  // acquisition may be in flight; per-row labels still key off `isLocating`.
+  const locationBusy = locatingControlId !== null
+
   const startsAt = new Date(event.startsAt)
   const checkinOpensAt = new Date(startsAt.getTime() - CHECKIN_WINDOW_BEFORE_START_MS)
 
@@ -1104,7 +1109,9 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
                                 type="button"
                                 className="-my-2 py-2 font-normal text-muted-foreground underline decoration-muted-foreground/40 underline-offset-2 hover:text-foreground disabled:opacity-50"
                                 disabled={
-                                  isLocating || gpsUpgradeQueued || undoingControlId === control.id
+                                  locationBusy ||
+                                  gpsUpgradeQueued ||
+                                  undoingControlId === control.id
                                 }
                                 onClick={() =>
                                   handleRetryGps(control, checkin.checkedInAt, checkin.receivedAt)
@@ -1152,7 +1159,7 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
                       size="lg"
                       variant={isNext ? 'default' : 'outline'}
                       className="h-12"
-                      disabled={isLocating || beforeWindow}
+                      disabled={locationBusy || beforeWindow}
                       onClick={() => handleCheckIn(control)}
                     >
                       {isLocating ? (

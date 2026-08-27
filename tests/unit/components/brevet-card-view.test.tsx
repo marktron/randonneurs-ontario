@@ -1034,6 +1034,46 @@ describe('BrevetCard location diagnostics and GPS retry', () => {
     unmount()
     expect(clearWatch).toHaveBeenCalledWith(73)
   })
+
+  it('blocks a second control tap while one control is still acquiring GPS', async () => {
+    const data = makeTwoControlData()
+    let watchSuccess!: PositionCallback
+    Object.defineProperty(navigator, 'geolocation', {
+      value: {
+        getCurrentPosition: (success: PositionCallback) =>
+          success({
+            coords: { latitude: 43.65, longitude: -79.38, accuracy: 1_000 },
+          } as GeolocationPosition),
+        watchPosition: vi.fn((success: PositionCallback) => {
+          watchSuccess = success
+          return 91
+        }),
+        clearWatch: vi.fn(),
+      },
+      configurable: true,
+    })
+    mockCheckIn.mockResolvedValue(checkinOk('ctrl-a'))
+
+    const user = userEvent.setup()
+    render(<BrevetCard token={TOKEN} initialData={data} />)
+
+    // Both controls start with an enabled Check in button.
+    expect(screen.getAllByRole('button', { name: /^check in$/i })).toHaveLength(2)
+    await user.click(screen.getAllByRole('button', { name: /^check in$/i })[0])
+    expect(await screen.findByText(/waiting for precise gps/i)).toBeInTheDocument()
+
+    // ctrl-b's button is the only remaining "Check in"; it must be inert.
+    expect(screen.getByRole('button', { name: /^check in$/i })).toBeDisabled()
+
+    // The first control's acquisition still completes and is recorded.
+    act(() => {
+      watchSuccess({
+        coords: { latitude: 43.65, longitude: -79.38, accuracy: 10 },
+      } as GeolocationPosition)
+    })
+    await waitFor(() => expect(mockCheckIn).toHaveBeenCalledTimes(1))
+    expect(mockCheckIn.mock.calls[0][1]).toMatchObject({ controlId: 'ctrl-a' })
+  })
 })
 
 describe('BrevetCard hydration', () => {

@@ -214,6 +214,9 @@ Design notes:
      GPS after confirmation; it is flagged out-of-radius, not converted to a
      manual check-in. If the control itself has no saved coordinates, the
      rider's GPS fix is still stored, but distance/radius cannot be derived.
+
+  Only one location acquisition runs at a time — while one control is acquiring, every other row's **Check in** and **Retry GPS** button is disabled, because a second tap would cancel the first control's fix.
+
 - **Wrong-control detection (GPS check-ins)**: after a fix is obtained but
   before recording, if the fix falls _outside_ the tapped control's radius
   but _inside_ another control's radius, the rider is warned before anything
