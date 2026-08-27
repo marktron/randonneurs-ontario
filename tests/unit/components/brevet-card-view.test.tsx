@@ -877,6 +877,12 @@ describe('BrevetCard location diagnostics and GPS retry', () => {
     expect(mockCheckIn).not.toHaveBeenCalled()
   })
 
+  // This is the pin for the compensating-undo guard in flushOutbox
+  // (`entry.expectedManualReceivedAt === undefined`): the undo here
+  // succeeds, so the entry is dropped and `currentForControl` is
+  // undefined when the queued upgrade resolves. Without the guard, the
+  // `!currentForControl` branch would fire a second, destructive undo
+  // against the row the upgrade just left in place.
   it('does not resurrect a manual check-in undone while its GPS upgrade is syncing', async () => {
     const data = dataWithFreshManualCheckin()
     let resolveUpgrade!: (value: Awaited<ReturnType<typeof checkInAtControl>>) => void
@@ -953,7 +959,7 @@ describe('BrevetCard location diagnostics and GPS retry', () => {
     })
   })
 
-  it('does not delete the row a second time when a failed undo races the upgrade', async () => {
+  it('leaves a failed-undo row in place for the queued upgrade to complete normally', async () => {
     const data = dataWithFreshManualCheckin()
     let resolveUpgrade!: (value: Awaited<ReturnType<typeof checkInAtControl>>) => void
     mockCheckIn.mockImplementation(
@@ -992,7 +998,10 @@ describe('BrevetCard location diagnostics and GPS retry', () => {
       },
     })
 
-    // The still-rendered row must not be deleted behind the rider's back.
+    // The failed undo left the entry in the outbox, so `currentForControl`
+    // is still defined when the upgrade resolves: this takes the normal
+    // success path (storeCheckin), not the compensating-undo guard below —
+    // that guard is pinned separately by the test above.
     await waitFor(() => expect(mockCheckIn).toHaveBeenCalled())
     expect(mockUndo).toHaveBeenCalledTimes(1)
   })

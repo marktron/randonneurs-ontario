@@ -732,9 +732,14 @@ changed business logic) is caught — things the mock-based suite cannot see. It
    `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, and
    `SUPABASE_SERVICE_ROLE_KEY` env vars the tests read.
 4. Runs `npm run test:integration-real`.
+5. Installs the WebKit and Chromium browsers, then runs
+   `tests/e2e/brevet-card.spec.ts` against three Playwright projects:
+   `webkit-iphone-8-plus`, `webkit-card-mutation`, and
+   `chromium-card-mutation` (see `.github/workflows/ci.yml`).
 
-Playwright E2E tests do not yet run in CI; running them there is tracked as a
-follow-up.
+The rest of the Playwright suite — the full `chromium` project in
+`playwright.config.ts`, covering everything outside the digital brevet card —
+is not yet wired into CI.
 
 > **Why both?** The mock suite asserts input validation and call shapes; it
 > mocks Supabase so aggressively it ignores tables, columns, and filters. The

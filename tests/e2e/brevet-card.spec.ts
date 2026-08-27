@@ -116,11 +116,13 @@ test.describe('Digital Brevet Card', () => {
     // the check-in reached the server.
     await expect(progress).toHaveText('1 of 2 controls', { timeout: 15000 })
 
-    // Wait for the offline-outbox banner to clear: that only happens once
-    // the server round-trip actually completes (see flushOutbox in
-    // components/brevet-card-view.tsx), unlike the optimistic progress text
-    // above. Reloading before this drains races the check-in against the
-    // page teardown and produces a flaky false negative, not a real bug.
+    // Wait for the offline-outbox banner to clear before reloading. This is
+    // not proof the round-trip finished on its own — a locator matching zero
+    // elements satisfies toBeHidden immediately, so if the sync outraces this
+    // assertion the banner never renders and the wait is a no-op. It just
+    // avoids reloading mid-flush and racing the check-in against page
+    // teardown. The post-reload assertion below is the real proof of
+    // persistence.
     await expect(page.getByText(/saved on this phone/)).toBeHidden({ timeout: 15000 })
 
     // Reload: the check-in came back from the server, not just local state.

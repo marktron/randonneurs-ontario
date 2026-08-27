@@ -20,9 +20,9 @@ export default defineConfig({
   },
   projects: [
     {
-      // Full e2e suite for Chromium. Not yet run in CI — it needs the
-      // broader app auth/seed setup that only the digital-card projects
-      // below have so far. See docs/TESTING.md → "CI/CD Integration".
+      // Full e2e suite for Chromium. Not yet wired into CI (the
+      // digital-card projects below are). See docs/TESTING.md →
+      // "CI/CD Integration".
       name: 'chromium',
       grepInvert: /@card-mutation/,
       use: { ...devices['Desktop Chrome'] },
