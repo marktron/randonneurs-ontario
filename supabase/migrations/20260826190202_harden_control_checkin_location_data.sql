@@ -35,6 +35,10 @@ SET
   distance_to_control_m = NULL
 WHERE lat IS NULL;
 
+-- A row can retain either a coordinate fix or a no-GPS failure diagnostic,
+-- never both. Organizer corrections preserve the rider's original evidence:
+-- GPS-origin rows keep coordinates, while manual-origin rows keep the
+-- diagnostic.
 ALTER TABLE control_checkins
   ADD CONSTRAINT control_checkins_coordinates_paired_check
     CHECK ((lat IS NULL) = (lng IS NULL)),
@@ -57,6 +61,8 @@ ALTER TABLE control_checkins
       )
       OR (
         method IN ('manual', 'admin')
+        AND lat IS NULL
+        AND lng IS NULL
         AND location_failure_reason IS NOT NULL
         AND location_failure_stage IS NOT NULL
         AND location_failure_elapsed_ms IS NOT NULL
@@ -83,3 +89,5 @@ COMMENT ON COLUMN control_checkins.location_failure_elapsed_ms IS
   'Client-observed location acquisition duration, bounded to 0..120000 ms.';
 COMMENT ON COLUMN control_checkins.location_failure_context IS
   'Bounded browser context: browser, standalone, or embedded.';
+COMMENT ON CONSTRAINT control_checkins_method_coordinates_check ON control_checkins IS
+  'GPS rows require a fix; legacy manual and organizer rows may retain a complete paired fix.';
