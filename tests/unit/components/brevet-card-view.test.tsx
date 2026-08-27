@@ -790,6 +790,21 @@ describe('BrevetCard location diagnostics and GPS retry', () => {
     expect(screen.getByRole('button', { name: /retry gps/i })).toBeInTheDocument()
   })
 
+  it('refuses a GPS retry taken away from the control and keeps the manual row', async () => {
+    const data = dataWithFreshManualCheckin() // ctrl-1 at 43.65/-79.38, radius 500 m
+    stubGeolocation(43.7, -79.38) // ~6 km north of the control
+
+    const user = userEvent.setup()
+    render(<BrevetCard token={TOKEN} initialData={data} />)
+    await user.click(await screen.findByRole('button', { name: /retry gps/i }))
+
+    expect(await screen.findByText(/km from start/i)).toBeInTheDocument()
+    expect(mockCheckIn).not.toHaveBeenCalled()
+    // The manual row and its Retry GPS affordance survive for another attempt.
+    expect(screen.getByRole('button', { name: /retry gps/i })).toBeInTheDocument()
+    expect(screen.getByText(/recorded without gps/i)).toBeInTheDocument()
+  })
+
   it('disables Undo while a GPS retry is still acquiring a precise fix', async () => {
     const data = dataWithFreshManualCheckin()
     const clearWatch = vi.fn()

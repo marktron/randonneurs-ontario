@@ -630,6 +630,16 @@ export async function checkInAtControl(token: string, input: CheckinInput): Prom
     let upgradedFromManual = false
 
     if (input.expectedManualReceivedAt !== undefined) {
+      // A queued upgrade from an older client (localStorage survives deploys)
+      // can arrive from far away. Refuse it rather than overwrite the manual
+      // row's honest no-GPS diagnostic with an out-of-radius fix.
+      if (distanceToControl !== null && distanceToControl > control.radius_m) {
+        return {
+          success: false,
+          error: 'GPS could not be added: that fix is outside this control',
+        }
+      }
+
       // Upgrade requests are update-only. They must never insert: if Undo
       // removes the target before a delayed request arrives, an INSERT would
       // silently resurrect the rider's deleted check-in.

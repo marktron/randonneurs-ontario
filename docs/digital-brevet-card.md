@@ -272,7 +272,15 @@ Design notes:
   original check-in time. The request includes that row's server receipt
   timestamp as an optimistic-lock identity and is never allowed to insert a
   replacement. This repairs the evidence without changing when the rider
-  first checked in, racing Undo, or creating a second row.
+  first checked in, racing Undo, or creating a second row. The upgrade is
+  accepted only when the new fix lands inside the target control's radius:
+  a fix outside it would erase an honest "no GPS" diagnostic in exchange
+  for a row the organizer would see flagged as out of radius anyway, so the
+  manual row and its diagnostic are left untouched and the rider is told
+  how far away the fix put them. The client checks this first, to show that
+  message; the server enforces it independently, because a stale upgrade
+  queued in `localStorage` by an older build can survive a deploy and
+  arrive from far away.
 - After the finish control is checked: "Submit your result →
   `/results/submit/[token]`" (token already shared between the two flows;
   if no result row exists yet the existing `createEarlyResult` path covers

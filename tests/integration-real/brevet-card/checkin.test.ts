@@ -531,6 +531,61 @@ describe('digital brevet card check-in (real DB)', () => {
     })
   })
 
+  it('refuses a GPS upgrade whose fix is outside the control radius', async () => {
+    await clearActiveCheckin(IDS.controlStart)
+    const manual = await checkInAtControl(activeToken, {
+      controlId: IDS.controlStart,
+      checkedInAt: new Date().toISOString(),
+      locationFailure: {
+        reason: 'permission_denied',
+        stage: 'preflight',
+        elapsedMs: 0,
+        context: 'browser',
+      },
+    })
+    expect(manual.success).toBe(true)
+
+    const before = await checked(
+      supabase
+        .from('control_checkins')
+        .select('received_at')
+        .eq('registration_id', IDS.regActive)
+        .eq('control_id', IDS.controlStart)
+        .single(),
+      'read manual before far upgrade'
+    )
+
+    // ~5.5 km north of controlStart, well outside its 500 m radius.
+    const rejected = await checkInAtControl(activeToken, {
+      controlId: IDS.controlStart,
+      checkedInAt: new Date().toISOString(),
+      lat: CONTROL_LAT + 0.05,
+      lng: CONTROL_LNG,
+      accuracyM: 9,
+      expectedManualReceivedAt: (before as { received_at: string }).received_at,
+    })
+    expect(rejected.success).toBe(false)
+    expect(rejected.retryable).not.toBe(true)
+
+    const after = await checked(
+      supabase
+        .from('control_checkins')
+        .select('method, lat, lng, location_failure_reason, location_failure_stage')
+        .eq('registration_id', IDS.regActive)
+        .eq('control_id', IDS.controlStart)
+        .single(),
+      'read row after refused upgrade'
+    )
+    expect(after).toMatchObject({
+      method: 'manual',
+      lat: null,
+      lng: null,
+      location_failure_reason: 'permission_denied',
+      location_failure_stage: 'preflight',
+    })
+    await clearActiveCheckin(IDS.controlStart)
+  })
+
   it('does not let a stale GPS retry upgrade a manual row created after Undo', async () => {
     await clearActiveCheckin()
     const staleReceivedAt = new Date(Date.now() - 60_000).toISOString()

@@ -621,6 +621,23 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
           setLocationStatus('granted')
           const fix: CheckinFix = { ...result.fix, checkedInAt }
           if (intent === 'retry') {
+            // An upgrade must not turn an honest "no GPS" row into a GPS row
+            // recorded kilometres away: that erases the diagnostic and lands
+            // as an out-of-radius fix. Only a fix inside this control's own
+            // radius may replace the manual evidence.
+            const distanceM =
+              control.lat !== null && control.lng !== null
+                ? haversineMeters(fix.lat, fix.lng, control.lat, control.lng)
+                : null
+            if (distanceM !== null && distanceM > control.radiusM) {
+              setRetryGpsNotice({
+                controlId: control.id,
+                message: `GPS puts you ${formatDistanceKm(distanceM)} km from ${
+                  control.name
+                }. Your saved check-in was left as it is — retry at the control.`,
+              })
+              return
+            }
             // This is an upgrade of the same check-in, not a new visit: keep
             // its original tap time and target control while replacing the
             // manual row with GPS server-side.
