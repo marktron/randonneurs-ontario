@@ -1,5 +1,7 @@
 import {
+  MAX_LOCATION_ACCURACY_M,
   MAX_LOCATION_FAILURE_ELAPSED_MS,
+  isValidCoordinatePair,
   type LocationContext,
   type LocationFailureDiagnostic,
   type LocationFailureReason,
@@ -17,7 +19,7 @@ export const HIGH_ACCURACY_TIMEOUT_MS = 45_000
 export const USEFUL_LOCATION_ACCURACY_M = 100
 
 /** Keep client output within the server's accepted GPS accuracy range. */
-export const MAX_USABLE_LOCATION_ACCURACY_M = 100_000
+export const MAX_USABLE_LOCATION_ACCURACY_M = MAX_LOCATION_ACCURACY_M
 
 export interface GeolocationFix {
   lat: number
@@ -88,19 +90,10 @@ function positionFix(
   position: GeolocationPosition
 ): { ok: true; fix: GeolocationFix } | { ok: false; rejection: PositionRejection } {
   const { latitude, longitude, accuracy } = position.coords
-  if (
-    !Number.isFinite(latitude) ||
-    latitude < -90 ||
-    latitude > 90 ||
-    !Number.isFinite(longitude) ||
-    longitude < -180 ||
-    longitude > 180 ||
-    !Number.isFinite(accuracy) ||
-    accuracy < 0
-  ) {
+  if (!isValidCoordinatePair(latitude, longitude) || !Number.isFinite(accuracy) || accuracy < 0) {
     return { ok: false, rejection: 'malformed' }
   }
-  if (accuracy > MAX_USABLE_LOCATION_ACCURACY_M) {
+  if (accuracy > MAX_LOCATION_ACCURACY_M) {
     return { ok: false, rejection: 'too_coarse' }
   }
   return {

@@ -28,10 +28,12 @@ import {
 } from '@/lib/brevet-card'
 import { handleFinishIfFinalControl, revertFinishIfFinalControl } from '@/lib/events/finish-result'
 import {
+  MAX_LOCATION_ACCURACY_M,
   MAX_LOCATION_FAILURE_ELAPSED_MS,
   isLocationContext,
   isLocationFailureReason,
   isLocationFailureStage,
+  isValidCoordinatePair,
   type LocationFailureDiagnostic,
 } from '@/lib/location-diagnostics'
 import type { ActionResult } from '@/types/actions'
@@ -44,9 +46,6 @@ const CHECKIN_WINDOW_MS = 15 * 60 * 1000
 
 // Device clocks can drift; a tap "from the future" beyond this is rejected.
 const MAX_CLOCK_SKEW_MS = 5 * 60 * 1000
-
-// A GPS fix claiming worse accuracy than this is garbage input, not a fix.
-const MAX_GPS_ACCURACY_M = 100_000
 
 // ============================================================================
 // Shared: derive whether a control is the event's final control
@@ -384,6 +383,27 @@ interface PersistedCheckinRow {
   distance_to_control_m: number | null
 }
 
+/** Every read of a persisted check-in returns exactly these columns. */
+const CHECKIN_ROW_COLUMNS = 'control_id, checked_in_at, received_at, method, distance_to_control_m'
+
+/**
+ * The row that currently owns (registration, control), if any. Used by both
+ * write-miss fallbacks: the 23505 insert conflict and the upgrade whose
+ * optimistic-lock UPDATE matched nothing.
+ */
+function fetchExistingCheckinRow(
+  supabase: ReturnType<typeof getSupabaseAdmin>,
+  registrationId: string,
+  controlId: string
+) {
+  return supabase
+    .from('control_checkins')
+    .select(CHECKIN_ROW_COLUMNS)
+    .eq('registration_id', registrationId)
+    .eq('control_id', controlId)
+    .maybeSingle()
+}
+
 /**
  * Result of a check-in attempt. `retryable` marks failures that are
  * transient (rate limit, DB hiccup): the client outbox must keep the entry
@@ -426,14 +446,7 @@ export async function checkInAtControl(token: string, input: CheckinInput): Prom
 
     const hasCoords = hasLat && hasLng
     if (hasCoords) {
-      if (
-        !Number.isFinite(input.lat!) ||
-        input.lat! < -90 ||
-        input.lat! > 90 ||
-        !Number.isFinite(input.lng!) ||
-        input.lng! < -180 ||
-        input.lng! > 180
-      ) {
+      if (!isValidCoordinatePair(input.lat, input.lng)) {
         return { success: false, error: 'Invalid GPS coordinates' }
       }
       if (
@@ -441,7 +454,7 @@ export async function checkInAtControl(token: string, input: CheckinInput): Prom
         (typeof input.accuracyM !== 'number' ||
           !Number.isFinite(input.accuracyM) ||
           input.accuracyM < 0 ||
-          input.accuracyM > MAX_GPS_ACCURACY_M)
+          input.accuracyM > MAX_LOCATION_ACCURACY_M)
       ) {
         return { success: false, error: 'Invalid GPS accuracy' }
       }
@@ -662,7 +675,7 @@ export async function checkInAtControl(token: string, input: CheckinInput): Prom
         .eq('method', 'manual')
         .eq('received_at', input.expectedManualReceivedAt)
         .gte('received_at', upgradeCutoff)
-        .select('control_id, checked_in_at, received_at, method, distance_to_control_m')
+        .select(CHECKIN_ROW_COLUMNS)
         .maybeSingle()
 
       if (upgradeError) {
@@ -686,12 +699,11 @@ export async function checkInAtControl(token: string, input: CheckinInput): Prom
         // The target may have aged out, been corrected by an organizer, or
         // been replaced after Undo. Return the current winner when one
         // exists, but never apply the stale GPS evidence to it.
-        const { data: existing, error: existingError } = await supabase
-          .from('control_checkins')
-          .select('control_id, checked_in_at, received_at, method, distance_to_control_m')
-          .eq('registration_id', reg.id)
-          .eq('control_id', control.id)
-          .maybeSingle()
+        const { data: existing, error: existingError } = await fetchExistingCheckinRow(
+          supabase,
+          reg.id,
+          control.id
+        )
 
         if (existingError) {
           return {
@@ -719,7 +731,7 @@ export async function checkInAtControl(token: string, input: CheckinInput): Prom
       const { data: inserted, error: insertError } = await supabase
         .from('control_checkins')
         .insert(insertData)
-        .select('control_id, checked_in_at, received_at, method, distance_to_control_m')
+        .select(CHECKIN_ROW_COLUMNS)
         .single()
 
       row = inserted as PersistedCheckinRow | null
@@ -728,12 +740,11 @@ export async function checkInAtControl(token: string, input: CheckinInput): Prom
         // Unique violation (registration_id, control_id) — the offline outbox
         // retried a check-in that already landed. Return the existing row.
         if (insertError.code === '23505') {
-          const { data: existing, error: existingError } = await supabase
-            .from('control_checkins')
-            .select('control_id, checked_in_at, received_at, method, distance_to_control_m')
-            .eq('registration_id', reg.id)
-            .eq('control_id', control.id)
-            .single()
+          const { data: existing, error: existingError } = await fetchExistingCheckinRow(
+            supabase,
+            reg.id,
+            control.id
+          )
 
           if (existingError || !existing) {
             return {

@@ -46,3 +46,22 @@ export function isLocationFailureStage(value: unknown): value is LocationFailure
 export function isLocationContext(value: unknown): value is LocationContext {
   return LOCATION_CONTEXTS.includes(value as LocationContext)
 }
+
+/**
+ * A fix claiming worse accuracy than this is garbage input, not a location.
+ * Shared so the client never produces a fix the server would reject.
+ */
+export const MAX_LOCATION_ACCURACY_M = 100_000
+
+export function isValidLatitude(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= -90 && value <= 90
+}
+
+export function isValidLongitude(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= -180 && value <= 180
+}
+
+/** Both coordinates present, finite, and in range. */
+export function isValidCoordinatePair(lat: unknown, lng: unknown): boolean {
+  return isValidLatitude(lat) && isValidLongitude(lng)
+}

@@ -489,7 +489,7 @@ describe('checkInAtControl input validation', () => {
     const nowIso = new Date().toISOString()
     tables.control_checkins = {
       insertResponse: { data: null, error: { code: '23505' } },
-      singleResponse: {
+      maybeSingleResponse: {
         data: {
           control_id: 'ctrl-1',
           checked_in_at: nowIso,
@@ -696,7 +696,7 @@ describe('checkInAtControl input validation', () => {
     const original = new Date().toISOString()
     tables.control_checkins = {
       insertResponse: { data: null, error: { code: '23505' } },
-      singleResponse: {
+      maybeSingleResponse: {
         data: {
           control_id: 'ctrl-1',
           checked_in_at: original,
