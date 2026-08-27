@@ -190,6 +190,12 @@ export default async function globalSetup() {
         first_name: 'WebKit',
         last_name: 'TestRider',
       },
+      {
+        id: E2E_IDS.chromiumRider,
+        slug: 'e2e-test-chromium-rider',
+        first_name: 'Chromium',
+        last_name: 'TestRider',
+      },
     ]),
     'riders upsert'
   )
@@ -320,6 +326,11 @@ export default async function globalSetup() {
         event_id: E2E_IDS.activeEvent,
         rider_id: E2E_IDS.webkitRider,
       },
+      {
+        id: E2E_IDS.chromiumActiveRegistration,
+        event_id: E2E_IDS.activeEvent,
+        rider_id: E2E_IDS.chromiumRider,
+      },
     ]),
     'insert active registrations'
   )
@@ -328,7 +339,11 @@ export default async function globalSetup() {
     supabase
       .from('registrations')
       .select('id, management_token')
-      .in('id', [E2E_IDS.activeRegistration, E2E_IDS.webkitActiveRegistration]),
+      .in('id', [
+        E2E_IDS.activeRegistration,
+        E2E_IDS.webkitActiveRegistration,
+        E2E_IDS.chromiumActiveRegistration,
+      ]),
     'read active management tokens'
   )
   const activeTokenById = new Map(
@@ -339,7 +354,8 @@ export default async function globalSetup() {
   )
   const activeManagementToken = activeTokenById.get(E2E_IDS.activeRegistration)
   const webkitManagementToken = activeTokenById.get(E2E_IDS.webkitActiveRegistration)
-  if (!activeManagementToken || !webkitManagementToken) {
+  const chromiumManagementToken = activeTokenById.get(E2E_IDS.chromiumActiveRegistration)
+  if (!activeManagementToken || !webkitManagementToken || !chromiumManagementToken) {
     throw new Error('[e2e-setup] Active registration management token is null after insert')
   }
 
@@ -363,9 +379,18 @@ export default async function globalSetup() {
     brevetCard: {
       eventId: E2E_IDS.activeEvent,
       managementToken: activeManagementToken,
-      webkitManagementToken,
       controlLat: CONTROL_LAT,
       controlLng: CONTROL_LNG,
+      mutation: {
+        'webkit-card-mutation': {
+          managementToken: webkitManagementToken,
+          registrationId: E2E_IDS.webkitActiveRegistration,
+        },
+        'chromium-card-mutation': {
+          managementToken: chromiumManagementToken,
+          registrationId: E2E_IDS.chromiumActiveRegistration,
+        },
+      },
     },
   }
 

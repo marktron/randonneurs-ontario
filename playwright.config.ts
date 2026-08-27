@@ -20,6 +20,9 @@ export default defineConfig({
   },
   projects: [
     {
+      // Full e2e suite for Chromium. Not yet run in CI — it needs the
+      // broader app auth/seed setup that only the digital-card projects
+      // below have so far. See docs/TESTING.md → "CI/CD Integration".
       name: 'chromium',
       grepInvert: /@card-mutation/,
       use: { ...devices['Desktop Chrome'] },
@@ -34,22 +37,22 @@ export default defineConfig({
       use: { ...devices['iPhone 8 Plus'] },
     },
     {
-      // The one card test that writes to the shared seed runs only after the
-      // WebKit smoke tests have exercised a pristine registration.
+      // Each mutating project seeds and resets its own registration
+      // (tests/e2e/helpers/checkins.ts), so there is no ordering constraint
+      // on the WebKit smoke project and no dependency is needed.
       name: 'chromium-card-mutation',
       testMatch: /brevet-card\.spec\.ts/,
       grep: /@card-mutation/,
-      dependencies: ['webkit-iphone-8-plus'],
       use: { ...devices['Desktop Chrome'] },
     },
     {
       // Run the real check-in/outbox/server-action path on the affected
-      // browser profile too. It uses a separate seeded registration so the
-      // Chromium mutation and read-only smoke tests cannot race it.
+      // browser profile too. It uses a separate seeded registration, reset
+      // before each run, so it cannot race the Chromium mutation project or
+      // the read-only smoke tests.
       name: 'webkit-card-mutation',
       testMatch: /brevet-card\.spec\.ts/,
       grep: /@card-mutation/,
-      dependencies: ['webkit-iphone-8-plus'],
       use: { ...devices['iPhone 8 Plus'] },
     },
     // Uncomment to test in additional browsers

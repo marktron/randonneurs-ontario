@@ -37,7 +37,11 @@ export default async function globalTeardown() {
   await supabase
     .from('control_checkins')
     .delete()
-    .in('registration_id', [E2E_IDS.activeRegistration, E2E_IDS.webkitActiveRegistration])
+    .in('registration_id', [
+      E2E_IDS.activeRegistration,
+      E2E_IDS.webkitActiveRegistration,
+      E2E_IDS.chromiumActiveRegistration,
+    ])
   await supabase.from('event_controls').delete().eq('event_id', E2E_IDS.activeEvent)
 
   // Results
@@ -53,7 +57,10 @@ export default async function globalTeardown() {
   await supabase.from('routes').delete().eq('id', E2E_IDS.route)
 
   // Rider
-  await supabase.from('riders').delete().in('id', [E2E_IDS.rider, E2E_IDS.webkitRider])
+  await supabase
+    .from('riders')
+    .delete()
+    .in('id', [E2E_IDS.rider, E2E_IDS.webkitRider, E2E_IDS.chromiumRider])
 
   // News items created during admin tests
   await supabase.from('news').delete().ilike('title', 'Test Announcement%')

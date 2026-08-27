@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test'
 import { getTestData } from './helpers/test-data'
+import { resetCheckinsForRegistration } from './helpers/checkins'
 
 /**
  * E2E tests for the digital brevet card (/card/[token]).
@@ -32,9 +33,9 @@ test.describe('Digital Brevet Card', () => {
     await expect(page.getByRole('heading', { name: /E2E Test Active Brevet/ })).toBeVisible()
     await expect(page.getByText('Start — Union Station')).toBeVisible()
     await expect(page.getByText('Finish — Union Station')).toBeVisible()
-    // This read-only assertion is deliberately agnostic to the persisted
-    // progress: the Chromium-only mutation test can run concurrently.
-    await expect(page.getByText(/\d of 2 controls/)).toBeVisible()
+    // No mutating project touches this registration, so its progress is fixed.
+    await expect(page.getByText('0 of 2 controls')).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Check in' }).first()).toBeVisible()
   })
 
   test('proactive location test succeeds with mocked GPS', async ({ context, page }, testInfo) => {
@@ -71,12 +72,12 @@ test.describe('Digital Brevet Card', () => {
     })
 
     await page.goto(`/card/${card.managementToken}`)
-    const progress = page.getByText(/\d of 2 controls/)
-    const before = await progress.textContent()
+    const progress = page.getByText('0 of 2 controls')
+    await expect(progress).toBeVisible()
     await page.getByRole('button', { name: 'Test your location' }).click()
 
     await expect(page.getByText('Location works on this phone.')).toBeVisible({ timeout: 15000 })
-    await expect(progress).toHaveText(before ?? '0 of 2 controls')
+    await expect(progress).toBeVisible()
   })
 
   test('checks in at a control with mocked GPS @card-mutation', async ({
@@ -96,32 +97,34 @@ test.describe('Digital Brevet Card', () => {
       accuracy: 10,
     })
 
-    const managementToken =
-      testInfo.project.name === 'webkit-card-mutation'
-        ? card.webkitManagementToken
-        : card.managementToken
-    await page.goto(`/card/${managementToken}`)
-    const progress = page.getByText(/\d of 2 controls/)
-    await expect(progress).toBeVisible()
-    const initialText = await progress.textContent()
-    const initialCount = Number(initialText?.match(/\d+/)?.[0] ?? 0)
+    const seat = card.mutation[testInfo.project.name]
+    expect(seat, `no seeded registration for project ${testInfo.project.name}`).toBeTruthy()
 
-    // A Playwright retry reuses the global seed, so the first attempt may
-    // already have committed. Avoid colliding with the unique row constraint.
-    if (initialCount === 2) {
-      await expect(progress).toContainText('2 of 2 controls')
-      return
-    }
+    // Own this registration's state: globalSetup runs once per invocation, so
+    // a Playwright retry would otherwise start from the failed attempt's row.
+    await resetCheckinsForRegistration(seat.registrationId)
+
+    await page.goto(`/card/${seat.managementToken}`)
+    const progress = page.getByText(/\d of 2 controls/)
+    await expect(progress).toHaveText('0 of 2 controls')
 
     await page.getByRole('button', { name: 'Check in' }).first().click()
 
-    // The check-in syncs and renders the ✓ timestamp within the row.
-    await expect(progress).toContainText(`${initialCount + 1} of 2 controls`, { timeout: 15000 })
+    // The check-in syncs and renders the ✓ timestamp within the row. Note
+    // this text can go to "1 of 2" purely from the client-side outbox queue,
+    // before the server round-trip finishes — so it is not on its own proof
+    // the check-in reached the server.
+    await expect(progress).toHaveText('1 of 2 controls', { timeout: 15000 })
+
+    // Wait for the offline-outbox banner to clear: that only happens once
+    // the server round-trip actually completes (see flushOutbox in
+    // components/brevet-card-view.tsx), unlike the optimistic progress text
+    // above. Reloading before this drains races the check-in against the
+    // page teardown and produces a flaky false negative, not a real bug.
+    await expect(page.getByText(/saved on this phone/)).toBeHidden({ timeout: 15000 })
 
     // Reload: the check-in came back from the server, not just local state.
     await page.reload()
-    await expect(page.getByText(`${initialCount + 1} of 2 controls`)).toBeVisible({
-      timeout: 15000,
-    })
+    await expect(page.getByText('1 of 2 controls')).toBeVisible({ timeout: 15000 })
   })
 })

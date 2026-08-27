@@ -16,6 +16,8 @@ export const E2E_IDS = {
   activeControlFinish: '00000000-e2e0-4000-a000-00000000000b',
   webkitRider: '00000000-e2e0-4000-a000-00000000000c',
   webkitActiveRegistration: '00000000-e2e0-4000-a000-00000000000d',
+  chromiumRider: '00000000-e2e0-4000-a000-00000000000e',
+  chromiumActiveRegistration: '00000000-e2e0-4000-a000-00000000000f',
 }
 
 export interface E2ETestData {
@@ -30,10 +32,12 @@ export interface E2ETestData {
   /** In-progress brevet with controls for digital brevet card tests. */
   brevetCard: {
     eventId: string
+    /** Read-only smoke tests only. No mutating project ever touches it. */
     managementToken: string
-    webkitManagementToken: string
     controlLat: number
     controlLng: number
+    /** One pristine registration per @card-mutation project. */
+    mutation: Record<string, { managementToken: string; registrationId: string }>
   }
 }
 
