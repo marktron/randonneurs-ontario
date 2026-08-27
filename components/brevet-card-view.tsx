@@ -263,6 +263,8 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
   const flushInFlight = useRef(false)
   const flushRequested = useRef(false)
   const activeLocationRequest = useRef<AbortController | null>(null)
+  /** Controls with a server undo in flight; their outbox entries must not send. */
+  const undoInFlight = useRef<Set<string>>(new Set())
   const locationProgressStageRef = useRef<LocationProgressStage>('quick')
   const checkinsRef = useRef<Map<string, CardCheckin>>(
     new Map(initialData.checkins.map((checkin) => [checkin.controlId, checkin]))
@@ -353,6 +355,9 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
           // A prior slow request may have allowed Undo or a replacement for
           // this control. Never send a stale snapshot entry.
           if (!outboxRef.current.some((queued) => sameOutboxGeneration(queued, entry))) continue
+          // Undo is deciding this control's fate. Sending now would either
+          // race the delete or report a bogus "check-in was removed" error.
+          if (undoInFlight.current.has(entry.controlId)) continue
 
           try {
             const result = await checkInAtControl(token, outboxServerPayload(entry))
@@ -369,7 +374,10 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
                 // in flight. Clean up any row the request just created. If a
                 // replacement exists, ignore this stale acknowledgement and
                 // let the new generation make its own request.
-                if (!currentForControl) {
+                // Upgrade entries are update-only server-side: they can never
+                // have created a row, so a compensating delete here would
+                // destroy a row that Undo failed to remove.
+                if (!currentForControl && entry.expectedManualReceivedAt === undefined) {
                   void undoCheckin(token, { controlId: checkin.controlId }).catch(() => {})
                 }
                 continue
@@ -809,17 +817,17 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
         return
       }
 
-      // A manual row can also have a GPS-upgrade payload queued behind it.
-      // Remove that payload before deleting the row so it cannot recreate or
-      // upgrade a check-in after Undo.
-      if (hasQueuedEntry) {
-        persistOutbox((prev) => prev.filter((e) => e.controlId !== control.id))
-      }
-
       setUndoingControlId(control.id)
+      undoInFlight.current.add(control.id)
       try {
         const result = await undoCheckin(token, { controlId: control.id })
         if (result.success) {
+          // Only now is the row gone, so the queued GPS upgrade can neither
+          // recreate nor re-upgrade it. Dropping it any earlier loses the
+          // rider's fix whenever the undo is refused or the network is down.
+          if (hasQueuedEntry) {
+            persistOutbox((prev) => prev.filter((e) => e.controlId !== control.id))
+          }
           removeStoredCheckin(control.id)
         } else {
           setErrorMessage(result.error || 'Could not undo the check-in')
@@ -827,6 +835,7 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
       } catch {
         setErrorMessage('Could not undo the check-in — check your connection and try again.')
       } finally {
+        undoInFlight.current.delete(control.id)
         setUndoingControlId(null)
       }
     },

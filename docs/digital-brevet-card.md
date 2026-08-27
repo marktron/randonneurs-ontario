@@ -264,8 +264,14 @@ Design notes:
   Undo is hidden for `method='admin'` check-ins and once the event is
   submitted. Pending (not-yet-synced) check-ins undo by dropping the outbox
   entry locally (works offline), with a best-effort server undo in case a
-  retry already landed. **After the window, admins remain the only
-  correction path** (edit/delete in the check-in grid).
+  retry already landed. When a synced check-in also has a queued GPS
+  upgrade (Retry GPS succeeded but the send is still queued), the queued
+  upgrade payload is dropped only after the server confirms the undo — a
+  refused or offline undo keeps both the row and the rider's fix, so it can
+  still repair the evidence on a later flush. The outbox never sends an
+  entry for a control whose undo is in flight, so a background flush cannot
+  race the delete. **After the window, admins remain the only correction
+  path** (edit/delete in the check-in grid).
 - **Retry GPS after a manual check-in:** during that same window, the rider
   can retry location acquisition. A successful retry upgrades the existing
   row from `manual` to `gps`, clears the failure diagnostic, and keeps the

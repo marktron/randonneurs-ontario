@@ -876,9 +876,85 @@ describe('BrevetCard location diagnostics and GPS retry', () => {
       },
     })
 
-    await waitFor(() => expect(mockUndo).toHaveBeenCalledTimes(2))
+    // The upgrade is update-only server-side, so no compensating delete is
+    // needed — and the undone row must stay gone.
+    await waitFor(() => expect(mockCheckIn).toHaveBeenCalled())
+    expect(mockUndo).toHaveBeenCalledTimes(1)
     expect(screen.getByRole('button', { name: /^check in$/i })).toBeInTheDocument()
     expect(screen.queryByText(/gps was added/i)).not.toBeInTheDocument()
+  })
+
+  it('keeps the queued GPS upgrade when the server refuses the undo', async () => {
+    const data = dataWithFreshManualCheckin()
+    // The upgrade stays queued (offline); only the undo call answers.
+    mockCheckIn.mockImplementation(() => new Promise(() => {}))
+    mockUndo.mockResolvedValue({
+      success: false,
+      error: 'The undo window has passed',
+    } as Awaited<ReturnType<typeof undoCheckin>>)
+
+    const user = userEvent.setup()
+    render(<BrevetCard token={TOKEN} initialData={data} />)
+    await user.click(await screen.findByRole('button', { name: /retry gps/i }))
+    await screen.findByText(/gps fix saved — waiting to sync/i)
+
+    await user.click(screen.getByRole('button', { name: /^undo$/i }))
+    expect(await screen.findByText(/the undo window has passed/i)).toBeInTheDocument()
+
+    // The row survives — and so does the rider's GPS payload, in memory and
+    // in storage, so a later flush can still repair the evidence.
+    expect(screen.getByText(/gps fix saved — waiting to sync/i)).toBeInTheDocument()
+    const stored = JSON.parse(window.localStorage.getItem(`brevet-card-outbox-${TOKEN}`) ?? '[]')
+    expect(stored).toHaveLength(1)
+    expect(stored[0]).toMatchObject({
+      controlId: 'ctrl-1',
+      lat: 43.65,
+      expectedManualReceivedAt: data.checkins[0].receivedAt,
+    })
+  })
+
+  it('does not delete the row a second time when a failed undo races the upgrade', async () => {
+    const data = dataWithFreshManualCheckin()
+    let resolveUpgrade!: (value: Awaited<ReturnType<typeof checkInAtControl>>) => void
+    mockCheckIn.mockImplementation(
+      () =>
+        new Promise<Awaited<ReturnType<typeof checkInAtControl>>>((resolve) => {
+          resolveUpgrade = resolve
+        })
+    )
+    mockUndo.mockResolvedValue({
+      success: false,
+      error: 'Too many attempts. Please wait a few minutes.',
+    } as Awaited<ReturnType<typeof undoCheckin>>)
+
+    const user = userEvent.setup()
+    render(<BrevetCard token={TOKEN} initialData={data} />)
+    await user.click(await screen.findByRole('button', { name: /retry gps/i }))
+    await screen.findByText(/gps fix saved — waiting to sync/i)
+
+    await user.click(screen.getByRole('button', { name: /^undo$/i }))
+    expect(await screen.findByText(/too many attempts/i)).toBeInTheDocument()
+    expect(mockUndo).toHaveBeenCalledTimes(1)
+
+    resolveUpgrade({
+      success: true,
+      data: {
+        checkin: {
+          controlId: 'ctrl-1',
+          checkedInAt: data.checkins[0].checkedInAt,
+          receivedAt: new Date().toISOString(),
+          method: 'gps',
+          distanceToControlM: 12,
+          flags: { ...NO_FLAGS },
+        },
+        alreadyExisted: true,
+        upgradedFromManual: true,
+      },
+    })
+
+    // The still-rendered row must not be deleted behind the rider's back.
+    await waitFor(() => expect(mockCheckIn).toHaveBeenCalled())
+    expect(mockUndo).toHaveBeenCalledTimes(1)
   })
 
   it('does not let a stale recovered acknowledgement delete a newer GPS retry', async () => {
