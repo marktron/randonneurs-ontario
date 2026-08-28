@@ -708,7 +708,7 @@ matches by coincidence).
 ## CI/CD Integration
 
 CI is defined in `.github/workflows/ci.yml` and runs on every pull request and
-on pushes to `main`. It has two jobs that both must pass:
+on pushes to `main`. It has three jobs that all must pass:
 
 ### `verify` job
 
@@ -755,6 +755,10 @@ is not yet wired into CI.
 > `integration-real` job is what proves the app actually works against the
 > schema. Keep it green — a renamed column or changed action that compiles will
 > only fail here.
+
+### Deploying migrations (separate workflow)
+
+Production migrations are pushed by `.github/workflows/deploy-migrations.yml`, not by `ci.yml`. This is because `ci.yml` uses `cancel-in-progress: true` (safe for tests), whereas cancelling `db push` mid-migration is worse than a slow test run. The workflow is guarded by `tests/unit/workflows/deploy-migrations.test.ts` to keep the CLI version, concurrency settings, and configuration in sync. For setup instructions and backward-compatibility guidance, see `docs/database-setup.md` → "Push migrations to remote".
 
 ## Related Documentation
 

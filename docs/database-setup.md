@@ -193,6 +193,41 @@ npx supabase migration list
 
 ### Push migrations to remote (production)
 
+Migrations are applied to production automatically by `.github/workflows/deploy-migrations.yml` whenever a push to `main` changes `supabase/migrations/**`. Nothing else is needed after merging.
+
+#### Setup
+
+The workflow requires three repository settings:
+
+```bash
+gh secret set SUPABASE_ACCESS_TOKEN   # Dashboard → Account → Access Tokens
+gh secret set SUPABASE_DB_PASSWORD    # the project's Postgres password
+gh variable set SUPABASE_PROJECT_REF --body blddxbjpgqhyvergugzh
+```
+
+If any of these are missing, the job fails immediately with a message naming which one(s).
+
+#### Why this workflow exists
+
+Vercel deploys the same commit concurrently and does not wait for migrations. Before this workflow existed, a merge whose code read a new column would 500 with Postgres `42703` until someone ran `db push` by hand (Sentry JAVASCRIPT-NEXTJS-2Q / -2D, 2026-08-27; same pattern on 2026-07-03).
+
+#### Backward compatibility
+
+The job usually finishes well before the Vercel build does, but nothing enforces this, and the previous release keeps running for a minute or so after the migration lands. Migrations therefore must be backward-compatible with the previous release:
+
+- Additive changes (new nullable columns, new tables) are safe.
+- Renames and drops need a two-step rollout: add the new column/table in one PR (deploy the code that reads it), then drop the old one in a later PR.
+
+#### Manual fallback
+
+If needed, re-run via:
+
+```bash
+gh workflow run deploy-migrations.yml
+```
+
+Or push locally with the direct commands (note that the workflow passes `--project-ref` instead of linking):
+
 ```bash
 npx supabase link --project-ref <project-ref>
 npx supabase db push
