@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test'
 import { getTestData } from './helpers/test-data'
+import { resetCheckinsForRegistration } from './helpers/checkins'
 
 /**
  * E2E tests for the digital brevet card (/card/[token]).
@@ -32,33 +33,100 @@ test.describe('Digital Brevet Card', () => {
     await expect(page.getByRole('heading', { name: /E2E Test Active Brevet/ })).toBeVisible()
     await expect(page.getByText('Start — Union Station')).toBeVisible()
     await expect(page.getByText('Finish — Union Station')).toBeVisible()
-    await expect(page.getByText(/0 of 2 controls/)).toBeVisible()
+    // No mutating project touches this registration, so its progress is fixed.
+    await expect(page.getByText('0 of 2 controls')).toBeVisible()
     await expect(page.getByRole('button', { name: 'Check in' }).first()).toBeVisible()
   })
 
-  test('checks in at a control with mocked GPS', async ({ browser }) => {
+  test('proactive location test succeeds with mocked GPS', async ({ context, page }, testInfo) => {
+    test.skip(
+      testInfo.project.name !== 'webkit-iphone-8-plus',
+      'This smoke test specifically covers the iPhone/WebKit geolocation path'
+    )
+
     const card = data()
     if (!card) {
       test.skip(true, 'No brevet card test data — globalSetup may have failed')
       return
     }
 
-    const context = await browser.newContext({
-      permissions: ['geolocation'],
-      geolocation: { latitude: card.controlLat, longitude: card.controlLng, accuracy: 10 },
+    // Keep the proactive affordance visible while granting the underlying
+    // browser permission. The click still uses Playwright's real WebKit
+    // Geolocation API and the production staged-acquisition helper.
+    await page.addInitScript(() => {
+      const promptPermission = {
+        state: 'prompt',
+        addEventListener: () => {},
+        removeEventListener: () => {},
+      }
+      Object.defineProperty(navigator, 'permissions', {
+        configurable: true,
+        value: { query: async () => promptPermission },
+      })
     })
-    const page = await context.newPage()
+    await context.grantPermissions(['geolocation'])
+    await context.setGeolocation({
+      latitude: card.controlLat,
+      longitude: card.controlLng,
+      accuracy: 10,
+    })
 
     await page.goto(`/card/${card.managementToken}`)
+    const progress = page.getByText('0 of 2 controls')
+    await expect(progress).toBeVisible()
+    await page.getByRole('button', { name: 'Test your location' }).click()
+
+    await expect(page.getByText('Location works on this phone.')).toBeVisible({ timeout: 15000 })
+    await expect(progress).toBeVisible()
+  })
+
+  test('checks in at a control with mocked GPS @card-mutation', async ({
+    context,
+    page,
+  }, testInfo) => {
+    const card = data()
+    if (!card) {
+      test.skip(true, 'No brevet card test data — globalSetup may have failed')
+      return
+    }
+
+    await context.grantPermissions(['geolocation'])
+    await context.setGeolocation({
+      latitude: card.controlLat,
+      longitude: card.controlLng,
+      accuracy: 10,
+    })
+
+    const seat = card.mutation[testInfo.project.name]
+    expect(seat, `no seeded registration for project ${testInfo.project.name}`).toBeTruthy()
+
+    // Own this registration's state: globalSetup runs once per invocation, so
+    // a Playwright retry would otherwise start from the failed attempt's row.
+    await resetCheckinsForRegistration(seat.registrationId)
+
+    await page.goto(`/card/${seat.managementToken}`)
+    const progress = page.getByText(/\d of 2 controls/)
+    await expect(progress).toHaveText('0 of 2 controls')
+
     await page.getByRole('button', { name: 'Check in' }).first().click()
 
-    // The check-in syncs and renders the ✓ timestamp within the row.
-    await expect(page.getByText(/1 of 2 controls/)).toBeVisible({ timeout: 15000 })
+    // The check-in syncs and renders the ✓ timestamp within the row. Note
+    // this text can go to "1 of 2" purely from the client-side outbox queue,
+    // before the server round-trip finishes — so it is not on its own proof
+    // the check-in reached the server.
+    await expect(progress).toHaveText('1 of 2 controls', { timeout: 15000 })
+
+    // Wait for the offline-outbox banner to clear before reloading. This is
+    // not proof the round-trip finished on its own — a locator matching zero
+    // elements satisfies toBeHidden immediately, so if the sync outraces this
+    // assertion the banner never renders and the wait is a no-op. It just
+    // avoids reloading mid-flush and racing the check-in against page
+    // teardown. The post-reload assertion below is the real proof of
+    // persistence.
+    await expect(page.getByText(/saved on this phone/)).toBeHidden({ timeout: 15000 })
 
     // Reload: the check-in came back from the server, not just local state.
     await page.reload()
-    await expect(page.getByText(/1 of 2 controls/)).toBeVisible({ timeout: 15000 })
-
-    await context.close()
+    await expect(page.getByText('1 of 2 controls')).toBeVisible({ timeout: 15000 })
   })
 })

@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest'
-import { buildCheckinEvidence, formatCheckinDistanceCompact } from '@/lib/checkin-evidence'
+import {
+  buildCheckinEvidence,
+  formatCheckinDistanceCompact,
+  formatLocationFailureSummary,
+} from '@/lib/checkin-evidence'
 import type { AdminCheckinGridRider } from '@/lib/actions/control-checkins'
 import type { CheckinFlags } from '@/lib/brevet-card'
 
@@ -44,6 +48,10 @@ function makeCheckin(controlId: string, overrides: Record<string, unknown> = {})
     lng: -79.4,
     accuracyM: 12,
     distanceToControlM: 40,
+    locationFailureReason: null,
+    locationFailureStage: null,
+    locationElapsedMs: null,
+    locationContext: null,
     note: null,
     flags: NO_FLAGS,
     ...overrides,
@@ -68,6 +76,28 @@ describe('buildCheckinEvidence', () => {
     expect(rows[2].distanceKm).toBe(200)
     expect(rows[2].checkin?.method).toBe('gps')
     expect(rows[2].checkin?.flags).toEqual(NO_FLAGS)
+  })
+
+  it('carries no-GPS diagnostic evidence into result rows', () => {
+    const rider = makeRider({
+      riderId: 'r1',
+      checkins: [
+        makeCheckin('c1', {
+          method: 'manual',
+          locationFailureReason: 'timeout',
+          locationFailureStage: 'high_accuracy',
+          locationElapsedMs: 42150,
+          locationContext: 'embedded',
+        }),
+      ],
+    })
+
+    expect(buildCheckinEvidence(CONTROLS, [rider])['r1'][0].checkin).toMatchObject({
+      locationFailureReason: 'timeout',
+      locationFailureStage: 'high_accuracy',
+      locationElapsedMs: 42150,
+      locationContext: 'embedded',
+    })
   })
 
   it('omits riders with no check-ins', () => {
@@ -97,5 +127,40 @@ describe('formatCheckinDistanceCompact', () => {
   it('omits accuracy when zero or not finite', () => {
     expect(formatCheckinDistanceCompact(320, 0)).toBe('320 m from control')
     expect(formatCheckinDistanceCompact(320, Number.NaN)).toBe('320 m from control')
+  })
+})
+
+describe('formatLocationFailureSummary', () => {
+  it('formats the cause, acquisition stage, elapsed time, and browsing context', () => {
+    expect(
+      formatLocationFailureSummary({
+        locationFailureReason: 'timeout',
+        locationFailureStage: 'high_accuracy',
+        locationElapsedMs: 42150,
+        locationContext: 'embedded',
+      })
+    ).toBe('Location timed out during the high-accuracy attempt after 42 s (embedded browser)')
+  })
+
+  it('uses milliseconds for an immediate permission failure', () => {
+    expect(
+      formatLocationFailureSummary({
+        locationFailureReason: 'permission_denied',
+        locationFailureStage: 'preflight',
+        locationElapsedMs: 215,
+        locationContext: 'browser',
+      })
+    ).toBe('Location permission was denied during preflight after 215 ms (browser)')
+  })
+
+  it('does not invent a cause for legacy manual check-ins', () => {
+    expect(
+      formatLocationFailureSummary({
+        locationFailureReason: null,
+        locationFailureStage: null,
+        locationElapsedMs: null,
+        locationContext: null,
+      })
+    ).toBeNull()
   })
 })

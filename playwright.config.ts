@@ -20,17 +20,45 @@ export default defineConfig({
   },
   projects: [
     {
+      // Full e2e suite for Chromium. Not yet wired into CI (the
+      // digital-card projects below are). See docs/TESTING.md →
+      // "CI/CD Integration".
       name: 'chromium',
+      grepInvert: /@card-mutation/,
       use: { ...devices['Desktop Chrome'] },
+    },
+    {
+      // Exercise the card on the closest Playwright profile to the affected
+      // iPhone 8 Plus. Keep this project focused so the rest of the seeded,
+      // mutation-heavy E2E suite is not duplicated across browser engines.
+      name: 'webkit-iphone-8-plus',
+      testMatch: /brevet-card\.spec\.ts/,
+      grepInvert: /@card-mutation/,
+      use: { ...devices['iPhone 8 Plus'] },
+    },
+    {
+      // Each mutating project seeds and resets its own registration
+      // (tests/e2e/helpers/checkins.ts), so there is no ordering constraint
+      // on the WebKit smoke project and no dependency is needed.
+      name: 'chromium-card-mutation',
+      testMatch: /brevet-card\.spec\.ts/,
+      grep: /@card-mutation/,
+      use: { ...devices['Desktop Chrome'] },
+    },
+    {
+      // Run the real check-in/outbox/server-action path on the affected
+      // browser profile too. It uses a separate seeded registration, reset
+      // before each run, so it cannot race the Chromium mutation project or
+      // the read-only smoke tests.
+      name: 'webkit-card-mutation',
+      testMatch: /brevet-card\.spec\.ts/,
+      grep: /@card-mutation/,
+      use: { ...devices['iPhone 8 Plus'] },
     },
     // Uncomment to test in additional browsers
     // {
     //   name: 'firefox',
     //   use: { ...devices['Desktop Firefox'] },
-    // },
-    // {
-    //   name: 'webkit',
-    //   use: { ...devices['Desktop Safari'] },
     // },
   ],
   webServer: {

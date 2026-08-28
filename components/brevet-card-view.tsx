@@ -28,6 +28,7 @@ import {
   type BrevetCardData,
   type CardCheckin,
   type CardControl,
+  type CheckinInput,
 } from '@/lib/actions/brevet-card'
 import { formatControlTime } from '@/lib/brmTimes'
 import { haversineMeters } from '@/lib/geo'
@@ -42,42 +43,137 @@ import {
   type WrongControlCandidate,
   type WrongControlDecision,
 } from '@/lib/brevet-card'
-import { detectPlatform, locationFixSteps } from '@/lib/location-help'
+import { detectLocationContext, detectPlatform, locationFixSteps } from '@/lib/location-help'
+import { acquireGeolocation, MAX_USABLE_LOCATION_ACCURACY_M } from '@/lib/geolocation'
+import type {
+  LocationFailureDiagnostic,
+  LocationFailureReason,
+  LocationFailureStage,
+} from '@/lib/location-diagnostics'
 import { CheckCircle2, CloudOff, Loader2, Mail, Map as MapIcon, MapPin, Phone } from 'lucide-react'
 import { BoldLabelText } from '@/components/bold-label-text'
 import { REGULATIONS_TEXT, EVENT_INFO_TEXT } from '@/types/control-card'
 import { cn } from '@/lib/utils'
 
 const OUTBOX_RETRY_INTERVAL_MS = 45 * 1000
-const GEOLOCATION_TIMEOUT_MS = 12 * 1000
 
-interface OutboxEntry {
-  controlId: string
-  checkedInAt: string
-  lat?: number
-  lng?: number
-  accuracyM?: number
+type OutboxEntry = CheckinInput & {
+  /** Client-only identity for distinguishing replacements for the same control. */
+  generation?: string
 }
 
-/** A GPS fix captured at tap time, carried through the confirm dialogs. */
+/** A GPS fix paired with the original tap time and carried through confirmations. */
 interface CheckinFix {
   lat: number
   lng: number
   accuracyM: number
-  /** Device clock at the moment of the fix — preserved across confirmations. */
+  /** Device clock at the tap, before GPS acquisition — preserved throughout. */
   checkedInAt: string
+}
+
+type LocationProgressStage = Exclude<LocationFailureStage, 'preflight'>
+type ControlLocationIntent = 'checkin' | 'retry'
+
+interface ManualCheckinPrompt {
+  control: CardControl
+  reason: string
+  checkedInAt: string
+  diagnostic: LocationFailureDiagnostic
+}
+
+interface BlockedLocationPrompt {
+  control: CardControl
+  checkedInAt: string
+  diagnostic: LocationFailureDiagnostic
+  intent: ControlLocationIntent
+  expectedManualReceivedAt?: string
+}
+
+function manualLocationMessage(diagnostic: LocationFailureDiagnostic): string {
+  if (diagnostic.reason === 'insecure_context') {
+    return 'Location needs a secure (HTTPS) connection, which this page does not have. You can still check in — the organizer will see it was recorded without GPS.'
+  }
+  if (diagnostic.reason === 'unsupported') {
+    return 'Your browser does not support location. You can still check in — the organizer will see it was recorded without GPS.'
+  }
+  if (diagnostic.context === 'embedded') {
+    return 'This in-app browser could not provide your location. Open the card in Safari for the best chance of a GPS fix. You can still check in — the organizer will see it was recorded without GPS.'
+  }
+  if (diagnostic.reason === 'timeout') {
+    return 'GPS did not get a fix after waiting. Try again outdoors if you can. You can still check in — the organizer will see it was recorded without GPS.'
+  }
+  if (diagnostic.reason === 'position_unavailable') {
+    return 'Your phone could not pin down a usable location. Try again outdoors if you can. You can still check in — the organizer will see it was recorded without GPS.'
+  }
+  return 'Location is not available in this browser. You can still check in — the organizer will see it was recorded without GPS.'
+}
+
+function preflightLocationFailure(
+  reason: Extract<LocationFailureReason, 'insecure_context' | 'unsupported'>,
+  context: LocationFailureDiagnostic['context']
+): LocationFailureDiagnostic {
+  return { reason, stage: 'preflight', elapsedMs: 0, context }
 }
 
 function outboxStorageKey(token: string): string {
   return `brevet-card-outbox-${token}`
 }
 
+let outboxGenerationSequence = 0
+
+function createOutboxGeneration(): string {
+  outboxGenerationSequence += 1
+  return `${Date.now().toString(36)}-${outboxGenerationSequence.toString(36)}`
+}
+
+/** Normalize old entries before they can hit stricter current server validation. */
+function normalizeStoredOutboxEntry(value: unknown): OutboxEntry | null {
+  if (typeof value !== 'object' || value === null) return null
+  const raw = value as Record<string, unknown>
+  if (typeof raw.controlId !== 'string' || typeof raw.checkedInAt !== 'string') return null
+
+  const entry = {
+    ...raw,
+    generation:
+      typeof raw.generation === 'string' && raw.generation.length > 0
+        ? raw.generation
+        : createOutboxGeneration(),
+  } as unknown as OutboxEntry
+  if (
+    typeof entry.accuracyM !== 'number' ||
+    !Number.isFinite(entry.accuracyM) ||
+    entry.accuracyM < 0 ||
+    entry.accuracyM > MAX_USABLE_LOCATION_ACCURACY_M
+  ) {
+    delete entry.accuracyM
+  }
+  return entry
+}
+
+function sameOutboxGeneration(a: OutboxEntry, b: OutboxEntry): boolean {
+  if (a.controlId !== b.controlId) return false
+  if (a.generation !== undefined && b.generation !== undefined) {
+    return a.generation === b.generation
+  }
+  return a === b
+}
+
+function outboxServerPayload(entry: OutboxEntry): CheckinInput {
+  const payload = { ...entry }
+  delete payload.generation
+  return payload as CheckinInput
+}
+
 function readOutbox(token: string): OutboxEntry[] {
   if (typeof window === 'undefined') return []
   try {
     const raw = window.localStorage.getItem(outboxStorageKey(token))
-    const parsed = raw ? (JSON.parse(raw) as OutboxEntry[]) : []
-    return Array.isArray(parsed) ? parsed : []
+    const parsed = raw ? (JSON.parse(raw) as unknown) : []
+    return Array.isArray(parsed)
+      ? parsed
+          .map((entry) => normalizeStoredOutboxEntry(entry))
+          .filter((entry): entry is OutboxEntry => entry !== null)
+      : []
   } catch {
     return []
   }
@@ -134,15 +230,20 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
   // from storage in the mount effect below.
   const [outbox, setOutbox] = useState<OutboxEntry[]>([])
   const [locatingControlId, setLocatingControlId] = useState<string | null>(null)
-  const [manualControl, setManualControl] = useState<CardControl | null>(null)
-  const [manualReason, setManualReason] = useState('')
-  const [blockedControl, setBlockedControl] = useState<CardControl | null>(null)
+  const [locationProgressStage, setLocationProgressStage] = useState<LocationProgressStage>('quick')
+  const [manualPrompt, setManualPrompt] = useState<ManualCheckinPrompt | null>(null)
+  const [blockedPrompt, setBlockedPrompt] = useState<BlockedLocationPrompt | null>(null)
+  const [retryGpsNotice, setRetryGpsNotice] = useState<{
+    controlId: string
+    message: string
+  } | null>(null)
   // Proactive location-permission surface (see docs/digital-brevet-card.md).
   // 'unknown' until the mount effect resolves; nothing renders until then.
   const [locationStatus, setLocationStatus] = useState<'unknown' | 'prompt' | 'granted' | 'denied'>(
     'unknown'
   )
   const [locationTest, setLocationTest] = useState<'idle' | 'testing' | 'ok' | 'no-fix'>('idle')
+  const [locationTestStage, setLocationTestStage] = useState<LocationProgressStage>('quick')
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [undoingControlId, setUndoingControlId] = useState<string | null>(null)
   // Wrong-control confirm (GPS only): the fix landed inside another control.
@@ -158,8 +259,18 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
     control: CardControl
     opensAt: string
     entry: OutboxEntry
+    /** The "gathering at the start line" case, not a control that is shut. */
+    atStart: boolean
   } | null>(null)
   const flushInFlight = useRef(false)
+  const flushRequested = useRef(false)
+  const activeLocationRequest = useRef<AbortController | null>(null)
+  /** Controls with a server undo in flight; their outbox entries must not send. */
+  const undoInFlight = useRef<Set<string>>(new Set())
+  const locationProgressStageRef = useRef<LocationProgressStage>('quick')
+  const checkinsRef = useRef<Map<string, CardCheckin>>(
+    new Map(initialData.checkins.map((checkin) => [checkin.controlId, checkin]))
+  )
   // Source of truth for syncing. localStorage is only a best-effort backup
   // for page reloads: writes can throw (quota, private mode) and must never
   // block a check-in from sending.
@@ -172,9 +283,27 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
 
   // SSR-safe: `navigator` does not exist during renderToString, and the
   // blocked dialog never renders on the server anyway.
-  const fixHelp = useMemo(
-    () =>
-      locationFixSteps(detectPlatform(typeof navigator === 'undefined' ? '' : navigator.userAgent)),
+  const locationEnvironment = useMemo(() => {
+    const userAgent = typeof navigator === 'undefined' ? '' : navigator.userAgent
+    const standaloneNavigator =
+      typeof navigator === 'undefined' ? null : (navigator as Navigator & { standalone?: boolean })
+    const isStandalone =
+      typeof window !== 'undefined' &&
+      (standaloneNavigator?.standalone === true ||
+        window.matchMedia?.('(display-mode: standalone)').matches === true)
+    return {
+      context: detectLocationContext(userAgent, isStandalone),
+      help: locationFixSteps(detectPlatform(userAgent, isStandalone)),
+    }
+  }, [])
+  const fixHelp = locationEnvironment.help
+
+  // A geolocation watch must never survive navigation away from the card.
+  useEffect(
+    () => () => {
+      activeLocationRequest.current?.abort()
+      activeLocationRequest.current = null
+    },
     []
   )
 
@@ -195,55 +324,104 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
     [token]
   )
 
+  const storeCheckin = useCallback((checkin: CardCheckin) => {
+    const next = new Map(checkinsRef.current).set(checkin.controlId, checkin)
+    checkinsRef.current = next
+    setCheckins(next)
+  }, [])
+
+  const removeStoredCheckin = useCallback((controlId: string) => {
+    const next = new Map(checkinsRef.current)
+    next.delete(controlId)
+    checkinsRef.current = next
+    setCheckins(next)
+  }, [])
+
   /**
    * Try to send every queued check-in. Permanent rejections (server said no)
    * are dropped and surfaced; retryable rejections (rate limit, DB hiccup)
    * and network failures keep the entry queued for the next pass.
    */
   const flushOutbox = useCallback(async () => {
-    if (flushInFlight.current) return
+    if (flushInFlight.current) {
+      flushRequested.current = true
+      return
+    }
     flushInFlight.current = true
+    let stoppedByTransientFailure = false
     try {
-      const entries = outboxRef.current
-      for (const entry of entries) {
-        try {
-          const result = await checkInAtControl(token, entry)
-          // The rider may have tapped Undo while this request was in flight
-          // (the undo path removes the entry from the outbox). Honour the
-          // undo: don't resurrect the check-in locally, and delete the row
-          // the request just created server-side.
-          const undoneInFlight = !outboxRef.current.some((e) => e.controlId === entry.controlId)
-          if (result.success && result.data) {
-            const { checkin } = result.data
-            if (undoneInFlight) {
-              void undoCheckin(token, { controlId: checkin.controlId }).catch(() => {})
-              continue
-            }
-            setCheckins((prev) => new Map(prev).set(checkin.controlId, checkin))
-            persistOutbox((prev) => prev.filter((e) => e.controlId !== entry.controlId))
-          } else if (result.retryable) {
-            // Transient rejection (e.g. rate limited): stay queued and stop
-            // this pass — later entries would hit the same wall.
-            break
-          } else {
-            // The server rejected this check-in outright — retrying the
-            // identical payload will never succeed, so stop queueing it.
-            // No error toast if the rider already undid it: the rejection
-            // is moot.
-            persistOutbox((prev) => prev.filter((e) => e.controlId !== entry.controlId))
-            if (!undoneInFlight) {
+      do {
+        flushRequested.current = false
+        const entries = [...outboxRef.current]
+        for (const entry of entries) {
+          // A prior slow request may have allowed Undo or a replacement for
+          // this control. Never send a stale snapshot entry.
+          if (!outboxRef.current.some((queued) => sameOutboxGeneration(queued, entry))) continue
+          // Undo is deciding this control's fate. Sending now would either
+          // race the delete or report a bogus "check-in was removed" error.
+          if (undoInFlight.current.has(entry.controlId)) continue
+
+          try {
+            const result = await checkInAtControl(token, outboxServerPayload(entry))
+            const currentForControl = outboxRef.current.find(
+              (queued) => queued.controlId === entry.controlId
+            )
+            const isCurrentGeneration =
+              currentForControl !== undefined && sameOutboxGeneration(currentForControl, entry)
+
+            if (result.success && result.data) {
+              const { checkin, upgradedFromManual } = result.data
+              if (!isCurrentGeneration) {
+                // With no replacement, Undo removed this entry while it was
+                // in flight. Clean up any row the request just created. If a
+                // replacement exists, ignore this stale acknowledgement and
+                // let the new generation make its own request.
+                // Upgrade entries are update-only server-side: they can never
+                // have created a row, so a compensating delete here would
+                // destroy a row that Undo failed to remove.
+                if (!currentForControl && entry.expectedManualReceivedAt === undefined) {
+                  void undoCheckin(token, { controlId: checkin.controlId }).catch(() => {})
+                }
+                continue
+              }
+
+              storeCheckin(checkin)
+              if (upgradedFromManual) {
+                setRetryGpsNotice({
+                  controlId: checkin.controlId,
+                  message: 'GPS was added to your saved check-in.',
+                })
+              } else if (entry.lat !== undefined && checkin.method === 'manual') {
+                setRetryGpsNotice({
+                  controlId: checkin.controlId,
+                  message:
+                    'GPS could not replace the saved manual check-in. The organizer can still review it.',
+                })
+              }
+              persistOutbox((prev) => prev.filter((queued) => !sameOutboxGeneration(queued, entry)))
+            } else if (result.retryable) {
+              // Transient rejection (e.g. rate limited): stay queued and stop
+              // this pass — later entries would hit the same wall.
+              stoppedByTransientFailure = true
+              break
+            } else if (isCurrentGeneration) {
+              // The server rejected this exact payload permanently. A newer
+              // replacement for the same control, if present, remains queued.
+              persistOutbox((prev) => prev.filter((queued) => !sameOutboxGeneration(queued, entry)))
               setErrorMessage(result.error || 'Check-in was rejected')
             }
+          } catch {
+            // Network failure: stay queued, try again on the next pass.
+            stoppedByTransientFailure = true
+            break
           }
-        } catch {
-          // Network failure: stay queued, try again on the next pass.
-          break
         }
-      }
+      } while (!stoppedByTransientFailure && flushRequested.current)
     } finally {
       flushInFlight.current = false
+      if (stoppedByTransientFailure) flushRequested.current = false
     }
-  }, [token, persistOutbox])
+  }, [token, persistOutbox, storeCheckin])
 
   // On mount: recover check-ins queued by a previous page load, then retry
   // queued check-ins now, when connectivity returns, and on an interval
@@ -306,9 +484,14 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
 
   const enqueueCheckin = useCallback(
     (entry: OutboxEntry) => {
+      const queuedEntry =
+        entry.generation === undefined ? { ...entry, generation: createOutboxGeneration() } : entry
       setErrorMessage(null)
-      setSessionCheckins((prev) => new Set(prev).add(entry.controlId))
-      persistOutbox((prev) => [...prev.filter((e) => e.controlId !== entry.controlId), entry])
+      setSessionCheckins((prev) => new Set(prev).add(queuedEntry.controlId))
+      persistOutbox((prev) => [
+        ...prev.filter((existing) => existing.controlId !== queuedEntry.controlId),
+        queuedEntry,
+      ])
       // Fire-and-forget: the UI shows "queued" until the server confirms.
       void flushOutbox()
     },
@@ -319,22 +502,31 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
    * Record the check-in, but if the (final, post-redirect) target control
    * hasn't opened yet, confirm first. Applies to every method.
    *
-   * Same rule the server applies (server re-clamps regardless): a pre-start
-   * tap at the first control records the official start, not the tap time.
+   * A pre-start tap at the first control is recorded at the official start,
+   * not the tap time — but the server does that clamp itself. Send the tap
+   * time and mirror the rule only in the confirm copy: a payload carrying
+   * the (future) start time is a tap claiming to be from the future, which
+   * the server rejects outright.
    */
   const enqueueOrConfirmEarly = useCallback(
     (control: CardControl, entry: OutboxEntry) => {
-      const recordedAt = resolveRecordedCheckinTime(
-        new Date(entry.checkedInAt),
-        new Date(event.startsAt),
-        control.id === controls[0]?.id
-      )
-      const clamped = { ...entry, checkedInAt: recordedAt.toISOString() }
-      if (control.opensAt !== null && Date.now() < new Date(control.opensAt).getTime()) {
-        setEarlyConfirm({ control, opensAt: control.opensAt, entry: clamped })
+      const tappedAt = new Date(entry.checkedInAt)
+      const recordsOfficialStart =
+        resolveRecordedCheckinTime(
+          tappedAt,
+          new Date(event.startsAt),
+          control.id === controls[0]?.id
+        ).getTime() !== tappedAt.getTime()
+      if (control.opensAt !== null && tappedAt.getTime() < new Date(control.opensAt).getTime()) {
+        setEarlyConfirm({
+          control,
+          opensAt: control.opensAt,
+          entry,
+          atStart: recordsOfficialStart,
+        })
         return
       }
-      enqueueCheckin(clamped)
+      enqueueCheckin(entry)
     },
     [enqueueCheckin, controls, event.startsAt]
   )
@@ -355,7 +547,7 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
           lng: c.lng,
           radiusM: c.radiusM,
           alreadyCheckedIn:
-            checkins.has(c.id) || outboxRef.current.some((e) => e.controlId === c.id),
+            checkinsRef.current.has(c.id) || outboxRef.current.some((e) => e.controlId === c.id),
         }))
 
       const decision = detectWrongControl(
@@ -377,95 +569,230 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
         accuracyM: fix.accuracyM,
       })
     },
-    [controls, checkins, enqueueOrConfirmEarly]
+    [controls, enqueueOrConfirmEarly]
+  )
+
+  const attemptControlLocation = useCallback(
+    async (
+      control: CardControl,
+      intent: ControlLocationIntent,
+      checkedInAt: string,
+      expectedManualReceivedAt?: string
+    ): Promise<void> => {
+      setErrorMessage(null)
+      setRetryGpsNotice(null)
+
+      const showPreflightFailure = (
+        reason: Extract<LocationFailureReason, 'insecure_context' | 'unsupported'>
+      ) => {
+        const diagnostic = preflightLocationFailure(reason, locationEnvironment.context)
+        if (intent === 'checkin') {
+          setManualPrompt({
+            control,
+            reason: manualLocationMessage(diagnostic),
+            checkedInAt,
+            diagnostic,
+          })
+        } else {
+          setRetryGpsNotice({
+            controlId: control.id,
+            message:
+              reason === 'insecure_context'
+                ? 'GPS needs a secure HTTPS page. Your existing check-in is still saved.'
+                : 'This browser does not support GPS. Your existing check-in is still saved.',
+          })
+        }
+      }
+
+      // Browsers disable geolocation on http:// (except localhost); calling
+      // it would only delay the useful explanation.
+      if (!window.isSecureContext) {
+        showPreflightFailure('insecure_context')
+        return
+      }
+      if (!navigator.geolocation) {
+        showPreflightFailure('unsupported')
+        return
+      }
+
+      activeLocationRequest.current?.abort()
+      const controller = new AbortController()
+      activeLocationRequest.current = controller
+      setLocationTest((current) => (current === 'testing' ? 'idle' : current))
+      setLocatingControlId(control.id)
+      locationProgressStageRef.current = 'quick'
+      setLocationProgressStage('quick')
+
+      try {
+        const result = await acquireGeolocation({
+          geolocation: navigator.geolocation,
+          context: locationEnvironment.context,
+          signal: controller.signal,
+          onStageChange: (stage) => {
+            locationProgressStageRef.current = stage
+            setLocationProgressStage(stage)
+          },
+        })
+        if (controller.signal.aborted) return
+
+        if (result.ok) {
+          setLocationStatus('granted')
+          const fix: CheckinFix = { ...result.fix, checkedInAt }
+          if (intent === 'retry') {
+            // An upgrade must not turn an honest "no GPS" row into a GPS row
+            // recorded kilometres away: that erases the diagnostic and lands
+            // as an out-of-radius fix. Only a fix inside this control's own
+            // radius may replace the manual evidence.
+            const distanceM =
+              control.lat !== null && control.lng !== null
+                ? haversineMeters(fix.lat, fix.lng, control.lat, control.lng)
+                : null
+            if (distanceM !== null && distanceM > control.radiusM) {
+              setRetryGpsNotice({
+                controlId: control.id,
+                message: `GPS puts you ${formatDistanceKm(distanceM)} km from ${
+                  control.name
+                }. Your saved check-in was left as it is — retry at the control.`,
+              })
+              return
+            }
+            // This is an upgrade of the same check-in, not a new visit: keep
+            // its original tap time and target control while replacing the
+            // manual row with GPS server-side.
+            enqueueCheckin({
+              controlId: control.id,
+              checkedInAt,
+              lat: fix.lat,
+              lng: fix.lng,
+              accuracyM: fix.accuracyM,
+              expectedManualReceivedAt,
+            })
+          } else {
+            resolveGpsCheckin(control, fix)
+          }
+          return
+        }
+
+        const { diagnostic } = result
+        if (diagnostic.reason === 'permission_denied') {
+          // OS-level revocations do not always emit a Permissions API change
+          // event on iOS, so synchronize the proactive surface here too.
+          setLocationStatus('denied')
+          setLocationTest('idle')
+          setBlockedPrompt({
+            control,
+            checkedInAt,
+            diagnostic,
+            intent,
+            expectedManualReceivedAt,
+          })
+          if (intent === 'retry') {
+            setRetryGpsNotice({
+              controlId: control.id,
+              message: 'Location is blocked. Your existing check-in is still saved.',
+            })
+          }
+        } else if (intent === 'checkin') {
+          setManualPrompt({
+            control,
+            reason: manualLocationMessage(diagnostic),
+            checkedInAt,
+            diagnostic,
+          })
+        } else {
+          setRetryGpsNotice({
+            controlId: control.id,
+            message:
+              'GPS still could not get a fix. Your existing check-in is safe; try again outdoors.',
+          })
+        }
+      } catch {
+        if (controller.signal.aborted) return
+        const diagnostic: LocationFailureDiagnostic = {
+          reason: 'request_error',
+          stage: locationProgressStageRef.current,
+          elapsedMs: 0,
+          context: locationEnvironment.context,
+        }
+        if (intent === 'checkin') {
+          setManualPrompt({
+            control,
+            reason: manualLocationMessage(diagnostic),
+            checkedInAt,
+            diagnostic,
+          })
+        } else {
+          setRetryGpsNotice({
+            controlId: control.id,
+            message: 'GPS could not be started. Your existing check-in is still saved.',
+          })
+        }
+      } finally {
+        if (activeLocationRequest.current === controller) {
+          activeLocationRequest.current = null
+          setLocatingControlId(null)
+        }
+      }
+    },
+    [enqueueCheckin, locationEnvironment.context, resolveGpsCheckin]
   )
 
   const handleCheckIn = useCallback(
     (control: CardControl) => {
-      setErrorMessage(null)
-      // Browsers disable geolocation on http:// (except localhost); calling
-      // it would just burn the timeout before failing. Say why instead.
-      if (!window.isSecureContext) {
-        setManualReason(
-          'Location needs a secure (HTTPS) connection, which this page does not have. You can still check in — the organizer will see it was recorded without GPS.'
-        )
-        setManualControl(control)
-        return
-      }
-      if (!('geolocation' in navigator)) {
-        setManualReason('Your browser does not support location.')
-        setManualControl(control)
-        return
-      }
-      setLocatingControlId(control.id)
-      try {
-        navigator.geolocation.getCurrentPosition(
-          (position) => {
-            setLocatingControlId(null)
-            resolveGpsCheckin(control, {
-              lat: position.coords.latitude,
-              lng: position.coords.longitude,
-              accuracyM: Math.round(position.coords.accuracy),
-              checkedInAt: new Date().toISOString(),
-            })
-          },
-          (error) => {
-            setLocatingControlId(null)
-            if (error.code === 1 /* PERMISSION_DENIED */) {
-              // Blocked in settings — fixable, unlike a weak GPS signal. Show
-              // the platform-specific fix instead of the generic manual dialog.
-              // Sync the proactive surface too: an earlier successful test can
-              // go stale if the rider revokes permission at the OS level
-              // without a 'change' event firing, and this tap is the first
-              // sign of it (mirrors the test-button code-1 branch below).
-              setLocationStatus('denied')
-              setLocationTest('idle')
-              setBlockedControl(control)
-              return
-            }
-            setManualReason(
-              'Your location could not be determined. You can still check in — the organizer will see it was recorded without GPS.'
-            )
-            setManualControl(control)
-          },
-          { enableHighAccuracy: true, timeout: GEOLOCATION_TIMEOUT_MS, maximumAge: 30 * 1000 }
-        )
-      } catch {
-        // Permissions-Policy blocks and some embedded webviews throw
-        // synchronously instead of invoking the error callback — without
-        // this catch the tap silently does nothing and the spinner sticks.
-        setLocatingControlId(null)
-        setManualReason(
-          'Location is not available in this browser. You can still check in — the organizer will see it was recorded without GPS.'
-        )
-        setManualControl(control)
-      }
+      // Capture the tap before GPS acquisition and preserve it through every
+      // timeout, retry, and confirmation dialog.
+      void attemptControlLocation(control, 'checkin', new Date().toISOString())
     },
-    [resolveGpsCheckin]
+    [attemptControlLocation]
+  )
+
+  const handleRetryGps = useCallback(
+    (control: CardControl, checkedInAt: string, receivedAt: string) => {
+      void attemptControlLocation(control, 'retry', checkedInAt, receivedAt)
+    },
+    [attemptControlLocation]
   )
 
   const handleLocationTest = useCallback(() => {
+    if (!window.isSecureContext || !navigator.geolocation) {
+      setLocationTest('no-fix')
+      return
+    }
+
+    activeLocationRequest.current?.abort()
+    const controller = new AbortController()
+    activeLocationRequest.current = controller
+    setLocatingControlId(null)
     setLocationTest('testing')
-    try {
-      navigator.geolocation.getCurrentPosition(
-        () => {
+    setLocationTestStage('quick')
+
+    void acquireGeolocation({
+      geolocation: navigator.geolocation,
+      context: locationEnvironment.context,
+      signal: controller.signal,
+      onStageChange: setLocationTestStage,
+    })
+      .then((result) => {
+        if (controller.signal.aborted) return
+        if (result.ok) {
           setLocationTest('ok')
           setLocationStatus('granted')
-        },
-        (error) => {
-          if (error.code === 1 /* PERMISSION_DENIED */) {
-            setLocationStatus('denied')
-            setLocationTest('idle')
-          } else {
-            setLocationTest('no-fix')
-          }
-        },
-        { enableHighAccuracy: true, timeout: GEOLOCATION_TIMEOUT_MS, maximumAge: 0 }
-      )
-    } catch {
-      setLocationTest('no-fix')
-    }
-  }, [])
+        } else if (result.diagnostic.reason === 'permission_denied') {
+          setLocationStatus('denied')
+          setLocationTest('idle')
+        } else {
+          setLocationTest('no-fix')
+        }
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setLocationTest('no-fix')
+      })
+      .finally(() => {
+        if (activeLocationRequest.current === controller) {
+          activeLocationRequest.current = null
+        }
+      })
+  }, [locationEnvironment.context])
 
   /**
    * Undo a check-in. For a synced check-in, ask the server (which enforces
@@ -475,9 +802,20 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
    */
   const handleUndo = useCallback(
     async (control: CardControl) => {
+      // Undo wins over an in-flight GPS upgrade. Aborting here as well as
+      // disabling the button prevents a late fix from resurrecting the row.
+      // Do not cancel a lookup for a different control (or the proactive
+      // location test) when another row is undone.
+      if (locatingControlId === control.id) {
+        activeLocationRequest.current?.abort()
+        activeLocationRequest.current = null
+        setLocatingControlId(null)
+        setLocationTest((current) => (current === 'testing' ? 'idle' : current))
+      }
       setErrorMessage(null)
-      const pending =
-        !checkins.has(control.id) && outboxRef.current.some((e) => e.controlId === control.id)
+      setRetryGpsNotice((current) => (current?.controlId === control.id ? null : current))
+      const hasQueuedEntry = outboxRef.current.some((e) => e.controlId === control.id)
+      const pending = !checkinsRef.current.has(control.id) && hasQueuedEntry
 
       if (pending) {
         persistOutbox((prev) => prev.filter((e) => e.controlId !== control.id))
@@ -490,24 +828,28 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
       }
 
       setUndoingControlId(control.id)
+      undoInFlight.current.add(control.id)
       try {
         const result = await undoCheckin(token, { controlId: control.id })
         if (result.success) {
-          setCheckins((prev) => {
-            const next = new Map(prev)
-            next.delete(control.id)
-            return next
-          })
+          // Only now is the row gone, so the queued GPS upgrade can neither
+          // recreate nor re-upgrade it. Dropping it any earlier loses the
+          // rider's fix whenever the undo is refused or the network is down.
+          if (hasQueuedEntry) {
+            persistOutbox((prev) => prev.filter((e) => e.controlId !== control.id))
+          }
+          removeStoredCheckin(control.id)
         } else {
           setErrorMessage(result.error || 'Could not undo the check-in')
         }
       } catch {
         setErrorMessage('Could not undo the check-in — check your connection and try again.')
       } finally {
+        undoInFlight.current.delete(control.id)
         setUndoingControlId(null)
       }
     },
-    [token, checkins, persistOutbox]
+    [token, locatingControlId, persistOutbox, removeStoredCheckin]
   )
 
   // Wrong-control sheet actions read from the `wrongControl` state so their
@@ -559,6 +901,11 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
   const finishDone = finishControl ? checkins.has(finishControl.id) : false
   const doneCount = controls.filter((c) => checkins.has(c.id) || queuedControlIds.has(c.id)).length
 
+  // One AbortController is shared by every acquisition, so a second tap
+  // cancels the first control's lookup and loses it entirely. Only one
+  // acquisition may be in flight; per-row labels still key off `isLocating`.
+  const locationBusy = locatingControlId !== null
+
   const startsAt = new Date(event.startsAt)
   const checkinOpensAt = new Date(startsAt.getTime() - CHECKIN_WINDOW_BEFORE_START_MS)
 
@@ -582,11 +929,7 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
     return () => window.clearInterval(id)
   }, [event.startsAt])
 
-  // The early-confirm entry was clamped iff its time equals the start —
-  // that is exactly the "gathering at the start line" case.
-  const earlyConfirmAtStart =
-    earlyConfirm !== null &&
-    earlyConfirm.entry.checkedInAt === new Date(event.startsAt).toISOString()
+  const earlyConfirmAtStart = earlyConfirm?.atStart === true
 
   return (
     <div className="content-container pt-12 md:pt-20 max-w-2xl pb-16 space-y-6">
@@ -636,10 +979,14 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
             type="button"
             variant="outline"
             size="sm"
-            disabled={locationTest === 'testing'}
+            disabled={locationTest === 'testing' || locatingControlId !== null}
             onClick={handleLocationTest}
           >
-            {locationTest === 'testing' ? 'Checking…' : 'Try again'}
+            {locationTest === 'testing'
+              ? locationTestStage === 'quick'
+                ? 'Checking recent location…'
+                : 'Waiting for precise GPS…'
+              : 'Try again'}
           </Button>
         </div>
       )}
@@ -653,17 +1000,23 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
           </p>
           {locationTest === 'no-fix' && (
             <p className="text-muted-foreground">
-              Couldn&apos;t get a location fix just now — worth trying again, ideally outdoors.
+              {locationEnvironment.context === 'embedded'
+                ? "Couldn't get a location fix in this in-app browser. Open this card in Safari and try again."
+                : "Couldn't get a location fix just now — worth trying again, ideally outdoors."}
             </p>
           )}
           <Button
             type="button"
             variant="outline"
             size="sm"
-            disabled={locationTest === 'testing'}
+            disabled={locationTest === 'testing' || locatingControlId !== null}
             onClick={handleLocationTest}
           >
-            {locationTest === 'testing' ? 'Checking…' : 'Test your location'}
+            {locationTest === 'testing'
+              ? locationTestStage === 'quick'
+                ? 'Checking recent location…'
+                : 'Waiting for precise GPS…'
+              : 'Test your location'}
           </Button>
         </div>
       )}
@@ -692,10 +1045,18 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
       <ol className="divide-y border rounded-md">
         {controls.map((control, index) => {
           const checkin = checkins.get(control.id)
-          const queued = !checkin && queuedControlIds.has(control.id)
+          const queuedEntry = outbox.find((entry) => entry.controlId === control.id)
+          const queued = !checkin && queuedEntry !== undefined
           const isNext = control.id === nextControlId
           const isLocating = locatingControlId === control.id
           const stamped = !!(checkin || queued)
+          const gpsUpgradeQueued = checkin?.method === 'manual' && queuedEntry?.lat !== undefined
+          const freshRiderCheckin =
+            checkin !== undefined &&
+            checkin.method !== 'admin' &&
+            event.status !== 'submitted' &&
+            now !== null &&
+            now - new Date(checkin.receivedAt).getTime() < RIDER_UNDO_WINDOW_MS
           // Leg heading at each boundary (display-only; collection events).
           const legHeading =
             control.legName !== null &&
@@ -742,6 +1103,23 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
                       Recorded without GPS — the organizer will review it.
                     </p>
                   )}
+                  {retryGpsNotice?.controlId === control.id && (
+                    <p className="text-xs text-muted-foreground mt-1" aria-live="polite">
+                      {retryGpsNotice.message}
+                    </p>
+                  )}
+                  {gpsUpgradeQueued && (
+                    <p className="text-xs text-muted-foreground mt-1" aria-live="polite">
+                      GPS fix saved — waiting to sync.
+                    </p>
+                  )}
+                  {isLocating && (
+                    <p className="text-xs text-muted-foreground mt-1" aria-live="polite">
+                      {locationProgressStage === 'quick'
+                        ? 'Checking for a recent location…'
+                        : 'Waiting for precise GPS — this can take up to 45 seconds, especially indoors.'}
+                    </p>
+                  )}
                 </div>
 
                 <div className="shrink-0 text-right">
@@ -749,27 +1127,49 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
                     <p className="relative z-10 inline-flex items-baseline gap-1.5 text-sm font-medium tabular-nums">
                       <CheckCircle2 className="h-4 w-4 self-center text-green-600" />
                       {formatControlTime(new Date(checkin.checkedInAt))}
-                      {checkin.method !== 'admin' &&
-                        event.status !== 'submitted' &&
-                        now !== null &&
-                        now - new Date(checkin.receivedAt).getTime() < RIDER_UNDO_WINDOW_MS && (
-                          <>
-                            <span
-                              aria-hidden="true"
-                              className="font-normal text-muted-foreground/50"
-                            >
-                              ·
-                            </span>
-                            <button
-                              type="button"
-                              className="-my-2 py-2 font-normal text-muted-foreground underline decoration-muted-foreground/40 underline-offset-2 hover:text-foreground disabled:opacity-50"
-                              disabled={undoingControlId === control.id}
-                              onClick={() => handleUndo(control)}
-                            >
-                              {undoingControlId === control.id ? 'Undoing…' : 'Undo'}
-                            </button>
-                          </>
-                        )}
+                      {freshRiderCheckin && (
+                        <>
+                          {checkin.method === 'manual' && (
+                            <>
+                              <span
+                                aria-hidden="true"
+                                className="font-normal text-muted-foreground/50"
+                              >
+                                ·
+                              </span>
+                              <button
+                                type="button"
+                                className="-my-2 py-2 font-normal text-muted-foreground underline decoration-muted-foreground/40 underline-offset-2 hover:text-foreground disabled:opacity-50"
+                                disabled={
+                                  locationBusy ||
+                                  gpsUpgradeQueued ||
+                                  undoingControlId === control.id
+                                }
+                                onClick={() =>
+                                  handleRetryGps(control, checkin.checkedInAt, checkin.receivedAt)
+                                }
+                              >
+                                {isLocating
+                                  ? 'Retrying GPS…'
+                                  : gpsUpgradeQueued
+                                    ? 'GPS queued'
+                                    : 'Retry GPS'}
+                              </button>
+                            </>
+                          )}
+                          <span aria-hidden="true" className="font-normal text-muted-foreground/50">
+                            ·
+                          </span>
+                          <button
+                            type="button"
+                            className="-my-2 py-2 font-normal text-muted-foreground underline decoration-muted-foreground/40 underline-offset-2 hover:text-foreground disabled:opacity-50"
+                            disabled={isLocating || undoingControlId === control.id}
+                            onClick={() => handleUndo(control)}
+                          >
+                            {undoingControlId === control.id ? 'Undoing…' : 'Undo'}
+                          </button>
+                        </>
+                      )}
                     </p>
                   ) : queued ? (
                     <p className="relative z-10 inline-flex items-baseline gap-1.5 text-sm text-muted-foreground">
@@ -791,7 +1191,7 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
                       size="lg"
                       variant={isNext ? 'default' : 'outline'}
                       className="h-12"
-                      disabled={isLocating || beforeWindow}
+                      disabled={locationBusy || beforeWindow}
                       onClick={() => handleCheckIn(control)}
                     >
                       {isLocating ? (
@@ -799,7 +1199,11 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
                       ) : (
                         <MapPin className="h-4 w-4 mr-2" />
                       )}
-                      Check in
+                      {isLocating
+                        ? locationProgressStage === 'quick'
+                          ? 'Checking location…'
+                          : 'Waiting for GPS…'
+                        : 'Check in'}
                     </Button>
                   )}
                 </div>
@@ -942,25 +1346,26 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
       </div>
 
       <AlertDialog
-        open={manualControl !== null}
-        onOpenChange={(open) => !open && setManualControl(null)}
+        open={manualPrompt !== null}
+        onOpenChange={(open) => !open && setManualPrompt(null)}
       >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Check in without GPS?</AlertDialogTitle>
-            <AlertDialogDescription>{manualReason}</AlertDialogDescription>
+            <AlertDialogDescription>{manualPrompt?.reason}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => {
-                if (manualControl) {
-                  enqueueOrConfirmEarly(manualControl, {
-                    controlId: manualControl.id,
-                    checkedInAt: new Date().toISOString(),
+                if (manualPrompt) {
+                  enqueueOrConfirmEarly(manualPrompt.control, {
+                    controlId: manualPrompt.control.id,
+                    checkedInAt: manualPrompt.checkedInAt,
+                    locationFailure: manualPrompt.diagnostic,
                   })
                 }
-                setManualControl(null)
+                setManualPrompt(null)
               }}
             >
               Check in anyway
@@ -970,8 +1375,8 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
       </AlertDialog>
 
       <AlertDialog
-        open={blockedControl !== null}
-        onOpenChange={(open) => !open && setBlockedControl(null)}
+        open={blockedPrompt !== null}
+        onOpenChange={(open) => !open && setBlockedPrompt(null)}
       >
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -985,26 +1390,36 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
           </ol>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <Button
-              variant="outline"
-              onClick={() => {
-                const control = blockedControl
-                setBlockedControl(null)
-                if (control) {
-                  enqueueOrConfirmEarly(control, {
-                    controlId: control.id,
-                    checkedInAt: new Date().toISOString(),
-                  })
-                }
-              }}
-            >
-              Check in without GPS
-            </Button>
+            {blockedPrompt?.intent === 'checkin' && (
+              <Button
+                variant="outline"
+                onClick={() => {
+                  const prompt = blockedPrompt
+                  setBlockedPrompt(null)
+                  if (prompt) {
+                    enqueueOrConfirmEarly(prompt.control, {
+                      controlId: prompt.control.id,
+                      checkedInAt: prompt.checkedInAt,
+                      locationFailure: prompt.diagnostic,
+                    })
+                  }
+                }}
+              >
+                Check in without GPS
+              </Button>
+            )}
             <AlertDialogAction
               onClick={() => {
-                const control = blockedControl
-                setBlockedControl(null)
-                if (control) handleCheckIn(control)
+                const prompt = blockedPrompt
+                setBlockedPrompt(null)
+                if (prompt) {
+                  void attemptControlLocation(
+                    prompt.control,
+                    prompt.intent,
+                    prompt.checkedInAt,
+                    prompt.expectedManualReceivedAt
+                  )
+                }
               }}
             >
               Try again

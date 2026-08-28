@@ -1,7 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { computeEventStart } from '@/lib/brevet-card'
 
-type FromCall = { table: string; ops: string[]; insertPayload?: unknown }
+type FromCall = {
+  table: string
+  ops: string[]
+  insertPayload?: unknown
+  updatePayload?: unknown
+  eqArgs: Array<[string, unknown]>
+  gteArgs: Array<[string, unknown]>
+}
 const fromCalls: FromCall[] = []
 
 interface TableState {
@@ -13,6 +20,8 @@ interface TableState {
   listResponse?: { data: unknown; error: unknown }
   /** Response for `.single()` after `.insert()`. */
   insertResponse?: { data: unknown; error: unknown }
+  /** Response for `.maybeSingle()` after `.update()`. */
+  updateResponse?: { data: unknown; error: unknown }
   /** Response when a `.delete()` chain is awaited. */
   deleteResponse?: { data: unknown; error: unknown }
 }
@@ -20,10 +29,11 @@ interface TableState {
 let tables: Record<string, TableState> = {}
 
 const mockFrom = vi.fn((table: string) => {
-  const call: FromCall = { table, ops: [] }
+  const call: FromCall = { table, ops: [], eqArgs: [], gteArgs: [] }
   fromCalls.push(call)
   const state = tables[table] ?? {}
   let inserted = false
+  let updated = false
   let deleted = false
 
   const builder = {
@@ -31,8 +41,14 @@ const mockFrom = vi.fn((table: string) => {
       call.ops.push('select')
       return builder
     }),
-    eq: vi.fn(() => {
+    eq: vi.fn((column: string, value: unknown) => {
       call.ops.push('eq')
+      call.eqArgs.push([column, value])
+      return builder
+    }),
+    gte: vi.fn((column: string, value: unknown) => {
+      call.ops.push('gte')
+      call.gteArgs.push([column, value])
       return builder
     }),
     order: vi.fn(() => {
@@ -49,6 +65,12 @@ const mockFrom = vi.fn((table: string) => {
       inserted = true
       return builder
     }),
+    update: vi.fn((payload: unknown) => {
+      call.ops.push('update')
+      call.updatePayload = payload
+      updated = true
+      return builder
+    }),
     delete: vi.fn(() => {
       call.ops.push('delete')
       deleted = true
@@ -61,7 +83,8 @@ const mockFrom = vi.fn((table: string) => {
     }),
     maybeSingle: vi.fn(() => {
       call.ops.push('maybeSingle')
-      return Promise.resolve(state.maybeSingleResponse ?? { data: null, error: null })
+      const response = updated ? state.updateResponse : state.maybeSingleResponse
+      return Promise.resolve(response ?? { data: null, error: null })
     }),
     // Supabase query builders are thenables: awaiting the builder directly
     // runs the list query (controls/check-ins reads) or a delete chain.
@@ -209,10 +232,25 @@ describe('checkInAtControl input validation', () => {
       controlId: 'ctrl-1',
       checkedInAt: new Date().toISOString(),
       ...coords,
-    })
+    } as never)
 
     expect(result.success).toBe(false)
     expect(result.error).toMatch(/invalid gps coordinates/i)
+    expect(fromCalls).toEqual([])
+  })
+
+  it.each([
+    ['latitude only', { lat: 43.65 }],
+    ['longitude only', { lng: -79.38 }],
+  ])('rejects %s before touching the database', async (_label, coords) => {
+    const result = await checkInAtControl(TOKEN, {
+      controlId: 'ctrl-1',
+      checkedInAt: new Date().toISOString(),
+      ...coords,
+    } as never)
+
+    expect(result.success).toBe(false)
+    expect(result.error).toMatch(/provided together/i)
     expect(fromCalls).toEqual([])
   })
 
@@ -233,6 +271,136 @@ describe('checkInAtControl input validation', () => {
     expect(result.success).toBe(false)
     expect(result.error).toMatch(/invalid gps accuracy/i)
     expect(fromCalls).toEqual([])
+  })
+
+  it('rejects GPS accuracy without coordinates', async () => {
+    const result = await checkInAtControl(TOKEN, {
+      controlId: 'ctrl-1',
+      checkedInAt: new Date().toISOString(),
+      accuracyM: 12,
+    } as never)
+
+    expect(result.success).toBe(false)
+    expect(result.error).toMatch(/accuracy requires latitude and longitude/i)
+    expect(fromCalls).toEqual([])
+  })
+
+  it('rejects a manual-row identity without GPS coordinates', async () => {
+    const result = await checkInAtControl(TOKEN, {
+      controlId: 'ctrl-1',
+      checkedInAt: new Date().toISOString(),
+      expectedManualReceivedAt: new Date().toISOString(),
+    } as never)
+
+    expect(result.success).toBe(false)
+    expect(result.error).toMatch(/requires gps coordinates/i)
+    expect(fromCalls).toEqual([])
+  })
+
+  it('rejects an invalid manual-row identity', async () => {
+    const result = await checkInAtControl(TOKEN, {
+      controlId: 'ctrl-1',
+      checkedInAt: new Date().toISOString(),
+      lat: 43.65,
+      lng: -79.38,
+      expectedManualReceivedAt: 'not-a-date',
+    })
+
+    expect(result.success).toBe(false)
+    expect(result.error).toMatch(/invalid manual check-in identity/i)
+    expect(fromCalls).toEqual([])
+  })
+
+  it.each([
+    ['unknown reason', { reason: 'other', stage: 'quick', elapsedMs: 100, context: 'browser' }],
+    ['unknown stage', { reason: 'timeout', stage: 'other', elapsedMs: 100, context: 'browser' }],
+    ['unknown context', { reason: 'timeout', stage: 'quick', elapsedMs: 100, context: 'other' }],
+    [
+      'negative elapsed time',
+      { reason: 'timeout', stage: 'quick', elapsedMs: -1, context: 'browser' },
+    ],
+    [
+      'elapsed time above the bound',
+      { reason: 'timeout', stage: 'quick', elapsedMs: 120_001, context: 'browser' },
+    ],
+    [
+      'fractional elapsed time',
+      { reason: 'timeout', stage: 'quick', elapsedMs: 100.5, context: 'browser' },
+    ],
+    ['partial diagnostic', { reason: 'timeout', stage: 'quick', elapsedMs: 100 }],
+  ])('rejects an invalid location diagnostic: %s', async (_label, locationFailure) => {
+    const result = await checkInAtControl(TOKEN, {
+      controlId: 'ctrl-1',
+      checkedInAt: new Date().toISOString(),
+      locationFailure: locationFailure as never,
+    })
+
+    expect(result.success).toBe(false)
+    expect(result.error).toMatch(/invalid location failure details/i)
+    expect(fromCalls).toEqual([])
+  })
+
+  it('rejects location failure diagnostics on a GPS check-in', async () => {
+    const result = await checkInAtControl(TOKEN, {
+      controlId: 'ctrl-1',
+      checkedInAt: new Date().toISOString(),
+      lat: 43.65,
+      lng: -79.38,
+      locationFailure: {
+        reason: 'timeout',
+        stage: 'high_accuracy',
+        elapsedMs: 45_000,
+        context: 'browser',
+      },
+    } as never)
+
+    expect(result.success).toBe(false)
+    expect(result.error).toMatch(/require a manual check-in/i)
+    expect(fromCalls).toEqual([])
+  })
+
+  it('persists a bounded diagnostic with a manual check-in', async () => {
+    tables.registrations = { singleResponse: { data: makeRegistration(), error: null } }
+    tables.event_controls = { singleResponse: { data: makeControlRow(), error: null } }
+    const nowIso = new Date().toISOString()
+    tables.control_checkins = {
+      insertResponse: {
+        data: {
+          control_id: 'ctrl-1',
+          checked_in_at: nowIso,
+          received_at: nowIso,
+          method: 'manual',
+          distance_to_control_m: null,
+        },
+        error: null,
+      },
+    }
+
+    const result = await checkInAtControl(TOKEN, {
+      controlId: 'ctrl-1',
+      checkedInAt: nowIso,
+      locationFailure: {
+        reason: 'timeout',
+        stage: 'high_accuracy',
+        elapsedMs: 45_000,
+        context: 'embedded',
+      },
+    })
+
+    expect(result.success).toBe(true)
+    const insert = fromCalls.find(
+      (call) => call.table === 'control_checkins' && call.ops.includes('insert')
+    )
+    expect(insert?.insertPayload).toMatchObject({
+      method: 'manual',
+      lat: null,
+      lng: null,
+      accuracy_m: null,
+      location_failure_reason: 'timeout',
+      location_failure_stage: 'high_accuracy',
+      location_failure_elapsed_ms: 45_000,
+      location_failure_context: 'embedded',
+    })
   })
 
   it('rejects a checkedInAt backdated before the acceptance window opened', async () => {
@@ -321,7 +489,7 @@ describe('checkInAtControl input validation', () => {
     const nowIso = new Date().toISOString()
     tables.control_checkins = {
       insertResponse: { data: null, error: { code: '23505' } },
-      singleResponse: {
+      maybeSingleResponse: {
         data: {
           control_id: 'ctrl-1',
           checked_in_at: nowIso,
@@ -342,7 +510,342 @@ describe('checkInAtControl input validation', () => {
 
     expect(result.success).toBe(true)
     expect(result.data!.alreadyExisted).toBe(true)
+    expect(result.data!.upgradedFromManual).toBe(false)
     expect(mockHandleFinish).toHaveBeenCalledTimes(1)
+  })
+
+  it('reports "Failed to record check-in" when a 23505 conflict\'s row has vanished by the time of the fallback fetch', async () => {
+    tables.registrations = { singleResponse: { data: makeRegistration(), error: null } }
+    tables.event_controls = { singleResponse: { data: makeControlRow(), error: null } }
+    const nowIso = new Date().toISOString()
+    tables.control_checkins = {
+      insertResponse: { data: null, error: { code: '23505' } },
+      maybeSingleResponse: { data: null, error: null },
+    }
+
+    const result = await checkInAtControl(TOKEN, {
+      controlId: 'ctrl-1',
+      checkedInAt: nowIso,
+      lat: 43.65,
+      lng: -79.38,
+    })
+
+    expect(result.success).toBe(false)
+    expect((result as { error?: string }).error).toBe('Failed to record check-in')
+    expect(result.retryable).toBe(true)
+  })
+
+  it('atomically upgrades a recent manual check-in without replacing its timestamps', async () => {
+    tables.registrations = { singleResponse: { data: makeRegistration(), error: null } }
+    tables.event_controls = { singleResponse: { data: makeControlRow(), error: null } }
+    const originalCheckedInAt = new Date(Date.now() - 30_000).toISOString()
+    const originalReceivedAt = new Date(Date.now() - 20_000).toISOString()
+    tables.control_checkins = {
+      insertResponse: { data: null, error: { code: '23505' } },
+      updateResponse: {
+        data: {
+          control_id: 'ctrl-1',
+          checked_in_at: originalCheckedInAt,
+          received_at: originalReceivedAt,
+          method: 'gps',
+          distance_to_control_m: 0,
+        },
+        error: null,
+      },
+    }
+
+    const result = await checkInAtControl(TOKEN, {
+      controlId: 'ctrl-1',
+      checkedInAt: new Date().toISOString(),
+      lat: 43.65,
+      lng: -79.38,
+      accuracyM: 8,
+      expectedManualReceivedAt: originalReceivedAt,
+    })
+
+    expect(result.success).toBe(true)
+    expect(result.data).toMatchObject({
+      alreadyExisted: true,
+      upgradedFromManual: true,
+      checkin: {
+        checkedInAt: originalCheckedInAt,
+        receivedAt: originalReceivedAt,
+        method: 'gps',
+      },
+    })
+
+    const update = fromCalls.find(
+      (call) => call.table === 'control_checkins' && call.ops.includes('update')
+    )
+    expect(update?.eqArgs).toEqual(
+      expect.arrayContaining([
+        ['registration_id', 'reg-1'],
+        ['control_id', 'ctrl-1'],
+        ['method', 'manual'],
+        ['received_at', originalReceivedAt],
+      ])
+    )
+    expect(update?.gteArgs[0]?.[0]).toBe('received_at')
+    expect(update?.updatePayload).toMatchObject({
+      method: 'gps',
+      lat: 43.65,
+      lng: -79.38,
+      accuracy_m: 8,
+      location_failure_reason: null,
+      location_failure_stage: null,
+      location_failure_elapsed_ms: null,
+      location_failure_context: null,
+    })
+    expect(update?.updatePayload).not.toHaveProperty('checked_in_at')
+    expect(update?.updatePayload).not.toHaveProperty('received_at')
+    // No INSERT or refetch is needed after the conditional UPDATE returns a row.
+    expect(
+      fromCalls.filter((call) => call.table === 'control_checkins' && call.ops.includes('single'))
+    ).toHaveLength(0)
+  })
+
+  it('upgrades a pre-start first-control row whose recorded time is still ahead', async () => {
+    // Riders tap the start control when they arrive, so the row's recorded
+    // time is the official start — genuinely in the future while they wait.
+    // A GPS retry echoes that server-issued time back and must not be
+    // mistaken for a device clock claiming to be from the future.
+    const soon = torontoNowParts(30 * 60 * 1000)
+    const reg = makeRegistration()
+    reg.events.event_date = soon.date
+    reg.events.start_time = soon.time
+    tables.registrations = { singleResponse: { data: reg, error: null } }
+    tables.event_controls = { singleResponse: { data: makeControlRow(), error: null } }
+
+    const recordedStart = computeEventStart(soon.date, soon.time).toISOString()
+    const originalReceivedAt = new Date(Date.now() - 20_000).toISOString()
+    tables.control_checkins = {
+      updateResponse: {
+        data: {
+          control_id: 'ctrl-1',
+          checked_in_at: recordedStart,
+          received_at: originalReceivedAt,
+          method: 'gps',
+          distance_to_control_m: 0,
+        },
+        error: null,
+      },
+    }
+
+    const result = await checkInAtControl(TOKEN, {
+      controlId: 'ctrl-1',
+      checkedInAt: recordedStart,
+      lat: 43.65,
+      lng: -79.38,
+      accuracyM: 8,
+      expectedManualReceivedAt: originalReceivedAt,
+    })
+
+    expect(result.success).toBe(true)
+    expect(result.data).toMatchObject({
+      upgradedFromManual: true,
+      checkin: { checkedInAt: recordedStart, method: 'gps' },
+    })
+  })
+
+  it('still rejects a first check-in claiming a time from the future', async () => {
+    tables.registrations = { singleResponse: { data: makeRegistration(), error: null } }
+    tables.event_controls = { singleResponse: { data: makeControlRow(), error: null } }
+
+    const result = await checkInAtControl(TOKEN, {
+      controlId: 'ctrl-1',
+      checkedInAt: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
+      lat: 43.65,
+      lng: -79.38,
+    })
+
+    expect(result.success).toBe(false)
+    expect((result as { error?: string }).error).toBe('Check-in time is in the future')
+  })
+
+  it('does not let a stale GPS retry upgrade a replacement manual row', async () => {
+    tables.registrations = { singleResponse: { data: makeRegistration(), error: null } }
+    tables.event_controls = { singleResponse: { data: makeControlRow(), error: null } }
+    const staleReceivedAt = new Date(Date.now() - 60_000).toISOString()
+    const replacementReceivedAt = new Date(Date.now() - 10_000).toISOString()
+    tables.control_checkins = {
+      insertResponse: { data: null, error: { code: '23505' } },
+      updateResponse: { data: null, error: null },
+      maybeSingleResponse: {
+        data: {
+          control_id: 'ctrl-1',
+          checked_in_at: replacementReceivedAt,
+          received_at: replacementReceivedAt,
+          method: 'manual',
+          distance_to_control_m: null,
+        },
+        error: null,
+      },
+    }
+
+    const result = await checkInAtControl(TOKEN, {
+      controlId: 'ctrl-1',
+      checkedInAt: new Date().toISOString(),
+      lat: 43.65,
+      lng: -79.38,
+      expectedManualReceivedAt: staleReceivedAt,
+    })
+
+    expect(result.success).toBe(true)
+    expect(result.data).toMatchObject({
+      alreadyExisted: true,
+      upgradedFromManual: false,
+      checkin: { method: 'manual', receivedAt: replacementReceivedAt },
+    })
+    const update = fromCalls.find(
+      (call) => call.table === 'control_checkins' && call.ops.includes('update')
+    )
+    expect(update?.eqArgs).toContainEqual(['received_at', staleReceivedAt])
+  })
+
+  it('does not recreate a manual row removed before a delayed GPS retry arrives', async () => {
+    tables.registrations = { singleResponse: { data: makeRegistration(), error: null } }
+    tables.event_controls = { singleResponse: { data: makeControlRow(), error: null } }
+    const removedReceivedAt = new Date(Date.now() - 10_000).toISOString()
+    tables.control_checkins = {
+      updateResponse: { data: null, error: null },
+      maybeSingleResponse: { data: null, error: null },
+    }
+
+    const result = await checkInAtControl(TOKEN, {
+      controlId: 'ctrl-1',
+      checkedInAt: new Date().toISOString(),
+      lat: 43.65,
+      lng: -79.38,
+      expectedManualReceivedAt: removedReceivedAt,
+    })
+
+    expect(result.success).toBe(false)
+    expect(result.retryable).toBeUndefined()
+    expect(result.error).toMatch(/removed before gps could be added/i)
+    expect(
+      fromCalls.find((call) => call.table === 'control_checkins' && call.ops.includes('insert'))
+    ).toBeUndefined()
+  })
+
+  it('does not upgrade a manual check-in after the rider window', async () => {
+    tables.registrations = { singleResponse: { data: makeRegistration(), error: null } }
+    tables.event_controls = { singleResponse: { data: makeControlRow(), error: null } }
+    const oldReceivedAt = new Date(Date.now() - RIDER_UNDO_WINDOW_MS - 60_000).toISOString()
+    tables.control_checkins = {
+      insertResponse: { data: null, error: { code: '23505' } },
+      updateResponse: { data: null, error: null },
+      maybeSingleResponse: {
+        data: {
+          control_id: 'ctrl-1',
+          checked_in_at: oldReceivedAt,
+          received_at: oldReceivedAt,
+          method: 'manual',
+          distance_to_control_m: null,
+        },
+        error: null,
+      },
+    }
+    const before = Date.now()
+
+    const result = await checkInAtControl(TOKEN, {
+      controlId: 'ctrl-1',
+      checkedInAt: new Date().toISOString(),
+      lat: 43.65,
+      lng: -79.38,
+      expectedManualReceivedAt: oldReceivedAt,
+    })
+
+    expect(result.success).toBe(true)
+    expect(result.data).toMatchObject({
+      alreadyExisted: true,
+      upgradedFromManual: false,
+      checkin: { method: 'manual', receivedAt: oldReceivedAt },
+    })
+    const update = fromCalls.find(
+      (call) => call.table === 'control_checkins' && call.ops.includes('update')
+    )
+    const cutoff = new Date(update!.gteArgs[0][1] as string).getTime()
+    expect(cutoff).toBeGreaterThanOrEqual(before - RIDER_UNDO_WINDOW_MS)
+    expect(cutoff).toBeLessThanOrEqual(Date.now() - RIDER_UNDO_WINDOW_MS)
+  })
+
+  it('never downgrades an existing GPS check-in with a manual retry', async () => {
+    tables.registrations = { singleResponse: { data: makeRegistration(), error: null } }
+    tables.event_controls = { singleResponse: { data: makeControlRow(), error: null } }
+    const original = new Date().toISOString()
+    tables.control_checkins = {
+      insertResponse: { data: null, error: { code: '23505' } },
+      maybeSingleResponse: {
+        data: {
+          control_id: 'ctrl-1',
+          checked_in_at: original,
+          received_at: original,
+          method: 'gps',
+          distance_to_control_m: 0,
+        },
+        error: null,
+      },
+    }
+
+    const result = await checkInAtControl(TOKEN, {
+      controlId: 'ctrl-1',
+      checkedInAt: new Date().toISOString(),
+      locationFailure: {
+        reason: 'timeout',
+        stage: 'high_accuracy',
+        elapsedMs: 60_000,
+        context: 'browser',
+      },
+    })
+
+    expect(result.success).toBe(true)
+    expect(result.data).toMatchObject({
+      alreadyExisted: true,
+      upgradedFromManual: false,
+      checkin: { method: 'gps' },
+    })
+    expect(
+      fromCalls.find((call) => call.table === 'control_checkins' && call.ops.includes('update'))
+    ).toBeUndefined()
+  })
+
+  it('never replaces an organizer check-in with a GPS retry', async () => {
+    tables.registrations = { singleResponse: { data: makeRegistration(), error: null } }
+    tables.event_controls = { singleResponse: { data: makeControlRow(), error: null } }
+    const original = new Date().toISOString()
+    tables.control_checkins = {
+      insertResponse: { data: null, error: { code: '23505' } },
+      updateResponse: { data: null, error: null },
+      maybeSingleResponse: {
+        data: {
+          control_id: 'ctrl-1',
+          checked_in_at: original,
+          received_at: original,
+          method: 'admin',
+          distance_to_control_m: null,
+        },
+        error: null,
+      },
+    }
+
+    const result = await checkInAtControl(TOKEN, {
+      controlId: 'ctrl-1',
+      checkedInAt: new Date().toISOString(),
+      lat: 43.65,
+      lng: -79.38,
+      expectedManualReceivedAt: original,
+    })
+
+    expect(result.success).toBe(true)
+    expect(result.data).toMatchObject({
+      alreadyExisted: true,
+      upgradedFromManual: false,
+      checkin: { method: 'admin' },
+    })
+    const update = fromCalls.find(
+      (call) => call.table === 'control_checkins' && call.ops.includes('update')
+    )
+    expect(update?.eqArgs).toContainEqual(['method', 'manual'])
   })
 
   it('does not call the finish flow when the check-in fails', async () => {

@@ -78,6 +78,10 @@ function makeCheckin(overrides: Partial<AdminCheckin>): AdminCheckin {
     lng: -79.3799,
     accuracyM: 10,
     distanceToControlM: 5,
+    locationFailureReason: null,
+    locationFailureStage: null,
+    locationElapsedMs: null,
+    locationContext: null,
     note: null,
     flags: {
       outOfRadius: false,
@@ -337,6 +341,42 @@ describe('EventCheckinsGrid correction dialog map', () => {
 
     expect(screen.getByText(/no gps fix was recorded for this check-in/i)).toBeInTheDocument()
     expect(screen.queryByTestId('checkin-map')).not.toBeInTheDocument()
+  })
+
+  it('shows the no-GPS cause, acquisition stage, timing, and context when recorded', async () => {
+    const user = userEvent.setup()
+    const rider = makeRider({
+      checkins: [
+        makeCheckin({
+          controlId: 'ctrl-1',
+          method: 'manual',
+          lat: null,
+          lng: null,
+          accuracyM: null,
+          locationFailureReason: 'timeout',
+          locationFailureStage: 'high_accuracy',
+          locationElapsedMs: 42150,
+          locationContext: 'embedded',
+        }),
+      ],
+    })
+    render(
+      <EventCheckinsGrid
+        eventId="evt-1"
+        eventSubmitted={false}
+        controls={controls}
+        riders={[rider]}
+      />
+    )
+
+    await user.click(screen.getByText('Sat 08:32'))
+
+    expect(
+      screen.getByText(
+        'No GPS: Location timed out during the high-accuracy attempt after 42 s (embedded browser)'
+      )
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/no gps fix was recorded for this check-in/i)).not.toBeInTheDocument()
   })
 
   it('renders no map and no GPS note in add-check-in mode', async () => {

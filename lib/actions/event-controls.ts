@@ -14,6 +14,7 @@ import { logAuditEvent } from '@/lib/audit-log'
 import { fetchRwgpsControlsWithCoords, fetchRwgpsCollection } from '@/lib/rwgps'
 import { isReversedEvent } from '@/lib/controlPoints'
 import { handleActionError, handleSupabaseError, createActionResult } from '@/lib/errors'
+import { isValidLatitude, isValidLongitude } from '@/lib/location-diagnostics'
 import type { ActionResult } from '@/types/actions'
 import type { EventControlInsert } from '@/types/queries'
 
@@ -173,10 +174,10 @@ export async function saveEventControls(
           error: `Control "${control.name}" needs both latitude and longitude (or neither)`,
         }
       }
-      if (hasLat && (control.lat! < -90 || control.lat! > 90)) {
+      if (hasLat && !isValidLatitude(control.lat)) {
         return { success: false, error: `Invalid latitude for "${control.name}"` }
       }
-      if (hasLng && (control.lng! < -180 || control.lng! > 180)) {
+      if (hasLng && !isValidLongitude(control.lng)) {
         return { success: false, error: `Invalid longitude for "${control.name}"` }
       }
       const hasLegId = control.legRwgpsId != null && control.legRwgpsId !== ''

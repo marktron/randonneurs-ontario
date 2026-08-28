@@ -177,6 +177,10 @@ export type Database = {
           id: string
           lat: number | null
           lng: number | null
+          location_failure_context: string | null
+          location_failure_elapsed_ms: number | null
+          location_failure_reason: string | null
+          location_failure_stage: string | null
           method: string
           note: string | null
           received_at: string
@@ -192,6 +196,10 @@ export type Database = {
           id?: string
           lat?: number | null
           lng?: number | null
+          location_failure_context?: string | null
+          location_failure_elapsed_ms?: number | null
+          location_failure_reason?: string | null
+          location_failure_stage?: string | null
           method: string
           note?: string | null
           received_at?: string
@@ -207,6 +215,10 @@ export type Database = {
           id?: string
           lat?: number | null
           lng?: number | null
+          location_failure_context?: string | null
+          location_failure_elapsed_ms?: number | null
+          location_failure_reason?: string | null
+          location_failure_stage?: string | null
           method?: string
           note?: string | null
           received_at?: string

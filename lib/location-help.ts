@@ -9,10 +9,33 @@
  * matching steps (see docs/digital-brevet-card.md).
  */
 
-export type LocationPlatform = 'ios-safari' | 'ios-chrome' | 'android' | 'other'
+import type { LocationContext } from '@/lib/location-diagnostics'
 
-export function detectPlatform(userAgent: string): LocationPlatform {
-  if (/iPhone|iPad|iPod/.test(userAgent)) {
+export type LocationPlatform = 'ios-safari' | 'ios-chrome' | 'ios-embedded' | 'android' | 'other'
+
+const IOS_DEVICE = /iPhone|iPad|iPod/
+const IOS_EMBEDDED_APP = /FBAN|FBAV|Instagram|GSA\/|Gmail|Line\/|MicroMessenger|LinkedInApp/i
+const IOS_BROWSER = /(?:Version\/[^ ]+.*Safari\/|CriOS|FxiOS|EdgiOS|OPiOS)/i
+
+/**
+ * Classify only a bounded context label for diagnostics. The user-agent is
+ * inspected locally and is never returned or persisted.
+ */
+export function detectLocationContext(userAgent: string, isStandalone = false): LocationContext {
+  if (isStandalone) return 'standalone'
+  if (
+    IOS_DEVICE.test(userAgent) &&
+    (IOS_EMBEDDED_APP.test(userAgent) ||
+      (/AppleWebKit/i.test(userAgent) && !IOS_BROWSER.test(userAgent)))
+  ) {
+    return 'embedded'
+  }
+  return 'browser'
+}
+
+export function detectPlatform(userAgent: string, isStandalone = false): LocationPlatform {
+  if (IOS_DEVICE.test(userAgent)) {
+    if (detectLocationContext(userAgent, isStandalone) === 'embedded') return 'ios-embedded'
     if (/CriOS/.test(userAgent)) return 'ios-chrome'
     // Firefox (FxiOS), Edge (EdgiOS), etc. have their own settings paths;
     // the generic copy is safer than pointing at "Safari Websites".
@@ -46,6 +69,15 @@ const FIX_STEPS: Record<LocationPlatform, LocationFixHelp> = {
       'Make sure Location Services (at the top) is turned on.',
       'Scroll down to Chrome and choose "While Using the App".',
       'Come back to this page and try again.',
+    ],
+  },
+  'ios-embedded': {
+    intro:
+      'This card is open inside another app, where iPhone location may not work. Open it in Safari:',
+    steps: [
+      'Use the Share button or the app menu and choose "Open in Safari". If that option is missing, copy this page link and paste it into Safari.',
+      'In Safari, return to this card and try again.',
+      'If Safari asks for location, choose Allow While Using App and turn on Precise Location.',
     ],
   },
   android: {

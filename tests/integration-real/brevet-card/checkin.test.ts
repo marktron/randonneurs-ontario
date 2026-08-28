@@ -3,7 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 import { getTestSupabase, checked } from '../helpers/supabase'
 import { TORONTO_CHAPTER_ID, daysFromNow } from '../registration/helpers'
 import { checkInAtControl, getBrevetCardByToken } from '@/lib/actions/brevet-card'
-import { computeEventStart } from '@/lib/brevet-card'
+import { computeEventStart, RIDER_UNDO_WINDOW_MS } from '@/lib/brevet-card'
 import { resetRateLimitStores } from '@/lib/rate-limit'
 
 const IDS = {
@@ -110,6 +110,17 @@ describe('digital brevet card check-in (real DB)', () => {
   let flecheToken: string
   let soonToken: string
   let soonEventStart: Date
+
+  async function clearActiveCheckin(controlId = IDS.controlNoCoords) {
+    await checked(
+      supabase
+        .from('control_checkins')
+        .delete()
+        .eq('registration_id', IDS.regActive)
+        .eq('control_id', controlId),
+      'clear active check-in'
+    )
+  }
 
   beforeAll(async () => {
     await cleanup(supabase)
@@ -394,6 +405,438 @@ describe('digital brevet card check-in (real DB)', () => {
     expect(result.data!.checkin.distanceToControlM).toBeNull()
   })
 
+  it('rejects partial coordinates and accuracy without coordinates at the action boundary', async () => {
+    const partial = await checkInAtControl(activeToken, {
+      controlId: IDS.controlNoCoords,
+      checkedInAt: new Date().toISOString(),
+      lat: CONTROL_LAT,
+    } as never)
+    expect(partial.success).toBe(false)
+    expect(partial.error).toMatch(/provided together/i)
+
+    const accuracyOnly = await checkInAtControl(activeToken, {
+      controlId: IDS.controlNoCoords,
+      checkedInAt: new Date().toISOString(),
+      accuracyM: 10,
+    } as never)
+    expect(accuracyOnly.success).toBe(false)
+    expect(accuracyOnly.error).toMatch(/accuracy requires/i)
+  })
+
+  it('persists bounded diagnostics for a manual check-in', async () => {
+    await clearActiveCheckin()
+
+    const result = await checkInAtControl(activeToken, {
+      controlId: IDS.controlNoCoords,
+      checkedInAt: new Date().toISOString(),
+      locationFailure: {
+        reason: 'timeout',
+        stage: 'high_accuracy',
+        elapsedMs: 55_000,
+        context: 'embedded',
+      },
+    })
+    expect(result.success).toBe(true)
+    expect(result.data!.upgradedFromManual).toBe(false)
+
+    const row = await checked(
+      supabase
+        .from('control_checkins')
+        .select(
+          'method, lat, lng, accuracy_m, location_failure_reason, location_failure_stage, location_failure_elapsed_ms, location_failure_context'
+        )
+        .eq('registration_id', IDS.regActive)
+        .eq('control_id', IDS.controlNoCoords)
+        .single(),
+      'read manual diagnostic'
+    )
+    expect(row).toMatchObject({
+      method: 'manual',
+      lat: null,
+      lng: null,
+      accuracy_m: null,
+      location_failure_reason: 'timeout',
+      location_failure_stage: 'high_accuracy',
+      location_failure_elapsed_ms: 55_000,
+      location_failure_context: 'embedded',
+    })
+  })
+
+  it('upgrades a recent manual row to GPS in place and clears failure diagnostics', async () => {
+    await clearActiveCheckin()
+    const manual = await checkInAtControl(activeToken, {
+      controlId: IDS.controlNoCoords,
+      checkedInAt: new Date().toISOString(),
+      locationFailure: {
+        reason: 'position_unavailable',
+        stage: 'high_accuracy',
+        elapsedMs: 40_000,
+        context: 'browser',
+      },
+    })
+    expect(manual.success).toBe(true)
+
+    const before = await checked(
+      supabase
+        .from('control_checkins')
+        .select('id, checked_in_at, received_at')
+        .eq('registration_id', IDS.regActive)
+        .eq('control_id', IDS.controlNoCoords)
+        .single(),
+      'read manual before GPS upgrade'
+    )
+
+    const upgraded = await checkInAtControl(activeToken, {
+      controlId: IDS.controlNoCoords,
+      checkedInAt: new Date().toISOString(),
+      lat: CONTROL_LAT,
+      lng: CONTROL_LNG,
+      accuracyM: 9,
+      expectedManualReceivedAt: (before as { received_at: string }).received_at,
+    })
+    expect(upgraded.success).toBe(true)
+    expect(upgraded.data).toMatchObject({
+      alreadyExisted: true,
+      upgradedFromManual: true,
+      checkin: {
+        checkedInAt: (before as { checked_in_at: string }).checked_in_at,
+        receivedAt: (before as { received_at: string }).received_at,
+        method: 'gps',
+      },
+    })
+
+    const after = await checked(
+      supabase
+        .from('control_checkins')
+        .select(
+          'id, checked_in_at, received_at, method, lat, lng, accuracy_m, location_failure_reason, location_failure_stage, location_failure_elapsed_ms, location_failure_context'
+        )
+        .eq('registration_id', IDS.regActive)
+        .eq('control_id', IDS.controlNoCoords)
+        .single(),
+      'read GPS upgrade'
+    )
+    expect(after).toMatchObject({
+      id: (before as { id: string }).id,
+      checked_in_at: (before as { checked_in_at: string }).checked_in_at,
+      received_at: (before as { received_at: string }).received_at,
+      method: 'gps',
+      lat: CONTROL_LAT,
+      lng: CONTROL_LNG,
+      accuracy_m: 9,
+      location_failure_reason: null,
+      location_failure_stage: null,
+      location_failure_elapsed_ms: null,
+      location_failure_context: null,
+    })
+  })
+
+  it('refuses a GPS upgrade whose fix is outside the control radius', async () => {
+    await clearActiveCheckin(IDS.controlStart)
+    const manual = await checkInAtControl(activeToken, {
+      controlId: IDS.controlStart,
+      checkedInAt: new Date().toISOString(),
+      locationFailure: {
+        reason: 'permission_denied',
+        stage: 'preflight',
+        elapsedMs: 0,
+        context: 'browser',
+      },
+    })
+    expect(manual.success).toBe(true)
+
+    const before = await checked(
+      supabase
+        .from('control_checkins')
+        .select('received_at')
+        .eq('registration_id', IDS.regActive)
+        .eq('control_id', IDS.controlStart)
+        .single(),
+      'read manual before far upgrade'
+    )
+
+    // ~5.5 km north of controlStart, well outside its 500 m radius.
+    const rejected = await checkInAtControl(activeToken, {
+      controlId: IDS.controlStart,
+      checkedInAt: new Date().toISOString(),
+      lat: CONTROL_LAT + 0.05,
+      lng: CONTROL_LNG,
+      accuracyM: 9,
+      expectedManualReceivedAt: (before as { received_at: string }).received_at,
+    })
+    expect(rejected.success).toBe(false)
+    expect(rejected.retryable).not.toBe(true)
+
+    const after = await checked(
+      supabase
+        .from('control_checkins')
+        .select('method, lat, lng, location_failure_reason, location_failure_stage')
+        .eq('registration_id', IDS.regActive)
+        .eq('control_id', IDS.controlStart)
+        .single(),
+      'read row after refused upgrade'
+    )
+    expect(after).toMatchObject({
+      method: 'manual',
+      lat: null,
+      lng: null,
+      location_failure_reason: 'permission_denied',
+      location_failure_stage: 'preflight',
+    })
+    await clearActiveCheckin(IDS.controlStart)
+  })
+
+  it('does not let a stale GPS retry upgrade a manual row created after Undo', async () => {
+    await clearActiveCheckin()
+    const staleReceivedAt = new Date(Date.now() - 60_000).toISOString()
+    const replacementReceivedAt = new Date(Date.now() - 10_000).toISOString()
+    await checked(
+      supabase.from('control_checkins').insert({
+        registration_id: IDS.regActive,
+        control_id: IDS.controlNoCoords,
+        checked_in_at: replacementReceivedAt,
+        received_at: replacementReceivedAt,
+        method: 'manual',
+      }),
+      'insert replacement manual check-in'
+    )
+
+    const staleRetry = await checkInAtControl(activeToken, {
+      controlId: IDS.controlNoCoords,
+      checkedInAt: new Date().toISOString(),
+      lat: CONTROL_LAT,
+      lng: CONTROL_LNG,
+      expectedManualReceivedAt: staleReceivedAt,
+    })
+
+    expect(staleRetry.success).toBe(true)
+    expect(staleRetry.data).toMatchObject({
+      alreadyExisted: true,
+      upgradedFromManual: false,
+      checkin: { method: 'manual' },
+    })
+    expect(new Date(staleRetry.data!.checkin.receivedAt).getTime()).toBe(
+      new Date(replacementReceivedAt).getTime()
+    )
+
+    const row = await checked(
+      supabase
+        .from('control_checkins')
+        .select('method, lat, lng')
+        .eq('registration_id', IDS.regActive)
+        .eq('control_id', IDS.controlNoCoords)
+        .single(),
+      'read replacement manual check-in'
+    )
+    expect(row).toMatchObject({ method: 'manual', lat: null, lng: null })
+  })
+
+  it('does not recreate a manual row removed before a delayed GPS retry arrives', async () => {
+    await clearActiveCheckin()
+    const removedReceivedAt = new Date(Date.now() - 10_000).toISOString()
+
+    const staleRetry = await checkInAtControl(activeToken, {
+      controlId: IDS.controlNoCoords,
+      checkedInAt: new Date().toISOString(),
+      lat: CONTROL_LAT,
+      lng: CONTROL_LNG,
+      expectedManualReceivedAt: removedReceivedAt,
+    })
+
+    expect(staleRetry.success).toBe(false)
+    expect(staleRetry.retryable).toBeUndefined()
+    expect(staleRetry.error).toMatch(/removed before gps could be added/i)
+
+    const rows = await checked(
+      supabase
+        .from('control_checkins')
+        .select('id')
+        .eq('registration_id', IDS.regActive)
+        .eq('control_id', IDS.controlNoCoords),
+      'verify stale GPS retry did not recreate check-in'
+    )
+    expect(rows).toEqual([])
+  })
+
+  it('does not upgrade a manual row after the rider window', async () => {
+    await clearActiveCheckin()
+    const oldReceivedAt = new Date(Date.now() - RIDER_UNDO_WINDOW_MS - 60_000).toISOString()
+    await checked(
+      supabase.from('control_checkins').insert({
+        registration_id: IDS.regActive,
+        control_id: IDS.controlNoCoords,
+        checked_in_at: oldReceivedAt,
+        received_at: oldReceivedAt,
+        method: 'manual',
+      }),
+      'insert expired manual check-in'
+    )
+
+    const result = await checkInAtControl(activeToken, {
+      controlId: IDS.controlNoCoords,
+      checkedInAt: new Date().toISOString(),
+      lat: CONTROL_LAT,
+      lng: CONTROL_LNG,
+      expectedManualReceivedAt: oldReceivedAt,
+    })
+    expect(result.success).toBe(true)
+    expect(result.data).toMatchObject({
+      alreadyExisted: true,
+      upgradedFromManual: false,
+      checkin: { method: 'manual' },
+    })
+    expect(new Date(result.data!.checkin.receivedAt).getTime()).toBe(
+      new Date(oldReceivedAt).getTime()
+    )
+
+    const row = await checked(
+      supabase
+        .from('control_checkins')
+        .select('method, lat, lng')
+        .eq('registration_id', IDS.regActive)
+        .eq('control_id', IDS.controlNoCoords)
+        .single(),
+      'read expired manual check-in'
+    )
+    expect(row).toMatchObject({ method: 'manual', lat: null, lng: null })
+  })
+
+  it('never downgrades GPS or replaces an organizer check-in', async () => {
+    await clearActiveCheckin()
+    await checked(
+      supabase.from('control_checkins').insert({
+        registration_id: IDS.regActive,
+        control_id: IDS.controlNoCoords,
+        checked_in_at: new Date().toISOString(),
+        method: 'gps',
+        lat: CONTROL_LAT,
+        lng: CONTROL_LNG,
+      }),
+      'insert GPS check-in'
+    )
+
+    const manualRetry = await checkInAtControl(activeToken, {
+      controlId: IDS.controlNoCoords,
+      checkedInAt: new Date().toISOString(),
+      locationFailure: {
+        reason: 'timeout',
+        stage: 'high_accuracy',
+        elapsedMs: 60_000,
+        context: 'browser',
+      },
+    })
+    expect(manualRetry.success).toBe(true)
+    expect(manualRetry.data).toMatchObject({
+      upgradedFromManual: false,
+      checkin: { method: 'gps' },
+    })
+
+    await clearActiveCheckin()
+    await checked(
+      supabase.from('control_checkins').insert({
+        registration_id: IDS.regActive,
+        control_id: IDS.controlNoCoords,
+        checked_in_at: new Date().toISOString(),
+        method: 'admin',
+        lat: CONTROL_LAT,
+        lng: CONTROL_LNG,
+        note: 'Organizer-confirmed GPS fix',
+      }),
+      'insert organizer check-in with paired GPS fix'
+    )
+
+    const gpsRetry = await checkInAtControl(activeToken, {
+      controlId: IDS.controlNoCoords,
+      checkedInAt: new Date().toISOString(),
+      lat: CONTROL_LAT + 0.01,
+      lng: CONTROL_LNG + 0.01,
+    })
+    expect(gpsRetry.success).toBe(true)
+    expect(gpsRetry.data).toMatchObject({
+      upgradedFromManual: false,
+      checkin: { method: 'admin' },
+    })
+
+    const admin = await checked(
+      supabase
+        .from('control_checkins')
+        .select('method, lat, lng, note')
+        .eq('registration_id', IDS.regActive)
+        .eq('control_id', IDS.controlNoCoords)
+        .single(),
+      'read organizer check-in'
+    )
+    expect(admin).toMatchObject({
+      method: 'admin',
+      lat: CONTROL_LAT,
+      lng: CONTROL_LNG,
+      note: 'Organizer-confirmed GPS fix',
+    })
+  })
+
+  it('enforces coordinate, method, measurement, and diagnostic constraints in the database', async () => {
+    await clearActiveCheckin()
+    const base = {
+      registration_id: IDS.regActive,
+      control_id: IDS.controlNoCoords,
+      checked_in_at: new Date().toISOString(),
+    }
+
+    const partialCoordinates = await supabase
+      .from('control_checkins')
+      .insert({ ...base, method: 'gps', lat: CONTROL_LAT })
+    expect(partialCoordinates.error?.code).toBe('23514')
+
+    const accuracyWithoutCoordinates = await supabase
+      .from('control_checkins')
+      .insert({ ...base, method: 'manual', accuracy_m: 10 })
+    expect(accuracyWithoutCoordinates.error?.code).toBe('23514')
+
+    const gpsWithoutCoordinates = await supabase
+      .from('control_checkins')
+      .insert({ ...base, method: 'gps' })
+    expect(gpsWithoutCoordinates.error?.code).toBe('23514')
+
+    const manualWithCoordinates = await supabase.from('control_checkins').insert({
+      ...base,
+      method: 'manual',
+      lat: CONTROL_LAT,
+      lng: CONTROL_LNG,
+    })
+    // Preserve complete coordinate evidence written by legacy clients. The
+    // current action no longer creates this shape, but the migration must not
+    // erase or reject it merely because its provenance label is `manual`.
+    expect(manualWithCoordinates.error).toBeNull()
+    await clearActiveCheckin()
+
+    // SQL CHECK treats UNKNOWN as passing, so this specifically guards the
+    // explicit all-four-IS-NOT-NULL predicates in the migration.
+    const partialDiagnostic = await supabase.from('control_checkins').insert({
+      ...base,
+      method: 'manual',
+      location_failure_reason: 'timeout',
+    })
+    expect(partialDiagnostic.error?.code).toBe('23514')
+
+    const gpsAndFailureDiagnostic = await supabase.from('control_checkins').insert({
+      ...base,
+      method: 'admin',
+      lat: CONTROL_LAT,
+      lng: CONTROL_LNG,
+      location_failure_reason: 'timeout',
+      location_failure_stage: 'high_accuracy',
+      location_failure_elapsed_ms: 45_000,
+      location_failure_context: 'browser',
+    })
+    expect(gpsAndFailureDiagnostic.error?.code).toBe('23514')
+
+    const partialControlCoordinates = await supabase
+      .from('event_controls')
+      .update({ lat: null, lng: CONTROL_LNG })
+      .eq('id', IDS.controlStart)
+    expect(partialControlCoordinates.error?.code).toBe('23514')
+  })
+
   it('accepts but flags a GPS check-in outside the control radius', async () => {
     const result = await checkInAtControl(activeToken, {
       controlId: IDS.controlFar,
@@ -539,5 +982,61 @@ describe('digital brevet card check-in (real DB)', () => {
     expect(new Date(result.data!.checkin.checkedInAt).getTime()).toBe(
       new Date(row!.checked_in_at).getTime()
     )
+  })
+
+  it('adds GPS to a pre-start first-control row recorded at the start time (real DB)', async () => {
+    // A row at the start control is recorded at the official start, so its
+    // checked_in_at sits in the future while riders wait at the line. The GPS
+    // retry echoes that server-issued time back; reading it as a device clock
+    // claiming to be from the future would refuse the upgrade and drop the fix.
+    await checked(
+      supabase
+        .from('control_checkins')
+        .delete()
+        .eq('registration_id', IDS.regSoon)
+        .eq('control_id', IDS.controlSoonStart),
+      'clear pre-start check-in'
+    )
+
+    const manual = await checkInAtControl(soonToken, {
+      controlId: IDS.controlSoonStart,
+      checkedInAt: new Date().toISOString(),
+      locationFailure: {
+        reason: 'timeout',
+        stage: 'high_accuracy',
+        elapsedMs: 45_000,
+        context: 'browser',
+      },
+    })
+    expect(manual.success).toBe(true)
+    expect(manual.data!.checkin.method).toBe('manual')
+    const recordedAt = new Date(manual.data!.checkin.checkedInAt).getTime()
+    expect(recordedAt).toBe(soonEventStart.getTime())
+    expect(recordedAt).toBeGreaterThan(Date.now())
+
+    const upgraded = await checkInAtControl(soonToken, {
+      controlId: IDS.controlSoonStart,
+      checkedInAt: manual.data!.checkin.checkedInAt,
+      lat: CONTROL_LAT,
+      lng: CONTROL_LNG,
+      accuracyM: 10,
+      expectedManualReceivedAt: manual.data!.checkin.receivedAt,
+    })
+
+    expect(upgraded.success).toBe(true)
+    expect(upgraded.data!.upgradedFromManual).toBe(true)
+
+    const { data: upgradedRow } = await supabase
+      .from('control_checkins')
+      .select('method, lat, checked_in_at, location_failure_reason')
+      .eq('registration_id', IDS.regSoon)
+      .eq('control_id', IDS.controlSoonStart)
+      .single()
+
+    expect(upgradedRow!.method).toBe('gps')
+    expect(upgradedRow!.lat).not.toBeNull()
+    expect(upgradedRow!.location_failure_reason).toBeNull()
+    // The upgrade enriches the row; it never rewrites the recorded start.
+    expect(new Date(upgradedRow!.checked_in_at).getTime()).toBe(soonEventStart.getTime())
   })
 })

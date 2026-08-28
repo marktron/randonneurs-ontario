@@ -14,6 +14,10 @@ export const E2E_IDS = {
   activeRegistration: '00000000-e2e0-4000-a000-000000000009',
   activeControlStart: '00000000-e2e0-4000-a000-00000000000a',
   activeControlFinish: '00000000-e2e0-4000-a000-00000000000b',
+  webkitRider: '00000000-e2e0-4000-a000-00000000000c',
+  webkitActiveRegistration: '00000000-e2e0-4000-a000-00000000000d',
+  chromiumRider: '00000000-e2e0-4000-a000-00000000000e',
+  chromiumActiveRegistration: '00000000-e2e0-4000-a000-00000000000f',
 }
 
 export interface E2ETestData {
@@ -28,13 +32,17 @@ export interface E2ETestData {
   /** In-progress brevet with controls for digital brevet card tests. */
   brevetCard: {
     eventId: string
+    /** Read-only smoke tests only. No mutating project ever touches it. */
     managementToken: string
     controlLat: number
     controlLng: number
+    /** One pristine registration per @card-mutation project. */
+    mutation: Record<string, { managementToken: string; registrationId: string }>
   }
 }
 
-const DATA_FILE = join(__dirname, '..', '.e2e-data.json')
+/** Single definition of the seed handoff file, shared by setup/teardown/tests. */
+export const E2E_DATA_FILE = join(__dirname, '..', '.e2e-data.json')
 
 /**
  * Read the test data file written by globalSetup.
@@ -42,7 +50,7 @@ const DATA_FILE = join(__dirname, '..', '.e2e-data.json')
  */
 export function getTestData(): E2ETestData | null {
   try {
-    const raw = readFileSync(DATA_FILE, 'utf-8')
+    const raw = readFileSync(E2E_DATA_FILE, 'utf-8')
     return JSON.parse(raw) as E2ETestData
   } catch {
     return null

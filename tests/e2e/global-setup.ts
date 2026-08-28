@@ -4,11 +4,11 @@
  * Creates an admin user, route, events, rider, and results so that
  * previously-skipping tests can actually run.
  */
-import { createClient, SupabaseClient } from '@supabase/supabase-js'
+import { createClient } from '@supabase/supabase-js'
 import { loadEnvConfig } from '@next/env'
-import { writeFileSync } from 'fs'
-import { join } from 'path'
-import { E2E_IDS, type E2ETestData } from './helpers/test-data'
+import { unlinkSync, writeFileSync } from 'fs'
+import WebSocket from 'ws'
+import { E2E_DATA_FILE, E2E_IDS, type E2ETestData } from './helpers/test-data'
 
 const TORONTO_CHAPTER_ID = 'ad83d0b9-4d25-472b-9d3e-5732730d761c'
 const ADMIN_EMAIL = 'admin@test.com'
@@ -36,11 +36,36 @@ export default async function globalSetup() {
   // Load env files — force development mode so .env.development.local is included
   loadEnvConfig(process.cwd(), true /* development */)
 
+  // Never let a previous (or interrupted) run's tokens stand in for this
+  // one's: getTestData() cannot tell a fresh file from a stale one.
+  try {
+    unlinkSync(E2E_DATA_FILE)
+  } catch {
+    // Absent is the normal case.
+  }
+
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
   if (!supabaseUrl || !serviceKey) {
+    // Returning here writes no data file, so every seeded test calls
+    // test.skip() and the run reports success having exercised nothing — a
+    // CI job that gates on this suite would be green for the wrong reason
+    // (CLAUDE.md: no suite may be excluded from CI). Fail loudly there; keep
+    // the escape hatch for a contributor with no local Supabase stack.
+    if (process.env.CI) {
+      throw new Error(
+        '[e2e-setup] Missing SUPABASE env vars — refusing to run the E2E suite unseeded in CI'
+      )
+    }
     console.warn('[e2e-setup] Missing SUPABASE env vars — skipping seed')
     return
+  }
+
+  // Newer supabase-js initializes Realtime eagerly. Node 20 (still used by
+  // CI) has no native WebSocket, so provide the same test-only transport as
+  // the real-database Vitest setup.
+  if (typeof globalThis.WebSocket === 'undefined') {
+    ;(globalThis as unknown as { WebSocket: typeof WebSocket }).WebSocket = WebSocket
   }
 
   const supabase = createClient(supabaseUrl, serviceKey, {
@@ -169,15 +194,26 @@ export default async function globalSetup() {
 
   // ── 4. Rider ────────────────────────────────────────────────────────
   await checked(
-    supabase.from('riders').upsert(
+    supabase.from('riders').upsert([
       {
         id: E2E_IDS.rider,
         slug: 'e2e-test-rider',
         first_name: 'E2E',
         last_name: 'TestRider',
       },
-      { onConflict: 'id' }
-    ),
+      {
+        id: E2E_IDS.webkitRider,
+        slug: 'e2e-test-webkit-rider',
+        first_name: 'WebKit',
+        last_name: 'TestRider',
+      },
+      {
+        id: E2E_IDS.chromiumRider,
+        slug: 'e2e-test-chromium-rider',
+        first_name: 'Chromium',
+        last_name: 'TestRider',
+      },
+    ]),
     'riders upsert'
   )
 
@@ -296,24 +332,48 @@ export default async function globalSetup() {
   )
 
   await checked(
-    supabase.from('registrations').insert({
-      id: E2E_IDS.activeRegistration,
-      event_id: E2E_IDS.activeEvent,
-      rider_id: E2E_IDS.rider,
-    }),
-    'insert active registration'
+    supabase.from('registrations').insert([
+      {
+        id: E2E_IDS.activeRegistration,
+        event_id: E2E_IDS.activeEvent,
+        rider_id: E2E_IDS.rider,
+      },
+      {
+        id: E2E_IDS.webkitActiveRegistration,
+        event_id: E2E_IDS.activeEvent,
+        rider_id: E2E_IDS.webkitRider,
+      },
+      {
+        id: E2E_IDS.chromiumActiveRegistration,
+        event_id: E2E_IDS.activeEvent,
+        rider_id: E2E_IDS.chromiumRider,
+      },
+    ]),
+    'insert active registrations'
   )
 
-  const activeReg = await checked(
+  const activeRegs = await checked(
     supabase
       .from('registrations')
-      .select('management_token')
-      .eq('id', E2E_IDS.activeRegistration)
-      .single(),
-    'read active management_token'
+      .select('id, management_token')
+      .in('id', [
+        E2E_IDS.activeRegistration,
+        E2E_IDS.webkitActiveRegistration,
+        E2E_IDS.chromiumActiveRegistration,
+      ]),
+    'read active management tokens'
   )
-  if (!activeReg?.management_token) {
-    throw new Error('[e2e-setup] Active registration management_token is null after insert')
+  const activeTokenById = new Map(
+    (activeRegs as { id: string; management_token: string | null }[]).map((registration) => [
+      registration.id,
+      registration.management_token,
+    ])
+  )
+  const activeManagementToken = activeTokenById.get(E2E_IDS.activeRegistration)
+  const webkitManagementToken = activeTokenById.get(E2E_IDS.webkitActiveRegistration)
+  const chromiumManagementToken = activeTokenById.get(E2E_IDS.chromiumActiveRegistration)
+  if (!activeManagementToken || !webkitManagementToken || !chromiumManagementToken) {
+    throw new Error('[e2e-setup] Active registration management token is null after insert')
   }
 
   // ── 7. Write data file for test workers ─────────────────────────────
@@ -335,13 +395,22 @@ export default async function globalSetup() {
     },
     brevetCard: {
       eventId: E2E_IDS.activeEvent,
-      managementToken: activeReg.management_token,
+      managementToken: activeManagementToken,
       controlLat: CONTROL_LAT,
       controlLng: CONTROL_LNG,
+      mutation: {
+        'webkit-card-mutation': {
+          managementToken: webkitManagementToken,
+          registrationId: E2E_IDS.webkitActiveRegistration,
+        },
+        'chromium-card-mutation': {
+          managementToken: chromiumManagementToken,
+          registrationId: E2E_IDS.chromiumActiveRegistration,
+        },
+      },
     },
   }
 
-  const outPath = join(__dirname, '.e2e-data.json')
-  writeFileSync(outPath, JSON.stringify(testData, null, 2))
+  writeFileSync(E2E_DATA_FILE, JSON.stringify(testData, null, 2))
   console.log('[e2e-setup] Test data seeded successfully')
 }

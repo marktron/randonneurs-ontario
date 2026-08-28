@@ -28,7 +28,11 @@ import {
   type AdminCheckin,
   type AdminCheckinGridRider,
 } from '@/lib/actions/control-checkins'
-import { FLAG_LABELS, formatCheckinDistanceLabel } from '@/lib/checkin-evidence'
+import {
+  FLAG_LABELS,
+  formatCheckinDistanceLabel,
+  formatLocationFailureSummary,
+} from '@/lib/checkin-evidence'
 import { cn } from '@/lib/utils'
 import { formatControlTime } from '@/lib/brmTimes'
 import { toast } from 'sonner'
@@ -333,6 +337,7 @@ function CheckinDialog({ eventId, editing, onClose, onSaved }: CheckinDialogProp
 
   const existing = editing?.existing ?? null
   const hasRiderGps = existing != null && existing.lat != null && existing.lng != null
+  const locationFailureSummary = existing ? formatLocationFailureSummary(existing) : null
   const controlHasCoords =
     editing != null && editing.control.lat != null && editing.control.lng != null
 
@@ -381,7 +386,9 @@ function CheckinDialog({ eventId, editing, onClose, onSaved }: CheckinDialogProp
           )}
           {existing && !hasRiderGps && (
             <p className="text-sm text-muted-foreground">
-              No GPS fix was recorded for this check-in.
+              {locationFailureSummary
+                ? `No GPS: ${locationFailureSummary}`
+                : 'No GPS fix was recorded for this check-in.'}
             </p>
           )}
           <div className="space-y-2">

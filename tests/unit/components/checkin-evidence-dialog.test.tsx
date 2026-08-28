@@ -26,6 +26,10 @@ const CONTROLS: CheckinEvidenceControl[] = [
       flags: NO_FLAGS,
       distanceToControlM: 40,
       accuracyM: 12,
+      locationFailureReason: null,
+      locationFailureStage: null,
+      locationElapsedMs: null,
+      locationContext: null,
       note: null,
     },
   },
@@ -43,6 +47,10 @@ const CONTROLS: CheckinEvidenceControl[] = [
       flags: { ...NO_FLAGS, late: true },
       distanceToControlM: null,
       accuracyM: null,
+      locationFailureReason: 'timeout',
+      locationFailureStage: 'high_accuracy',
+      locationElapsedMs: 42150,
+      locationContext: 'embedded',
       note: 'Entered by organizer',
     },
   },
@@ -86,6 +94,15 @@ describe('CheckinEvidenceDialog', () => {
     renderDialog()
     expect(screen.getByText('40 m from control (±12 m)')).toBeTruthy()
     expect(screen.getByText('Entered by organizer')).toBeTruthy()
+  })
+
+  it('explains a no-GPS failure with its stage, timing, and context', () => {
+    renderDialog()
+    expect(
+      screen.getByText(
+        'No GPS: Location timed out during the high-accuracy attempt after 42 s (embedded browser)'
+      )
+    ).toBeTruthy()
   })
 
   it('links to the digital cards grid for corrections', () => {
