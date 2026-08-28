@@ -462,3 +462,36 @@ describe('EventCheckinsGrid mobile card layout', () => {
     expect(screen.getByText('Control 2 · 100 km')).toBeTruthy()
   })
 })
+
+describe('EventCheckinsGrid load failure', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  // A failed check-in query degrades to an empty rider list. Without a
+  // distinct load-failure state the grid claims "No registered riders yet",
+  // which is affirmatively false: the riders exist, the read failed.
+  it('reports a failed load instead of claiming there are no riders', () => {
+    render(
+      <EventCheckinsGrid
+        eventId="evt-1"
+        eventSubmitted={false}
+        controls={controls}
+        riders={[]}
+        loadFailed
+      />
+    )
+
+    expect(screen.queryByText(/no registered riders yet/i)).not.toBeInTheDocument()
+    expect(screen.getByText(/check-ins could not be loaded/i)).toBeInTheDocument()
+  })
+
+  it('still shows the empty-rider state when the load succeeded', () => {
+    render(
+      <EventCheckinsGrid eventId="evt-1" eventSubmitted={false} controls={controls} riders={[]} />
+    )
+
+    expect(screen.getByText(/no registered riders yet/i)).toBeInTheDocument()
+    expect(screen.queryByText(/check-ins could not be loaded/i)).not.toBeInTheDocument()
+  })
+})

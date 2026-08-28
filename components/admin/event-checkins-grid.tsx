@@ -59,6 +59,12 @@ interface EventCheckinsGridProps {
   eventSubmitted: boolean
   controls: GridControl[]
   riders: AdminCheckinGridRider[]
+  /**
+   * The check-in read failed, so `riders` is empty for lack of data rather
+   * than lack of riders. Kept distinct so the grid never reports a failed
+   * read as "no registered riders yet".
+   */
+  loadFailed?: boolean
 }
 
 /** ISO → value usable in a datetime-local input, in the browser's timezone. */
@@ -79,6 +85,7 @@ export function EventCheckinsGrid({
   eventSubmitted,
   controls,
   riders,
+  loadFailed = false,
 }: EventCheckinsGridProps) {
   const router = useRouter()
   const [editing, setEditing] = useState<EditingCell | null>(null)
@@ -113,7 +120,12 @@ export function EventCheckinsGrid({
         </Button>
       </div>
 
-      {riders.length === 0 || controls.length === 0 ? (
+      {loadFailed ? (
+        <p className="text-sm text-destructive border rounded-md p-6 text-center">
+          Check-ins could not be loaded. This grid is not showing rider data — retry with Refresh,
+          and don&apos;t treat it as evidence that riders missed controls.
+        </p>
+      ) : riders.length === 0 || controls.length === 0 ? (
         <p className="text-sm text-muted-foreground border rounded-md p-6 text-center">
           {controls.length === 0
             ? 'Save controls above to start tracking check-ins.'

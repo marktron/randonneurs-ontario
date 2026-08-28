@@ -125,6 +125,7 @@ export default async function BrevetCardAdminPage({ params }: BrevetCardAdminPag
         eventSubmitted={typedEvent.status === 'submitted'}
         controls={gridControls}
         riders={riders}
+        loadFailed={!checkinsResult.success}
       />
 
       <PreRideManager
