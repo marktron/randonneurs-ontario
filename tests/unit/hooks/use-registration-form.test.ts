@@ -35,6 +35,7 @@ describe('useRegistrationForm', () => {
         shareRegistration: false,
         emergencyContactName: 'Bob',
         emergencyContactPhone: '555-9876',
+        brevetCardType: 'digital',
       })
     )
 
@@ -44,6 +45,27 @@ describe('useRegistrationForm', () => {
     expect(result.current.email).toBe('anna@example.com')
     expect(result.current.gender).toBe('F')
     expect(result.current.shareRegistration).toBe(false)
+    expect(result.current.brevetCardType).toBe('digital')
+  })
+
+  it('defaults brevetCardType to paper when a saved record has no key', () => {
+    localStorage.setItem(
+      'ro-registration',
+      JSON.stringify({
+        firstName: 'Anna',
+        lastName: 'Smith',
+        email: 'anna@example.com',
+        phone: '555-1234',
+        gender: 'F',
+        shareRegistration: false,
+        emergencyContactName: 'Bob',
+        emergencyContactPhone: '555-9876',
+      })
+    )
+
+    const { result } = renderHook(() => useRegistrationForm())
+
+    expect(result.current.brevetCardType).toBe('paper')
   })
 
   it('persists rider data, flips success, and refreshes the router on success', () => {
@@ -52,6 +74,7 @@ describe('useRegistrationForm', () => {
     act(() => result.current.setFirstName('Anna'))
     act(() => result.current.setLastName('Smith'))
     act(() => result.current.setEmail('anna@example.com'))
+    act(() => result.current.setBrevetCardType('digital'))
     act(() => result.current.handleRegistrationResult({ success: true }))
 
     expect(result.current.success).toBe(true)
@@ -59,6 +82,7 @@ describe('useRegistrationForm', () => {
     const saved = JSON.parse(localStorage.getItem('ro-registration') || '{}')
     expect(saved.firstName).toBe('Anna')
     expect(saved.email).toBe('anna@example.com')
+    expect(saved.brevetCardType).toBe('digital')
   })
 
   it('opens the match dialog and reports pending context on needsRiderMatch', () => {

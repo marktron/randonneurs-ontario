@@ -40,6 +40,7 @@ When results are created (by cron or early submission), the registration's `mana
 
 - `registrations.management_token` — UUID, unique, auto-generated
 - `registrations.cancelled_at` — timestamp of cancellation
+- `registrations.brevet_card_type` — `'paper'` (default) or `'digital'`; the card the rider asked for at registration (see `docs/digital-brevet-card.md` §7a)
 
 ## Key files
 

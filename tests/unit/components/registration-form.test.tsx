@@ -134,6 +134,7 @@ describe('RegistrationForm', () => {
           emergencyContactPhone: '555-1234',
           emailConfirmed: false,
           homepageUrl: '',
+          brevetCardType: 'paper',
         })
       })
     })
@@ -258,6 +259,85 @@ describe('RegistrationForm', () => {
     })
   })
 
+  describe('brevet card preference', () => {
+    async function fillRequiredFields(
+      user: ReturnType<typeof userEvent.setup>,
+      container: HTMLElement
+    ) {
+      await user.type(screen.getByLabelText(/first name/i), 'John')
+      await user.type(screen.getByLabelText(/last name/i), 'Doe')
+      await user.type(screen.getByLabelText(/email/i), 'john@example.com')
+      await user.type(container.querySelector('#emergencyContactName')!, 'Jane Doe')
+      await user.type(container.querySelector('#emergencyContactPhone')!, '555-1234')
+      await user.type(container.querySelector('#phone')!, '416-555-9999')
+    }
+
+    it('defaults to paper and sends it on submit', async () => {
+      const user = userEvent.setup()
+      const { container } = render(<RegistrationForm {...defaultProps} />)
+
+      expect(screen.getByRole('radio', { name: /paper brevet card/i })).toBeChecked()
+      expect(screen.getByRole('radio', { name: /digital brevet card/i })).not.toBeChecked()
+
+      await fillRequiredFields(user, container)
+      await user.click(screen.getByRole('button', { name: /^register$/i }))
+
+      await waitFor(() => {
+        expect(mockRegisterForEvent).toHaveBeenCalledWith(
+          expect.objectContaining({ brevetCardType: 'paper' })
+        )
+      })
+    })
+
+    it('selects the digital card when the rider clicks its label text', async () => {
+      const user = userEvent.setup()
+      render(<RegistrationForm {...defaultProps} />)
+
+      await user.click(screen.getByText('Digital brevet card'))
+
+      expect(screen.getByRole('radio', { name: /digital brevet card/i })).toBeChecked()
+    })
+
+    it('labels target their own form when the form is rendered twice on a page', async () => {
+      // The register page mounts the form in both the desktop sidebar and the
+      // mobile drawer. Hard-coded ids would make every label activate the first
+      // (hidden) copy, so clicks on the visible one did nothing.
+      const user = userEvent.setup()
+      render(
+        <>
+          <RegistrationForm {...defaultProps} />
+          <RegistrationForm {...defaultProps} />
+        </>
+      )
+
+      const labels = screen.getAllByText('Digital brevet card')
+      const radios = screen.getAllByRole('radio', { name: /digital brevet card/i })
+      expect(labels).toHaveLength(2)
+
+      await user.click(labels[1])
+
+      expect(radios[1]).toBeChecked()
+      expect(radios[0]).not.toBeChecked()
+    })
+
+    it('sends digital when the rider selects the digital brevet card', async () => {
+      const user = userEvent.setup()
+      const { container } = render(<RegistrationForm {...defaultProps} />)
+
+      await user.click(screen.getByRole('radio', { name: /digital brevet card/i }))
+      expect(screen.getByRole('radio', { name: /digital brevet card/i })).toBeChecked()
+
+      await fillRequiredFields(user, container)
+      await user.click(screen.getByRole('button', { name: /^register$/i }))
+
+      await waitFor(() => {
+        expect(mockRegisterForEvent).toHaveBeenCalledWith(
+          expect.objectContaining({ brevetCardType: 'digital' })
+        )
+      })
+    })
+  })
+
   describe('form fields', () => {
     it('renders gender selector', () => {
       render(<RegistrationForm {...defaultProps} />)
@@ -277,6 +357,29 @@ describe('RegistrationForm', () => {
 
       await user.click(checkbox)
       expect(checkbox).not.toBeChecked()
+    })
+
+    it('toggles share registration by clicking its label text, even with two forms on the page', async () => {
+      // Same duplicate-mount situation as the brevet card radios: the register
+      // page renders the form in the sidebar and the mobile drawer.
+      const user = userEvent.setup()
+      render(
+        <>
+          <RegistrationForm {...defaultProps} />
+          <RegistrationForm {...defaultProps} />
+        </>
+      )
+
+      const checkboxes = screen.getAllByRole('checkbox', {
+        name: /appear on the registered riders list/i,
+      })
+      const labels = screen.getAllByText('Appear on the registered riders list')
+      expect(checkboxes).toHaveLength(2)
+
+      await user.click(labels[1])
+
+      expect(checkboxes[1]).not.toBeChecked()
+      expect(checkboxes[0]).toBeChecked()
     })
 
     it('allows entering notes', async () => {

@@ -60,6 +60,7 @@ async function getRegistrations(eventId: string): Promise<RegistrationWithRiderF
       team_name,
       is_team_captain,
       share_registration,
+      brevet_card_type,
       riders (id, first_name, last_name, email, phone, emergency_contact_name, emergency_contact_phone, rider_memberships (membership_type, season))
     `
     )

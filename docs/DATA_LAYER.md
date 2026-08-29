@@ -352,17 +352,17 @@ export function RegistrationForm({ eventId }: { eventId: string }) {
 
 ### Core Tables
 
-| Table           | Description                                  |
-| --------------- | -------------------------------------------- |
-| `chapters`      | 7 regional chapters (Toronto, Ottawa, etc.)  |
-| `routes`        | Route definitions with RWGPS links           |
-| `events`        | Scheduled events (brevets, populaires, etc.) |
-| `riders`        | Rider profiles (name, email, gender)         |
-| `registrations` | Event registrations                          |
-| `results`       | Completion records with finish times         |
-| `awards`        | Award definitions                            |
-| `result_awards` | Junction table for results ↔ awards          |
-| `admins`        | Admin users (linked to Supabase Auth)        |
+| Table           | Description                                    |
+| --------------- | ---------------------------------------------- |
+| `chapters`      | 7 regional chapters (Toronto, Ottawa, etc.)    |
+| `routes`        | Route definitions with RWGPS links             |
+| `events`        | Scheduled events (brevets, populaires, etc.)   |
+| `riders`        | Rider profiles (name, email, gender)           |
+| `registrations` | Event registrations (incl. `brevet_card_type`) |
+| `results`       | Completion records with finish times           |
+| `awards`        | Award definitions                              |
+| `result_awards` | Junction table for results ↔ awards            |
+| `admins`        | Admin users (linked to Supabase Auth)          |
 
 ### Database Views
 

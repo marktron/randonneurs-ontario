@@ -31,6 +31,7 @@ import {
   RegistrationError,
   RiderInfoFields,
   EmergencyContactFields,
+  BrevetCardTypeField,
   ShareRegistrationCheckbox,
   NotesField,
 } from '@/components/registration/registration-fields'
@@ -338,6 +339,7 @@ export function PermanentRegistrationForm({ routes }: PermanentRegistrationFormP
           <RiderInfoFields form={form} />
           <ShareRegistrationCheckbox form={form} />
           <EmergencyContactFields form={form} />
+          <BrevetCardTypeField form={form} />
           <NotesField disabled={isPending} value={notes} onChange={setNotes} />
         </div>
 

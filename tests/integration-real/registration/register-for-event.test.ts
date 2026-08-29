@@ -174,7 +174,9 @@ describe('registerForEvent (real DB)', () => {
     // Verify registration in DB
     const { data: reg } = await supabase
       .from('registrations')
-      .select('status, rider_id, share_registration, notes, team_name, is_team_captain')
+      .select(
+        'status, rider_id, share_registration, notes, team_name, is_team_captain, brevet_card_type'
+      )
       .eq('event_id', IDS.scheduledEvent)
       .eq('rider_id', IDS.rider)
       .single()
@@ -183,6 +185,7 @@ describe('registerForEvent (real DB)', () => {
     expect(reg?.notes).toBeNull()
     expect(reg?.team_name).toBeNull()
     expect(reg?.is_team_captain).toBe(false)
+    expect(reg?.brevet_card_type).toBe('paper')
 
     // Verify email
     expect(sendEmail).toHaveBeenCalledTimes(1)
@@ -195,6 +198,60 @@ describe('registerForEvent (real DB)', () => {
       eventLocation: 'Test Start',
     })
     assertManagementUrl(sendEmail)
+  })
+
+  it('registers with brevetCardType: "digital" — stored as digital', async () => {
+    searchCCNMembership.mockResolvedValue({
+      found: true,
+      membershipId: 42,
+      type: 'Individual Membership',
+      city: 'Toronto',
+      country: 'Canada',
+    })
+
+    const { registerForEvent } = await import('@/lib/actions/register')
+    const result = await registerForEvent(
+      buildRegistrationData({ eventId: IDS.scheduledEvent, brevetCardType: 'digital' })
+    )
+
+    expect(result.success).toBe(true)
+
+    const { data: reg } = await supabase
+      .from('registrations')
+      .select('brevet_card_type')
+      .eq('event_id', IDS.scheduledEvent)
+      .eq('rider_id', IDS.rider)
+      .single()
+    expect(reg?.brevet_card_type).toBe('digital')
+  })
+
+  it('registers with an unrecognised brevetCardType — coerced to "paper" server-side', async () => {
+    searchCCNMembership.mockResolvedValue({
+      found: true,
+      membershipId: 42,
+      type: 'Individual Membership',
+      city: 'Toronto',
+      country: 'Canada',
+    })
+
+    const { registerForEvent } = await import('@/lib/actions/register')
+    const result = await registerForEvent(
+      buildRegistrationData({
+        eventId: IDS.scheduledEvent,
+        // @ts-expect-error deliberately bogus value to verify server-side coercion
+        brevetCardType: 'hologram',
+      })
+    )
+
+    expect(result.success).toBe(true)
+
+    const { data: reg } = await supabase
+      .from('registrations')
+      .select('brevet_card_type')
+      .eq('event_id', IDS.scheduledEvent)
+      .eq('rider_id', IDS.rider)
+      .single()
+    expect(reg?.brevet_card_type).toBe('paper')
   })
 
   it('CCN returns not-found — incomplete membership, email with none', async () => {

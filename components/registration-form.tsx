@@ -10,6 +10,7 @@ import {
   RegistrationError,
   RiderInfoFields,
   EmergencyContactFields,
+  BrevetCardTypeField,
   ShareRegistrationCheckbox,
   NotesField,
 } from '@/components/registration/registration-fields'
@@ -129,6 +130,7 @@ export function RegistrationForm({
         <RegistrationError form={form} />
         <RiderInfoFields form={form} />
         <EmergencyContactFields form={form} />
+        <BrevetCardTypeField form={form} />
         <NotesField disabled={isPending} />
         <ShareRegistrationCheckbox form={form} />
 

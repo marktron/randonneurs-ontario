@@ -19,6 +19,7 @@ const sample: SavedRegistrationData = {
   shareRegistration: true,
   emergencyContactName: 'Bob Smith',
   emergencyContactPhone: '555-9876',
+  brevetCardType: 'digital',
 }
 
 describe('registration-storage', () => {
@@ -46,6 +47,15 @@ describe('registration-storage', () => {
   it('returns null for corrupted JSON', () => {
     localStorage.setItem(REGISTRATION_STORAGE_KEY, '{not-json')
     expect(getSavedRegistrationData()).toBeNull()
+  })
+
+  it('still loads a legacy record saved before brevetCardType existed', () => {
+    const { brevetCardType, ...legacy } = sample
+    void brevetCardType
+    localStorage.setItem(REGISTRATION_STORAGE_KEY, JSON.stringify(legacy))
+    const loaded = getSavedRegistrationData()
+    expect(loaded).toEqual(legacy)
+    expect((loaded as Partial<SavedRegistrationData>)?.brevetCardType).toBeUndefined()
   })
 
   it('swallows storage write errors', () => {

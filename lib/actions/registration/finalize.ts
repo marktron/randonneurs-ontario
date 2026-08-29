@@ -17,6 +17,7 @@ import type { RegistrationInsert } from '@/types/queries'
 import { buildManagementUrl, buildConfirmationEmailCardUrl } from './helpers'
 import type { BaseEmailPayload } from './types'
 import type { RegistrationResult } from '../register'
+import { DEFAULT_BREVET_CARD_TYPE, type BrevetCardType } from '@/lib/brevet-card'
 
 /**
  * Create or update a registration record for a rider and event.
@@ -36,7 +37,8 @@ export async function createRegistrationRecord(
   notes?: string,
   status: 'registered' | 'incomplete: membership' = 'registered',
   teamName?: string,
-  isTeamCaptain?: boolean
+  isTeamCaptain?: boolean,
+  brevetCardType: BrevetCardType = DEFAULT_BREVET_CARD_TYPE
 ): Promise<string | 'duplicate'> {
   const supabase = getSupabaseAdmin()
 
@@ -49,6 +51,7 @@ export async function createRegistrationRecord(
     notes: notes || null,
     team_name: teamName || null,
     is_team_captain: isTeamCaptain || false,
+    brevet_card_type: brevetCardType,
   }
   const { data: inserted, error: insertError } = await supabase
     .from('registrations')
@@ -81,6 +84,7 @@ export async function createRegistrationRecord(
         notes: notes || null,
         team_name: teamName || null,
         is_team_captain: isTeamCaptain || false,
+        brevet_card_type: brevetCardType,
         ...(revivableStatus === 'cancelled' ? { cancelled_at: null } : {}),
       })
       .eq('event_id', eventId)
@@ -140,6 +144,8 @@ export interface FinalizeRegistrationParams {
   /** Scheduled-event team fields; omit for permanents (which have no teams). */
   teamName?: string
   isTeamCaptain?: boolean
+  /** Paper (default) or digital brevet card. Already normalized by the caller. */
+  brevetCardType: BrevetCardType
   /** Confirmation-email payload minus the membership-dependent fields. */
   emailBase: BaseEmailPayload
   /** Message returned when the rider is already fully registered. */
@@ -171,6 +177,7 @@ export async function finalizeRegistration(
     notes,
     teamName,
     isTeamCaptain,
+    brevetCardType,
     emailBase,
     duplicateMessage,
     emailErrorOperation,
@@ -209,7 +216,8 @@ export async function finalizeRegistration(
       notes,
       'incomplete: membership',
       teamName,
-      isTeamCaptain
+      isTeamCaptain,
+      brevetCardType
     )
     if (mgmtToken === 'duplicate') {
       return { success: false, error: duplicateMessage }
@@ -233,7 +241,8 @@ export async function finalizeRegistration(
         notes,
         'incomplete: membership',
         teamName,
-        isTeamCaptain
+        isTeamCaptain,
+        brevetCardType
       )
       if (mgmtToken === 'duplicate') {
         return { success: false, error: duplicateMessage }
@@ -255,7 +264,8 @@ export async function finalizeRegistration(
     notes,
     'registered',
     teamName,
-    isTeamCaptain
+    isTeamCaptain,
+    brevetCardType
   )
   if (mgmtToken === 'duplicate') {
     return { success: false, error: duplicateMessage }

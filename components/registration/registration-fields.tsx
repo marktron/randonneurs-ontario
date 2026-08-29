@@ -1,9 +1,12 @@
 'use client'
 
+import { useId } from 'react'
+
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import {
   Select,
   SelectContent,
@@ -13,6 +16,7 @@ import {
 } from '@/components/ui/select'
 import { EmailTypoSuggestion } from '@/components/email-typo-suggestion'
 import type { RegistrationFormState } from '@/hooks/use-registration-form'
+import type { BrevetCardType } from '@/lib/brevet-card'
 
 interface FormSectionProps {
   form: RegistrationFormState
@@ -198,30 +202,80 @@ export function EmergencyContactFields({ form }: FormSectionProps) {
 /** "Appear on the registered riders list" checkbox with clickable label. */
 export function ShareRegistrationCheckbox({ form }: FormSectionProps) {
   const { isPending } = form
+  // Per-instance id: the register page mounts the form twice (see BrevetCardTypeField).
+  const id = useId()
   return (
     <div className="flex items-start gap-3">
       <Checkbox
+        id={id}
         checked={form.shareRegistration}
         onCheckedChange={(checked) => form.setShareRegistration(checked === true)}
         className="mt-1"
         disabled={isPending}
-        aria-label="Appear on the registered riders list"
       />
-      {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- checkbox is keyboard-accessible via aria-label */}
-      <div
-        className="space-y-1 cursor-pointer"
-        onClick={() => {
-          if (!isPending) form.setShareRegistration(!form.shareRegistration)
-        }}
-      >
-        <span className="text-sm font-medium leading-none">
+      <Label htmlFor={id} className="flex-col items-start gap-1 font-normal cursor-pointer">
+        <span className="block text-sm font-medium leading-none text-foreground">
           Appear on the registered riders list
         </span>
-        <p className="text-xs text-muted-foreground">
+        <span className="block text-xs text-muted-foreground">
           Allow other riders to see you&apos;re signed up. Results always include all riders.
-        </p>
-      </div>
+        </span>
+      </Label>
     </div>
+  )
+}
+
+/** Paper vs. digital brevet card choice, radio-styled like a two-option select. */
+export function BrevetCardTypeField({ form }: FormSectionProps) {
+  const { isPending } = form
+  // The register page mounts the form twice (sidebar + mobile drawer), so ids
+  // must be per-instance or every label activates the first, hidden, copy.
+  const id = useId()
+  const paperId = `${id}-paper`
+  const digitalId = `${id}-digital`
+  return (
+    <fieldset className="space-y-3">
+      <legend className="text-sm font-medium">Brevet card</legend>
+      <p className="text-xs text-muted-foreground -mt-2">
+        This only tells the organizer what to prepare at the start.
+      </p>
+      <RadioGroup
+        value={form.brevetCardType}
+        onValueChange={(value) => form.setBrevetCardType(value as BrevetCardType)}
+        disabled={isPending}
+        className="gap-3"
+      >
+        <div className="flex items-start gap-3">
+          <RadioGroupItem value="paper" id={paperId} className="mt-1" />
+          <Label
+            htmlFor={paperId}
+            className="flex-col items-start gap-1 font-normal cursor-pointer"
+          >
+            <span className="block text-sm font-medium leading-none text-foreground">
+              Paper brevet card
+            </span>
+            <span className="block text-xs text-muted-foreground">
+              Pick up a printed card at the start and collect signatures as usual.
+            </span>
+          </Label>
+        </div>
+        <div className="flex items-start gap-3">
+          <RadioGroupItem value="digital" id={digitalId} className="mt-1" />
+          <Label
+            htmlFor={digitalId}
+            className="flex-col items-start gap-1 font-normal cursor-pointer"
+          >
+            <span className="block text-sm font-medium leading-none text-foreground">
+              Digital brevet card
+            </span>
+            <span className="block text-xs text-muted-foreground">
+              Check in at each control with your phone&apos;s GPS. You will not receive a paper card
+              at the start.
+            </span>
+          </Label>
+        </div>
+      </RadioGroup>
+    </fieldset>
   )
 }
 

@@ -178,13 +178,14 @@ describe('registerForPermanent (real DB)', () => {
 
     const { data: reg } = await supabase
       .from('registrations')
-      .select('status, rider_id, share_registration, notes')
+      .select('status, rider_id, share_registration, notes, brevet_card_type')
       .eq('event_id', event!.id)
       .eq('rider_id', IDS.rider)
       .single()
     expect(reg?.status).toBe('registered')
     expect(reg?.share_registration).toBe(false)
     expect(reg?.notes).toBeNull()
+    expect(reg?.brevet_card_type).toBe('paper')
 
     expect(sendEmail).toHaveBeenCalledTimes(1)
     assertEmailPayload(sendEmail, {
@@ -196,6 +197,77 @@ describe('registerForPermanent (real DB)', () => {
       eventType: 'Permanent',
     })
     assertManagementUrl(sendEmail)
+  })
+
+  it('registers with brevetCardType: "digital" — stored as digital', async () => {
+    searchCCNMembership.mockResolvedValue({
+      found: true,
+      membershipId: 42,
+      type: 'Individual Membership',
+      city: 'Toronto',
+      country: 'Canada',
+    })
+
+    const eventDate = daysFromNow(37)
+    const { registerForPermanent } = await import('@/lib/actions/register')
+    const result = await registerForPermanent(
+      buildPermanentRegistrationData({ routeId: IDS.route, eventDate, brevetCardType: 'digital' })
+    )
+
+    expect(result.success).toBe(true)
+
+    const expectedSlug = `permanent-inttest-perm-route-${eventDate}`
+    const { data: event } = await supabase
+      .from('events')
+      .select('id')
+      .eq('slug', expectedSlug)
+      .single()
+
+    const { data: reg } = await supabase
+      .from('registrations')
+      .select('brevet_card_type')
+      .eq('event_id', event!.id)
+      .eq('rider_id', IDS.rider)
+      .single()
+    expect(reg?.brevet_card_type).toBe('digital')
+  })
+
+  it('registers with an unrecognised brevetCardType — coerced to "paper" server-side', async () => {
+    searchCCNMembership.mockResolvedValue({
+      found: true,
+      membershipId: 42,
+      type: 'Individual Membership',
+      city: 'Toronto',
+      country: 'Canada',
+    })
+
+    const eventDate = daysFromNow(38)
+    const { registerForPermanent } = await import('@/lib/actions/register')
+    const result = await registerForPermanent(
+      buildPermanentRegistrationData({
+        routeId: IDS.route,
+        eventDate,
+        // @ts-expect-error deliberately bogus value to verify server-side coercion
+        brevetCardType: 'hologram',
+      })
+    )
+
+    expect(result.success).toBe(true)
+
+    const expectedSlug = `permanent-inttest-perm-route-${eventDate}`
+    const { data: event } = await supabase
+      .from('events')
+      .select('id')
+      .eq('slug', expectedSlug)
+      .single()
+
+    const { data: reg } = await supabase
+      .from('registrations')
+      .select('brevet_card_type')
+      .eq('event_id', event!.id)
+      .eq('rider_id', IDS.rider)
+      .single()
+    expect(reg?.brevet_card_type).toBe('paper')
   })
 
   it('second registration for same route+date reuses existing event', async () => {
