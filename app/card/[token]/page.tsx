@@ -46,13 +46,15 @@ export default async function BrevetCardPage({ params }: PageProps) {
 
   if (!cardAvailable) {
     let reason: string
+    let notSetUp = false
     if (data.registration.status !== 'registered') {
       reason = 'This registration is no longer active, so its brevet card is unavailable.'
     } else if (!isDigitalCardEventType(data.event.eventType)) {
       reason = 'Digital brevet cards are not available for this type of event.'
     } else {
+      notSetUp = true
       reason =
-        'The organizer has not set up digital check-in for this event. Use your paper brevet card.'
+        'The organizer hasn’t set up the digital control card for this event yet. Check back closer to the event, or use the paper brevet card handed out at the start.'
     }
 
     return (
@@ -60,6 +62,13 @@ export default async function BrevetCardPage({ params }: PageProps) {
         <div className="content-container pt-20 md:pt-28 max-w-2xl pb-16">
           <h1 className="font-serif text-3xl md:text-4xl tracking-tight">Digital Brevet Card</h1>
           <p className="mt-4 text-muted-foreground">{reason}</p>
+          {notSetUp && (
+            <p className="mt-4">
+              <Link href="/digital-control-cards" className="underline underline-offset-4">
+                Learn more about digital control cards
+              </Link>
+            </p>
+          )}
           <p className="mt-4">
             <Link href={`/registration/manage/${token}`} className="underline underline-offset-4">
               Manage your registration
