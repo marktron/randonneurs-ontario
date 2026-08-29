@@ -1,5 +1,12 @@
 import { vi } from 'vitest'
 import '@testing-library/jest-dom'
+import { configure } from '@testing-library/react'
+
+// The shared CI runner is ~10x slower than a dev machine; testing-library's
+// default 1000ms `waitFor` timeout made the dialog-driven registration tests
+// flaky there (see the "email typo confirmation" block). Stay well under the
+// 5000ms vitest testTimeout.
+configure({ asyncUtilTimeout: 3000 })
 
 // Polyfill missing DOM APIs for happy-dom compatibility with Radix UI
 if (typeof Element !== 'undefined' && !Element.prototype.hasPointerCapture) {
