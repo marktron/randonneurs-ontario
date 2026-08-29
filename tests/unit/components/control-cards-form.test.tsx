@@ -157,6 +157,56 @@ describe('ControlCardsForm rider selection', () => {
   })
 })
 
+describe('ControlCardsForm rider selection — digital card riders', () => {
+  const ridersWithDigital: CardRider[] = [
+    { id: 'rider-a', firstName: 'Alice', lastName: 'Adams' },
+    { id: 'rider-b', firstName: 'Bob', lastName: 'Brar', brevetCardType: 'digital' },
+    { id: 'rider-c', firstName: 'Cy', lastName: 'Chen' },
+  ]
+
+  it('shows the digital rider muted with "(digital card)" in Everyone mode', () => {
+    renderForm({ riders: ridersWithDigital })
+    const bob = screen.getByText(/Bob Brar \(digital card\)/)
+    expect(bob.className).toContain('text-muted-foreground')
+    const alice = screen.getByText('Alice Adams')
+    expect(alice.className).not.toContain('text-muted-foreground')
+  })
+
+  it('excludes digital riders from the Everyone-mode card count', () => {
+    renderForm({ riders: ridersWithDigital })
+    expect(screen.getByRole('link', { name: 'Generate 2 Control Cards' })).toBeTruthy()
+  })
+
+  it('leaves the digital rider unchecked and paper riders checked when switching to Choose', async () => {
+    const user = userEvent.setup()
+    renderForm({ riders: ridersWithDigital })
+    await user.click(screen.getByRole('radio', { name: 'Choose' }))
+    expect(screen.getByLabelText(/Bob Brar \(digital card\)/).getAttribute('data-state')).toBe(
+      'unchecked'
+    )
+    expect(screen.getByLabelText('Alice Adams').getAttribute('data-state')).toBe('checked')
+    expect(screen.getByLabelText('Cy Chen').getAttribute('data-state')).toBe('checked')
+  })
+
+  it('omits the digital rider from the print URL in Choose mode by default', async () => {
+    const user = userEvent.setup()
+    renderForm({ riders: ridersWithDigital })
+    await user.click(screen.getByRole('radio', { name: 'Choose' }))
+    const href = generateHref()
+    expect(href).toContain('riderIds=rider-a,rider-c')
+    expect(href).not.toContain('rider-b')
+  })
+
+  it('adds the digital rider to the print URL once manually ticked', async () => {
+    const user = userEvent.setup()
+    renderForm({ riders: ridersWithDigital })
+    await user.click(screen.getByRole('radio', { name: 'Choose' }))
+    await user.click(screen.getByLabelText(/Bob Brar \(digital card\)/))
+    const href = generateHref()
+    expect(href).toContain('riderIds=rider-a,rider-b,rider-c')
+  })
+})
+
 const eventWithRwgps = { ...event, rwgpsId: '12345' }
 
 const savedThree: AdminEventControl[] = [

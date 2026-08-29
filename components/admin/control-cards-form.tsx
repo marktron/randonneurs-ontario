@@ -162,10 +162,13 @@ export function ControlCardsForm({
   // Extra blank cards for day-of registrations
   const [extraBlankCards, setExtraBlankCards] = useState(0)
 
-  // Rider selection
+  // Rider selection. Digital-card riders start unchecked in Choose mode —
+  // they don't need a printed card — but "Select all" (an explicit admin
+  // action) still picks up everyone, and a digital rider can be ticked
+  // manually.
   const [selectionMode, setSelectionMode] = useState<'all' | 'individual'>('all')
   const [selectedRiderIds, setSelectedRiderIds] = useState<Set<string>>(
-    () => new Set(riders.map((r) => r.id))
+    () => new Set(riders.filter((r) => r.brevetCardType !== 'digital').map((r) => r.id))
   )
 
   const allRidersSelected = riders.length > 0 && riders.every((r) => selectedRiderIds.has(r.id))
@@ -189,10 +192,13 @@ export function ControlCardsForm({
     })
   }, [riders])
 
+  // In "all" mode this counts paper riders only — digital riders won't get a
+  // printed card (see selectRegistrations), so the button and card total
+  // should match what actually prints.
   const chosenRiderCount =
     selectionMode === 'individual'
       ? riders.filter((r) => selectedRiderIds.has(r.id)).length
-      : riders.length
+      : riders.filter((r) => r.brevetCardType !== 'digital').length
 
   const individualSelectionValid = selectionMode === 'all' || chosenRiderCount > 0
 
@@ -842,11 +848,18 @@ export function ControlCardsForm({
             <div className="space-y-4">
               {selectionMode === 'all' ? (
                 <div className="grid gap-1 md:grid-cols-3">
-                  {riders.map((rider) => (
-                    <div key={rider.id} className="text-sm">
-                      {rider.firstName} {rider.lastName}
-                    </div>
-                  ))}
+                  {riders.map((rider) => {
+                    const digital = rider.brevetCardType === 'digital'
+                    return (
+                      <div
+                        key={rider.id}
+                        className={`text-sm ${digital ? 'text-muted-foreground' : ''}`}
+                      >
+                        {rider.firstName} {rider.lastName}
+                        {digital && ' (digital card)'}
+                      </div>
+                    )
+                  })}
                 </div>
               ) : (
                 <div className="space-y-2 border-t pt-3">
@@ -862,7 +875,8 @@ export function ControlCardsForm({
                   </div>
                   <div className="grid gap-2 md:grid-cols-3">
                     {riders.map((rider) => {
-                      const label = `${rider.firstName} ${rider.lastName}`
+                      const digital = rider.brevetCardType === 'digital'
+                      const label = `${rider.firstName} ${rider.lastName}${digital ? ' (digital card)' : ''}`
                       return (
                         <div key={rider.id} className="flex items-center gap-2">
                           <Checkbox
@@ -870,7 +884,10 @@ export function ControlCardsForm({
                             checked={selectedRiderIds.has(rider.id)}
                             onCheckedChange={() => toggleRider(rider.id)}
                           />
-                          <Label htmlFor={`rider-${rider.id}`} className="text-sm font-normal">
+                          <Label
+                            htmlFor={`rider-${rider.id}`}
+                            className={`text-sm font-normal ${digital ? 'text-muted-foreground' : ''}`}
+                          >
                             {label}
                           </Label>
                         </div>

@@ -355,6 +355,15 @@ Manual entry is always available regardless of RWGPS import.
 - **Admin flow**: riders are the event's registered riders (with management tokens). Extra blank cards can be added for day-of registrations via the `extraBlank` input. If no registrations exist and no extras are requested, the form prints **2 blank cards** by default.
 - **Public flow**: riders are entered by name in the form. Blank-card default is **1** if no riders or extras.
 
+### Digital-card riders
+
+Riders who chose a digital brevet card at registration (`registrations.brevet_card_type`, see `docs/digital-brevet-card.md` §7a) are shown in the admin "Registered Riders" section in muted gray with `(digital card)` appended after their name, in both the Everyone list and the Choose checkbox list.
+
+- **Choose mode default**: digital riders are unchecked by default (paper riders are checked). An admin can still tick a digital rider manually, and "Select all" is an explicit action that selects everyone, digital riders included.
+- **Everyone-mode printing**: `selectRegistrations` (`lib/control-cards-selection.ts`) excludes digital-card registrations when no `riderIds` param is present — printing "everyone" only prints cards for riders who actually want one. An explicit `riderIds` selection (from Choose mode, or a hand-ticked digital rider) is honoured exactly, so a manually-selected digital rider still prints. A registration with a missing/null `brevet_card_type` is treated as paper and kept.
+- The Everyone-mode card count in the Generate button (`chosenRiderCount` when `selectionMode === 'all'`) counts paper riders only, so it matches what actually prints.
+- If every registered rider is digital and the admin prints Everyone, the print page's normal "no registrations → 2 blank cards" fallback applies (nothing crashes, and the Generate button stays enabled).
+
 The print renderer pairs riders 2-per-sheet (`riderPairs`). A `null` is inserted for an unpaired final rider so the layout stays consistent.
 
 ### First-time rider indicator
