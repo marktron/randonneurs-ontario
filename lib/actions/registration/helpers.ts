@@ -96,5 +96,9 @@ export function buildConfirmationEmailCardUrl(
   eventType: string | null,
   managementToken: string
 ): string | undefined {
-  return isDigitalCardEventType(eventType) ? buildDigitalCardUrl(managementToken) : undefined
+  // The email payload carries the display type from formatEventType()
+  // ('Brevet', 'Permanent', …), not the lowercase DB value the eligibility
+  // check expects. Normalise so either form works.
+  const normalized = eventType?.toLowerCase() ?? null
+  return isDigitalCardEventType(normalized) ? buildDigitalCardUrl(managementToken) : undefined
 }

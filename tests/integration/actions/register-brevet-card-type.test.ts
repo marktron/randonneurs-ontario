@@ -97,6 +97,7 @@ vi.mock('@/lib/memberships/service', () => ({
 }))
 
 import { registerForEvent } from '@/lib/actions/register'
+import { sendRegistrationConfirmationEmail } from '@/lib/email/send-registration-email'
 
 function baseData(overrides: Record<string, unknown> = {}) {
   return {
@@ -140,5 +141,27 @@ describe('registerForEvent — brevet_card_type', () => {
 
     const registrationInsert = insertPayloads.find((p) => p.table === 'registrations')
     expect(registrationInsert?.data).toMatchObject({ brevet_card_type: 'paper' })
+  })
+})
+
+describe('registerForEvent — confirmation email digital card link', () => {
+  beforeEach(() => {
+    vi.mocked(sendRegistrationConfirmationEmail).mockClear()
+  })
+
+  it.each([
+    ['paper', 'paper-link@example.com'],
+    ['digital', 'digital-link@example.com'],
+  ])('includes the /card/<token> link for a %s-card rider', async (brevetCardType, email) => {
+    await registerForEvent(baseData({ email, brevetCardType }))
+
+    // emailBase.eventType is the display string ('Brevet'), not the DB value —
+    // the link must survive that.
+    expect(sendRegistrationConfirmationEmail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: 'Brevet',
+        digitalCardUrl: expect.stringMatching(/\/card\/[^/]+$/),
+      })
+    )
   })
 })

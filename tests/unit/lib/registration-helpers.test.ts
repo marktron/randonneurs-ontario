@@ -31,6 +31,15 @@ describe('buildConfirmationEmailCardUrl', () => {
     expect(buildConfirmationEmailCardUrl('permanent', 'token-123')).toMatch(/\/card\/token-123$/)
   })
 
+  it('accepts the display-cased event type the email payload actually carries', () => {
+    // register.ts builds emailBase.eventType with formatEventType(), which
+    // yields 'Brevet' / 'Populaire' / 'Permanent' — not the raw DB value.
+    expect(buildConfirmationEmailCardUrl('Brevet', 'token-123')).toMatch(/\/card\/token-123$/)
+    expect(buildConfirmationEmailCardUrl('Populaire', 'token-123')).toMatch(/\/card\/token-123$/)
+    expect(buildConfirmationEmailCardUrl('Permanent', 'token-123')).toMatch(/\/card\/token-123$/)
+    expect(buildConfirmationEmailCardUrl('Fleche', 'token-123')).toBeUndefined()
+  })
+
   it('returns undefined for ineligible event types', () => {
     expect(buildConfirmationEmailCardUrl('fleche', 'token-123')).toBeUndefined()
     expect(buildConfirmationEmailCardUrl(null, 'token-123')).toBeUndefined()
