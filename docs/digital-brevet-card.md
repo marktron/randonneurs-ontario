@@ -707,17 +707,14 @@ made here — the dialog links to the Digital Cards grid, which owns editing.
 
 ## 11. Email
 
-- **Temporarily hidden (July 2026):** the confirmation-email card link is
-  suppressed while the feature is polished for public use. Flip
-  `DIGITAL_CARD_EMAIL_LINK_ENABLED` in
-  `lib/actions/registration/helpers.ts` (and update
-  `tests/unit/lib/registration-helpers.test.ts`) to restore it. The rest of
-  this section describes the intended behavior once re-enabled.
 - The registration-confirmation email includes an "Open your brevet card"
-  section for **all card-eligible event types**, whether or not the
-  organizer has saved controls yet — most riders register before controls
-  are configured, and the card page explains itself when digital check-in
-  isn't set up. No new emails in Phase 1.
+  section for **every rider on a card-eligible event type** — regardless of
+  the paper/digital preference they gave at registration (§7a), and whether
+  or not the organizer has saved controls yet. Most riders register before
+  controls are configured, and the card page explains itself when digital
+  check-in isn't set up. (The link was hidden behind a kill switch from July
+  to August 2026 while the feature was polished; enabled 2026-08-29.) No new
+  emails in Phase 1.
 - The registration-manage page shows the card section only once controls
   actually exist (`hasDigitalCard`).
 

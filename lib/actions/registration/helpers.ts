@@ -84,22 +84,17 @@ export function buildDigitalCardUrl(managementToken: string): string {
   return `${baseUrl}/card/${managementToken}`
 }
 
-// TEMPORARY KILL SWITCH: the digital brevet card is deployed but not yet
-// ready for riders. Flip to true to restore the card link in registration
-// confirmation emails (and update registration-helpers.test.ts to match).
-const DIGITAL_CARD_EMAIL_LINK_ENABLED = false
-
 /**
  * Card URL to include in the registration confirmation email, or undefined
- * to omit the section entirely. Included for card-eligible event types even
- * if the organizer hasn't saved controls yet — the card page explains when
- * it's not set up, and most organizers configure controls after registration
- * opens.
+ * to omit the section entirely. Included for every rider on a card-eligible
+ * event type — regardless of the brevet card they asked for at registration,
+ * and even if the organizer hasn't saved controls yet: the card page explains
+ * when it's not set up, and most organizers configure controls after
+ * registration opens.
  */
 export function buildConfirmationEmailCardUrl(
   eventType: string | null,
   managementToken: string
 ): string | undefined {
-  if (!DIGITAL_CARD_EMAIL_LINK_ENABLED) return undefined
   return isDigitalCardEventType(eventType) ? buildDigitalCardUrl(managementToken) : undefined
 }
