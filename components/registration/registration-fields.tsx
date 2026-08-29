@@ -202,29 +202,25 @@ export function EmergencyContactFields({ form }: FormSectionProps) {
 /** "Appear on the registered riders list" checkbox with clickable label. */
 export function ShareRegistrationCheckbox({ form }: FormSectionProps) {
   const { isPending } = form
+  // Per-instance id: the register page mounts the form twice (see BrevetCardTypeField).
+  const id = useId()
   return (
     <div className="flex items-start gap-3">
       <Checkbox
+        id={id}
         checked={form.shareRegistration}
         onCheckedChange={(checked) => form.setShareRegistration(checked === true)}
         className="mt-1"
         disabled={isPending}
-        aria-label="Appear on the registered riders list"
       />
-      {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- checkbox is keyboard-accessible via aria-label */}
-      <div
-        className="space-y-1 cursor-pointer"
-        onClick={() => {
-          if (!isPending) form.setShareRegistration(!form.shareRegistration)
-        }}
-      >
-        <span className="text-sm font-medium leading-none">
+      <Label htmlFor={id} className="flex-col items-start gap-1 font-normal cursor-pointer">
+        <span className="block text-sm font-medium leading-none text-foreground">
           Appear on the registered riders list
         </span>
-        <p className="text-xs text-muted-foreground">
+        <span className="block text-xs text-muted-foreground">
           Allow other riders to see you&apos;re signed up. Results always include all riders.
-        </p>
-      </div>
+        </span>
+      </Label>
     </div>
   )
 }

@@ -359,6 +359,29 @@ describe('RegistrationForm', () => {
       expect(checkbox).not.toBeChecked()
     })
 
+    it('toggles share registration by clicking its label text, even with two forms on the page', async () => {
+      // Same duplicate-mount situation as the brevet card radios: the register
+      // page renders the form in the sidebar and the mobile drawer.
+      const user = userEvent.setup()
+      render(
+        <>
+          <RegistrationForm {...defaultProps} />
+          <RegistrationForm {...defaultProps} />
+        </>
+      )
+
+      const checkboxes = screen.getAllByRole('checkbox', {
+        name: /appear on the registered riders list/i,
+      })
+      const labels = screen.getAllByText('Appear on the registered riders list')
+      expect(checkboxes).toHaveLength(2)
+
+      await user.click(labels[1])
+
+      expect(checkboxes[1]).not.toBeChecked()
+      expect(checkboxes[0]).toBeChecked()
+    })
+
     it('allows entering notes', async () => {
       const user = userEvent.setup()
       render(<RegistrationForm {...defaultProps} />)
