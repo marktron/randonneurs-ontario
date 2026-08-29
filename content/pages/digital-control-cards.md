@@ -17,17 +17,17 @@ If you’ve never ridden a brevet, start with [What is Randonneuring?](/intro) a
 
 ## What it actually is
 
-Not an app. Nothing to install, no account, no password. Your card is a private link that looks like `randonneursontario.ca/card/…` followed by a long string of characters. That string is the only thing standing between the internet and your check-ins, so don’t post it in the group chat.
+The digital control card is not an app. There’s nothing to install, no account, no password. Your card is a private link that is unique to you, so don’t post it in the group chat.
 
-You’ll find the link in your registration confirmation email, under a green “Digital brevet card” heading. It’s also on your registration page (the one you’d use to cancel or submit results), and if the organizer printed you a paper card, the QR code on it opens your digital card too.
+You’ll find the link in your registration confirmation email, under a “Digital brevet card” heading. If the organizer printed you a paper card, a QR code on it opens your digital card too.
 
 Open it on the phone you’ll carry on the ride and leave the tab open. Any modern browser works. On an iPhone, Safari gives GPS the best chance of a clean fix; if the link opens inside Gmail’s or Instagram’s built-in browser, look for the option to open it in Safari instead.
 
 ## Paper or digital? Pick one when you register
 
-The registration form asks which card you want. **Paper** is the default. Choose **digital** and the organizer won’t print a card for you, which is the point (fewer cards to photocopy at 5 a.m.). You can use the digital card either way, and you can carry a paper card either way. The choice only tells the organizer what to prepare.
+The registration form asks which card you want. **Paper** is the default. Choose **digital** and the organizer won’t print a card for you, which is the point (fewer cards to print out and fold at 5 a.m.). You can use the digital card either way, and you can carry a paper card either way. The choice only tells the organizer what to prepare.
 
-My honest advice for a first brevet: pick paper, and use the digital card alongside it. Once you’ve done a ride and trust the thing, go digital. A paper card is a comforting object to have in a pocket when your phone reads 4% at kilometre 180.
+Some advice for your first brevet: pick paper, and use the digital card alongside it. Once you’ve done a ride and trust the process, go digital. A paper card is a comforting object to have in a pocket when your phone reads 4% at kilometre 180. Some riders also just like keeping the cards.
 
 ## Before the ride
 
@@ -35,13 +35,13 @@ My honest advice for a first brevet: pick paper, and use the digital card alongs
 
 [screenshot-2]: <> 'SCREENSHOT: The top of the card before the event, showing the ‘Check that location works on this phone before your ride’ note and the Test your location button, then the ‘Location works on this phone.’ confirmation. Two small crops side by side.'
 
-**Charge everything.** The card reads your location only when you tap Check in, so it won’t drain your battery the way a tracking app does. But your phone is also your map and your way of calling for a ride home. Bring a small power bank.
+**Charge everything.** The card reads your location only when you tap the “Check in” button, so it won’t drain your battery the way a tracking app does. But your phone is often also your map and your way of calling for a ride home. Bring a small power bank if you’re not sure your phone will last the whole ride.
 
-**Read the control list.** Each control shows its distance from the start and the window it’s open, like `07:12 – 09:40`. Those times come from the same formula as the paper card. Nothing about the ride changes: you still have to reach each control before it closes, and the finish before the time limit.
+**Read the control list.** Each control shows its distance from the start and the window it’s open, like `07:12 – 09:40`. Those times come from the same formula as the paper card. Nothing about the ride changes. The intermediate control times are guidelines rather than hard cut-offs, though you should still try to reach each control before it closes. The finish control’s closing time is the time limit for the event, and that one is firm.
 
 ## On the day
 
-Check-in opens two hours before the official start. Until then the buttons are greyed out and the page tells you when they’ll wake up. At the start line, tap **Check in** on the first control. If you’re a few minutes early, the page says so and records your time as the official start. Nobody gets a head start by tapping at 5:47.
+Check-in opens two hours before the official start. Until then the buttons are greyed out and the page tells you when they’ll be active. At the start line, tap **Check in** on the first control. If you’re a few minutes early, the page says so and records your time as the official start. Nobody gets a head start by tapping at 5:47.
 
 [screenshot-3]: <> 'SCREENSHOT: The ‘Before the start’ dialog: ‘You’re checking in before the start. Your check-in will be recorded at the official start time (06:00).’'
 
@@ -63,21 +63,19 @@ Something will go wrong. Not to you, necessarily, but to someone on every ride.
 
 **GPS won’t cooperate.** Sometimes it can’t get a fix; sometimes your phone has quietly blocked location for the browser. Either way the page offers **Check in without GPS**. Take it. The check-in records with a note that it was manual, and if GPS starts behaving in the next 15 minutes, a **Retry GPS** link adds a location to the check-in you already made without changing the time.
 
-**You’re early, or late.** Both are allowed. Early gets a quick “are you sure?” and a flag. Late just gets a flag. The organizer looks at flags after the ride, the way they’d look at a paper card with an odd time on it.
+**You’re early, or late.** Both are allowed. Early gets a quick “are you sure?” and a flag. Late just gets a flag. The organizer looks at flags after the ride, the way they’d look at a paper card with an odd time on it. Remember that only the start and finish times are firm; the intermediate controls are guidelines.
 
-**Your phone dies.** This is what the paper card is for. Get it signed as usual. If you went digital-only, get a receipt at each remaining control and tell the organizer what happened. Riders were finishing brevets on receipts long before phones.
+**Your phone dies.** This is what the paper card is for. Get it signed as usual. If you went digital-only, get a receipt or make a note at each remaining control and tell the organizer what happened. Riders were finishing brevets on receipts long before phones. Sharing your Strava or GPS data can also help the organizer verify your ride.
 
 ## The finish
 
-Check in at the final control and the card congratulates you (you’ll have earned it) and shows a button to submit your result. Your finish time has already been worked out from your check-ins. You’ll get an email asking for one last thing: a link to your Strava activity or a GPX file of the ride, which is required to make the result official. Add it, hit submit, and go find the largest meal in the county.
+Check in at the final control and the card congratulates you (you’ll have earned it) and shows a button to submit your result. Your finish time has already been worked out from your check-ins. You’ll get an email asking for one last thing: a link to your Strava activity or a GPX file of the ride. Add it, hit submit, and go find something delicious to eat!
 
 [screenshot-6]: <> 'SCREENSHOT: The ‘Ride complete — congratulations!’ banner at the top of the card with the Submit your result button.'
 
-If you also carried a paper card, hand that in too.
-
 ## The fine print, briefly
 
-- The card works for brevets, populaires, and permanents. Flèches are team events with their own rules and don’t use it.
+- The card works for brevets, populaires, and permanents.
 - It reads your location only when you tap. It is not live tracking, and nobody can watch you ride. (If you _want_ people to watch you ride, [there’s a page for that](/live-tracking).)
 - Your check-ins live on the phone that made them. Don’t switch phones mid-ride.
 - Organizers can correct a check-in afterward, and they can see when one was early, late, without GPS, or outside the radius. That’s the whole idea.
