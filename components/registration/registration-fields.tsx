@@ -252,7 +252,7 @@ export function BrevetCardTypeField({ form }: FormSectionProps) {
               Paper brevet card
             </span>
             <span className="block text-xs text-muted-foreground">
-              Pick up a printed card at the start and collect stamps as usual.
+              Pick up a printed card at the start and collect signatures as usual.
             </span>
           </Label>
         </div>
@@ -266,8 +266,8 @@ export function BrevetCardTypeField({ form }: FormSectionProps) {
               Digital brevet card
             </span>
             <span className="block text-xs text-muted-foreground">
-              Check in at each control from your phone. You can still ask for a paper card at the
-              start.
+              Check in at each control with your phone&apos;s GPS. You will not receive a paper card
+              at the start.
             </span>
           </Label>
         </div>

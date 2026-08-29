@@ -548,7 +548,8 @@ Registration forms for digital-card event types (brevets, populaires,
 permanents — not flèches) ask which brevet card the rider wants:
 
 - **Paper brevet card** (default) — a printed card is waiting at the start.
-- **Digital brevet card** — the rider plans to check in from their phone.
+- **Digital brevet card** — the rider checks in with their phone's GPS and
+  is told they will not receive a paper card at the start.
 
 The answer is stored on the registration as `registrations.brevet_card_type`
 (`TEXT NOT NULL DEFAULT 'paper' CHECK (IN ('paper','digital'))`, migration
