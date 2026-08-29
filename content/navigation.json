@@ -43,7 +43,7 @@
           "separator": true
         },
         {
-          "label": "Administration",
+          "label": "Help",
           "type": "heading"
         },
         {
@@ -57,6 +57,10 @@
         {
           "label": "Control Cards",
           "href": "/control-cards"
+        },
+        {
+          "label": "Digital Control Cards",
+          "href": "/digital-control-cards"
         },
         {
           "label": "Contact",
