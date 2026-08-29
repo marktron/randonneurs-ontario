@@ -289,6 +289,37 @@ describe('RegistrationForm', () => {
       })
     })
 
+    it('selects the digital card when the rider clicks its label text', async () => {
+      const user = userEvent.setup()
+      render(<RegistrationForm {...defaultProps} />)
+
+      await user.click(screen.getByText('Digital brevet card'))
+
+      expect(screen.getByRole('radio', { name: /digital brevet card/i })).toBeChecked()
+    })
+
+    it('labels target their own form when the form is rendered twice on a page', async () => {
+      // The register page mounts the form in both the desktop sidebar and the
+      // mobile drawer. Hard-coded ids would make every label activate the first
+      // (hidden) copy, so clicks on the visible one did nothing.
+      const user = userEvent.setup()
+      render(
+        <>
+          <RegistrationForm {...defaultProps} />
+          <RegistrationForm {...defaultProps} />
+        </>
+      )
+
+      const labels = screen.getAllByText('Digital brevet card')
+      const radios = screen.getAllByRole('radio', { name: /digital brevet card/i })
+      expect(labels).toHaveLength(2)
+
+      await user.click(labels[1])
+
+      expect(radios[1]).toBeChecked()
+      expect(radios[0]).not.toBeChecked()
+    })
+
     it('sends digital when the rider selects the digital brevet card', async () => {
       const user = userEvent.setup()
       const { container } = render(<RegistrationForm {...defaultProps} />)

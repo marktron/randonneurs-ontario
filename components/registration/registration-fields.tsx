@@ -1,5 +1,7 @@
 'use client'
 
+import { useId } from 'react'
+
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
@@ -230,6 +232,11 @@ export function ShareRegistrationCheckbox({ form }: FormSectionProps) {
 /** Paper vs. digital brevet card choice, radio-styled like a two-option select. */
 export function BrevetCardTypeField({ form }: FormSectionProps) {
   const { isPending } = form
+  // The register page mounts the form twice (sidebar + mobile drawer), so ids
+  // must be per-instance or every label activates the first, hidden, copy.
+  const id = useId()
+  const paperId = `${id}-paper`
+  const digitalId = `${id}-digital`
   return (
     <fieldset className="space-y-3">
       <legend className="text-sm font-medium">Brevet card</legend>
@@ -243,9 +250,9 @@ export function BrevetCardTypeField({ form }: FormSectionProps) {
         className="gap-3"
       >
         <div className="flex items-start gap-3">
-          <RadioGroupItem value="paper" id="brevetCardType-paper" className="mt-1" />
+          <RadioGroupItem value="paper" id={paperId} className="mt-1" />
           <Label
-            htmlFor="brevetCardType-paper"
+            htmlFor={paperId}
             className="flex-col items-start gap-1 font-normal cursor-pointer"
           >
             <span className="block text-sm font-medium leading-none text-foreground">
@@ -257,9 +264,9 @@ export function BrevetCardTypeField({ form }: FormSectionProps) {
           </Label>
         </div>
         <div className="flex items-start gap-3">
-          <RadioGroupItem value="digital" id="brevetCardType-digital" className="mt-1" />
+          <RadioGroupItem value="digital" id={digitalId} className="mt-1" />
           <Label
-            htmlFor="brevetCardType-digital"
+            htmlFor={digitalId}
             className="flex-col items-start gap-1 font-normal cursor-pointer"
           >
             <span className="block text-sm font-medium leading-none text-foreground">
