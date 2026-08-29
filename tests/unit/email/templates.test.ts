@@ -116,10 +116,20 @@ describe('registration confirmation digital brevet card link', () => {
     expect(email.html).toContain('Open your brevet card')
   })
 
+  it('links to the digital control cards help page from the card section', () => {
+    const email = buildRegistrationConfirmationEmail({
+      ...baseRegistration,
+      digitalCardUrl: cardUrl,
+    })
+    expect(email.text).toContain('/digital-control-cards')
+    expect(email.html).toMatch(/href="[^"]*\/digital-control-cards"[^>]*>Learn more</)
+  })
+
   it('omits the card section when no url is provided', () => {
     const email = buildRegistrationConfirmationEmail(baseRegistration)
     expect(email.text).not.toContain('Digital brevet card')
     expect(email.html).not.toContain('Open your brevet card')
+    expect(email.html).not.toContain('/digital-control-cards')
   })
 })
 

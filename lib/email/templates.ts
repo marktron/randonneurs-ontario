@@ -146,7 +146,7 @@ Start time: ${data.eventTime} ${data.eventDate}
 Start location: ${data.eventLocation}
 ${membershipTypeRow}
 ${notesSection}
-${data.managementUrl ? `\nNew for 2026! Cancel your event registration or submit your results: ${data.managementUrl}\n` : ''}${data.digitalCardUrl ? `\nDigital brevet card — check in at controls from your phone on event day: ${data.digitalCardUrl}\n` : ''}
+${data.managementUrl ? `\nNew for 2026! Cancel your event registration or submit your results: ${data.managementUrl}\n` : ''}${data.digitalCardUrl ? `\nDigital brevet card — check in at controls from your phone on event day: ${data.digitalCardUrl}\nLearn more about digital control cards: ${SITE_URL}/digital-control-cards\n` : ''}
 --------------------
 Brevet Rules
 --------------------
@@ -239,6 +239,9 @@ ${
       </p>
       <p style="text-align: center;">
         <a href="${safe.digitalCardUrl}" style="display: inline-block; background-color: #4d7c0f; color: white; padding: 8px 16px; text-decoration: none; border-radius: 6px; font-weight: 600;">Open your brevet card</a>
+      </p>
+      <p style="text-align: center; font-size: 14px; margin: 0;">
+        <a href="${SITE_URL}/digital-control-cards" style="color: #4d7c0f;">Learn more</a> about how digital control cards work.
       </p>
     </div>
 `
