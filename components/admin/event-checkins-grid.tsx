@@ -37,7 +37,7 @@ import { cn } from '@/lib/utils'
 import { formatControlTime } from '@/lib/brmTimes'
 import { toast } from 'sonner'
 import Link from 'next/link'
-import { ExternalLink, Loader2, RefreshCw } from 'lucide-react'
+import { Link as LinkIcon, Loader2, RefreshCw } from 'lucide-react'
 import { CheckinMap } from '@/components/admin/checkin-map'
 
 export interface GridControl {
@@ -205,7 +205,7 @@ const RiderRow = memo(function RiderRow({
               title={`Open ${rider.riderName}'s digital card`}
               aria-label={`Open ${rider.riderName}'s digital card`}
             >
-              <ExternalLink className="h-3.5 w-3.5" />
+              <LinkIcon className="h-3.5 w-3.5" />
             </Link>
           )}
         </div>
