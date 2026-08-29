@@ -12,7 +12,7 @@ import {
   createTorontoDate,
 } from '@/lib/brmTimes'
 import { buildCardLegsFromRows, type ControlRowForLegs } from '@/lib/controlPoints'
-import { isDigitalCardEventType } from '@/lib/brevet-card'
+import { isDigitalCardEventType, normalizeBrevetCardType } from '@/lib/brevet-card'
 import { SITE_URL } from '@/lib/site-url'
 import type {
   ControlPoint,
@@ -58,6 +58,7 @@ async function getRegistrations(eventId: string): Promise<RegistrationForControl
       id,
       rider_id,
       management_token,
+      brevet_card_type,
       riders (id, first_name, last_name)
     `
     )
@@ -234,6 +235,7 @@ export default async function PrintPage({ params, searchParams }: PrintPageProps
           ? `${baseUrl}/card/${r.management_token}`
           : undefined,
       isFirstTimeRider: firstTimeRiderIdSet.has(r.riders!.id),
+      brevetCardType: normalizeBrevetCardType(r.brevet_card_type),
     }))
 
   // Create extra blank cards

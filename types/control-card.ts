@@ -1,4 +1,5 @@
 import type { NominalDistance } from '@/lib/brmTimes'
+import type { BrevetCardType } from '@/lib/brevet-card'
 
 /**
  * A control point on a route
@@ -32,6 +33,8 @@ export interface CardRider {
   cardUrl?: string
   /** True when this is the rider's first event (no prior non-DNS results). */
   isFirstTimeRider?: boolean
+  /** Rider's chosen card type at registration. The public flow never sets this. */
+  brevetCardType?: BrevetCardType
 }
 
 /**

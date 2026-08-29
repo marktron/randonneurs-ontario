@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { ChevronLeft } from 'lucide-react'
 import { ControlCardsForm } from '@/components/admin/control-cards-form'
 import { getEventControlsForAdmin } from '@/lib/actions/event-controls'
+import { normalizeBrevetCardType } from '@/lib/brevet-card'
 import type { EventForControlCards, RegistrationForControlCards } from '@/types/queries'
 
 type EventForControlCardsWithStatus = EventForControlCards & { status: string | null }
@@ -40,6 +41,7 @@ async function getRegistrations(eventId: string): Promise<RegistrationForControl
       `
       id,
       rider_id,
+      brevet_card_type,
       riders (id, first_name, last_name)
     `
     )
@@ -114,6 +116,7 @@ export default async function ControlCardsPage({ params }: ControlCardsPageProps
             id: r.riders!.id,
             firstName: r.riders!.first_name,
             lastName: r.riders!.last_name,
+            brevetCardType: normalizeBrevetCardType(r.brevet_card_type),
           }))}
         organizer={{
           name: admin.name,

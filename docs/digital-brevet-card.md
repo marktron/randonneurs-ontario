@@ -566,6 +566,12 @@ rows) overwrites the stored value.
 Server side, `normalizeBrevetCardType` (`lib/brevet-card.ts`) coerces any
 unrecognised value to `paper`, so the column is never trusted to the client.
 
+The admin control-cards flow reads this preference too: digital riders are
+shown muted with a `(digital card)` label, default to unchecked when an admin
+chooses individual riders to print, and are excluded from an Everyone-mode
+print run unless explicitly selected — see `docs/control-cards.md` →
+"Digital-card riders".
+
 ## 8. Offline strategy (the honest version)
 
 Phase 1 is **online-first with an offline outbox**, not a full PWA:

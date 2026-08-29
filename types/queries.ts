@@ -425,7 +425,10 @@ export type EventForControlCards = Pick<
 /**
  * Registration with rider for control cards
  */
-export type RegistrationForControlCards = Pick<Registration, 'id' | 'rider_id'> & {
+export type RegistrationForControlCards = Pick<
+  Registration,
+  'id' | 'rider_id' | 'brevet_card_type'
+> & {
   riders: Pick<Rider, 'id' | 'first_name' | 'last_name'> | null
 }
 

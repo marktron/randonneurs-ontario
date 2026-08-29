@@ -40,6 +40,7 @@ vi.mock('qrcode.react', () => ({
 
 let eventRow: Record<string, unknown> | null = null
 let controlRows: Record<string, unknown>[] = []
+let registrationRows: Record<string, unknown>[] = []
 
 /**
  * Minimal chainable stand-in for the three queries this page makes:
@@ -52,7 +53,14 @@ function makeQueryBuilder(table: string) {
     select: () => builder,
     eq: () => builder,
     single: async () => ({ data: table === 'events' ? eventRow : null }),
-    order: async () => ({ data: table === 'event_controls' ? controlRows : [] }),
+    order: async () => ({
+      data:
+        table === 'event_controls'
+          ? controlRows
+          : table === 'registrations'
+            ? registrationRows
+            : [],
+    }),
   }
   return builder
 }
@@ -77,6 +85,7 @@ function renderPage(searchParams: Record<string, string> = {}) {
 
 beforeEach(() => {
   controlRows = []
+  registrationRows = []
   eventRow = {
     id: 'event-1',
     name: 'Ottawa 200 Brevet',
@@ -137,5 +146,39 @@ describe('Admin control-cards print page — card identity', () => {
     expect(routeNames).toContain('Leg 2: Haliburton')
     // The event name must not leak onto a leg card's headline.
     expect(routeNames).not.toContain('Ottawa 200 Brevet')
+  })
+})
+
+describe('Admin control-cards print page — digital card riders', () => {
+  beforeEach(() => {
+    registrationRows = [
+      {
+        id: 'reg-1',
+        rider_id: 'rider-1',
+        management_token: 'token-1',
+        brevet_card_type: 'paper',
+        riders: { id: 'rider-1', first_name: 'Paper', last_name: 'Rider' },
+      },
+      {
+        id: 'reg-2',
+        rider_id: 'rider-2',
+        management_token: 'token-2',
+        brevet_card_type: 'digital',
+        riders: { id: 'rider-2', first_name: 'Digital', last_name: 'Rider' },
+      },
+    ]
+  })
+
+  it('does not print a card for a digital-card rider when printing everyone', async () => {
+    const { container } = render(await renderPage())
+
+    expect(container.textContent).toContain('Paper Rider')
+    expect(container.textContent).not.toContain('Digital Rider')
+  })
+
+  it('prints the digital-card rider when explicitly selected via riderIds', async () => {
+    const { container } = render(await renderPage({ riderIds: 'rider-2' }))
+
+    expect(container.textContent).toContain('Digital Rider')
   })
 })
