@@ -542,6 +542,29 @@ never changes between events.
   they're client-safe and unit-testable without React.
 - Reads for admin/live views in `lib/actions/control-checkins.ts`.
 
+## 7a. Rider's card preference at registration
+
+Registration forms for digital-card event types (brevets, populaires,
+permanents — not flèches) ask which brevet card the rider wants:
+
+- **Paper brevet card** (default) — a printed card is waiting at the start.
+- **Digital brevet card** — the rider plans to check in from their phone.
+
+The answer is stored on the registration as `registrations.brevet_card_type`
+(`TEXT NOT NULL DEFAULT 'paper' CHECK (IN ('paper','digital'))`, migration
+`20260828120000_add_brevet_card_type.sql`) and remembered in the rider's
+localStorage record (`lib/registration-storage.ts`) so future forms pre-fill it.
+
+This is a **preference for the organizer**, not a gate: the digital card page
+still works for every registered rider on an eligible event, and paper remains
+the fallback. Organizers see a "Digital card" badge on the admin registrant
+list so they know how many paper cards to print. The choice can be changed by
+cancelling and re-registering; re-registration (revived cancelled/incomplete
+rows) overwrites the stored value.
+
+Server side, `normalizeBrevetCardType` (`lib/brevet-card.ts`) coerces any
+unrecognised value to `paper`, so the column is never trusted to the client.
+
 ## 8. Offline strategy (the honest version)
 
 Phase 1 is **online-first with an offline outbox**, not a full PWA:
@@ -761,7 +784,7 @@ Each step lands as its own commit; the branch stays shippable throughout.
 
 | Concern                 | Location                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Schema                  | `supabase/migrations/20260703120000_add_digital_brevet_card.sql`                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| Schema                  | `supabase/migrations/20260703120000_add_digital_brevet_card.sql`; rider preference column in `20260828120000_add_brevet_card_type.sql` (§7a)                                                                                                                                                                                                                                                                                                                                                                                               |
 | Check-in stamp effect   | `public/stamp-green.svg` — stamp artwork; `stampRotation` in `lib/brevet-card.ts` — deterministic tilt; rendering in `components/brevet-card-view.tsx`; animation keyframes in `app/globals.css`                                                                                                                                                                                                                                                                                                                                           |
 | Domain logic (pure)     | `lib/brevet-card.ts` — eligibility, event start, acceptance window, control windows, flag derivation                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | Rider actions           | `lib/actions/brevet-card.ts` — `getBrevetCardByToken`, `checkInAtControl`, `undoCheckin` (both also decide `isFinalControl` for the finish flow, folded into an existing query)                                                                                                                                                                                                                                                                                                                                                            |

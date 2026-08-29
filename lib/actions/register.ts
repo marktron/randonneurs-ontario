@@ -64,6 +64,7 @@ import {
 } from './registration/rider'
 import { finalizeRegistration } from './registration/finalize'
 import type { BaseEmailPayload } from './registration/types'
+import { normalizeBrevetCardType, type BrevetCardType } from '@/lib/brevet-card'
 
 export interface RegistrationData {
   eventId: string
@@ -82,6 +83,8 @@ export interface RegistrationData {
   emailConfirmed?: boolean
   /** Honeypot field — must be empty. Non-empty value means bot; we silently drop. */
   homepageUrl?: string
+  /** Paper (default) or digital brevet card. Unrecognised values fall back to paper server-side. */
+  brevetCardType?: BrevetCardType
 }
 
 export interface RegistrationResult {
@@ -264,6 +267,7 @@ export async function registerForEvent(data: RegistrationData): Promise<Registra
       notes,
       teamName: trimmedTeamName,
       isTeamCaptain,
+      brevetCardType: normalizeBrevetCardType(data.brevetCardType),
       emailBase: eventEmailBase(
         event,
         `${trimmedFirstName} ${trimmedLastName}`,
@@ -304,6 +308,8 @@ export interface PermanentRegistrationData {
   emailConfirmed?: boolean
   /** Honeypot field — must be empty. Non-empty value means bot; we silently drop. */
   homepageUrl?: string
+  /** Paper (default) or digital brevet card. Unrecognised values fall back to paper server-side. */
+  brevetCardType?: BrevetCardType
 }
 
 export async function registerForPermanent(
@@ -469,6 +475,7 @@ export async function registerForPermanent(
           notes,
           emergencyContactName: data.emergencyContactName,
           emergencyContactPhone: data.emergencyContactPhone,
+          brevetCardType: data.brevetCardType,
         },
       }
     }
@@ -482,6 +489,7 @@ export async function registerForPermanent(
       realChapterId: realChapterIdFor(route.chapters?.slug, route.chapter_id),
       shareRegistration,
       notes,
+      brevetCardType: normalizeBrevetCardType(data.brevetCardType),
       // Permanents have no teams; leave team fields unset.
       emailBase: {
         registrantName: `${trimmedFirstName} ${trimmedLastName}`,
@@ -536,6 +544,8 @@ export interface CompleteRegistrationData {
   emailConfirmed?: boolean
   /** Honeypot field — must be empty. Non-empty value means bot; we silently drop. */
   homepageUrl?: string
+  /** Paper (default) or digital brevet card. Unrecognised values fall back to paper server-side. */
+  brevetCardType?: BrevetCardType
 }
 
 /**
@@ -701,6 +711,7 @@ export async function completeRegistrationWithRider(
       notes,
       teamName: trimmedTeamName,
       isTeamCaptain,
+      brevetCardType: normalizeBrevetCardType(data.brevetCardType),
       emailBase: eventEmailBase(
         event,
         `${trimmedFirstName} ${trimmedLastName}`,

@@ -62,6 +62,7 @@ function makeRegistration(
     team_name: null,
     is_team_captain: false,
     share_registration: true,
+    brevet_card_type: null,
     riders: {
       id: riderId,
       first_name: firstName,
@@ -167,6 +168,72 @@ describe('EventResultsManager — first event badge', () => {
 
     const row = screen.getByText('Nora Newbie').closest('tr')!
     expect(within(row).getByText('First event')).toBeTruthy()
+  })
+})
+
+describe('EventResultsManager — brevet card type badge', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('renders the "Digital card" badge for a digital registration', () => {
+    render(
+      <EventResultsManager
+        {...baseProps}
+        registrations={[
+          makeRegistration({
+            riderId: 'rider-digital',
+            firstName: 'Dana',
+            lastName: 'Digital',
+            brevet_card_type: 'digital',
+          }),
+        ]}
+        firstTimeRiderIds={[]}
+      />
+    )
+
+    const row = screen.getByText('Dana Digital').closest('tr')!
+    expect(within(row).getByText('Digital card')).toBeTruthy()
+  })
+
+  it('does not render the "Digital card" badge for a paper registration', () => {
+    render(
+      <EventResultsManager
+        {...baseProps}
+        registrations={[
+          makeRegistration({
+            riderId: 'rider-paper',
+            firstName: 'Paul',
+            lastName: 'Paper',
+            brevet_card_type: 'paper',
+          }),
+        ]}
+        firstTimeRiderIds={[]}
+      />
+    )
+
+    const row = screen.getByText('Paul Paper').closest('tr')!
+    expect(within(row).queryByText('Digital card')).toBeNull()
+  })
+
+  it('does not render the "Digital card" badge when brevet_card_type is null (default paper)', () => {
+    render(
+      <EventResultsManager
+        {...baseProps}
+        registrations={[
+          makeRegistration({
+            riderId: 'rider-default',
+            firstName: 'Nell',
+            lastName: 'Nullcard',
+            brevet_card_type: null,
+          }),
+        ]}
+        firstTimeRiderIds={[]}
+      />
+    )
+
+    const row = screen.getByText('Nell Nullcard').closest('tr')!
+    expect(within(row).queryByText('Digital card')).toBeNull()
   })
 })
 

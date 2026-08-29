@@ -20,6 +20,22 @@ import { haversineMeters } from '@/lib/geo'
  */
 export const DIGITAL_CARD_EVENT_TYPES = ['brevet', 'populaire', 'permanent'] as const
 
+/**
+ * Brevet card a rider asks for at registration. `paper` (the default) means a
+ * printed card is waiting at the start; `digital` means they plan to check in
+ * from their phone. Mirrors the CHECK constraint on `registrations.brevet_card_type`.
+ */
+export const BREVET_CARD_TYPES = ['paper', 'digital'] as const
+export type BrevetCardType = (typeof BREVET_CARD_TYPES)[number]
+export const DEFAULT_BREVET_CARD_TYPE: BrevetCardType = 'paper'
+
+/** Coerce untrusted input to a valid card type; anything unrecognised is `paper`. */
+export function normalizeBrevetCardType(value: unknown): BrevetCardType {
+  return (BREVET_CARD_TYPES as readonly unknown[]).includes(value)
+    ? (value as BrevetCardType)
+    : DEFAULT_BREVET_CARD_TYPE
+}
+
 export function isDigitalCardEventType(eventType: string | null): boolean {
   return eventType !== null && (DIGITAL_CARD_EVENT_TYPES as readonly string[]).includes(eventType)
 }

@@ -71,6 +71,7 @@ import {
   type ResultStatus,
 } from '@/lib/actions/results'
 import { cn, formatFinishTime, buildParticipantMailtoUrl, buildRiderInfoText } from '@/lib/utils'
+import { isDigitalCardEventType } from '@/lib/brevet-card'
 import { SubmitResultsButton } from './submit-results-button'
 import { AddRiderDialog } from './add-rider-dialog'
 import { CheckinEvidenceDialog } from './checkin-evidence-dialog'
@@ -86,6 +87,7 @@ interface Registration {
   team_name: string | null
   is_team_captain: boolean | null
   share_registration: boolean | null
+  brevet_card_type: string | null
   riders: {
     id: string
     first_name: string
@@ -140,6 +142,7 @@ interface Participant {
   isTeamCaptain: boolean | null
   shareRegistration: boolean | null
   submissionToken: string | null
+  brevetCardType: string | null
 }
 
 interface CancelledRegistration {
@@ -521,6 +524,11 @@ function RiderRow({
             {participant.hasRegistration && participant.shareRegistration === false && (
               <Badge variant="outline" className="ml-1">
                 Anonymous registration
+              </Badge>
+            )}
+            {participant.hasRegistration && participant.brevetCardType === 'digital' && (
+              <Badge variant="outline" className="ml-1">
+                Digital card
               </Badge>
             )}
           </div>
@@ -932,6 +940,7 @@ export function EventResultsManager({
         isTeamCaptain: reg.is_team_captain,
         shareRegistration: reg.share_registration,
         submissionToken: result?.submission_token ?? null,
+        brevetCardType: reg.brevet_card_type,
       }
     })
 
@@ -954,6 +963,7 @@ export function EventResultsManager({
       isTeamCaptain: false,
       shareRegistration: null,
       submissionToken: result.submission_token,
+      brevetCardType: null,
     }))
 
   const allParticipants = [...participantsFromRegistrations, ...participantsFromResultsOnly]
@@ -976,6 +986,9 @@ export function EventResultsManager({
 
   const completedCount = results.filter((r) => r.status && r.status !== 'pending').length
   const totalCount = allParticipants.length
+  const paperCardCount = allParticipants.filter(
+    (p) => p.hasRegistration && p.brevetCardType !== 'digital'
+  ).length
 
   const participantEmails = allParticipants
     .map((p) => p.email)
@@ -1000,6 +1013,11 @@ export function EventResultsManager({
             <CardDescription>
               {completedCount} of {totalCount} riders have results entered
             </CardDescription>
+          )}
+          {isDigitalCardEventType(eventType) && paperCardCount > 0 && (
+            <p className="text-xs text-muted-foreground">
+              {paperCardCount} paper card{paperCardCount === 1 ? '' : 's'}
+            </p>
           )}
         </div>
         <div className="flex flex-wrap items-center gap-2">

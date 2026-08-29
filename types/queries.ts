@@ -309,6 +309,7 @@ export type RegistrationWithRiderForAdmin = Pick<
   | 'team_name'
   | 'is_team_captain'
   | 'share_registration'
+  | 'brevet_card_type'
 > & {
   riders:
     | (Pick<

@@ -244,6 +244,25 @@ describe('PermanentRegistrationForm', () => {
     })
   })
 
+  describe('brevet card preference', () => {
+    it('defaults to paper', () => {
+      render(<PermanentRegistrationForm routes={mockRoutes} />)
+
+      expect(screen.getByRole('radio', { name: /paper brevet card/i })).toBeChecked()
+      expect(screen.getByRole('radio', { name: /digital brevet card/i })).not.toBeChecked()
+    })
+
+    it('lets the rider select the digital brevet card', async () => {
+      const user = userEvent.setup()
+      render(<PermanentRegistrationForm routes={mockRoutes} />)
+
+      await user.click(screen.getByRole('radio', { name: /digital brevet card/i }))
+
+      expect(screen.getByRole('radio', { name: /digital brevet card/i })).toBeChecked()
+      expect(screen.getByRole('radio', { name: /paper brevet card/i })).not.toBeChecked()
+    })
+  })
+
   describe('mobile optimizations', () => {
     it('has autocomplete attributes on name and email fields', () => {
       render(<PermanentRegistrationForm routes={mockRoutes} />)

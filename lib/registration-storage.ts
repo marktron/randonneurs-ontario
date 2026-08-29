@@ -1,3 +1,5 @@
+import type { BrevetCardType } from '@/lib/brevet-card'
+
 /**
  * Shared localStorage persistence for rider registration details.
  *
@@ -16,6 +18,7 @@ export interface SavedRegistrationData {
   shareRegistration: boolean
   emergencyContactName: string
   emergencyContactPhone: string
+  brevetCardType: BrevetCardType
 }
 
 export function getSavedRegistrationData(): SavedRegistrationData | null {

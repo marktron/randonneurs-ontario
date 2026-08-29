@@ -6,6 +6,11 @@ import { getSavedRegistrationData, saveRegistrationData } from '@/lib/registrati
 import type { RegistrationResult } from '@/lib/actions/register'
 import type { RiderMatchCandidate } from '@/lib/actions/rider-match'
 import { getUpcomingEventsByEventId, type UpcomingEvent } from '@/lib/actions/rider-results'
+import {
+  DEFAULT_BREVET_CARD_TYPE,
+  normalizeBrevetCardType,
+  type BrevetCardType,
+} from '@/lib/brevet-card'
 
 export type MembershipErrorVariant = 'no-membership' | 'trial-used'
 
@@ -40,6 +45,7 @@ export function useRegistrationForm(options: UseRegistrationFormOptions = {}) {
   const [emergencyContactName, setEmergencyContactName] = useState('')
   const [emergencyContactPhone, setEmergencyContactPhone] = useState('')
   const [homepageUrl, setHomepageUrl] = useState('')
+  const [brevetCardType, setBrevetCardType] = useState<BrevetCardType>(DEFAULT_BREVET_CARD_TYPE)
 
   // UI state
   const [error, setError] = useState<string | null>(null)
@@ -70,6 +76,7 @@ export function useRegistrationForm(options: UseRegistrationFormOptions = {}) {
       setShareRegistration(saved.shareRegistration)
       setEmergencyContactName(saved.emergencyContactName || '')
       setEmergencyContactPhone(saved.emergencyContactPhone || '')
+      setBrevetCardType(normalizeBrevetCardType(saved.brevetCardType))
     }
   }, [])
 
@@ -99,6 +106,7 @@ export function useRegistrationForm(options: UseRegistrationFormOptions = {}) {
     emergencyContactPhone,
     emailConfirmed,
     homepageUrl,
+    brevetCardType,
   }
 
   /**
@@ -142,6 +150,7 @@ export function useRegistrationForm(options: UseRegistrationFormOptions = {}) {
         shareRegistration,
         emergencyContactName,
         emergencyContactPhone,
+        brevetCardType,
       })
       setMatchDialogOpen(false)
       setSuccess(true)
@@ -209,6 +218,8 @@ export function useRegistrationForm(options: UseRegistrationFormOptions = {}) {
     setEmergencyContactPhone,
     homepageUrl,
     setHomepageUrl,
+    brevetCardType,
+    setBrevetCardType,
     // ui state
     error,
     setError,

@@ -134,6 +134,7 @@ describe('RegistrationForm', () => {
           emergencyContactPhone: '555-1234',
           emailConfirmed: false,
           homepageUrl: '',
+          brevetCardType: 'paper',
         })
       })
     })
@@ -254,6 +255,54 @@ describe('RegistrationForm', () => {
 
       await waitFor(() => {
         expect(screen.getByTestId('rider-match-dialog')).toBeInTheDocument()
+      })
+    })
+  })
+
+  describe('brevet card preference', () => {
+    async function fillRequiredFields(
+      user: ReturnType<typeof userEvent.setup>,
+      container: HTMLElement
+    ) {
+      await user.type(screen.getByLabelText(/first name/i), 'John')
+      await user.type(screen.getByLabelText(/last name/i), 'Doe')
+      await user.type(screen.getByLabelText(/email/i), 'john@example.com')
+      await user.type(container.querySelector('#emergencyContactName')!, 'Jane Doe')
+      await user.type(container.querySelector('#emergencyContactPhone')!, '555-1234')
+      await user.type(container.querySelector('#phone')!, '416-555-9999')
+    }
+
+    it('defaults to paper and sends it on submit', async () => {
+      const user = userEvent.setup()
+      const { container } = render(<RegistrationForm {...defaultProps} />)
+
+      expect(screen.getByRole('radio', { name: /paper brevet card/i })).toBeChecked()
+      expect(screen.getByRole('radio', { name: /digital brevet card/i })).not.toBeChecked()
+
+      await fillRequiredFields(user, container)
+      await user.click(screen.getByRole('button', { name: /^register$/i }))
+
+      await waitFor(() => {
+        expect(mockRegisterForEvent).toHaveBeenCalledWith(
+          expect.objectContaining({ brevetCardType: 'paper' })
+        )
+      })
+    })
+
+    it('sends digital when the rider selects the digital brevet card', async () => {
+      const user = userEvent.setup()
+      const { container } = render(<RegistrationForm {...defaultProps} />)
+
+      await user.click(screen.getByRole('radio', { name: /digital brevet card/i }))
+      expect(screen.getByRole('radio', { name: /digital brevet card/i })).toBeChecked()
+
+      await fillRequiredFields(user, container)
+      await user.click(screen.getByRole('button', { name: /^register$/i }))
+
+      await waitFor(() => {
+        expect(mockRegisterForEvent).toHaveBeenCalledWith(
+          expect.objectContaining({ brevetCardType: 'digital' })
+        )
       })
     })
   })

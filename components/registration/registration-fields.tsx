@@ -4,6 +4,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import {
   Select,
   SelectContent,
@@ -13,6 +14,7 @@ import {
 } from '@/components/ui/select'
 import { EmailTypoSuggestion } from '@/components/email-typo-suggestion'
 import type { RegistrationFormState } from '@/hooks/use-registration-form'
+import type { BrevetCardType } from '@/lib/brevet-card'
 
 interface FormSectionProps {
   form: RegistrationFormState
@@ -222,6 +224,55 @@ export function ShareRegistrationCheckbox({ form }: FormSectionProps) {
         </p>
       </div>
     </div>
+  )
+}
+
+/** Paper vs. digital brevet card choice, radio-styled like a two-option select. */
+export function BrevetCardTypeField({ form }: FormSectionProps) {
+  const { isPending } = form
+  return (
+    <fieldset className="space-y-3">
+      <legend className="text-sm font-medium">Brevet card</legend>
+      <p className="text-xs text-muted-foreground -mt-2">
+        This only tells the organizer what to prepare at the start.
+      </p>
+      <RadioGroup
+        value={form.brevetCardType}
+        onValueChange={(value) => form.setBrevetCardType(value as BrevetCardType)}
+        disabled={isPending}
+        className="gap-3"
+      >
+        <div className="flex items-start gap-3">
+          <RadioGroupItem value="paper" id="brevetCardType-paper" className="mt-1" />
+          <Label
+            htmlFor="brevetCardType-paper"
+            className="flex-col items-start gap-1 font-normal cursor-pointer"
+          >
+            <span className="block text-sm font-medium leading-none text-foreground">
+              Paper brevet card
+            </span>
+            <span className="block text-xs text-muted-foreground">
+              Pick up a printed card at the start and collect stamps as usual.
+            </span>
+          </Label>
+        </div>
+        <div className="flex items-start gap-3">
+          <RadioGroupItem value="digital" id="brevetCardType-digital" className="mt-1" />
+          <Label
+            htmlFor="brevetCardType-digital"
+            className="flex-col items-start gap-1 font-normal cursor-pointer"
+          >
+            <span className="block text-sm font-medium leading-none text-foreground">
+              Digital brevet card
+            </span>
+            <span className="block text-xs text-muted-foreground">
+              Check in at each control from your phone. You can still ask for a paper card at the
+              start.
+            </span>
+          </Label>
+        </div>
+      </RadioGroup>
+    </fieldset>
   )
 }
 
