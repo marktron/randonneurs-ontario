@@ -520,6 +520,35 @@ describe('ControlCardsForm collection legs', () => {
     }),
   ]
 
+  it('annotates legs-2+ rows with the cumulative event distance', () => {
+    renderForm({ savedControls: legSaved })
+
+    // Leg 2 rows are offset by leg 1's largest distance (200 km).
+    expect(screen.getByText('= 200 km')).toBeTruthy()
+    expect(screen.getByText('= 500 km')).toBeTruthy()
+    // Leg 1 rows carry no annotation (their stored distance is already
+    // the event distance), and there are exactly two annotations.
+    expect(screen.getAllByText(/^= [\d.]+ km$/)).toHaveLength(2)
+  })
+
+  it('recomputes cumulative annotations live when an earlier leg distance is edited', async () => {
+    const user = userEvent.setup()
+    renderForm({ savedControls: legSaved })
+
+    const l1Finish = screen.getAllByPlaceholderText('km')[1]
+    await user.clear(l1Finish)
+    await user.type(l1Finish, '250')
+
+    expect(screen.getByText('= 250 km')).toBeTruthy()
+    expect(screen.getByText('= 550 km')).toBeTruthy()
+  })
+
+  it('shows no cumulative annotation for single-route controls', () => {
+    renderForm({ savedControls: savedThree })
+
+    expect(screen.queryByText(/^= [\d.]+ km$/)).toBeNull()
+  })
+
   it('multiplies the card count by the number of legs (riders × legs)', () => {
     renderForm({ savedControls: legSaved })
     // 3 riders × 2 legs = 6

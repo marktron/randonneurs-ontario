@@ -1,6 +1,6 @@
 'use client'
 
-import { Fragment, useState, useCallback, useEffect, useRef, useTransition } from 'react'
+import { Fragment, useState, useCallback, useEffect, useMemo, useRef, useTransition } from 'react'
 import Link from 'next/link'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -23,6 +23,7 @@ import {
   isReversedEvent,
   matchImportedControls,
   controlsInSync,
+  cumulativeLegDistanceKm,
   groupControlsByLeg,
   MAX_CARD_CONTROLS,
 } from '@/lib/controlPoints'
@@ -508,6 +509,27 @@ export function ControlCardsForm({
     savedSnapshot.map((c) => ({ name: c.name, distanceKm: c.distanceKm }))
   )
 
+  // Cumulative event distances for leg rows — the editable inputs stay
+  // per-leg (they are the stored values), but the printed and digital cards
+  // display cumulative distances, so annotate legs 2+ with what will print.
+  // Null for single-route lists. Recomputed live against unsaved edits;
+  // a row mid-edit (blank or unparseable) counts as 0.
+  const cumulativeKm = useMemo(
+    () =>
+      cumulativeLegDistanceKm(
+        controls.map((c) => {
+          const n = parseFloat(c.distance)
+          return {
+            distanceKm: Number.isFinite(n) && n >= 0 ? n : 0,
+            legRwgpsId: c.legRwgpsId,
+            legName: c.legName,
+          }
+        })
+      ),
+    [controls]
+  )
+  const firstLegId = controls[0]?.legRwgpsId ?? null
+
   const handleResetToSaved = useCallback(() => {
     setControls(savedSnapshot.map(rowFromSaved))
   }, [savedSnapshot])
@@ -663,6 +685,14 @@ export function ControlCardsForm({
                     />
                     <span className="text-sm text-muted-foreground">km</span>
                   </div>
+                  {cumulativeKm && (
+                    <span
+                      className="w-24 text-right text-sm text-muted-foreground tabular-nums"
+                      title="Cumulative event distance on the card"
+                    >
+                      {control.legRwgpsId !== firstLegId ? `= ${cumulativeKm[index]} km` : ''}
+                    </span>
+                  )}
                   <Button
                     type="button"
                     variant="ghost"
