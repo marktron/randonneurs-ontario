@@ -1131,6 +1131,71 @@ describe('getBrevetCardByToken', () => {
     expect(card!.controls[0].legName).toBeNull()
   })
 
+  it("offsets leg-tagged control distances by previous legs' totals (cumulative event km)", async () => {
+    seedHappyTables()
+    tables.event_controls = {
+      listResponse: {
+        data: [
+          {
+            ...makeControlRow(),
+            id: 'c1',
+            position: 1,
+            notes: null,
+            distance_km: 0,
+            leg_rwgps_id: '101',
+            leg_name: 'Day 1',
+          },
+          {
+            ...makeControlRow(),
+            id: 'c2',
+            position: 2,
+            notes: null,
+            distance_km: 205.3,
+            leg_rwgps_id: '101',
+            leg_name: 'Day 1',
+          },
+          {
+            ...makeControlRow(),
+            id: 'c3',
+            position: 3,
+            notes: null,
+            distance_km: 0,
+            leg_rwgps_id: '102',
+            leg_name: 'Day 2',
+          },
+          {
+            ...makeControlRow(),
+            id: 'c4',
+            position: 4,
+            notes: null,
+            distance_km: 96.9,
+            leg_rwgps_id: '102',
+            leg_name: 'Day 2',
+          },
+        ],
+        error: null,
+      },
+    }
+
+    const card = await getBrevetCardByToken(TOKEN)
+
+    expect(card!.controls.map((c) => c.distanceKm)).toEqual([0, 205.3, 205.3, 302.2])
+  })
+
+  it('passes single-route control distances through unchanged', async () => {
+    seedHappyTables()
+    tables.event_controls = {
+      listResponse: {
+        data: [{ ...makeControlRow(), position: 1, notes: null, distance_km: 55.5 }],
+        error: null,
+      },
+    }
+
+    const card = await getBrevetCardByToken(TOKEN)
+
+    expect(card!.controls[0].distanceKm).toBe(55.5)
+  })
+
   it('suppresses the control window for leg-tagged controls (opensAt/closesAt null)', async () => {
     seedHappyTables()
     tables.event_controls = {

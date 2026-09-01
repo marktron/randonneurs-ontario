@@ -201,18 +201,57 @@ export interface ControlRowForLegs {
 }
 
 /**
+ * Cumulative event distances for position-ordered, leg-tagged control rows.
+ * Stored leg distances restart at 0 per leg (they mirror the RWGPS member
+ * routes), but a brevet card reads as one continuous ride — so each leg's
+ * controls are offset by the running sum of the previous legs' largest
+ * control distance. Legs chain end-to-start at a shared overnight control
+ * (leg N's finish is leg N+1's 0 km start), so the largest distance of leg N
+ * is exactly the event distance at which leg N+1 begins.
+ *
+ * Returns the offset distances aligned to `rows` (rounded to one decimal, the
+ * stored precision), or null unless every row is leg-tagged — single-route
+ * distances are already cumulative and pass through untouched.
+ */
+export function cumulativeLegDistanceKm(
+  rows: { distanceKm: number; legRwgpsId?: string | null; legName?: string | null }[]
+): number[] | null {
+  if (rows.length === 0) return null
+  if (!rows.every((row) => row.legRwgpsId != null && row.legName != null)) return null
+
+  const out: number[] = []
+  let offset = 0
+  let currentLegId: string | null = null
+  let currentLegMax = 0
+  for (const row of rows) {
+    if (row.legRwgpsId !== currentLegId) {
+      if (currentLegId !== null) offset += currentLegMax
+      currentLegId = row.legRwgpsId!
+      currentLegMax = 0
+    }
+    currentLegMax = Math.max(currentLegMax, row.distanceKm)
+    out.push(Math.round((offset + row.distanceKm) * 10) / 10)
+  }
+  return out
+}
+
+/**
  * Build the printed-card legs from the stored event_controls rows — the DB
  * is the source of truth at print time (leg control lists are too large to
  * round-trip through the print URL). Rows must be position-ordered; legs
  * come out in first-appearance order, each leg's distance is its largest
- * control distance (per-leg distances restart at 0), and leg controls never
- * carry open/close times — the overall event limit governs.
+ * stored control distance (that day's ride, matching the leg's RWGPS route),
+ * control distances are cumulative across the whole event (see
+ * `cumulativeLegDistanceKm`), and leg controls never carry open/close times —
+ * the overall event limit governs.
  *
  * Returns null unless every row is leg-tagged (mirrors `groupControlsByLeg`):
  * a mixed or untagged list is a single-route card.
  */
 export function buildCardLegsFromRows(rows: ControlRowForLegs[]): CardLeg[] | null {
-  const groups = groupControlsByLeg(rows)
+  const cumulative = cumulativeLegDistanceKm(rows)
+  if (!cumulative) return null
+  const groups = groupControlsByLeg(rows.map((row, i) => ({ ...row, cumulativeKm: cumulative[i] })))
   if (!groups) return null
   return groups.map((group, groupIndex) => ({
     legRwgpsId: group.legRwgpsId,
@@ -222,7 +261,7 @@ export function buildCardLegsFromRows(rows: ControlRowForLegs[]): CardLeg[] | nu
     controls: group.controls.map((row, index) => ({
       id: `leg-${groupIndex}-control-${index}`,
       name: row.name,
-      distance: row.distanceKm,
+      distance: row.cumulativeKm,
     })),
   }))
 }

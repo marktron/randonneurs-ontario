@@ -14,6 +14,7 @@ import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { createActionResult, handleActionError, handleSupabaseError, logError } from '@/lib/errors'
 import { isRateLimited } from '@/lib/rate-limit'
 import { haversineMeters } from '@/lib/geo'
+import { cumulativeLegDistanceKm } from '@/lib/controlPoints'
 import {
   resolveRiderStart,
   computeControlWindow,
@@ -212,7 +213,9 @@ export async function getBrevetCardByToken(token: string): Promise<BrevetCardDat
     await Promise.all([
       supabase
         .from('event_controls')
-        .select('id, position, name, distance_km, lat, lng, radius_m, notes, leg_name')
+        .select(
+          'id, position, name, distance_km, lat, lng, radius_m, notes, leg_rwgps_id, leg_name'
+        )
         .eq('event_id', event.id)
         .order('position', { ascending: true }),
       supabase
@@ -247,6 +250,7 @@ export async function getBrevetCardByToken(token: string): Promise<BrevetCardDat
     lng: number | null
     radius_m: number
     notes: string | null
+    leg_rwgps_id: string | null
     leg_name: string | null
   }[]
 
@@ -260,6 +264,17 @@ export async function getBrevetCardByToken(token: string): Promise<BrevetCardDat
 
   const eventStart = resolveRiderStart(event, reg)
   const controlById = new Map(controls.map((c) => [c.id, c]))
+
+  // Collection events store per-leg distances (restarting at 0 each leg);
+  // the card displays cumulative event distances. Null for single-route
+  // events, whose stored distances are already cumulative.
+  const cumulativeDistances = cumulativeLegDistanceKm(
+    controls.map((c) => ({
+      distanceKm: c.distance_km,
+      legRwgpsId: c.leg_rwgps_id,
+      legName: c.leg_name,
+    }))
+  )
 
   return {
     registration: {
@@ -289,9 +304,11 @@ export async function getBrevetCardByToken(token: string): Promise<BrevetCardDat
       firstName: reg.riders.first_name,
       lastName: reg.riders.last_name,
     },
-    controls: controls.map((control) => {
-      // Leg-tagged controls carry no window — their distances restart at 0
-      // per leg, so a window from the event start would be wrong for legs 2+.
+    controls: controls.map((control, i) => {
+      // Leg-tagged controls carry no window — their STORED distances restart
+      // at 0 per leg, so a window from the event start would be wrong for
+      // legs 2+. (The displayed distance below is cumulative, but windows
+      // stay off until stored distances are too.)
       const window =
         control.leg_name !== null
           ? null
@@ -300,7 +317,7 @@ export async function getBrevetCardByToken(token: string): Promise<BrevetCardDat
         id: control.id,
         position: control.position,
         name: control.name,
-        distanceKm: control.distance_km,
+        distanceKm: cumulativeDistances?.[i] ?? control.distance_km,
         lat: control.lat,
         lng: control.lng,
         radiusM: control.radius_m,

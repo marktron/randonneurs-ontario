@@ -266,12 +266,18 @@ true })`) — leg-event printing reads the saved `event_controls` rows, so
   `groupControlsByLeg` / `expandRiderLegCards` (`lib/controlPoints.ts`) drive
   grouping and rider-major expansion.
 - Leg card front: leg name as the route name, per-leg distance (the leg's
-  last control distance), Route Map QR pointing at the leg's RWGPS route.
+  last control distance — that day's ride, matching the leg's RWGPS route),
+  Route Map QR pointing at the leg's RWGPS route.
   Event name/date/start info, organizer, Total Allowable Time (overall event
   limit) and Submit Results QR are the same on every leg card.
-- Leg card back: that leg's controls with per-leg distances and **no
-  open/close times** (`ControlPoint.openTime`/`closeTime` are optional and
-  omitted; `CardBack` skips the times block). Layout tiers apply per leg.
+- Leg card back: that leg's controls with **cumulative event distances** and
+  **no open/close times** (`ControlPoint.openTime`/`closeTime` are optional
+  and omitted; `CardBack` skips the times block). Layout tiers apply per leg.
+  Stored `event_controls.distance_km` restarts at 0 each leg (mirroring the
+  RWGPS member routes); `cumulativeLegDistanceKm` (`lib/controlPoints.ts`)
+  offsets each leg's controls by the running sum of the previous legs'
+  largest control distance at display time. Legs chain end-to-start at the
+  shared overnight control, so the offsets are exact at leg boundaries.
 - The DB is the source of truth at print time: cards keep printing from
   stored leg rows even if the route later loses its collection reference.
 - Collection events can import controls directly on the Control Cards form
@@ -289,10 +295,12 @@ true })`) — leg-event printing reads the saved `event_controls` rows, so
 - The digital brevet card stays **one card per event**, sectioned by leg:
   the payload carries `legName` per control and
   `components/brevet-card-view.tsx` renders a heading at each leg boundary.
-  Check-in/start/completion logic is untouched.
+  Control distances in the payload are cumulative event distances (same
+  `cumulativeLegDistanceKm` offsets as the printed leg cards), as is the
+  admin check-ins grid. Check-in/start/completion logic is untouched.
 - Like the printed leg cards, **leg-tagged controls carry no per-control
-  window** anywhere digital: per-leg distances restart at 0, so a window
-  computed from the event start would be wrong for legs 2+. The card payload
+  window** anywhere digital: _stored_ per-leg distances restart at 0, so a
+  window computed from the event start would be wrong for legs 2+. The card payload
   sends `opensAt`/`closesAt` as null (`CardControl` in
   `lib/actions/brevet-card.ts`), the rider card renders no times line,
   `deriveCheckinFlags` never derives `early`/`late` for a null window, and

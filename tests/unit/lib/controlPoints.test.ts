@@ -9,6 +9,7 @@ import {
   groupControlsByLeg,
   expandRiderLegCards,
   buildCardLegsFromRows,
+  cumulativeLegDistanceKm,
   titleStatesDistance,
 } from '@/lib/controlPoints'
 
@@ -334,6 +335,43 @@ describe('groupControlsByLeg', () => {
   })
 })
 
+describe('cumulativeLegDistanceKm', () => {
+  it("offsets each leg by the running sum of previous legs' largest distance", () => {
+    const rows = [
+      { distanceKm: 0, legRwgpsId: '101', legName: 'Day 1' },
+      { distanceKm: 100.4, legRwgpsId: '101', legName: 'Day 1' },
+      { distanceKm: 205.3, legRwgpsId: '101', legName: 'Day 1' },
+      { distanceKm: 0, legRwgpsId: '102', legName: 'Day 2' },
+      { distanceKm: 96.9, legRwgpsId: '102', legName: 'Day 2' },
+      { distanceKm: 0, legRwgpsId: '103', legName: 'Day 3' },
+      { distanceKm: 150, legRwgpsId: '103', legName: 'Day 3' },
+    ]
+    expect(cumulativeLegDistanceKm(rows)).toEqual([0, 100.4, 205.3, 205.3, 302.2, 302.2, 452.2])
+  })
+
+  it('rounds float sums to one decimal', () => {
+    const rows = [
+      { distanceKm: 400.2, legRwgpsId: '101', legName: 'Day 1' },
+      { distanceKm: 56.1, legRwgpsId: '102', legName: 'Day 2' },
+    ]
+    // 400.2 + 56.1 is 456.30000000000007 in float arithmetic.
+    expect(cumulativeLegDistanceKm(rows)).toEqual([400.2, 456.3])
+  })
+
+  it('returns null for untagged, mixed, or empty rows (single-route: stored distances are already cumulative)', () => {
+    expect(
+      cumulativeLegDistanceKm([{ distanceKm: 50, legRwgpsId: null, legName: null }])
+    ).toBeNull()
+    expect(
+      cumulativeLegDistanceKm([
+        { distanceKm: 0, legRwgpsId: '101', legName: 'Day 1' },
+        { distanceKm: 50, legRwgpsId: null, legName: null },
+      ])
+    ).toBeNull()
+    expect(cumulativeLegDistanceKm([])).toBeNull()
+  })
+})
+
 describe('buildCardLegsFromRows', () => {
   const rows = [
     { name: 'L1 Start', distanceKm: 0, legRwgpsId: '101', legName: 'Leg 1: A' },
@@ -351,11 +389,17 @@ describe('buildCardLegsFromRows', () => {
     expect(legs[1].controls.map((c) => c.name)).toEqual(['L2 Start', 'L2 Finish'])
   })
 
-  it('sets per-leg distance to the max control distance and maps distances through', () => {
+  it('sets per-leg distance to the max control distance (that day’s ride, matching the leg’s RWGPS route)', () => {
     const legs = buildCardLegsFromRows(rows)!
     expect(legs[0].distanceKm).toBe(205.3)
     expect(legs[1].distanceKm).toBe(302.1)
+  })
+
+  it('maps control distances through as cumulative event distances across legs', () => {
+    const legs = buildCardLegsFromRows(rows)!
     expect(legs[0].controls.map((c) => c.distance)).toEqual([0, 100.4, 205.3])
+    // Leg 2 controls are offset by leg 1's 205.3 km: 0 → 205.3, 302.1 → 507.4.
+    expect(legs[1].controls.map((c) => c.distance)).toEqual([205.3, 507.4])
   })
 
   it('builds the RWGPS url from the leg id and stable per-leg control ids', () => {

@@ -132,10 +132,12 @@ notes) rather than discarding it: imported and saved controls are grouped by
 `leg_rwgps_id` and matched leg-by-leg with `matchImportedControls`, so the
 resulting save updates rows in place instead of delete+reinserting them —
 which would cascade-delete rider check-ins on the deleted rows. Matching
-never crosses legs, since per-leg distances restart at 0 and two legs can
-share a control name. Printing expands riders × legs (rider-major) with
-per-leg distances and no open/close times; the digital card shows one
-leg-sectioned card. See `docs/control-cards.md` → "Collection routes
+never crosses legs, since stored per-leg distances restart at 0 and two legs
+can share a control name. Printing expands riders × legs (rider-major) with
+cumulative event distances on the controls (`cumulativeLegDistanceKm` offsets
+each leg by the previous legs' totals at display time) and no open/close
+times; the digital card shows one leg-sectioned card with the same
+cumulative distances. See `docs/control-cards.md` → "Collection routes
 (per-leg cards)".
 
 ## Deployment requirement

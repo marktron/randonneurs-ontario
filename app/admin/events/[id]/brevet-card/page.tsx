@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { ChevronLeft } from 'lucide-react'
 import { formatControlTime } from '@/lib/brmTimes'
 import { computeEventStart, computeControlWindow, isDigitalCardEventType } from '@/lib/brevet-card'
+import { cumulativeLegDistanceKm } from '@/lib/controlPoints'
 import { getEventControlsForAdmin } from '@/lib/actions/event-controls'
 import { getChapterOrganizerDefaults, type OrganizerContact } from '@/lib/actions/event-organizer'
 import { getEventCheckinsForAdmin } from '@/lib/actions/control-checkins'
@@ -68,9 +69,13 @@ export default async function BrevetCardAdminPage({ params }: BrevetCardAdminPag
     : await getChapterOrganizerDefaults(typedEvent.chapter_id)
 
   const eventStart = computeEventStart(typedEvent.event_date, typedEvent.start_time)
-  const gridControls: GridControl[] = controls.map((control) => {
-    // Leg-tagged controls have no per-control window (per-leg distances
-    // restart at 0; the overall event limit governs) — omit the label.
+  // Collection events store per-leg distances; the grid mirrors the rider's
+  // card, which displays cumulative event distances. Null for single-route.
+  const cumulativeDistances = cumulativeLegDistanceKm(controls)
+  const gridControls: GridControl[] = controls.map((control, i) => {
+    // Leg-tagged controls have no per-control window (stored per-leg
+    // distances restart at 0; the overall event limit governs) — omit the
+    // label.
     const window =
       control.legName !== null
         ? null
@@ -78,7 +83,7 @@ export default async function BrevetCardAdminPage({ params }: BrevetCardAdminPag
     return {
       id: control.id,
       name: control.name,
-      distanceKm: control.distanceKm,
+      distanceKm: cumulativeDistances?.[i] ?? control.distanceKm,
       windowLabel: window
         ? `${formatControlTime(window.openAt)} – ${formatControlTime(window.closeAt)}`
         : null,
