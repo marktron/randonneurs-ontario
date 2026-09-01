@@ -189,8 +189,9 @@ describe('extractControls', () => {
   it('collapses same-type POIs that are physically co-located, preferring the CONTROL-prefixed name', () => {
     // Two `start` POIs representing the same parking lot but ~70 m apart in
     // raw lat/lng, with slightly different distances along the route. They
-    // are collapsed by physical distance, so only the CONTROL-prefixed one
-    // (and its own distance) survives.
+    // are collapsed by physical distance: the CONTROL-prefixed name wins,
+    // their pass distances merge, and the `start` type keeps the earliest
+    // pass (km 0).
     const result = extractControls({
       points_of_interest: [
         { name: 'Start: Waterloo', lat: 43.5, lng: -80.55, type: 'start', distances: [0] },
@@ -205,9 +206,63 @@ describe('extractControls', () => {
       ],
     })
     expect(result).toEqual([
-      { name: 'Start A&W, Waterloo', distance: '0.2' },
+      { name: 'Start A&W, Waterloo', distance: '0.0' },
       { name: 'End', distance: '10.0' },
     ])
+  })
+
+  it('merges pass distances of co-located same-type POIs instead of dropping the later pin (Waffle Day 1 Chatham)', () => {
+    // RWGPS route 55952788: the organizer marked the start and finish of a
+    // loop with two separate control POIs 45 m apart — one carrying
+    // distances [0], the other [355724.8]. Both passes belong on the card;
+    // dropping the second POI wholesale lost the 355.7 km finish control.
+    const result = extractControls({
+      points_of_interest: [
+        { name: 'Chatham', lat: 42.379635, lng: -82.217395, type: 'control', distances: [0] },
+        {
+          name: 'Chatham',
+          lat: 42.37926,
+          lng: -82.21759,
+          type: 'control',
+          distances: [355_724.8],
+        },
+        { name: 'Glencoe', lat: 42.75, lng: -81.71, type: 'control', distances: [288_074.8] },
+      ],
+    })
+    expect(result).toEqual([
+      { name: 'Chatham', distance: '0.0' },
+      { name: 'Glencoe', distance: '288.1' },
+      { name: 'Chatham', distance: '355.7' },
+    ])
+  })
+
+  it('keeps the CONTROL-prefixed name for every merged pass', () => {
+    const result = extractControls({
+      points_of_interest: [
+        { name: 'Corner Store', lat: 43.5, lng: -80.55, type: 'control', distances: [0] },
+        {
+          name: 'CTL Chatham',
+          lat: 43.5001,
+          lng: -80.55,
+          type: 'control',
+          distances: [100_000],
+        },
+      ],
+    })
+    expect(result).toEqual([
+      { name: 'Chatham', distance: '0.0' },
+      { name: 'Chatham', distance: '100.0' },
+    ])
+  })
+
+  it('still collapses a double-pinned single pass (merged distances within 100 m along the route)', () => {
+    const result = extractControls({
+      points_of_interest: [
+        { name: 'Chatham', lat: 43.5, lng: -80.55, type: 'control', distances: [0] },
+        { name: 'Chatham', lat: 43.5001, lng: -80.55, type: 'control', distances: [30] },
+      ],
+    })
+    expect(result).toEqual([{ name: 'Chatham', distance: '0.0' }])
   })
 
   it('does not collapse same-type POIs that are > 200 m apart physically', () => {

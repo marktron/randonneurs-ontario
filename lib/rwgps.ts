@@ -275,12 +275,24 @@ function dedupeCoLocatedPois(pois: RwgpsPoi[]): RwgpsPoi[] {
       kept.push(p)
       continue
     }
-    // Overlap: prefer the entry whose name carries an explicit CONTROL-style
-    // prefix, since that signals the organizer's intent for the stop.
+    // Overlap: one physical stop marked with multiple pins. Prefer the name
+    // with an explicit CONTROL-style prefix (that signals the organizer's
+    // intent for the stop), but MERGE the pass distances — organizers
+    // sometimes pin each pass of a loop separately (e.g. Waffle Day 1's
+    // Chatham start and finish, RWGPS route 55952788), and dropping the
+    // later pin wholesale would lose its passes. Entries within the
+    // along-route dedupe threshold of an already-kept pass are the same
+    // pass double-pinned, not a new one.
     const existing = kept[idx]
-    if (hasControlNamePrefix(p.name) && !hasControlNamePrefix(existing.name)) {
-      kept[idx] = p
+    const winner =
+      hasControlNamePrefix(p.name) && !hasControlNamePrefix(existing.name) ? p : existing
+    const mergedDistances = [...(existing.distances ?? [])]
+    for (const d of p.distances ?? []) {
+      if (!mergedDistances.some((m) => Math.abs(m - d) < DEDUPE_THRESHOLD_METERS)) {
+        mergedDistances.push(d)
+      }
     }
+    kept[idx] = { ...winner, distances: mergedDistances }
   }
   return kept
 }
