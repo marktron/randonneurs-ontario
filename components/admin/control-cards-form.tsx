@@ -687,10 +687,12 @@ export function ControlCardsForm({
                   </div>
                   {cumulativeKm && (
                     <span
-                      className="w-24 text-right text-sm text-muted-foreground tabular-nums"
-                      title="Cumulative event distance on the card"
+                      className="w-36 text-right text-sm text-muted-foreground tabular-nums"
+                      title="Cumulative event distance — what prints on the card"
                     >
-                      {control.legRwgpsId !== firstLegId ? `= ${cumulativeKm[index]} km` : ''}
+                      {control.legRwgpsId !== firstLegId
+                        ? `= ${cumulativeKm[index]} km overall`
+                        : ''}
                     </span>
                   )}
                   <Button
