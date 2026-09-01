@@ -84,7 +84,14 @@ export interface CardControl {
   id: string
   position: number
   name: string
+  /** Route distance (km) — per-leg for collection events, mirroring RWGPS. */
   distanceKm: number
+  /**
+   * Cumulative event distance (km), shown as a second "N km overall" line.
+   * Set only for legs-2+ controls on collection events; null (or absent)
+   * elsewhere, where it would equal `distanceKm`.
+   */
+  overallDistanceKm?: number | null
   lat: number | null
   lng: number | null
   radiusM: number
@@ -266,8 +273,8 @@ export async function getBrevetCardByToken(token: string): Promise<BrevetCardDat
   const controlById = new Map(controls.map((c) => [c.id, c]))
 
   // Collection events store per-leg distances (restarting at 0 each leg);
-  // the card displays cumulative event distances. Null for single-route
-  // events, whose stored distances are already cumulative.
+  // legs-2+ controls also display the cumulative event distance. Null for
+  // single-route events, whose stored distances are already cumulative.
   const cumulativeDistances = cumulativeLegDistanceKm(
     controls.map((c) => ({
       distanceKm: c.distance_km,
@@ -275,6 +282,7 @@ export async function getBrevetCardByToken(token: string): Promise<BrevetCardDat
       legName: c.leg_name,
     }))
   )
+  const firstLegRwgpsId = controls[0]?.leg_rwgps_id ?? null
 
   return {
     registration: {
@@ -305,10 +313,9 @@ export async function getBrevetCardByToken(token: string): Promise<BrevetCardDat
       lastName: reg.riders.last_name,
     },
     controls: controls.map((control, i) => {
-      // Leg-tagged controls carry no window — their STORED distances restart
+      // Leg-tagged controls carry no window — their stored distances restart
       // at 0 per leg, so a window from the event start would be wrong for
-      // legs 2+. (The displayed distance below is cumulative, but windows
-      // stay off until stored distances are too.)
+      // legs 2+.
       const window =
         control.leg_name !== null
           ? null
@@ -317,7 +324,11 @@ export async function getBrevetCardByToken(token: string): Promise<BrevetCardDat
         id: control.id,
         position: control.position,
         name: control.name,
-        distanceKm: cumulativeDistances?.[i] ?? control.distance_km,
+        distanceKm: control.distance_km,
+        overallDistanceKm:
+          cumulativeDistances && control.leg_rwgps_id !== firstLegRwgpsId
+            ? cumulativeDistances[i]
+            : null,
         lat: control.lat,
         lng: control.lng,
         radiusM: control.radius_m,

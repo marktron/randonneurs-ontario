@@ -395,11 +395,21 @@ describe('buildCardLegsFromRows', () => {
     expect(legs[1].distanceKm).toBe(302.1)
   })
 
-  it('maps control distances through as cumulative event distances across legs', () => {
+  it('keeps per-leg control distances and adds cumulative overall distances on legs 2+', () => {
     const legs = buildCardLegsFromRows(rows)!
+    // Route (per-leg) distances pass through unchanged — riders recording a
+    // separate GPS file per day match against these.
     expect(legs[0].controls.map((c) => c.distance)).toEqual([0, 100.4, 205.3])
-    // Leg 2 controls are offset by leg 1's 205.3 km: 0 → 205.3, 302.1 → 507.4.
-    expect(legs[1].controls.map((c) => c.distance)).toEqual([205.3, 507.4])
+    expect(legs[1].controls.map((c) => c.distance)).toEqual([0, 302.1])
+    // Leg 2 controls also carry the cumulative event distance (offset by
+    // leg 1's 205.3 km); leg 1 controls carry none — theirs would be
+    // identical to the route distance.
+    expect(legs[0].controls.map((c) => c.overallDistance)).toEqual([
+      undefined,
+      undefined,
+      undefined,
+    ])
+    expect(legs[1].controls.map((c) => c.overallDistance)).toEqual([205.3, 507.4])
   })
 
   it('builds the RWGPS url from the leg id and stable per-leg control ids', () => {

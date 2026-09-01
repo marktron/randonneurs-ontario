@@ -1084,6 +1084,11 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
                       {control.distanceKm} km
                     </span>
                   </p>
+                  {control.overallDistanceKm != null && (
+                    <p className="text-sm text-muted-foreground tabular-nums">
+                      {control.overallDistanceKm} km overall
+                    </p>
+                  )}
                   {control.opensAt !== null && control.closesAt !== null && (
                     <p className="text-sm text-muted-foreground tabular-nums">
                       {formatControlTime(new Date(control.opensAt))} –{' '}

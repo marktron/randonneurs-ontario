@@ -278,6 +278,28 @@ describe('BrevetCard header', () => {
   })
 })
 
+describe('BrevetCard overall distance (collection legs)', () => {
+  it('shows the cumulative overall distance on its own line for legs-2+ controls', () => {
+    const data = makeData()
+    data.controls[0] = {
+      ...data.controls[0],
+      legName: 'Day 2: Waffle & Griddle',
+      opensAt: null,
+      closesAt: null,
+      overallDistanceKm: 355.7,
+    }
+    render(<BrevetCard token={TOKEN} initialData={data} />)
+
+    expect(screen.getByText('355.7 km overall')).toBeInTheDocument()
+  })
+
+  it('shows no overall line when the payload carries none (single-route or leg 1)', () => {
+    render(<BrevetCard token={TOKEN} initialData={makeData()} />)
+
+    expect(screen.queryByText(/km overall/)).toBeNull()
+  })
+})
+
 describe('BrevetCard check-in sync', () => {
   it('sends the check-in to the server immediately after tapping Check in', async () => {
     mockCheckIn.mockResolvedValue({

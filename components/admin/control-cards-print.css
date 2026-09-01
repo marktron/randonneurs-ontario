@@ -388,6 +388,14 @@ body:has(.control-cards-print) {
   font-variant-numeric: tabular-nums;
 }
 
+/* Cumulative event distance on legs-2+ collection cards. Styled like
+   control-times (leg cards have no times line, so it takes that slot). */
+.control-distance-overall {
+  font-size: 9pt;
+  color: #525252;
+  font-variant-numeric: tabular-nums;
+}
+
 .time-cell {
   border-left: 1px solid #d9d9d9;
   padding: 0.04in 0 0.04in 0.06in;
@@ -417,10 +425,13 @@ body:has(.control-cards-print) {
 
 .back-compact .control-distance,
 .back-compact .control-times,
+.back-compact .control-distance-overall,
 .back-dense .control-distance,
 .back-dense .control-times,
+.back-dense .control-distance-overall,
 .back-ultra .control-distance,
-.back-ultra .control-times {
+.back-ultra .control-times,
+.back-ultra .control-distance-overall {
   font-size: 7.5pt;
   line-height: 1.2;
 }

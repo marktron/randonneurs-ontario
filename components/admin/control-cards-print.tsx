@@ -502,6 +502,11 @@ function CardBack({
               <div className="control-info">
                 <div className="control-name">{control.name}</div>
                 <div className="control-distance">{control.distance} km</div>
+                {control.overallDistance != null && (
+                  <div className="control-distance-overall">
+                    {control.overallDistance} km overall
+                  </div>
+                )}
                 {control.openTime && control.closeTime && (
                   <div className="control-times">
                     {tier === 'ultra' ? (

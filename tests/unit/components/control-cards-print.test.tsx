@@ -172,7 +172,7 @@ const legB: CardLeg = {
   legName: 'Leg 2: Haliburton',
   distanceKm: 302.1,
   rwgpsUrl: 'https://ridewithgps.com/routes/102',
-  controls: [{ id: 'b0', name: 'B Start', distance: 0 }],
+  controls: [{ id: 'b0', name: 'B Start', distance: 0, overallDistance: 205.3 }],
 }
 
 function renderWithLegs(riders: CardRider[], legs: CardLeg[]) {
@@ -237,6 +237,20 @@ describe('ControlCardsPrint — collection legs', () => {
     expect(screen.getByText(/Leg 1: Gravenhurst lists 25 controls/)).toBeTruthy()
     // No card pages rendered.
     expect(document.querySelector('.card-page')).toBeNull()
+  })
+
+  it('prints the overall event distance on its own line under the route distance', () => {
+    const { container } = renderWithLegs([alice], [legA, legB])
+
+    const overall = screen.getByText('205.3 km overall')
+    expect(overall).toBeTruthy()
+    // Both lines live in the same control cell: the unlabeled route (per-leg)
+    // distance first, the labeled overall distance below it.
+    const cell = overall.closest('.control-info')
+    expect(cell?.querySelector('.control-distance')?.textContent).toBe('0 km')
+    // Leg 1 controls (no overallDistance) print only the route distance.
+    const overallLines = Array.from(container.querySelectorAll('.control-distance-overall'))
+    expect(overallLines).toHaveLength(1)
   })
 
   it('keeps the appended distance on leg cards, whose names carry no distance', () => {

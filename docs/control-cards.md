@@ -270,9 +270,12 @@ true })`) — leg-event printing reads the saved `event_controls` rows, so
   Route Map QR pointing at the leg's RWGPS route.
   Event name/date/start info, organizer, Total Allowable Time (overall event
   limit) and Submit Results QR are the same on every leg card.
-- Leg card back: that leg's controls with **cumulative event distances** and
-  **no open/close times** (`ControlPoint.openTime`/`closeTime` are optional
-  and omitted; `CardBack` skips the times block). Layout tiers apply per leg.
+- Leg card back: that leg's controls with **two distance lines** — the
+  unlabeled route (per-leg) distance, matching a rider's per-day GPS file,
+  and below it a muted `N km overall` line with the cumulative event
+  distance (legs 2+ only; leg 1's would be identical) — and **no open/close
+  times** (`ControlPoint.openTime`/`closeTime` are optional and omitted;
+  `CardBack` skips the times block). Layout tiers apply per leg.
   Stored `event_controls.distance_km` restarts at 0 each leg (mirroring the
   RWGPS member routes); `cumulativeLegDistanceKm` (`lib/controlPoints.ts`)
   offsets each leg's controls by the running sum of the previous legs'
@@ -301,9 +304,11 @@ true })`) — leg-event printing reads the saved `event_controls` rows, so
 - The digital brevet card stays **one card per event**, sectioned by leg:
   the payload carries `legName` per control and
   `components/brevet-card-view.tsx` renders a heading at each leg boundary.
-  Control distances in the payload are cumulative event distances (same
-  `cumulativeLegDistanceKm` offsets as the printed leg cards), as is the
-  admin check-ins grid. Check-in/start/completion logic is untouched.
+  Control distances in the payload stay per-leg (`distanceKm`), with legs-2+
+  controls also carrying `overallDistanceKm` (same `cumulativeLegDistanceKm`
+  offsets as the printed leg cards) rendered as a second `N km overall`
+  line; the admin check-ins grid shows the cumulative distance. Check-in/
+  start/completion logic is untouched.
 - Like the printed leg cards, **leg-tagged controls carry no per-control
   window** anywhere digital: _stored_ per-leg distances restart at 0, so a
   window computed from the event start would be wrong for legs 2+. The card payload

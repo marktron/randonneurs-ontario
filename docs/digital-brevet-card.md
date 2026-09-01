@@ -193,13 +193,14 @@ Design notes:
 ### Page behaviour (client component fed by a server load)
 
 - Header: event name, date, distance, rider name.
-- Control list, ordered by `position`: name, km (cumulative across the whole
-  event — leg-tagged collection controls are stored per-leg restarting at 0
-  and offset at display time by `cumulativeLegDistanceKm`), open/close
-  (computed server-side, displayed in local time; omitted for leg-tagged
-  collection controls, whose _stored_ per-leg distances restart at 0 — the
-  overall event limit governs, see docs/control-cards.md), and per-control
-  status:
+- Control list, ordered by `position`: name, route km (per-leg for
+  collection events, matching a rider's per-day GPS file), a second
+  `N km overall` line with the cumulative event distance on legs-2+
+  collection controls (offset by `cumulativeLegDistanceKm`; leg 1's would
+  be identical to the route km), open/close (computed server-side,
+  displayed in local time; omitted for leg-tagged collection controls,
+  whose stored per-leg distances restart at 0 — the overall event limit
+  governs, see docs/control-cards.md), and per-control status:
   ✓ checked in at HH:MM · **next** (highlighted) · upcoming · queued
   (offline, waiting to sync).
 - **Check in** button on any un-checked control (the next expected one is

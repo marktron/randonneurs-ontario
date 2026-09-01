@@ -1179,7 +1179,10 @@ describe('getBrevetCardByToken', () => {
 
     const card = await getBrevetCardByToken(TOKEN)
 
-    expect(card!.controls.map((c) => c.distanceKm)).toEqual([0, 205.3, 205.3, 302.2])
+    // Route (per-leg) distances pass through; the cumulative event distance
+    // rides alongside, only on legs 2+ (leg 1's would be identical).
+    expect(card!.controls.map((c) => c.distanceKm)).toEqual([0, 205.3, 0, 96.9])
+    expect(card!.controls.map((c) => c.overallDistanceKm)).toEqual([null, null, 205.3, 302.2])
   })
 
   it('passes single-route control distances through unchanged', async () => {
@@ -1194,6 +1197,7 @@ describe('getBrevetCardByToken', () => {
     const card = await getBrevetCardByToken(TOKEN)
 
     expect(card!.controls[0].distanceKm).toBe(55.5)
+    expect(card!.controls[0].overallDistanceKm).toBeNull()
   })
 
   it('suppresses the control window for leg-tagged controls (opensAt/closesAt null)', async () => {

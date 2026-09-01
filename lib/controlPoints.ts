@@ -241,9 +241,9 @@ export function cumulativeLegDistanceKm(
  * round-trip through the print URL). Rows must be position-ordered; legs
  * come out in first-appearance order, each leg's distance is its largest
  * stored control distance (that day's ride, matching the leg's RWGPS route),
- * control distances are cumulative across the whole event (see
- * `cumulativeLegDistanceKm`), and leg controls never carry open/close times —
- * the overall event limit governs.
+ * control distances stay per-leg with legs-2+ controls also carrying the
+ * cumulative event distance (see `cumulativeLegDistanceKm`), and leg
+ * controls never carry open/close times — the overall event limit governs.
  *
  * Returns null unless every row is leg-tagged (mirrors `groupControlsByLeg`):
  * a mixed or untagged list is a single-route card.
@@ -261,7 +261,10 @@ export function buildCardLegsFromRows(rows: ControlRowForLegs[]): CardLeg[] | nu
     controls: group.controls.map((row, index) => ({
       id: `leg-${groupIndex}-control-${index}`,
       name: row.name,
-      distance: row.cumulativeKm,
+      distance: row.distanceKm,
+      // Legs 2+ also carry the cumulative event distance; leg 1's would be
+      // identical to the route distance, so it is omitted there.
+      ...(groupIndex > 0 ? { overallDistance: row.cumulativeKm } : {}),
     })),
   }))
 }
