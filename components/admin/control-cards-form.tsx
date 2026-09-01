@@ -625,8 +625,23 @@ export function ControlCardsForm({
               <Fragment key={control.id}>
                 {control.legName !== null &&
                   control.legName !== (index === 0 ? null : controls[index - 1].legName) && (
-                    <div className="pt-2 text-sm font-medium text-muted-foreground first:pt-0">
-                      {control.legName}
+                    <div className="flex items-center gap-2 pt-2 first:pt-0">
+                      <div className="flex-1 text-sm font-medium text-muted-foreground">
+                        {control.legName}
+                      </div>
+                      {/* Column label for the cumulative annotations below,
+                          aligned over them (w-24 column + w-9 delete spacer). */}
+                      {cumulativeKm && control.legRwgpsId !== firstLegId && (
+                        <>
+                          <span
+                            className="w-24 text-right text-xs uppercase tracking-wide text-muted-foreground/70"
+                            title="Cumulative event distance — what prints on the card"
+                          >
+                            overall
+                          </span>
+                          <span className="w-9" aria-hidden="true" />
+                        </>
+                      )}
                     </div>
                   )}
                 <div className="flex items-center gap-2">
@@ -687,12 +702,10 @@ export function ControlCardsForm({
                   </div>
                   {cumulativeKm && (
                     <span
-                      className="w-36 text-right text-sm text-muted-foreground tabular-nums"
+                      className="w-24 text-right text-sm text-muted-foreground tabular-nums"
                       title="Cumulative event distance — what prints on the card"
                     >
-                      {control.legRwgpsId !== firstLegId
-                        ? `= ${cumulativeKm[index]} km overall`
-                        : ''}
+                      {control.legRwgpsId !== firstLegId ? `${cumulativeKm[index]} km` : ''}
                     </span>
                   )}
                   <Button

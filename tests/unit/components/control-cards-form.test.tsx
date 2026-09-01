@@ -520,15 +520,18 @@ describe('ControlCardsForm collection legs', () => {
     }),
   ]
 
-  it('annotates legs-2+ rows with the cumulative event distance', () => {
+  it('annotates legs-2+ rows with the cumulative event distance under an "overall" column label', () => {
     renderForm({ savedControls: legSaved })
 
     // Leg 2 rows are offset by leg 1's largest distance (200 km).
-    expect(screen.getByText('= 200 km overall')).toBeTruthy()
-    expect(screen.getByText('= 500 km overall')).toBeTruthy()
+    expect(screen.getByText('200 km')).toBeTruthy()
+    expect(screen.getByText('500 km')).toBeTruthy()
     // Leg 1 rows carry no annotation (their stored distance is already
     // the event distance), and there are exactly two annotations.
-    expect(screen.getAllByText(/^= [\d.]+ km overall$/)).toHaveLength(2)
+    expect(screen.getAllByText(/^[\d.]+ km$/)).toHaveLength(2)
+    // The column label sits in the leg heading row — only for legs 2+,
+    // so exactly one for this two-leg event.
+    expect(screen.getAllByText('overall')).toHaveLength(1)
   })
 
   it('recomputes cumulative annotations live when an earlier leg distance is edited', async () => {
@@ -539,14 +542,15 @@ describe('ControlCardsForm collection legs', () => {
     await user.clear(l1Finish)
     await user.type(l1Finish, '250')
 
-    expect(screen.getByText('= 250 km overall')).toBeTruthy()
-    expect(screen.getByText('= 550 km overall')).toBeTruthy()
+    expect(screen.getByText('250 km')).toBeTruthy()
+    expect(screen.getByText('550 km')).toBeTruthy()
   })
 
   it('shows no cumulative annotation for single-route controls', () => {
     renderForm({ savedControls: savedThree })
 
-    expect(screen.queryByText(/^= [\d.]+ km overall$/)).toBeNull()
+    expect(screen.queryByText(/^[\d.]+ km$/)).toBeNull()
+    expect(screen.queryByText('overall')).toBeNull()
   })
 
   it('multiplies the card count by the number of legs (riders × legs)', () => {

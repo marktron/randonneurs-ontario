@@ -293,10 +293,10 @@ true })`) — leg-event printing reads the saved `event_controls` rows, so
   Single-route lists (every `legName` null) render no headings.
 - Cumulative annotations: the form's distance inputs stay per-leg (they edit
   the stored values), but each legs-2+ row also shows a muted, read-only
-  `= N km overall` annotation — the cumulative event distance that will
-  print on the cards (`cumulativeLegDistanceKm`, recomputed live against
-  unsaved edits).
-  First-leg and single-route rows carry no annotation.
+  `N km` annotation under an "overall" column label in that leg's heading
+  row — the cumulative event distance that will print on the cards
+  (`cumulativeLegDistanceKm`, recomputed live against unsaved edits).
+  First-leg and single-route rows carry no annotation or label.
 - The public `/control-cards` flow is single-route only and untouched.
 - The digital brevet card stays **one card per event**, sectioned by leg:
   the payload carries `legName` per control and
