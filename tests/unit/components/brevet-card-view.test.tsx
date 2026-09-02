@@ -284,13 +284,13 @@ describe('BrevetCard control distances', () => {
 
     // First control has no previous control — total only.
     expect(screen.getByText('50 km')).toBeInTheDocument()
-    expect(screen.getByText('50 km, 100 km total')).toBeInTheDocument()
+    expect(screen.getByText('50 km from last, 100 km total')).toBeInTheDocument()
   })
 
   it('never line-breaks inside a distance value', () => {
     render(<BrevetCard token={TOKEN} initialData={makeTwoControlData()} />)
 
-    const label = screen.getByText('50 km, 100 km total')
+    const label = screen.getByText('50 km from last, 100 km total')
     // The value wraps to the next line as one unit (inline-block gives it a
     // break opportunity before it) but never splits internally.
     expect(label).toHaveClass('whitespace-nowrap')
@@ -304,7 +304,7 @@ describe('BrevetCard control distances', () => {
     render(<BrevetCard token={TOKEN} initialData={data} />)
 
     // 207 - 164.7 is 42.30000000000001 in float arithmetic.
-    expect(screen.getByText('42.3 km, 207 km total')).toBeInTheDocument()
+    expect(screen.getByText('42.3 km from last, 207 km total')).toBeInTheDocument()
   })
 
   it('restarts the since-previous distance at each collection leg boundary', () => {
@@ -337,8 +337,8 @@ describe('BrevetCard control distances', () => {
     // Each leg's first control (0 km) shows no since-previous distance —
     // the rider's per-day GPS file restarts there.
     expect(screen.getAllByText('0 km')).toHaveLength(2)
-    expect(screen.getByText('355.7 km, 355.7 km total')).toBeInTheDocument()
-    expect(screen.getByText('40.5 km, 40.5 km total')).toBeInTheDocument()
+    expect(screen.getByText('355.7 km from last, 355.7 km total')).toBeInTheDocument()
+    expect(screen.getByText('40.5 km from last, 40.5 km total')).toBeInTheDocument()
   })
 })
 

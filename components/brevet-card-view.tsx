@@ -1072,7 +1072,7 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
             prev !== null ? Math.round((control.distanceKm - prev.distanceKm) * 10) / 10 : null
           const distanceLabel =
             sinceLastKm !== null && sinceLastKm >= 0
-              ? `${sinceLastKm} km, ${control.distanceKm} km total`
+              ? `${sinceLastKm} km from last, ${control.distanceKm} km total`
               : `${control.distanceKm} km`
 
           return (
