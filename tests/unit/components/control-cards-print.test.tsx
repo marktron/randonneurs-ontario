@@ -242,7 +242,7 @@ describe('ControlCardsPrint — collection legs', () => {
   it('prints the overall event distance on its own line under the route distance', () => {
     const { container } = renderWithLegs([alice], [legA, legB])
 
-    const overall = screen.getByText('205.3 km overall')
+    const overall = screen.getByText('205.3 km this event')
     expect(overall).toBeTruthy()
     // Both lines live in the same control cell: the unlabeled route (per-leg)
     // distance first, the labeled overall distance below it.

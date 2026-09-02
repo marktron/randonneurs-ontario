@@ -87,7 +87,7 @@ export interface CardControl {
   /** Route distance (km) — per-leg for collection events, mirroring RWGPS. */
   distanceKm: number
   /**
-   * Cumulative event distance (km), shown as a second "N km overall" line.
+   * Cumulative event distance (km), shown as a second "N km this event" line.
    * Set only for legs-2+ controls on collection events; null (or absent)
    * elsewhere, where it would equal `distanceKm`.
    */

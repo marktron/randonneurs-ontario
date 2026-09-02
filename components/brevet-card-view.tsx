@@ -1096,11 +1096,11 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
                     </p>
                   )}
                   <p className="whitespace-nowrap text-sm text-muted-foreground tabular-nums">
-                    {control.distanceKm} km{showSinceLast ? ' total' : ''}
+                    {control.distanceKm} km{showSinceLast ? ' this route' : ''}
                   </p>
                   {control.overallDistanceKm != null && (
                     <p className="whitespace-nowrap text-sm text-muted-foreground tabular-nums">
-                      {control.overallDistanceKm} km overall
+                      {control.overallDistanceKm} km this event
                     </p>
                   )}
                   {control.opensAt !== null && control.closesAt !== null && (

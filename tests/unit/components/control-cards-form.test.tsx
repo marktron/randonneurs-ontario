@@ -531,7 +531,7 @@ describe('ControlCardsForm collection legs', () => {
     expect(screen.getAllByText(/^[\d.]+ km$/)).toHaveLength(2)
     // The column label sits in the leg heading row — only for legs 2+,
     // so exactly one for this two-leg event.
-    expect(screen.getAllByText('overall')).toHaveLength(1)
+    expect(screen.getAllByText('this event')).toHaveLength(1)
   })
 
   it('recomputes cumulative annotations live when an earlier leg distance is edited', async () => {
@@ -550,7 +550,7 @@ describe('ControlCardsForm collection legs', () => {
     renderForm({ savedControls: savedThree })
 
     expect(screen.queryByText(/^[\d.]+ km$/)).toBeNull()
-    expect(screen.queryByText('overall')).toBeNull()
+    expect(screen.queryByText('this event')).toBeNull()
   })
 
   it('multiplies the card count by the number of legs (riders × legs)', () => {

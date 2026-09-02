@@ -272,7 +272,7 @@ true })`) — leg-event printing reads the saved `event_controls` rows, so
   limit) and Submit Results QR are the same on every leg card.
 - Leg card back: that leg's controls with **two distance lines** — the
   unlabeled route (per-leg) distance, matching a rider's per-day GPS file,
-  and below it a muted `N km overall` line with the cumulative event
+  and below it a muted `N km this event` line with the cumulative event
   distance (legs 2+ only; leg 1's would be identical) — and **no open/close
   times** (`ControlPoint.openTime`/`closeTime` are optional and omitted;
   `CardBack` skips the times block). Layout tiers apply per leg.
@@ -296,7 +296,7 @@ true })`) — leg-event printing reads the saved `event_controls` rows, so
   Single-route lists (every `legName` null) render no headings.
 - Cumulative annotations: the form's distance inputs stay per-leg (they edit
   the stored values), but each legs-2+ row also shows a muted, read-only
-  `N km` annotation under an "overall" column label in that leg's heading
+  `N km` annotation under a "this event" column label in that leg's heading
   row — the cumulative event distance that will print on the cards
   (`cumulativeLegDistanceKm`, recomputed live against unsaved edits).
   First-leg and single-route rows carry no annotation or label.
@@ -306,7 +306,7 @@ true })`) — leg-event printing reads the saved `event_controls` rows, so
   `components/brevet-card-view.tsx` renders a heading at each leg boundary.
   Control distances in the payload stay per-leg (`distanceKm`), with legs-2+
   controls also carrying `overallDistanceKm` (same `cumulativeLegDistanceKm`
-  offsets as the printed leg cards) rendered as a second `N km overall`
+  offsets as the printed leg cards) rendered as a second `N km this event`
   line; the admin check-ins grid shows the cumulative distance. Check-in/
   start/completion logic is untouched.
 - Like the printed leg cards, **leg-tagged controls carry no per-control

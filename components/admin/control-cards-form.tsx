@@ -637,7 +637,7 @@ export function ControlCardsForm({
                             className="w-24 text-right text-xs uppercase tracking-wide text-muted-foreground/70"
                             title="Cumulative event distance — what prints on the card"
                           >
-                            overall
+                            this event
                           </span>
                           <span className="w-9" aria-hidden="true" />
                         </>

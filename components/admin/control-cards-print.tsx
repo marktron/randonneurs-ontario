@@ -504,7 +504,7 @@ function CardBack({
                 <div className="control-distance">{control.distance} km</div>
                 {control.overallDistance != null && (
                   <div className="control-distance-overall">
-                    {control.overallDistance} km overall
+                    {control.overallDistance} km this event
                   </div>
                 )}
                 {control.openTime && control.closeTime && (

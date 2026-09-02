@@ -10,7 +10,7 @@ export interface ControlPoint {
   distance: number // km from start (per-leg for leg cards)
   /**
    * Cumulative event distance (km) for legs-2+ controls on collection
-   * events — printed as a second "N km overall" line. Omitted on leg-1 and
+   * events — printed as a second "N km this event" line. Omitted on leg-1 and
    * single-route controls, where it would equal `distance`.
    */
   overallDistance?: number

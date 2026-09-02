@@ -194,11 +194,11 @@ Design notes:
 
 - Header: event name, date, distance, rider name.
 - Control list, ordered by `position`: name, route km shown as
-  "since previous" and "total" on separate lines (`42.3 km from last` / `207 km total`; the first control of
+  "since previous" and "this route" on separate lines (`42.3 km from last` / `207 km this route`; the first control of
   the event or of a collection leg shows the total only, since the rider's
   per-day GPS file restarts there — route km are per-leg for collection
   events; the printed card keeps a single distance for space), a second
-  `N km overall` line with the cumulative event distance on legs-2+
+  `N km this event` line with the cumulative event distance on legs-2+
   collection controls (offset by `cumulativeLegDistanceKm`; leg 1's would
   be identical to the route km), open/close (computed server-side,
   displayed in local time; omitted for leg-tagged collection controls,

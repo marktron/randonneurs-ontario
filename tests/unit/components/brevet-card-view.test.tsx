@@ -290,7 +290,7 @@ describe('BrevetCard control distances', () => {
     // First control has no previous control — total only, unlabeled.
     expect(distanceLine('50 km')).toBeInTheDocument()
     expect(distanceLine('50 km from last')).toBeInTheDocument()
-    expect(distanceLine('100 km total')).toBeInTheDocument()
+    expect(distanceLine('100 km this route')).toBeInTheDocument()
     expect(screen.queryByText(/km from last,/)).toBeNull()
   })
 
@@ -298,7 +298,7 @@ describe('BrevetCard control distances', () => {
     render(<BrevetCard token={TOKEN} initialData={makeTwoControlData()} />)
 
     expect(distanceLine('50 km from last')).toHaveClass('whitespace-nowrap')
-    expect(distanceLine('100 km total')).toHaveClass('whitespace-nowrap')
+    expect(distanceLine('100 km this route')).toHaveClass('whitespace-nowrap')
   })
 
   it('rounds the since-previous distance to one decimal', () => {
@@ -309,7 +309,7 @@ describe('BrevetCard control distances', () => {
 
     // 207 - 164.7 is 42.30000000000001 in float arithmetic.
     expect(distanceLine('42.3 km from last')).toBeInTheDocument()
-    expect(distanceLine('207 km total')).toBeInTheDocument()
+    expect(distanceLine('207 km this route')).toBeInTheDocument()
   })
 
   it('restarts the since-previous distance at each collection leg boundary', () => {
@@ -345,9 +345,9 @@ describe('BrevetCard control distances', () => {
       screen.getAllByText((_, el) => el?.tagName === 'P' && el.textContent === '0 km')
     ).toHaveLength(2)
     expect(distanceLine('355.7 km from last')).toBeInTheDocument()
-    expect(distanceLine('355.7 km total')).toBeInTheDocument()
+    expect(distanceLine('355.7 km this route')).toBeInTheDocument()
     expect(distanceLine('40.5 km from last')).toBeInTheDocument()
-    expect(distanceLine('40.5 km total')).toBeInTheDocument()
+    expect(distanceLine('40.5 km this route')).toBeInTheDocument()
   })
 })
 
@@ -363,13 +363,13 @@ describe('BrevetCard overall distance (collection legs)', () => {
     }
     render(<BrevetCard token={TOKEN} initialData={data} />)
 
-    expect(screen.getByText('355.7 km overall')).toBeInTheDocument()
+    expect(screen.getByText('355.7 km this event')).toBeInTheDocument()
   })
 
   it('shows no overall line when the payload carries none (single-route or leg 1)', () => {
     render(<BrevetCard token={TOKEN} initialData={makeData()} />)
 
-    expect(screen.queryByText(/km overall/)).toBeNull()
+    expect(screen.queryByText(/km this event/)).toBeNull()
   })
 })
 
