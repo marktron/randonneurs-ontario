@@ -278,6 +278,60 @@ describe('BrevetCard header', () => {
   })
 })
 
+describe('BrevetCard control distances', () => {
+  it('shows the distance since the previous control alongside the total', () => {
+    render(<BrevetCard token={TOKEN} initialData={makeTwoControlData()} />)
+
+    // First control has no previous control — total only.
+    expect(screen.getByText('50 km')).toBeInTheDocument()
+    expect(screen.getByText('50 km, 100 km total')).toBeInTheDocument()
+  })
+
+  it('rounds the since-previous distance to one decimal', () => {
+    const data = makeTwoControlData()
+    data.controls[0] = { ...data.controls[0], distanceKm: 164.7 }
+    data.controls[1] = { ...data.controls[1], distanceKm: 207 }
+    render(<BrevetCard token={TOKEN} initialData={data} />)
+
+    // 207 - 164.7 is 42.30000000000001 in float arithmetic.
+    expect(screen.getByText('42.3 km, 207 km total')).toBeInTheDocument()
+  })
+
+  it('restarts the since-previous distance at each collection leg boundary', () => {
+    const data = makeData()
+    const base = { ...data.controls[0], opensAt: null, closesAt: null }
+    data.controls = [
+      { ...base, id: 'd1-start', position: 1, name: 'Chatham', distanceKm: 0, legName: 'Day 1' },
+      { ...base, id: 'd1-fin', position: 2, name: 'Chatham', distanceKm: 355.7, legName: 'Day 1' },
+      {
+        ...base,
+        id: 'd2-start',
+        position: 3,
+        name: 'Chatham',
+        distanceKm: 0,
+        legName: 'Day 2',
+        overallDistanceKm: 355.7,
+      },
+      {
+        ...base,
+        id: 'd2-next',
+        position: 4,
+        name: 'Wallaceburg',
+        distanceKm: 40.5,
+        legName: 'Day 2',
+        overallDistanceKm: 396.2,
+      },
+    ]
+    render(<BrevetCard token={TOKEN} initialData={data} />)
+
+    // Each leg's first control (0 km) shows no since-previous distance —
+    // the rider's per-day GPS file restarts there.
+    expect(screen.getAllByText('0 km')).toHaveLength(2)
+    expect(screen.getByText('355.7 km, 355.7 km total')).toBeInTheDocument()
+    expect(screen.getByText('40.5 km, 40.5 km total')).toBeInTheDocument()
+  })
+})
+
 describe('BrevetCard overall distance (collection legs)', () => {
   it('shows the cumulative overall distance on its own line for legs-2+ controls', () => {
     const data = makeData()

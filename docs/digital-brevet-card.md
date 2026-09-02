@@ -193,8 +193,11 @@ Design notes:
 ### Page behaviour (client component fed by a server load)
 
 - Header: event name, date, distance, rider name.
-- Control list, ordered by `position`: name, route km (per-leg for
-  collection events, matching a rider's per-day GPS file), a second
+- Control list, ordered by `position`: name, route km shown as
+  "since previous, total" (`42.3 km, 207 km total`; the first control of
+  the event or of a collection leg shows the total only, since the rider's
+  per-day GPS file restarts there — route km are per-leg for collection
+  events; the printed card keeps a single distance for space), a second
   `N km overall` line with the cumulative event distance on legs-2+
   collection controls (offset by `cumulativeLegDistanceKm`; leg 1's would
   be identical to the route km), open/close (computed server-side,

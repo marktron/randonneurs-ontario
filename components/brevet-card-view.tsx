@@ -1063,6 +1063,17 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
             control.legName !== (index > 0 ? controls[index - 1].legName : null)
               ? control.legName
               : null
+          // Distance since the previous control, computed within the same
+          // leg only — a new leg's first control restarts at 0 km (the
+          // rider's per-day GPS file does too). Null when there is no
+          // previous control to measure from.
+          const prev = index > 0 && legHeading === null ? controls[index - 1] : null
+          const sinceLastKm =
+            prev !== null ? Math.round((control.distanceKm - prev.distanceKm) * 10) / 10 : null
+          const distanceLabel =
+            sinceLastKm !== null && sinceLastKm >= 0
+              ? `${sinceLastKm} km, ${control.distanceKm} km total`
+              : `${control.distanceKm} km`
 
           return (
             <Fragment key={control.id}>
@@ -1081,7 +1092,7 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
                   <p className="font-medium">
                     {control.name}
                     <span className="ml-2 text-sm text-muted-foreground tabular-nums">
-                      {control.distanceKm} km
+                      {distanceLabel}
                     </span>
                   </p>
                   {control.overallDistanceKm != null && (
