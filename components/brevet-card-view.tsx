@@ -1089,14 +1089,17 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
                   <p className="font-medium">{control.name}</p>
                   {/* Each distance on its own line under the name (inline
                       after a long name they indented or ran under the Check
-                      in button on phones); values never wrap. */}
+                      in button on phones); values never wrap. Collection
+                      legs say "this route" to contrast with the "this event"
+                      line below; single-route events just say "total". */}
                   {showSinceLast && (
                     <p className="whitespace-nowrap text-sm text-muted-foreground tabular-nums">
                       {sinceLastKm} km from last
                     </p>
                   )}
                   <p className="whitespace-nowrap text-sm text-muted-foreground tabular-nums">
-                    {control.distanceKm} km{showSinceLast ? ' this route' : ''}
+                    {control.distanceKm} km
+                    {showSinceLast ? (control.legName !== null ? ' this route' : ' total') : ''}
                   </p>
                   {control.overallDistanceKm != null && (
                     <p className="whitespace-nowrap text-sm text-muted-foreground tabular-nums">
