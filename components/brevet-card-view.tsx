@@ -1091,12 +1091,12 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
                 <div className="min-w-0">
                   <p className="font-medium">
                     {control.name}
-                    <span className="ml-2 text-sm text-muted-foreground tabular-nums">
+                    <span className="ml-2 inline-block whitespace-nowrap text-sm text-muted-foreground tabular-nums">
                       {distanceLabel}
                     </span>
                   </p>
                   {control.overallDistanceKm != null && (
-                    <p className="text-sm text-muted-foreground tabular-nums">
+                    <p className="whitespace-nowrap text-sm text-muted-foreground tabular-nums">
                       {control.overallDistanceKm} km overall
                     </p>
                   )}

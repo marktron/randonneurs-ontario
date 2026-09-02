@@ -287,6 +287,16 @@ describe('BrevetCard control distances', () => {
     expect(screen.getByText('50 km, 100 km total')).toBeInTheDocument()
   })
 
+  it('never line-breaks inside a distance value', () => {
+    render(<BrevetCard token={TOKEN} initialData={makeTwoControlData()} />)
+
+    const label = screen.getByText('50 km, 100 km total')
+    // The value wraps to the next line as one unit (inline-block gives it a
+    // break opportunity before it) but never splits internally.
+    expect(label).toHaveClass('whitespace-nowrap')
+    expect(label).toHaveClass('inline-block')
+  })
+
   it('rounds the since-previous distance to one decimal', () => {
     const data = makeTwoControlData()
     data.controls[0] = { ...data.controls[0], distanceKm: 164.7 }
