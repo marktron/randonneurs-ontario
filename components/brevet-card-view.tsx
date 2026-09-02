@@ -1070,10 +1070,7 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
           const prev = index > 0 && legHeading === null ? controls[index - 1] : null
           const sinceLastKm =
             prev !== null ? Math.round((control.distanceKm - prev.distanceKm) * 10) / 10 : null
-          const distanceLabel =
-            sinceLastKm !== null && sinceLastKm >= 0
-              ? `${sinceLastKm} km from last, ${control.distanceKm} km total`
-              : `${control.distanceKm} km`
+          const showSinceLast = sinceLastKm !== null && sinceLastKm >= 0
 
           return (
             <Fragment key={control.id}>
@@ -1089,11 +1086,20 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
                 )}
               >
                 <div className="min-w-0">
-                  <p className="font-medium">
-                    {control.name}
-                    <span className="ml-2 inline-block whitespace-nowrap text-sm text-muted-foreground tabular-nums">
-                      {distanceLabel}
-                    </span>
+                  <p className="font-medium">{control.name}</p>
+                  {/* Own line under the name: inline after a long name it
+                      would indent or run under the Check in button on
+                      phones. Each value is unbreakable; the line may wrap
+                      only at the comma. */}
+                  <p className="text-sm text-muted-foreground tabular-nums">
+                    {showSinceLast ? (
+                      <>
+                        <span className="whitespace-nowrap">{sinceLastKm} km from last,</span>{' '}
+                        <span className="whitespace-nowrap">{control.distanceKm} km total</span>
+                      </>
+                    ) : (
+                      <span className="whitespace-nowrap">{control.distanceKm} km</span>
+                    )}
                   </p>
                   {control.overallDistanceKm != null && (
                     <p className="whitespace-nowrap text-sm text-muted-foreground tabular-nums">
