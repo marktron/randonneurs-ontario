@@ -1087,19 +1087,16 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
               >
                 <div className="min-w-0">
                   <p className="font-medium">{control.name}</p>
-                  {/* Own line under the name: inline after a long name it
-                      would indent or run under the Check in button on
-                      phones. Each value is unbreakable; the line may wrap
-                      only at the comma. */}
-                  <p className="text-sm text-muted-foreground tabular-nums">
-                    {showSinceLast ? (
-                      <>
-                        <span className="whitespace-nowrap">{sinceLastKm} km from last,</span>{' '}
-                        <span className="whitespace-nowrap">{control.distanceKm} km total</span>
-                      </>
-                    ) : (
-                      <span className="whitespace-nowrap">{control.distanceKm} km</span>
-                    )}
+                  {/* Each distance on its own line under the name (inline
+                      after a long name they indented or ran under the Check
+                      in button on phones); values never wrap. */}
+                  {showSinceLast && (
+                    <p className="whitespace-nowrap text-sm text-muted-foreground tabular-nums">
+                      {sinceLastKm} km from last
+                    </p>
+                  )}
+                  <p className="whitespace-nowrap text-sm text-muted-foreground tabular-nums">
+                    {control.distanceKm} km{showSinceLast ? ' total' : ''}
                   </p>
                   {control.overallDistanceKm != null && (
                     <p className="whitespace-nowrap text-sm text-muted-foreground tabular-nums">
