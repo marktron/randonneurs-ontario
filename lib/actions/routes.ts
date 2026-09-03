@@ -56,6 +56,20 @@ async function revalidateRoutesTags(chapterId: string | null, routeSlug?: string
   }
 }
 
+/**
+ * `routes.distance_km` is an INTEGER column, but the admin form collects the
+ * distance as free-form numeric text (e.g. "107.1"). Passing a fractional
+ * value straight through makes Postgres reject the write with
+ * `invalid input syntax for type integer`, so round to the nearest kilometre
+ * here. Non-finite values (and 0) are stored as NULL.
+ */
+function normalizeDistanceKm(distanceKm: number | null | undefined): number | null {
+  if (typeof distanceKm !== 'number' || !Number.isFinite(distanceKm) || distanceKm === 0) {
+    return null
+  }
+  return Math.round(distanceKm)
+}
+
 export interface RouteData {
   name: string
   slug: string
@@ -95,7 +109,7 @@ export async function createRoute(data: RouteData): Promise<ActionResult> {
     name: name.trim(),
     slug,
     chapter_id: chapterId || null,
-    distance_km: distanceKm || null,
+    distance_km: normalizeDistanceKm(distanceKm),
     collection: collection || null,
     description: description || null,
     rwgps_id: rwgpsRefs.rwgpsId,
@@ -150,7 +164,7 @@ export async function updateRoute(
     updateData.chapter_id = data.chapterId || null
   }
   if (data.distanceKm !== undefined) {
-    updateData.distance_km = data.distanceKm || null
+    updateData.distance_km = normalizeDistanceKm(data.distanceKm)
   }
   if (data.collection !== undefined) {
     updateData.collection = data.collection || null
@@ -373,7 +387,7 @@ export async function mergeRoutes(data: MergeRoutesData): Promise<MergeResult> {
       name: routeData.name.trim(),
       slug: routeData.slug,
       chapter_id: routeData.chapterId || null,
-      distance_km: routeData.distanceKm || null,
+      distance_km: normalizeDistanceKm(routeData.distanceKm),
       collection: routeData.collection || null,
       description: routeData.description || null,
       rwgps_id: rwgpsRefs.rwgpsId,

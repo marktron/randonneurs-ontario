@@ -202,6 +202,58 @@ describe('createRoute', () => {
     })
   })
 
+  describe('distance normalization', () => {
+    // routes.distance_km is an INTEGER column; a fractional value from the
+    // admin form used to reach Postgres verbatim and blow up with
+    // 'invalid input syntax for type integer: "107.1"'.
+    it('rounds a fractional distance to a whole number of kilometres', async () => {
+      mockModule.__mockInsertSuccess()
+
+      const result = await createRoute({
+        name: 'Fractional Route',
+        slug: 'fractional-route',
+        distanceKm: 107.1,
+      })
+
+      expect(result.success).toBe(true)
+
+      const insertCalls = mockModule.__calls.filter(
+        (c) => c.table === 'routes' && c.method === 'insert'
+      )
+      expect(insertCalls[0].args![0]).toMatchObject({ distance_km: 107 })
+    })
+
+    it('rounds a fractional distance up when closer to the next kilometre', async () => {
+      mockModule.__mockInsertSuccess()
+
+      await createRoute({
+        name: 'Fractional Route',
+        slug: 'fractional-route-2',
+        distanceKm: 206.8,
+      })
+
+      const insertCalls = mockModule.__calls.filter(
+        (c) => c.table === 'routes' && c.method === 'insert'
+      )
+      expect(insertCalls[0].args![0]).toMatchObject({ distance_km: 207 })
+    })
+
+    it('stores null for a non-numeric distance', async () => {
+      mockModule.__mockInsertSuccess()
+
+      await createRoute({
+        name: 'No Distance Route',
+        slug: 'no-distance-route',
+        distanceKm: Number.NaN,
+      })
+
+      const insertCalls = mockModule.__calls.filter(
+        (c) => c.table === 'routes' && c.method === 'insert'
+      )
+      expect(insertCalls[0].args![0]).toMatchObject({ distance_km: null })
+    })
+  })
+
   describe('RWGPS URL extraction', () => {
     it('extracts ID from full RWGPS URL', async () => {
       mockModule.__mockInsertSuccess()
@@ -329,6 +381,20 @@ describe('updateRoute', () => {
 
     const { revalidatePath } = await import('next/cache')
     expect(revalidatePath).toHaveBeenCalledWith('/admin/routes')
+  })
+
+  it('rounds a fractional distance to a whole number of kilometres', async () => {
+    mockModule.__mockRouteFound({ id: 'route-1', chapter_id: 'chapter-1', slug: 'test-route' })
+    mockModule.__mockUpdateSuccess()
+
+    const result = await updateRoute('route-1', { distanceKm: 107.1 })
+
+    expect(result.success).toBe(true)
+
+    const updateCalls = mockModule.__calls.filter(
+      (c) => c.table === 'routes' && c.method === 'update'
+    )
+    expect(updateCalls[0].args![0]).toMatchObject({ distance_km: 107 })
   })
 
   it('handles duplicate slug error on update', async () => {
@@ -592,5 +658,28 @@ describe('mergeRoutes', () => {
       rwgps_id: null,
       rwgps_collection_id: '8387874',
     })
+  })
+
+  it('rounds a fractional distance on the merged route', async () => {
+    mockModule.__mockUpdateSuccess() // For event updates
+    mockModule.__mockUpdateSuccess() // For route deletion
+    mockModule.__mockUpdateSuccess() // For route update
+
+    const result = await mergeRoutes({
+      targetRouteId: 'route-1',
+      sourceRouteIds: ['route-1', 'route-2'],
+      routeData: {
+        name: 'Merged Route',
+        slug: 'merged-route',
+        distanceKm: 107.1,
+      },
+    })
+
+    expect(result.success).toBe(true)
+
+    const routeUpdateCalls = mockModule.__calls.filter(
+      (c) => c.table === 'routes' && c.method === 'update'
+    )
+    expect(routeUpdateCalls[0].args![0]).toMatchObject({ distance_km: 107 })
   })
 })

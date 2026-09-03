@@ -190,7 +190,7 @@ export function RouteForm({ chapters, route, mode }: RouteFormProps) {
                 onChange={(e) => handleDistanceChange(e.target.value)}
                 placeholder="200"
                 min="0"
-                step="0.1"
+                step="1"
                 disabled={isPending}
               />
             </div>
