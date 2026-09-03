@@ -85,6 +85,32 @@ export function distanceMedalCellClass(distance: string): string | null {
   }
 }
 
+/**
+ * Tailwind classes for a draft event chip: the same ACP medal hue as
+ * distanceMedalCellClass, but rendered as a dashed border over a faint tint
+ * with medal-coloured text, so drafts read as "this distance, not yet real".
+ * Populaires and any non-standard distance return null so the caller keeps
+ * its neutral dashed styling.
+ */
+export function distanceMedalDraftClass(distance: string): string | null {
+  const km = parseInt(distance, 10)
+  if (Number.isNaN(km)) return null
+  if (km >= 1000)
+    return 'border-dashed border-neutral-900/60 bg-neutral-900/10 text-neutral-900 dark:border-neutral-100/60 dark:bg-neutral-100/10 dark:text-neutral-100'
+  switch (km) {
+    case 200:
+      return 'border-dashed border-yellow-600/60 bg-yellow-600/10 text-yellow-800 dark:text-yellow-300'
+    case 300:
+      return 'border-dashed border-lime-600/60 bg-lime-600/10 text-lime-800 dark:text-lime-300'
+    case 400:
+      return 'border-dashed border-purple-600/60 bg-purple-600/10 text-purple-800 dark:text-purple-300'
+    case 600:
+      return 'border-dashed border-orange-600/60 bg-orange-600/10 text-orange-800 dark:text-orange-300'
+    default:
+      return null
+  }
+}
+
 function formatTime(time: string): string {
   const [hours, minutes] = time.split(':')
   const hour = parseInt(hours, 10)

@@ -121,7 +121,7 @@ This follows the same localStorage pattern used elsewhere in the app (e.g., `ro-
 
 ## Draft events
 
-`Event.status` may be `'draft'`. Public data reads never emit it (drafts are filtered by status and hidden by RLS), so it only appears in admin. Draft cells use a dashed border, muted text, a `Draft` label, and no medal fill; the mobile dot is muted and the row shows `(draft)`.
+`Event.status` may be `'draft'`. Public data reads never emit it (drafts are filtered by status and hidden by RLS), so it only appears in admin. Draft cells keep the medal hue of their distance but never the solid fill: `distanceMedalDraftClass` renders a dashed medal-coloured border over a faint tint with medal-coloured text, plus a `Draft` label. Non-medal drafts (populaires, odd distances) fall back to a neutral dashed border and muted text. On mobile the `(draft)` row's distance badge is a dashed outline in the medal text colour, and the day dot stays muted.
 
 ## Key files
 

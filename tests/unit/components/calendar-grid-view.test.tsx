@@ -187,14 +187,28 @@ describe('draft events', () => {
     chapterName: 'Toronto',
   }
 
-  it('renders a Draft chip and no medal background', () => {
+  it('renders a Draft chip with a dashed medal tint instead of the solid medal fill', () => {
     const { container } = render(<CalendarGridView events={[draft]} />)
     // The fixture name deliberately does not contain "draft", so these
     // assertions can only pass because of the draft chip itself.
     expect(screen.getAllByText('Draft').length).toBeGreaterThan(0)
     expect(screen.getAllByText('(draft)').length).toBeGreaterThan(0)
+    // Solid published fill must not appear anywhere for a draft.
     expect(container.querySelector('.bg-yellow-600')).toBeNull()
+    // Desktop chip: dashed border in the 200 km medal colour over a faint tint.
+    const chip = container.querySelector('.border-dashed.border-yellow-600\\/60.bg-yellow-600\\/10')
+    expect(chip).not.toBeNull()
+    // Mobile badge: dashed outline carrying the medal text colour.
+    const badge = container.querySelector('.border-dashed.text-yellow-600')
+    expect(badge).not.toBeNull()
+  })
+
+  it('keeps a plain dashed chip for a draft populaire with no medal colour', () => {
+    const { container } = render(
+      <CalendarGridView events={[{ ...draft, distance: '160', name: 'Spring 160' }]} />
+    )
     expect(container.querySelector('.border-dashed')).not.toBeNull()
+    expect(container.querySelector('[class*="border-yellow"]')).toBeNull()
   })
 
   it('announces the draft state in the link label', () => {

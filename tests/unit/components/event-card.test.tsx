@@ -8,6 +8,7 @@ import {
   EventCard,
   distanceMedalColorClass,
   distanceMedalCellClass,
+  distanceMedalDraftClass,
   type Event,
 } from '@/components/event-card'
 
@@ -43,6 +44,36 @@ describe('distanceMedalColorClass', () => {
     expect(distanceMedalColorClass('150')).toBeNull()
     expect(distanceMedalColorClass('500')).toBeNull()
     expect(distanceMedalColorClass('not-a-number')).toBeNull()
+  })
+})
+
+describe('distanceMedalDraftClass', () => {
+  it('returns a dashed medal-coloured border, faint tint and medal text for each medal distance', () => {
+    expect(distanceMedalDraftClass('200')).toBe(
+      'border-dashed border-yellow-600/60 bg-yellow-600/10 text-yellow-800 dark:text-yellow-300'
+    )
+    expect(distanceMedalDraftClass('300')).toBe(
+      'border-dashed border-lime-600/60 bg-lime-600/10 text-lime-800 dark:text-lime-300'
+    )
+    expect(distanceMedalDraftClass('400')).toBe(
+      'border-dashed border-purple-600/60 bg-purple-600/10 text-purple-800 dark:text-purple-300'
+    )
+    expect(distanceMedalDraftClass('600')).toBe(
+      'border-dashed border-orange-600/60 bg-orange-600/10 text-orange-800 dark:text-orange-300'
+    )
+  })
+
+  it('treats any distance of 1000 km or more as the 1000+ tint', () => {
+    expect(distanceMedalDraftClass('1000')).toBe(
+      'border-dashed border-neutral-900/60 bg-neutral-900/10 text-neutral-900 dark:border-neutral-100/60 dark:bg-neutral-100/10 dark:text-neutral-100'
+    )
+    expect(distanceMedalDraftClass('1200')).toBe(distanceMedalDraftClass('1000'))
+  })
+
+  it('returns null for populaires and non-standard distances', () => {
+    expect(distanceMedalDraftClass('100')).toBeNull()
+    expect(distanceMedalDraftClass('160')).toBeNull()
+    expect(distanceMedalDraftClass('not-a-number')).toBeNull()
   })
 })
 

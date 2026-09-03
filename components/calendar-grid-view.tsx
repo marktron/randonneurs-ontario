@@ -3,7 +3,12 @@
 import { useMemo } from 'react'
 import Link from 'next/link'
 import { Badge } from '@/components/ui/badge'
-import { distanceMedalCellClass, type Event } from '@/components/event-card'
+import {
+  distanceMedalCellClass,
+  distanceMedalColorClass,
+  distanceMedalDraftClass,
+  type Event,
+} from '@/components/event-card'
 import {
   buildWeekLanes,
   getEventDayKeys,
@@ -370,9 +375,11 @@ export function CalendarGridView({ events, hrefFor = defaultHrefFor }: CalendarG
                           <Badge
                             variant="outline"
                             className={`text-[10px] tracking-wider shrink-0 ml-auto ${
-                              isCancelled || isDraft
+                              isCancelled
                                 ? 'border-dashed'
-                                : (distanceMedalCellClass(event.distance) ?? '')
+                                : isDraft
+                                  ? `border-dashed ${distanceMedalColorClass(event.distance) ?? ''}`
+                                  : (distanceMedalCellClass(event.distance) ?? '')
                             }`}
                           >
                             {event.distance} km
@@ -403,6 +410,7 @@ function EventBar({ event, segment, hrefFor }: EventBarProps) {
   const isCancelled = event.status === 'cancelled'
   const isDraft = event.status === 'draft'
   const medalCell = isCancelled || isDraft ? null : distanceMedalCellClass(event.distance)
+  const medalDraft = isDraft ? distanceMedalDraftClass(event.distance) : null
   const { continuesBefore, continuesAfter, spanDays } = segment
   const limitLabel = spanDays > 1 ? getEventLimitLabel(event) : null
   const time = formatTime(event.startTime)
@@ -420,7 +428,9 @@ function EventBar({ event, segment, hrefFor }: EventBarProps) {
           isCancelled
             ? 'border-border/40 bg-muted/40 opacity-60'
             : isDraft
-              ? 'border-dashed border-border bg-background text-muted-foreground hover:bg-muted/50 transition-colors'
+              ? medalDraft
+                ? `${medalDraft} hover:opacity-80 transition-opacity`
+                : 'border-dashed border-border bg-background text-muted-foreground hover:bg-muted/50 transition-colors'
               : medalCell
                 ? `border-transparent ${medalCell} hover:opacity-90 transition-opacity`
                 : 'border-border/40 bg-muted/70 hover:bg-muted transition-colors'
@@ -440,7 +450,11 @@ function EventBar({ event, segment, hrefFor }: EventBarProps) {
             <span className="ml-1 font-normal uppercase tracking-wider text-[9px]">Draft</span>
           )}
         </div>
-        <div className={`mt-0.5 truncate ${medalCell ? 'text-white/80' : 'text-muted-foreground'}`}>
+        <div
+          className={`mt-0.5 truncate ${
+            medalCell ? 'text-white/80' : medalDraft ? 'opacity-80' : 'text-muted-foreground'
+          }`}
+        >
           {time}
           {limitLabel && `${time ? ' · ' : ''}${limitLabel} limit`}
           {event.chapterName && ` · ${event.chapterName}`}

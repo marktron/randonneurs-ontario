@@ -39,7 +39,7 @@ Each row shows the event name, chapter, date, distance, rider count, and status 
 
 Click any row to open the event detail page.
 
-Use the **List / Grid** toggle on the right of the filters to switch between the table and a month-by-month calendar grid (the same grid as the public calendar). Drafts appear in the grid with a dashed outline and a "Draft" label. Clicking a day's event opens its detail page.
+Use the **List / Grid** toggle on the right of the filters to switch between the table and a month-by-month calendar grid (the same grid as the public calendar). Drafts appear in the grid with a dashed outline in their distance colour, a light tint, and a "Draft" label, so they are easy to tell from the solid published events. Clicking a day's event opens its detail page.
 
 On phones, event rows stack into cards — name and type up top with the status badge in the corner, and the date and distance below — instead of scrolling sideways. The digital brevet card page's Controls and Check-ins tables stack the same way, with a labelled line per field or control.
 
