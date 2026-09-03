@@ -69,6 +69,25 @@ export interface RouteData {
   isActive?: boolean
 }
 
+/**
+ * routes.distance_km is an integer column. The admin form is free to accept a
+ * decimal (RWGPS reports e.g. 107.1 km), so normalise to a whole kilometre
+ * here rather than letting Postgres reject it with 22P02. Zero/absent → null.
+ */
+function normaliseDistanceKm(distanceKm: number | null | undefined): number | null {
+  if (!distanceKm || !Number.isFinite(distanceKm)) return null
+  const rounded = Math.round(distanceKm)
+  return rounded > 0 ? rounded : null
+}
+
+/**
+ * Only a unique-key violation is a slug clash; every other failure should
+ * surface the operation's generic message rather than blame the slug.
+ */
+function slugConflictMessage(error: { code?: string }): string | undefined {
+  return error.code === '23505' ? 'A route with this slug already exists' : undefined
+}
+
 export async function createRoute(data: RouteData): Promise<ActionResult> {
   const admin = await requireAdmin()
 
@@ -95,7 +114,7 @@ export async function createRoute(data: RouteData): Promise<ActionResult> {
     name: name.trim(),
     slug,
     chapter_id: chapterId || null,
-    distance_km: distanceKm || null,
+    distance_km: normaliseDistanceKm(distanceKm),
     collection: collection || null,
     description: description || null,
     rwgps_id: rwgpsRefs.rwgpsId,
@@ -110,7 +129,7 @@ export async function createRoute(data: RouteData): Promise<ActionResult> {
   if (error) {
     return handleSupabaseError(
       error,
-      { operation: 'createRoute', userMessage: 'A route with this slug already exists' },
+      { operation: 'createRoute', userMessage: slugConflictMessage(error) },
       'Failed to create route'
     )
   }
@@ -150,7 +169,7 @@ export async function updateRoute(
     updateData.chapter_id = data.chapterId || null
   }
   if (data.distanceKm !== undefined) {
-    updateData.distance_km = data.distanceKm || null
+    updateData.distance_km = normaliseDistanceKm(data.distanceKm)
   }
   if (data.collection !== undefined) {
     updateData.collection = data.collection || null
@@ -183,7 +202,7 @@ export async function updateRoute(
   if (error) {
     return handleSupabaseError(
       error,
-      { operation: 'updateRoute', userMessage: 'A route with this slug already exists' },
+      { operation: 'updateRoute', userMessage: slugConflictMessage(error) },
       'Failed to update route'
     )
   }
@@ -373,7 +392,7 @@ export async function mergeRoutes(data: MergeRoutesData): Promise<MergeResult> {
       name: routeData.name.trim(),
       slug: routeData.slug,
       chapter_id: routeData.chapterId || null,
-      distance_km: routeData.distanceKm || null,
+      distance_km: normaliseDistanceKm(routeData.distanceKm),
       collection: routeData.collection || null,
       description: routeData.description || null,
       rwgps_id: rwgpsRefs.rwgpsId,
@@ -393,7 +412,7 @@ export async function mergeRoutes(data: MergeRoutesData): Promise<MergeResult> {
         updateRouteError,
         {
           operation: 'mergeRoutes.updateRoute',
-          userMessage: 'A route with this slug already exists',
+          userMessage: slugConflictMessage(updateRouteError),
         },
         'Failed to update merged route'
       )

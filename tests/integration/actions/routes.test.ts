@@ -202,6 +202,45 @@ describe('createRoute', () => {
     })
   })
 
+  describe('distance normalisation', () => {
+    // routes.distance_km is an integer column; a decimal from the form used to
+    // reach Postgres unchanged and fail with 22P02 (Sentry JAVASCRIPT-NEXTJS-2R).
+    it('rounds a decimal distance to a whole kilometre before inserting', async () => {
+      mockModule.__mockInsertSuccess()
+
+      const result = await createRoute({
+        name: 'Decimal Route',
+        slug: 'decimal-route',
+        distanceKm: 107.1,
+      })
+
+      expect(result.success).toBe(true)
+      const insertCalls = mockModule.__calls.filter(
+        (c) => c.table === 'routes' && c.method === 'insert'
+      )
+      const insertData = insertCalls[0].args![0] as Record<string, unknown>
+      expect(insertData.distance_km).toBe(107)
+    })
+
+    it('rounds half-kilometres up', async () => {
+      mockModule.__mockInsertSuccess()
+      await createRoute({ name: 'Half Route', slug: 'half-route', distanceKm: 199.5 })
+      const insertCalls = mockModule.__calls.filter(
+        (c) => c.table === 'routes' && c.method === 'insert'
+      )
+      expect((insertCalls[0].args![0] as Record<string, unknown>).distance_km).toBe(200)
+    })
+
+    it('stores null when the distance is absent or zero', async () => {
+      mockModule.__mockInsertSuccess()
+      await createRoute({ name: 'No Distance', slug: 'no-distance', distanceKm: 0 })
+      const insertCalls = mockModule.__calls.filter(
+        (c) => c.table === 'routes' && c.method === 'insert'
+      )
+      expect((insertCalls[0].args![0] as Record<string, unknown>).distance_km).toBeNull()
+    })
+  })
+
   describe('RWGPS URL extraction', () => {
     it('extracts ID from full RWGPS URL', async () => {
       mockModule.__mockInsertSuccess()
@@ -271,6 +310,19 @@ describe('createRoute', () => {
 
       expect(result.success).toBe(false)
       expect(result.error).toBeDefined()
+      expect(result.error).not.toMatch(/slug already exists/)
+    })
+
+    it('does not blame the slug for a non-unique-violation error', async () => {
+      mockModule.__mockInsertError({
+        code: '22P02',
+        message: 'invalid input syntax for type integer: "107.1"',
+      })
+
+      const result = await createRoute({ name: 'Test Route', slug: 'test-route-5' })
+
+      expect(result.success).toBe(false)
+      expect(result.error).toBe('Failed to create route')
     })
 
     it('revalidates the routes cache even when the route has no chapter', async () => {
@@ -329,6 +381,33 @@ describe('updateRoute', () => {
 
     const { revalidatePath } = await import('next/cache')
     expect(revalidatePath).toHaveBeenCalledWith('/admin/routes')
+  })
+
+  it('rounds a decimal distance before updating', async () => {
+    mockModule.__mockRouteFound({ id: 'route-1', chapter_id: 'chapter-1', slug: 'test-route' })
+    mockModule.__mockUpdateSuccess()
+
+    const result = await updateRoute('route-1', { distanceKm: 107.1 })
+
+    expect(result.success).toBe(true)
+    const updateCalls = mockModule.__calls.filter(
+      (c) => c.table === 'routes' && c.method === 'update'
+    )
+    expect((updateCalls[0].args![0] as Record<string, unknown>).distance_km).toBe(107)
+  })
+
+  it('does not blame the slug for a non-unique-violation error on update', async () => {
+    mockModule.__mockRouteFound({ id: 'route-1', chapter_id: 'chapter-1', slug: 'test-route' })
+    // Same resolver shape as an insert error: the next awaited query rejects.
+    mockModule.__mockInsertError({
+      code: '22P02',
+      message: 'invalid input syntax for type integer: "107.1"',
+    })
+
+    const result = await updateRoute('route-1', { distanceKm: 107.1 })
+
+    expect(result.success).toBe(false)
+    expect(result.error).toBe('Failed to update route')
   })
 
   it('handles duplicate slug error on update', async () => {
@@ -565,6 +644,25 @@ describe('mergeRoutes', () => {
     // Verify updates were performed (event reassignment + route update/delete)
     const updateCalls = mockModule.__calls.filter((c) => c.method === 'update')
     expect(updateCalls.length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('rounds a decimal distance on the merged route', async () => {
+    mockModule.__mockUpdateSuccess()
+    mockModule.__mockUpdateSuccess()
+    mockModule.__mockUpdateSuccess()
+
+    const result = await mergeRoutes({
+      targetRouteId: 'route-1',
+      sourceRouteIds: ['route-1', 'route-2'],
+      routeData: { name: 'Merged Route', slug: 'merged-route', distanceKm: 107.1 },
+    })
+
+    expect(result.success).toBe(true)
+    const routeUpdates = mockModule.__calls.filter(
+      (c) => c.table === 'routes' && c.method === 'update'
+    )
+    expect(routeUpdates).toHaveLength(1)
+    expect((routeUpdates[0].args![0] as Record<string, unknown>).distance_km).toBe(107)
   })
 
   it('merging with a collection URL persists rwgps_collection_id and null rwgps_id on the target route', async () => {

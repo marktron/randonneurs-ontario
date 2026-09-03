@@ -89,7 +89,7 @@ export function RouteForm({ chapters, route, mode }: RouteFormProps) {
         name: name.trim(),
         slug,
         chapterId: chapterId || null,
-        distanceKm: distanceKm ? parseFloat(distanceKm) : null,
+        distanceKm: distanceKm ? Math.round(parseFloat(distanceKm)) : null,
         collection: collection || null,
         description: description || null,
         rwgpsUrl: rwgpsUrl || null,
@@ -189,8 +189,8 @@ export function RouteForm({ chapters, route, mode }: RouteFormProps) {
                 value={distanceKm}
                 onChange={(e) => handleDistanceChange(e.target.value)}
                 placeholder="200"
-                min="0"
-                step="0.1"
+                min="1"
+                step="1"
                 disabled={isPending}
               />
             </div>
