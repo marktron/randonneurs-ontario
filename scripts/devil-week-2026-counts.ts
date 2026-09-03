@@ -7,8 +7,6 @@
 //   npx tsx scripts/devil-week-2026-counts.ts --env-file=.env.production.local
 import './load-env'
 import { createClient } from '@supabase/supabase-js'
-import ws from 'ws'
-import type { WebSocketLikeConstructor } from '@supabase/realtime-js'
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL
 const key = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -18,7 +16,6 @@ if (!url || !key) {
 }
 const supabase = createClient(url, key, {
   auth: { autoRefreshToken: false, persistSession: false },
-  realtime: { transport: ws as unknown as WebSocketLikeConstructor },
 })
 
 const SEASON = 2026

@@ -6,7 +6,6 @@
 import { createClient } from '@supabase/supabase-js'
 import { loadEnvConfig } from '@next/env'
 import { unlinkSync } from 'fs'
-import WebSocket from 'ws'
 import { E2E_DATA_FILE, E2E_IDS } from './helpers/test-data'
 
 export default async function globalTeardown() {
@@ -15,10 +14,6 @@ export default async function globalTeardown() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
   if (!supabaseUrl || !serviceKey) return
-
-  if (typeof globalThis.WebSocket === 'undefined') {
-    ;(globalThis as unknown as { WebSocket: typeof WebSocket }).WebSocket = WebSocket
-  }
 
   const supabase = createClient(supabaseUrl, serviceKey, {
     auth: { autoRefreshToken: false, persistSession: false },

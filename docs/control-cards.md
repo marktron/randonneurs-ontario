@@ -426,7 +426,7 @@ Back-page **geometry** is covered by a real browser, because jsdom and happy-dom
 
 - `tests/e2e/control-card-print-layout.spec.ts` — asserts no control row overflows its own box, no two rows overlap, no row extends past the card edge, and that a long unbreakable name does not squeeze the Time/Signature cells. Run with `npm run test:e2e:print-layout`.
 
-That spec uses its own `playwright.config.print-layout.ts` rather than the main Playwright config: `/control-cards/print` is entirely query-param driven and sits outside the `/admin/*` proxy matcher, so it needs no seeded database and should not pull in `tests/e2e/global-setup.ts`. It runs in CI as the `print-layout` job. (The main `tests/e2e` suite is not currently wired into CI, and its `global-setup.ts` cannot run on Node 20 — supabase-js realtime requires a native `WebSocket`.)
+That spec uses its own `playwright.config.print-layout.ts` rather than the main Playwright config: `/control-cards/print` is entirely query-param driven and sits outside the `/admin/*` proxy matcher, so it needs no seeded database and should not pull in `tests/e2e/global-setup.ts`. It runs in CI as the `print-layout` job. The main `tests/e2e` suite is not currently wired into CI.
 
 If you change the print layout, run that spec and also eyeball a real print preview; if you change BRM math or RWGPS parsing, update the unit tests red-then-green.
 

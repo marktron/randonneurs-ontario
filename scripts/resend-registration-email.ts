@@ -30,16 +30,8 @@
 // env at import time, e.g. lib/email/ses.ts which freezes the SES from-address.
 import './load-env'
 
-import WebSocket from 'ws'
 import { createClient } from '@supabase/supabase-js'
 import { formatEventType } from '../lib/utils'
-
-// supabase-js eagerly inits a realtime client whose constructor needs a global
-// WebSocket; Node < 22 has none. This script never uses realtime, but the
-// constructor still runs, so provide a polyfill to satisfy it.
-if (!(globalThis as { WebSocket?: unknown }).WebSocket) {
-  ;(globalThis as { WebSocket?: unknown }).WebSocket = WebSocket
-}
 import { getCurrentSeason } from '../lib/season'
 import {
   formatEventDate,

@@ -36,7 +36,7 @@ New to the project? Start here:
 
 ## Prerequisites
 
-- Node.js 20+
+- Node.js 24
 - npm
 - Supabase CLI (`npx supabase`)
 - Docker (for local Supabase)

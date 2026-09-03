@@ -7,7 +7,6 @@
 import { createClient } from '@supabase/supabase-js'
 import { loadEnvConfig } from '@next/env'
 import { unlinkSync, writeFileSync } from 'fs'
-import WebSocket from 'ws'
 import { E2E_DATA_FILE, E2E_IDS, type E2ETestData } from './helpers/test-data'
 
 const TORONTO_CHAPTER_ID = 'ad83d0b9-4d25-472b-9d3e-5732730d761c'
@@ -59,13 +58,6 @@ export default async function globalSetup() {
     }
     console.warn('[e2e-setup] Missing SUPABASE env vars — skipping seed')
     return
-  }
-
-  // Newer supabase-js initializes Realtime eagerly. Node 20 (still used by
-  // CI) has no native WebSocket, so provide the same test-only transport as
-  // the real-database Vitest setup.
-  if (typeof globalThis.WebSocket === 'undefined') {
-    ;(globalThis as unknown as { WebSocket: typeof WebSocket }).WebSocket = WebSocket
   }
 
   const supabase = createClient(supabaseUrl, serviceKey, {

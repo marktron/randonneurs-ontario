@@ -1,7 +1,6 @@
 import { vi, beforeEach } from 'vitest'
 import { config } from 'dotenv'
 import path from 'path'
-import WebSocket from 'ws'
 import { resetRateLimitStores } from '@/lib/rate-limit'
 
 // Load real env vars from .env.development.local and .env.local
@@ -9,12 +8,6 @@ import { resetRateLimitStores } from '@/lib/rate-limit'
 // and doesn't work in Vitest's ESM worker context
 config({ path: path.resolve(process.cwd(), '.env.development.local'), override: true })
 config({ path: path.resolve(process.cwd(), '.env.local') })
-
-// supabase-js initializes a RealtimeClient which needs globalThis.WebSocket.
-// Node 22 provides it natively; on Node 20 we polyfill via the transitive `ws`.
-if (typeof globalThis.WebSocket === 'undefined') {
-  ;(globalThis as unknown as { WebSocket: typeof WebSocket }).WebSocket = WebSocket
-}
 
 // Never send real email during the real-DB suite. `.env.local` may carry AWS
 // SES credentials plus SES_OVERRIDE_RECIPIENT, which would otherwise route a

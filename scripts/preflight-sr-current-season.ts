@@ -17,8 +17,6 @@
 //   npx tsx scripts/preflight-sr-current-season.ts --env-file=.env.production.local
 import './load-env'
 import { createClient } from '@supabase/supabase-js'
-import ws from 'ws'
-import type { WebSocketLikeConstructor } from '@supabase/realtime-js'
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL
 const key = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -28,8 +26,6 @@ if (!url || !key) {
 }
 const supabase = createClient(url, key, {
   auth: { autoRefreshToken: false, persistSession: false },
-  // Node 20 has no global WebSocket; realtime-js needs one even REST-only.
-  realtime: { transport: ws as unknown as WebSocketLikeConstructor },
 })
 
 const SEASON = new Date().getFullYear()

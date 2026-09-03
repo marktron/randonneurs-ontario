@@ -5,9 +5,8 @@ import { defineConfig, devices } from '@playwright/test'
  *
  * These tests drive /control-cards/print, which is entirely query-param
  * driven — no auth, no seeded database. Running them under the main
- * playwright.config.ts would pull in tests/e2e/global-setup.ts, which boots a
- * Supabase client they have no use for (and which currently cannot run on
- * Node 20, where supabase-js realtime requires a native WebSocket).
+ * playwright.config.ts would pull in tests/e2e/global-setup.ts and boot a
+ * Supabase client they have no use for.
  *
  * Run with: npm run test:e2e:print-layout
  */

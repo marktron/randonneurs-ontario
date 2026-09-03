@@ -1,6 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
 import { loadEnvConfig } from '@next/env'
-import WebSocket from 'ws'
 
 /**
  * Delete every check-in for one registration.
@@ -15,9 +14,6 @@ export async function resetCheckinsForRegistration(registrationId: string): Prom
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
   if (!url || !serviceKey) {
     throw new Error('[e2e] Missing SUPABASE env vars — cannot reset check-ins')
-  }
-  if (typeof globalThis.WebSocket === 'undefined') {
-    ;(globalThis as unknown as { WebSocket: typeof WebSocket }).WebSocket = WebSocket
   }
   const supabase = createClient(url, serviceKey, {
     auth: { autoRefreshToken: false, persistSession: false },
