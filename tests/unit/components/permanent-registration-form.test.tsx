@@ -140,6 +140,27 @@ describe('PermanentRegistrationForm', () => {
       expect(screen.getByText(/select date/i)).toBeInTheDocument()
     })
 
+    it('reopens the date picker on the month of the chosen date', async () => {
+      const user = userEvent.setup()
+      render(<PermanentRegistrationForm routes={mockRoutes} />)
+
+      await user.click(screen.getByRole('button', { name: 'Ride Date' }))
+      await user.click(screen.getByRole('button', { name: 'Go to the Next Month' }))
+      await user.click(screen.getByRole('button', { name: 'Go to the Next Month' }))
+      const dayButtons = screen
+        .getAllByRole('button')
+        .filter((b) => /^\d+$/.test(b.textContent || ''))
+      await user.click(dayButtons[15])
+
+      // Calendar closes on select; reopen it
+      await user.click(screen.getByRole('button', { name: 'Ride Date' }))
+
+      const today = new Date()
+      const expected = new Date(today.getFullYear(), today.getMonth() + 2, 1)
+      const label = expected.toLocaleString('en-US', { month: 'long', year: 'numeric' })
+      expect(await screen.findByRole('grid', { name: label })).toBeInTheDocument()
+    })
+
     it('renders all form fields', () => {
       render(<PermanentRegistrationForm routes={mockRoutes} />)
 

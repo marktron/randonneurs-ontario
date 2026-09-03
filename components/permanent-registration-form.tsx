@@ -266,7 +266,7 @@ export function PermanentRegistrationForm({ routes }: PermanentRegistrationFormP
                     setDatePickerOpen(false)
                   }}
                   disabled={(date) => isBefore(date, minDate)}
-                  defaultMonth={minDate}
+                  defaultMonth={eventDate ?? minDate}
                 />
               </PopoverContent>
             </Popover>

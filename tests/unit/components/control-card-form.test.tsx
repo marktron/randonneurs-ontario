@@ -67,6 +67,29 @@ function generateLink() {
   return screen.getByRole('link', { name: /Generate Control Cards/i })
 }
 
+describe('ControlCardForm date picker', () => {
+  it('reopens on the month of the chosen date rather than today', async () => {
+    const user = userEvent.setup()
+    render(<ControlCardForm routes={[route]} />)
+
+    await user.click(screen.getByRole('button', { name: 'Start Date' }))
+    await user.click(screen.getByRole('button', { name: 'Go to the Next Month' }))
+    await user.click(screen.getByRole('button', { name: 'Go to the Next Month' }))
+    const dayButtons = screen
+      .getAllByRole('button')
+      .filter((b) => /^\d+$/.test(b.textContent || ''))
+    await user.click(dayButtons[15])
+
+    // Calendar closes on select; reopen it
+    await user.click(screen.getByRole('button', { name: 'Start Date' }))
+
+    const today = new Date()
+    const expected = new Date(today.getFullYear(), today.getMonth() + 2, 1)
+    const label = expected.toLocaleString('en-US', { month: 'long', year: 'numeric' })
+    expect(await screen.findByRole('grid', { name: label })).toBeInTheDocument()
+  })
+})
+
 describe('ControlCardForm control-count cap', () => {
   it('shows the cap message once controls exceed 24, even with no route/date picked', async () => {
     const user = userEvent.setup()
