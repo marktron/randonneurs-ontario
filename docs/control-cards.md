@@ -96,6 +96,9 @@ The admin flow looks up the event from the DB, so fewer params are needed:
 - `organizerName`, `organizerPhone`, `organizerEmail`
 - `controls` — JSON-encoded `{ name, distance }[]`
 - `extraBlank` — integer count
+- `riderIds` — optional comma-separated rider IDs for an individual selection
+- `cardLayout=event` — optional whole-event layout for a collection event;
+  omission keeps the one-card-per-leg default
 
 The event name, date, start time, start location, chapter, distance, and RWGPS ID all come from the `events` + `routes` + `chapters` join. Riders come from `registrations` where `status = 'registered'`, including each registration's `management_token` (used to build the result submission QR code).
 
@@ -103,7 +106,10 @@ The event name, date, start time, start location, chapter, distance, and RWGPS I
 
 `CardEvent.routeName` — the big serif headline on the card front and the middle column header on the back — is **`events.name`**, not `routes.name`. A linked route's name carries RideWithGPS-side edits, version suffixes and distance labels, and one route is often shared by several events, so it drifts from the name riders saw when they registered. The linked route is still used for what it genuinely owns: the `rwgps_id` behind the **Route Map** QR code.
 
-The single exception is a **collection event**, where each printed card covers one leg. `eventFor(leg)` in `ControlCardsPrint` substitutes the leg's name and per-leg distance for that card. See `tests/unit/app/admin-control-cards-print-page.test.tsx`.
+For a **collection event**, the default per-leg layout uses `eventFor(leg)` in
+`ControlCardsPrint` to substitute the leg's name and per-leg distance. The
+optional whole-event layout keeps the event name and event distance. See
+`tests/unit/app/admin-control-cards-print-page.test.tsx`.
 
 The public flow (`/control-cards`) has no event record, so it keeps taking `routeName` from the selected route via the query param.
 
@@ -216,10 +222,12 @@ The public form does **not** implement reversal — that flow has no concept of 
 
 Logic lives in `lib/controlPoints.ts`, covered by `tests/unit/lib/controlPoints.test.ts`.
 
-## Collection routes (per-leg cards)
+## Collection routes (whole-event or per-leg cards)
 
-Events whose route has `rwgps_collection_id` (no `rwgps_id`) print **one card
-per rider per collection member route ("leg")** instead of one card per rider.
+Events whose route has `rwgps_collection_id` (no `rwgps_id`) default to **one
+card per rider per collection member route ("leg")**. When the combined list
+fits the 24-control limit, the admin can instead choose **Single card** in the
+Registered Riders section to print one card per rider for the whole event.
 
 - Controls are stored per leg in `event_controls` via the nullable pair
   `leg_rwgps_id` + `leg_name` (set together or not at all —
@@ -249,7 +257,8 @@ true })`) — leg-event printing reads the saved `event_controls` rows, so
     an unsaved import would print nothing. The save is skipped when the event
     is submitted (controls are frozen).
 - The admin print form (`components/admin/control-cards-form.tsx`) shows the
-  card count as riders × legs and applies `MAX_CARD_CONTROLS` **per leg** (the
+  card count as riders × legs in the default layout and applies
+  `MAX_CARD_CONTROLS` **per leg** (the
   error names the offending leg). For leg-grouped controls it **omits the
   `controls` query param entirely** — a full leg control list blows past
   platform request-line limits (~14 KB on Vercel) — and the admin print page
@@ -265,6 +274,14 @@ true })`) — leg-event printing reads the saved `event_controls` rows, so
   Single-route events keep the legacy `controls` param flow unchanged.
   `groupControlsByLeg` / `expandRiderLegCards` (`lib/controlPoints.ts`) drive
   grouping and rider-major expansion.
+- The whole-event choice adds `cardLayout=event` to the print URL; omitting it
+  remains the backwards-compatible per-leg default. The print page flattens
+  the stored rows with `buildWholeEventControlsFromRows`, changes per-leg
+  distances to cumulative event distances, and collapses the duplicate
+  finish/start checkpoint at each leg boundary before enforcing the 24-control
+  limit. Whole-event cards use the event name and distance and include normal
+  BRM opening/closing times. Their Route Map QR points to the RWGPS collection
+  rather than to one member route.
 - Leg card front: leg name as the route name, per-leg distance (the leg's
   last control distance — that day's ride, matching the leg's RWGPS route),
   Route Map QR pointing at the leg's RWGPS route.
@@ -494,3 +511,10 @@ Pre-filled from the logged-in admin's profile (name, phone, email) in the admin 
 ### Extra blank cards
 
 Use the "Extra blank cards" field to print additional unassigned cards for day-of registrations.
+
+### Multi-leg card layout
+
+Multi-leg events default to one card per rider per leg. In the Registered
+Riders section, choose **Single card** to combine all legs onto one card per
+rider. Shared finish/start controls at leg boundaries count once. The option is
+disabled when the combined event has more than 24 controls.

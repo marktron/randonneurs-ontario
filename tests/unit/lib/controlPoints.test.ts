@@ -9,6 +9,7 @@ import {
   groupControlsByLeg,
   expandRiderLegCards,
   buildCardLegsFromRows,
+  buildWholeEventControlsFromRows,
   cumulativeLegDistanceKm,
   titleStatesDistance,
 } from '@/lib/controlPoints'
@@ -443,6 +444,39 @@ describe('buildCardLegsFromRows', () => {
       ])
     ).toBeNull()
     expect(buildCardLegsFromRows([])).toBeNull()
+  })
+})
+
+describe('buildWholeEventControlsFromRows', () => {
+  const rows = [
+    { name: 'Day 1 Start', distanceKm: 0, legRwgpsId: '101', legName: 'Day 1' },
+    { name: 'Overnight control', distanceKm: 205.3, legRwgpsId: '101', legName: 'Day 1' },
+    { name: 'Day 2 Start', distanceKm: 0, legRwgpsId: '102', legName: 'Day 2' },
+    { name: 'Finish', distanceKm: 302.1, legRwgpsId: '102', legName: 'Day 2' },
+  ]
+
+  it('combines leg controls using cumulative event distances', () => {
+    expect(buildWholeEventControlsFromRows(rows)).toEqual([
+      { name: 'Day 1 Start', distanceKm: 0 },
+      { name: 'Overnight control', distanceKm: 205.3 },
+      { name: 'Finish', distanceKm: 507.4 },
+    ])
+  })
+
+  it('collapses the duplicated finish/start checkpoint at a leg boundary', () => {
+    const controls = buildWholeEventControlsFromRows(rows)!
+    expect(controls).toHaveLength(3)
+    expect(controls.filter((control) => control.distanceKm === 205.3)).toHaveLength(1)
+  })
+
+  it('returns null for untagged, mixed, or empty rows', () => {
+    expect(
+      buildWholeEventControlsFromRows([
+        { name: 'Start', distanceKm: 0, legRwgpsId: null, legName: null },
+      ])
+    ).toBeNull()
+    expect(buildWholeEventControlsFromRows([rows[0], { ...rows[1], legName: null }])).toBeNull()
+    expect(buildWholeEventControlsFromRows([])).toBeNull()
   })
 })
 

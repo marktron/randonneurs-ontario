@@ -11,8 +11,13 @@ import {
   formatCardDate,
   createTorontoDate,
 } from '@/lib/brmTimes'
-import { buildCardLegsFromRows, type ControlRowForLegs } from '@/lib/controlPoints'
+import {
+  buildCardLegsFromRows,
+  buildWholeEventControlsFromRows,
+  type ControlRowForLegs,
+} from '@/lib/controlPoints'
 import { isDigitalCardEventType, normalizeBrevetCardType } from '@/lib/brevet-card'
+import { buildRwgpsCollectionUrl } from '@/lib/rwgps'
 import { SITE_URL } from '@/lib/site-url'
 import type {
   ControlPoint,
@@ -41,7 +46,7 @@ async function getEventDetails(eventId: string): Promise<EventForControlCards | 
       distance_km,
       event_type,
       chapters (id, name),
-      routes (id, name, rwgps_id)
+      routes (id, name, rwgps_id, rwgps_collection_id)
     `
     )
     .eq('id', eventId)
@@ -106,6 +111,7 @@ interface PrintPageProps {
     controls?: string
     extraBlank?: string
     riderIds?: string
+    cardLayout?: string
   }>
 }
 
@@ -152,34 +158,43 @@ export default async function PrintPage({ params, searchParams }: PrintPageProps
   // Get nominal distance for BRM calculations
   const nominalDistance = getNominalDistance(event.distance_km)
 
-  // Collection events: one CardLeg per stored leg, built from the DB rows
-  // (the form omits the `controls` param for leg events — the saved
-  // event_controls rows are the source of truth at print time). Leg cards
-  // never print open/close times (the overall event limit governs), and
-  // distances are per-leg (each leg restarts at 0). Null unless every
-  // stored row is leg-tagged — single-route events fall through to the
-  // unchanged query-param flow below.
-  const legs: CardLeg[] | undefined = buildCardLegsFromRows(storedControlRows) ?? undefined
+  // Collection events are built from saved DB rows because their full control
+  // lists are too large for the print URL. They default to CardLegs; the
+  // explicit whole-event layout flattens them to cumulative controls instead.
+  const storedLegs: CardLeg[] | undefined = buildCardLegsFromRows(storedControlRows) ?? undefined
+  const wholeEventControlRows =
+    search.cardLayout === 'event'
+      ? (buildWholeEventControlsFromRows(storedControlRows) ?? undefined)
+      : undefined
+  const legs = wholeEventControlRows ? undefined : storedLegs
 
-  // Single-route events: unchanged BRM open/close computation.
-  const controls: ControlPoint[] = legs
-    ? []
-    : controlInputs.map((input, index) => {
-        const { openAt, closeAt } = computeControlTimes(
-          startDate,
-          input.distance,
-          nominalDistance,
-          event.distance_km
-        )
+  // Single-route and whole-event collection cards use cumulative distances
+  // and the normal BRM open/close computation. Per-leg cards omit windows.
+  const controls: ControlPoint[] =
+    storedLegs && !wholeEventControlRows
+      ? []
+      : (
+          wholeEventControlRows ??
+          controlInputs.map((input) => ({
+            name: input.name,
+            distanceKm: input.distance,
+          }))
+        ).map((input, index) => {
+          const { openAt, closeAt } = computeControlTimes(
+            startDate,
+            input.distanceKm,
+            nominalDistance,
+            event.distance_km
+          )
 
-        return {
-          id: `control-${index}`,
-          name: input.name,
-          distance: input.distance,
-          openTime: formatControlTime(openAt),
-          closeTime: formatControlTime(closeAt),
-        }
-      })
+          return {
+            id: `control-${index}`,
+            name: input.name,
+            distance: input.distanceKm,
+            openTime: formatControlTime(openAt),
+            closeTime: formatControlTime(closeAt),
+          }
+        })
 
   // Calculate total allowable time
   const { closeMin } = computeControlTimes(
@@ -256,7 +271,9 @@ export default async function PrintPage({ params, searchParams }: PrintPageProps
 
   const rwgpsUrl = event.routes?.rwgps_id
     ? `https://ridewithgps.com/routes/${event.routes.rwgps_id}`
-    : undefined
+    : event.routes?.rwgps_collection_id
+      ? buildRwgpsCollectionUrl(event.routes.rwgps_collection_id)
+      : undefined
 
   return (
     <ControlCardsPrint

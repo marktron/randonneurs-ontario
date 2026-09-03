@@ -147,6 +147,45 @@ describe('Admin control-cards print page — card identity', () => {
     // The event name must not leak onto a leg card's headline.
     expect(routeNames).not.toContain('Ottawa 200 Brevet')
   })
+
+  it('prints one whole-event card per rider when cardLayout=event', async () => {
+    eventRow = {
+      ...eventRow,
+      distance_km: 507.4,
+      routes: {
+        id: 'r-1',
+        name: 'Test collection',
+        rwgps_id: null,
+        rwgps_collection_id: '999',
+      },
+    }
+    controlRows = [
+      { name: 'A Start', distance_km: 0, leg_rwgps_id: '101', leg_name: 'Leg 1: Gravenhurst' },
+      {
+        name: 'Overnight control',
+        distance_km: 205.3,
+        leg_rwgps_id: '101',
+        leg_name: 'Leg 1: Gravenhurst',
+      },
+      { name: 'B Start', distance_km: 0, leg_rwgps_id: '102', leg_name: 'Leg 2: Haliburton' },
+      { name: 'B Finish', distance_km: 302.1, leg_rwgps_id: '102', leg_name: 'Leg 2: Haliburton' },
+    ]
+
+    const { container } = render(await renderPage({ cardLayout: 'event' }))
+
+    const routeNames = Array.from(container.querySelectorAll('.route-name')).map(
+      (el) => el.textContent
+    )
+    expect(routeNames).toEqual(['Ottawa 200 Brevet', 'Ottawa 200 Brevet'])
+    expect(container.textContent).not.toContain('Leg 1: Gravenhurst')
+    expect(container.textContent).not.toContain('Leg 2: Haliburton')
+    // The shared boundary appears once on each of the two default blank cards.
+    expect(container.querySelectorAll('.control-name')).toHaveLength(6)
+    expect(container.textContent).toContain('507.4 km')
+    expect(
+      container.querySelector('[data-qr="https://ridewithgps.com/collections/999"]')
+    ).toBeTruthy()
+  })
 })
 
 describe('Admin control-cards print page — digital card riders', () => {

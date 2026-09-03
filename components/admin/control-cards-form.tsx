@@ -24,6 +24,7 @@ import {
   matchImportedControls,
   controlsInSync,
   cumulativeLegDistanceKm,
+  buildWholeEventControlsFromRows,
   groupControlsByLeg,
   MAX_CARD_CONTROLS,
 } from '@/lib/controlPoints'
@@ -208,11 +209,25 @@ export function ControlCardsForm({
   // generatePrintUrl below, which depends on it.
   const legGroups = groupControlsByLeg(controls)
   const legCount = legGroups?.length ?? 1
+  const [cardLayout, setCardLayout] = useState<'event' | 'legs'>('legs')
+  const wholeEventControls = legGroups
+    ? buildWholeEventControlsFromRows(
+        controls.map((control) => ({
+          name: control.name,
+          distanceKm: parseFloat(control.distance || '0'),
+          legRwgpsId: control.legRwgpsId,
+          legName: control.legName,
+        }))
+      )
+    : null
+  const wholeEventControlCount = wholeEventControls?.length ?? controls.length
+  const singleCardEligible = wholeEventControlCount <= MAX_CARD_CONTROLS
+  const cardsPerRider = legGroups && cardLayout === 'legs' ? legCount : 1
 
   // The print page falls back to 2 blank cards when nothing else would print.
   const baseCardCount =
     chosenRiderCount + extraBlankCards > 0 ? chosenRiderCount + extraBlankCards : 2
-  const cardCount = baseCardCount * legCount
+  const cardCount = baseCardCount * cardsPerRider
 
   const addControl = useCallback(() => {
     // Insert before the last control (finish). Hand-added rows carry no
@@ -485,6 +500,12 @@ export function ControlCardsForm({
       params.set('riderIds', ids.join(','))
     }
 
+    // Omission preserves the established one-card-per-leg default for old
+    // links and direct visits to the print page.
+    if (legGroups && cardLayout === 'event') {
+      params.set('cardLayout', 'event')
+    }
+
     return `/admin/events/${event.id}/control-cards/print?${params.toString()}`
   }, [
     event.id,
@@ -497,6 +518,7 @@ export function ControlCardsForm({
     selectionMode,
     selectedRiderIds,
     riders,
+    cardLayout,
   ])
 
   // Every row must have a name and a parseable distance before it can be saved.
@@ -539,7 +561,11 @@ export function ControlCardsForm({
   }, [saveRows, controls])
 
   const oversizedLeg = legGroups?.find((g) => g.controls.length > MAX_CARD_CONTROLS) ?? null
-  const tooManyControls = legGroups ? oversizedLeg !== null : controls.length > MAX_CARD_CONTROLS
+  const tooManyControls = legGroups
+    ? cardLayout === 'event'
+      ? !singleCardEligible
+      : oversizedLeg !== null
+    : controls.length > MAX_CARD_CONTROLS
 
   const isFormValid =
     organizerName &&
@@ -819,7 +845,7 @@ export function ControlCardsForm({
                     <span>
                       These controls differ from the saved digital-card controls.
                       {legGroups &&
-                        ' Printed leg cards use the saved controls — update them before generating.'}
+                        ' Printed collection cards use the saved controls — update them before generating.'}
                     </span>
                   </div>
                   <div className="flex gap-2">
@@ -949,6 +975,36 @@ export function ControlCardsForm({
             </div>
           )}
 
+          {legGroups && legCount > 1 && (
+            <div className="space-y-2 border-t pt-4">
+              <div className="flex flex-wrap items-center gap-3">
+                <Label id="card-layout-label" className="text-sm whitespace-nowrap">
+                  Cards per rider:
+                </Label>
+                <ToggleGroup
+                  type="single"
+                  value={cardLayout}
+                  onValueChange={(value) => {
+                    if (value) setCardLayout(value as 'event' | 'legs')
+                  }}
+                  variant="outline"
+                  size="sm"
+                  aria-labelledby="card-layout-label"
+                >
+                  <ToggleGroupItem value="event" disabled={!singleCardEligible}>
+                    Single card
+                  </ToggleGroupItem>
+                  <ToggleGroupItem value="legs">One per leg</ToggleGroupItem>
+                </ToggleGroup>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                {singleCardEligible
+                  ? `A single card combines ${wholeEventControlCount} controls across ${legCount} legs.`
+                  : `Single card unavailable: ${wholeEventControlCount} controls exceed the ${MAX_CARD_CONTROLS}-control limit.`}
+              </p>
+            </div>
+          )}
+
           <div className="flex items-center gap-3 pt-2 border-t">
             <Label htmlFor="extraBlank" className="text-sm whitespace-nowrap">
               Extra blank cards:
@@ -983,9 +1039,11 @@ export function ControlCardsForm({
         </Button>
         {tooManyControls && (
           <p className="text-sm text-destructive self-center">
-            {oversizedLeg
-              ? `${oversizedLeg.legName} has ${oversizedLeg.controls.length} controls — printed cards support at most ${MAX_CARD_CONTROLS} per leg. Merge or remove controls.`
-              : `${controls.length} controls — printed cards support at most ${MAX_CARD_CONTROLS}. Merge or remove controls.`}
+            {legGroups && cardLayout === 'event'
+              ? `${wholeEventControlCount} controls — a single event card supports at most ${MAX_CARD_CONTROLS}. Choose one card per leg.`
+              : oversizedLeg
+                ? `${oversizedLeg.legName} has ${oversizedLeg.controls.length} controls — printed cards support at most ${MAX_CARD_CONTROLS} per leg. Merge or remove controls.`
+                : `${controls.length} controls — printed cards support at most ${MAX_CARD_CONTROLS}. Merge or remove controls.`}
           </p>
         )}
         {!isFormValid && !tooManyControls && (

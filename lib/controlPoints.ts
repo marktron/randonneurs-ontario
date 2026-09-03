@@ -236,6 +236,38 @@ export function cumulativeLegDistanceKm(
 }
 
 /**
+ * Flatten leg-tagged controls into one whole-event control list. Distances
+ * become cumulative across legs, and the adjacent finish/start pair at each
+ * leg boundary is collapsed because it represents the same checkpoint on a
+ * single card. The earlier leg's finish label is retained.
+ *
+ * Returns null under the same all-or-nothing tagging rule as the other leg
+ * helpers so untagged and mixed lists keep their single-route behavior.
+ */
+export function buildWholeEventControlsFromRows(
+  rows: ControlRowForLegs[]
+): ControlNameDistance[] | null {
+  const cumulative = cumulativeLegDistanceKm(rows)
+  if (!cumulative) return null
+
+  const controls: ControlNameDistance[] = []
+  rows.forEach((row, index) => {
+    const previousRow = rows[index - 1]
+    const previousControl = controls[controls.length - 1]
+    const isSharedLegBoundary =
+      previousRow != null &&
+      previousRow.legRwgpsId !== row.legRwgpsId &&
+      previousControl?.distanceKm === cumulative[index]
+
+    if (!isSharedLegBoundary) {
+      controls.push({ name: row.name, distanceKm: cumulative[index] })
+    }
+  })
+
+  return controls
+}
+
+/**
  * Build the printed-card legs from the stored event_controls rows — the DB
  * is the source of truth at print time (leg control lists are too large to
  * round-trip through the print URL). Rows must be position-ordered; legs

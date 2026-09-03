@@ -559,6 +559,26 @@ describe('ControlCardsForm collection legs', () => {
     expect(screen.getByRole('link', { name: 'Generate 6 Control Cards' })).toBeTruthy()
   })
 
+  it('offers one card per leg by default and a single-card option when all controls fit', async () => {
+    const user = userEvent.setup()
+    renderForm({ savedControls: legSaved })
+
+    expect(screen.getByRole('radio', { name: 'One per leg' }).getAttribute('data-state')).toBe('on')
+    expect(screen.getByRole('radio', { name: 'Single card' })).not.toBeDisabled()
+    expect(new URLSearchParams(generateHref().split('?')[1]).get('cardLayout')).toBeNull()
+
+    await user.click(screen.getByRole('radio', { name: 'Single card' }))
+
+    expect(screen.getByRole('link', { name: 'Generate 3 Control Cards' })).toBeTruthy()
+    expect(new URLSearchParams(generateHref().split('?')[1]).get('cardLayout')).toBe('event')
+  })
+
+  it('counts a shared leg-boundary finish/start as one control on a single card', () => {
+    renderForm({ savedControls: legSaved })
+
+    expect(screen.getByText(/A single card combines 3 controls across 2 legs/i)).toBeTruthy()
+  })
+
   it('omits the controls param entirely for leg-grouped controls (print reads saved rows)', () => {
     // Encoding every leg-tagged control into the URL blows past platform
     // request-line limits (~14 KB on Vercel); the admin print page reads the
@@ -570,7 +590,7 @@ describe('ControlCardsForm collection legs', () => {
     expect(screen.getByRole('link', { name: 'Generate 6 Control Cards' })).toBeTruthy()
   })
 
-  it('notes that printed leg cards use the saved controls when leg rows drift', async () => {
+  it('notes that printed collection cards use the saved controls when leg rows drift', async () => {
     // With the DB as the print-time source of truth, unsaved edits do not
     // affect leg printing — the drift warning must say so.
     const user = userEvent.setup()
@@ -581,7 +601,7 @@ describe('ControlCardsForm collection legs', () => {
     expect(
       screen.getByText(/These controls differ from the saved digital-card controls/i)
     ).toBeTruthy()
-    expect(screen.getByText(/Printed leg cards use the saved controls/i)).toBeTruthy()
+    expect(screen.getByText(/Printed collection cards use the saved controls/i)).toBeTruthy()
   })
 
   it('does not show the leg-print note for single-route drift', async () => {
@@ -593,7 +613,7 @@ describe('ControlCardsForm collection legs', () => {
     expect(
       screen.getByText(/These controls differ from the saved digital-card controls/i)
     ).toBeTruthy()
-    expect(screen.queryByText(/Printed leg cards use the saved controls/i)).toBeNull()
+    expect(screen.queryByText(/Printed collection cards use the saved controls/i)).toBeNull()
   })
 
   it('keeps the single-route controls param shape unchanged (no leg keys)', () => {
@@ -652,6 +672,10 @@ describe('ControlCardsForm collection legs', () => {
     )
     renderForm({ savedControls: legs })
     expect(screen.queryByText(/printed cards support at most/)).toBeNull()
+    expect(screen.getByRole('radio', { name: 'Single card' })).toBeDisabled()
+    expect(
+      screen.getByText(/Single card unavailable: 39 controls exceed the 24-control limit/i)
+    ).toBeTruthy()
     // 3 riders × 2 legs = 6
     expect(screen.getByRole('link', { name: 'Generate 6 Control Cards' })).toBeTruthy()
   })
