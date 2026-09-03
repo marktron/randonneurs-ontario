@@ -152,6 +152,18 @@ describe('EventForm', () => {
       expect(screen.getByRole('button', { name: /save changes/i })).toBeInTheDocument()
     })
 
+    it('opens the date picker on the month of the saved event date', async () => {
+      const user = userEvent.setup()
+      const { container } = render(
+        <EventForm chapters={mockChapters} routes={mockRoutes} event={mockEvent} mode="edit" />
+      )
+
+      await user.click(container.querySelector('#eventDate') as HTMLButtonElement)
+
+      // The calendar grid should open on May 2025, not on today's month
+      expect(await screen.findByRole('grid', { name: /may 2025/i })).toBeInTheDocument()
+    })
+
     // Note: Full form submission in edit mode requires all fields to be valid,
     // including date/chapter selected via Radix UI components.
     // Complete edit flow is covered by E2E tests.

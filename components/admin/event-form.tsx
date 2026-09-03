@@ -504,6 +504,7 @@ export function EventForm({
                     <Calendar
                       mode="single"
                       selected={eventDate}
+                      defaultMonth={eventDate}
                       onSelect={(date) => {
                         setEventDate(date)
                         setDatePickerOpen(false)
