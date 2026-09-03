@@ -295,9 +295,11 @@ true })`) — leg-event printing reads the saved `event_controls` rows, so
   `CardBack` skips the times block). Layout tiers apply per leg.
   Stored `event_controls.distance_km` restarts at 0 each leg (mirroring the
   RWGPS member routes); `cumulativeLegDistanceKm` (`lib/controlPoints.ts`)
-  offsets each leg's controls by the running sum of the previous legs'
-  largest control distance at display time. Legs chain end-to-start at the
-  shared overnight control, so the offsets are exact at leg boundaries.
+  offsets each restarted leg's controls by the previous overall distance at
+  display time. Legacy or manually-entered rows that are already cumulative
+  are detected when a new leg continues at or beyond the previous maximum and
+  pass through unchanged. Legs normally chain end-to-start at a shared
+  overnight control, so the offsets are exact at leg boundaries.
 - The DB is the source of truth at print time: cards keep printing from
   stored leg rows even if the route later loses its collection reference.
 - Collection events can import controls directly on the Control Cards form

@@ -202,12 +202,12 @@ export interface ControlRowForLegs {
 
 /**
  * Cumulative event distances for position-ordered, leg-tagged control rows.
- * Stored leg distances restart at 0 per leg (they mirror the RWGPS member
- * routes), but a brevet card reads as one continuous ride — so each leg's
- * controls are offset by the running sum of the previous legs' largest
- * control distance. Legs chain end-to-start at a shared overnight control
- * (leg N's finish is leg N+1's 0 km start), so the largest distance of leg N
- * is exactly the event distance at which leg N+1 begins.
+ * New collection imports store distances that restart per leg, but some
+ * older/manually-entered collection controls already contain cumulative
+ * event distances. At each leg boundary, a distance below the previous
+ * overall maximum signals a restart and receives that maximum as its offset;
+ * a distance at or beyond the maximum is already cumulative and passes
+ * through unchanged.
  *
  * Returns the offset distances aligned to `rows` (rounded to one decimal, the
  * stored precision), or null unless every row is leg-tagged — single-route
@@ -222,15 +222,17 @@ export function cumulativeLegDistanceKm(
   const out: number[] = []
   let offset = 0
   let currentLegId: string | null = null
-  let currentLegMax = 0
+  let currentLegOverallMax = 0
   for (const row of rows) {
     if (row.legRwgpsId !== currentLegId) {
-      if (currentLegId !== null) offset += currentLegMax
+      offset =
+        currentLegId !== null && row.distanceKm < currentLegOverallMax ? currentLegOverallMax : 0
       currentLegId = row.legRwgpsId!
-      currentLegMax = 0
+      currentLegOverallMax = 0
     }
-    currentLegMax = Math.max(currentLegMax, row.distanceKm)
-    out.push(Math.round((offset + row.distanceKm) * 10) / 10)
+    const overallDistance = Math.round((offset + row.distanceKm) * 10) / 10
+    currentLegOverallMax = Math.max(currentLegOverallMax, overallDistance)
+    out.push(overallDistance)
   }
   return out
 }

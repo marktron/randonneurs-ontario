@@ -350,6 +350,23 @@ describe('cumulativeLegDistanceKm', () => {
     expect(cumulativeLegDistanceKm(rows)).toEqual([0, 100.4, 205.3, 205.3, 302.2, 302.2, 452.2])
   })
 
+  it('does not add another offset when stored leg distances are already cumulative', () => {
+    const rows = [
+      { distanceKm: 0, legRwgpsId: '101', legName: 'Day 1' },
+      { distanceKm: 355.7, legRwgpsId: '101', legName: 'Day 1' },
+      { distanceKm: 396.2, legRwgpsId: '102', legName: 'Day 2' },
+      { distanceKm: 713.9, legRwgpsId: '102', legName: 'Day 2' },
+      { distanceKm: 777, legRwgpsId: '103', legName: 'Day 3' },
+      { distanceKm: 973, legRwgpsId: '103', legName: 'Day 3' },
+      { distanceKm: 1050.2, legRwgpsId: '104', legName: 'Day 4' },
+      { distanceKm: 1214.4, legRwgpsId: '104', legName: 'Day 4' },
+    ]
+
+    expect(cumulativeLegDistanceKm(rows)).toEqual([
+      0, 355.7, 396.2, 713.9, 777, 973, 1050.2, 1214.4,
+    ])
+  })
+
   it('rounds float sums to one decimal', () => {
     const rows = [
       { distanceKm: 400.2, legRwgpsId: '101', legName: 'Day 1' },

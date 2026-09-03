@@ -135,7 +135,8 @@ which would cascade-delete rider check-ins on the deleted rows. Matching
 never crosses legs, since stored per-leg distances restart at 0 and two legs
 can share a control name. Printing expands riders × legs (rider-major) with
 cumulative event distances on the controls (`cumulativeLegDistanceKm` offsets
-each leg by the previous legs' totals at display time) and no open/close
+each restarted leg by the previous overall total at display time, while
+preserving legacy rows that are already cumulative) and no open/close
 times; the digital card shows one leg-sectioned card with the same
 cumulative distances. See `docs/control-cards.md` → "Collection routes
 (per-leg cards)".
