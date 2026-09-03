@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, cleanup } from '@testing-library/react'
 import { CalendarGridView } from '@/components/calendar-grid-view'
 import type { Event } from '@/components/event-card'
 
@@ -220,7 +220,11 @@ describe('cancelled events', () => {
   it('announces the cancelled state in the link label', () => {
     render(<CalendarGridView events={[cancelled]} />)
     const labels = screen.getAllByRole('link').map((l) => l.getAttribute('aria-label'))
-    expect(labels).toContain('Spring 300, 300 km, Thursday, April 16, 6:00am, Ottawa, cancelled')
+    // A 300 starting at 06:00 finishes at 02:00 the next day, so the label also
+    // carries the two-day span.
+    expect(labels).toContain(
+      'Spring 300, 300 km, Thursday, April 16, 6:00am, 2 days (20h limit), Ottawa, cancelled'
+    )
   })
 })
 
@@ -229,5 +233,152 @@ describe('scheduled events', () => {
     render(<CalendarGridView events={[sampleEvents[0]]} />)
     const labels = screen.getAllByRole('link').map((l) => l.getAttribute('aria-label'))
     expect(labels).toContain('Spring 100, 100 km, Wednesday, April 15, 8:00am, Toronto')
+  })
+})
+
+describe('multi-day bars', () => {
+  const six: Event = {
+    slug: 'saturday-600',
+    date: '2026-05-16', // Saturday
+    name: 'Saturday 600',
+    type: 'Brevet',
+    distance: '600',
+    startLocation: 'Park',
+    startTime: '06:00',
+    status: 'scheduled',
+    chapterName: 'Toronto',
+  }
+
+  /** Desktop bar wrappers expose their grid placement as data attributes. */
+  function desktopBars(container: HTMLElement, name: string) {
+    return Array.from(container.querySelectorAll('[data-col-start]')).filter((el) =>
+      el.textContent?.includes(name)
+    ) as HTMLElement[]
+  }
+
+  function placement(bar: HTMLElement) {
+    return { start: bar.dataset.colStart, span: bar.dataset.colSpan }
+  }
+
+  it('renders a 600 once, as a bar spanning two columns', () => {
+    const { container } = render(<CalendarGridView events={[six]} />)
+
+    const bars = desktopBars(container, 'Saturday 600')
+    expect(bars).toHaveLength(1)
+    // Saturday is column 6 (1-indexed), and the ride runs into Sunday.
+    expect(placement(bars[0])).toEqual({ start: '6', span: '2' })
+  })
+
+  it('keeps a same-day 200 as a single-column chip', () => {
+    const { container } = render(<CalendarGridView events={[sampleEvents[1]]} />)
+
+    const bars = desktopBars(container, 'Spring 200')
+    expect(bars).toHaveLength(1)
+    expect(placement(bars[0]).span).toBe('1')
+  })
+
+  it('keeps desktop bars in day order in the DOM so keyboard focus moves by date', () => {
+    // A Thursday 1200 occupies lane 0 through Sunday, pushing Saturday rides to
+    // lane 1 — but Tab should still visit Thursday, then Saturday, then Sunday.
+    const thursday1200: Event = {
+      ...six,
+      slug: 'thu',
+      name: 'Thursday 1200',
+      date: '2026-05-14',
+      distance: '1200',
+      startTime: '04:00',
+    }
+    const saturday200: Event = {
+      ...six,
+      slug: 'sat',
+      name: 'Saturday 200',
+      date: '2026-05-16',
+      distance: '200',
+    }
+    const sunday200: Event = {
+      ...six,
+      slug: 'sun',
+      name: 'Sunday 200',
+      date: '2026-05-17',
+      distance: '200',
+    }
+    const { container } = render(
+      <CalendarGridView events={[saturday200, sunday200, thursday1200]} />
+    )
+
+    const order = Array.from(container.querySelectorAll('[data-col-start] a')).map((el) =>
+      el.getAttribute('href')
+    )
+    expect(order).toEqual(['/register/thu', '/register/sat', '/register/sun'])
+  })
+
+  it('shows the ACP limit on the bar for multi-day rides only', () => {
+    render(<CalendarGridView events={[six]} />)
+    expect(screen.getAllByText(/40h limit/).length).toBeGreaterThan(0)
+
+    cleanup()
+    render(<CalendarGridView events={[sampleEvents[1]]} />) // 200 km, same day
+    expect(screen.queryByText(/limit/)).toBeNull()
+  })
+
+  it('announces the span in the link label', () => {
+    render(<CalendarGridView events={[six]} />)
+    const labels = screen.getAllByRole('link').map((l) => l.getAttribute('aria-label'))
+    expect(labels).toContain(
+      'Saturday 600, 600 km, Saturday, May 16, 6:00am, 2 days (40h limit), Toronto'
+    )
+  })
+
+  it('emits the following month for a ride that continues into it', () => {
+    const endOfMay: Event = { ...six, slug: 'may-31-600', date: '2026-05-31' } // Sunday
+    render(<CalendarGridView events={[endOfMay]} />)
+
+    expect(screen.getByText('May 2026')).toBeInTheDocument()
+    expect(screen.getByText('June 2026')).toBeInTheDocument()
+  })
+
+  it('splits the bar at the week boundary with continuation flags', () => {
+    const endOfMay: Event = { ...six, slug: 'may-31-600', date: '2026-05-31' } // Sunday
+    const { container } = render(<CalendarGridView events={[endOfMay]} />)
+
+    const bars = desktopBars(container, 'Saturday 600')
+    // One segment on Sunday May 31, one on Monday June 1 (a separate month grid).
+    expect(bars).toHaveLength(2)
+    expect(placement(bars[0])).toEqual({ start: '7', span: '1' })
+    expect(placement(bars[1])).toEqual({ start: '1', span: '1' })
+    // The continuation segment flattens its left corner and carries the cue.
+    expect(bars[1].querySelector('.rounded-l-none')).not.toBeNull()
+    expect(bars[0].querySelector('.rounded-r-none')).not.toBeNull()
+  })
+
+  it('shows a mobile dot on every day a ride spans', () => {
+    const { container } = render(<CalendarGridView events={[six]} />)
+
+    const mobile = container.querySelector('.sm\\:hidden') as HTMLElement
+    const counts = Array.from(mobile.querySelectorAll('.sr-only')).map((el) => el.textContent)
+    // Saturday May 16 and Sunday May 17 both report an event.
+    expect(counts).toEqual(['1 event', '1 event'])
+  })
+
+  it('lists a continued-in ride once, on the first week of the next month', () => {
+    const endOfMay: Event = { ...six, slug: 'may-31-600', date: '2026-05-31' }
+    const { container } = render(<CalendarGridView events={[endOfMay]} />)
+
+    // May and June are separate sections, each with its own mobile block.
+    const rows = Array.from(container.querySelectorAll('.sm\\:hidden')).flatMap((mobile) =>
+      Array.from(mobile.querySelectorAll('a')).map((a) => a.textContent)
+    )
+    // Once in May (its start week) and once in June (the continuation).
+    expect(rows).toHaveLength(2)
+    expect(rows[0]).toContain('Sun 31')
+    expect(rows[1]).toContain('Mon 1')
+  })
+
+  it('does not claim an ARIA grid it cannot honour', () => {
+    // Spanning bars break the 7-cells-per-row model and there is no arrow-key
+    // navigation, so the month is a plain heading + links with full date labels.
+    render(<CalendarGridView events={[six]} />)
+    expect(screen.queryByRole('grid')).not.toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'May 2026' })).toBeInTheDocument()
   })
 })
