@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { computeEventStart } from '@/lib/brevet-card'
+import { computeControlWindow, computeEventStart } from '@/lib/brevet-card'
 
 type FromCall = {
   table: string
@@ -868,9 +868,10 @@ describe('checkInAtControl input validation', () => {
     tables.registrations = { singleResponse: { data: makeRegistration(), error: null } }
     tables.event_controls = {
       singleResponse: { data: makeControlRow(), error: null },
-      // The max-position query (run in parallel with the control lookup)
-      // fails — same fallback the old sequential query used: not final.
-      maybeSingleResponse: { data: null, error: { message: 'boom' } },
+      // The event control-list query (run in parallel with the control
+      // lookup, and the source of the max position) fails — same fallback
+      // the old sequential query used: not final.
+      listResponse: { data: null, error: { message: 'boom' } },
     }
     const nowIso = new Date().toISOString()
     tables.control_checkins = {
@@ -900,15 +901,55 @@ describe('checkInAtControl input validation', () => {
 })
 
 describe('checkInAtControl leg-control flags', () => {
-  it('returns no late flag for a check-in at a leg-tagged control', async () => {
-    // Same restarted-distance trap as the card read: a 0 km leg-2 control on
-    // an event that started 3 hours ago would read "late" if the window were
-    // computed; leg controls have no window.
+  // Event started 3 hours ago. Leg 2's stored distances restart at 0 km, so
+  // the window comes from the cumulative event distance: leg 1 tops out at
+  // 40 km, making the leg-2 start control's window a 40 km one (closes 2h40m
+  // in) and the next leg-2 control a 90 km one (opens 2h39m in, closes 6h in).
+  function seedLegEvent() {
     const past = torontoNowParts(-3 * 60 * 60 * 1000)
     const reg = makeRegistration()
     reg.events.event_date = past.date
     reg.events.start_time = past.time
     tables.registrations = { singleResponse: { data: reg, error: null } }
+    return computeEventStart(past.date, past.time)
+  }
+
+  const legControlList = [
+    { id: 'ctrl-l1a', position: 1, distance_km: 0, leg_rwgps_id: '101', leg_name: 'Leg 1: Base' },
+    { id: 'ctrl-l1b', position: 2, distance_km: 40, leg_rwgps_id: '101', leg_name: 'Leg 1: Base' },
+    {
+      id: 'ctrl-l2',
+      position: 3,
+      distance_km: 0,
+      leg_rwgps_id: '102',
+      leg_name: 'Leg 2: Haliburton',
+    },
+    {
+      id: 'ctrl-l2b',
+      position: 4,
+      distance_km: 50,
+      leg_rwgps_id: '102',
+      leg_name: 'Leg 2: Haliburton',
+    },
+  ]
+
+  function seedLegCheckin(controlId: string, at: string) {
+    tables.control_checkins = {
+      insertResponse: {
+        data: {
+          control_id: controlId,
+          checked_in_at: at,
+          received_at: at,
+          method: 'gps',
+          distance_to_control_m: 0,
+        },
+        error: null,
+      },
+    }
+  }
+
+  it('flags a leg-tagged check-in late against its cumulative-distance window', async () => {
+    seedLegEvent()
     tables.event_controls = {
       singleResponse: {
         data: {
@@ -920,24 +961,44 @@ describe('checkInAtControl leg-control flags', () => {
         },
         error: null,
       },
-      maybeSingleResponse: { data: { position: 5 }, error: null },
+      listResponse: { data: legControlList, error: null },
     }
     const nowIso = new Date().toISOString()
-    tables.control_checkins = {
-      insertResponse: {
-        data: {
-          control_id: 'ctrl-l2',
-          checked_in_at: nowIso,
-          received_at: nowIso,
-          method: 'gps',
-          distance_to_control_m: 0,
-        },
-        error: null,
-      },
-    }
+    seedLegCheckin('ctrl-l2', nowIso)
 
     const result = await checkInAtControl(TOKEN, {
       controlId: 'ctrl-l2',
+      checkedInAt: nowIso,
+      lat: 43.65,
+      lng: -79.38,
+      accuracyM: 10,
+    })
+
+    expect(result.success).toBe(true)
+    expect(result.data!.checkin.flags.late).toBe(true)
+    expect(result.data!.checkin.flags.early).toBe(false)
+  })
+
+  it('leaves a leg-tagged check-in inside its cumulative-distance window unflagged', async () => {
+    seedLegEvent()
+    tables.event_controls = {
+      singleResponse: {
+        data: {
+          ...makeControlRow(),
+          id: 'ctrl-l2b',
+          position: 4,
+          distance_km: 50,
+          leg_name: 'Leg 2: Haliburton',
+        },
+        error: null,
+      },
+      listResponse: { data: legControlList, error: null },
+    }
+    const nowIso = new Date().toISOString()
+    seedLegCheckin('ctrl-l2b', nowIso)
+
+    const result = await checkInAtControl(TOKEN, {
+      controlId: 'ctrl-l2b',
       checkedInAt: nowIso,
       lat: 43.65,
       lng: -79.38,
@@ -960,7 +1021,7 @@ describe('checkInAtControl first-control start-time clamp', () => {
     tables.registrations = { singleResponse: { data: reg, error: null } }
     tables.event_controls = {
       singleResponse: { data: makeControlRow(), error: null }, // position 1, 0 km
-      maybeSingleResponse: { data: { position: 3 }, error: null },
+      listResponse: { data: [{ ...makeControlRow(), position: 3 }], error: null },
     }
     const nowIso = new Date().toISOString()
     tables.control_checkins = {
@@ -1003,7 +1064,7 @@ describe('checkInAtControl first-control start-time clamp', () => {
         data: { ...makeControlRow(), id: 'ctrl-2', position: 2, distance_km: 100 },
         error: null,
       },
-      maybeSingleResponse: { data: { position: 3 }, error: null },
+      listResponse: { data: [{ ...makeControlRow(), position: 3 }], error: null },
     }
     const tap = new Date().toISOString()
     tables.control_checkins = {
@@ -1040,7 +1101,7 @@ describe('checkInAtControl first-control start-time clamp', () => {
     tables.registrations = { singleResponse: { data: reg, error: null } }
     tables.event_controls = {
       singleResponse: { data: makeControlRow(), error: null },
-      maybeSingleResponse: { data: { position: 3 }, error: null },
+      listResponse: { data: [{ ...makeControlRow(), position: 3 }], error: null },
     }
     const nowIso = new Date().toISOString()
     tables.control_checkins = {
@@ -1200,19 +1261,51 @@ describe('getBrevetCardByToken', () => {
     expect(card!.controls[0].overallDistanceKm).toBeNull()
   })
 
-  it('suppresses the control window for leg-tagged controls (opensAt/closesAt null)', async () => {
+  it('computes leg-tagged control windows from the cumulative event distance', async () => {
     seedHappyTables()
     tables.event_controls = {
       listResponse: {
-        data: [{ ...makeControlRow(), position: 1, notes: null, leg_name: 'Leg 1: Gravenhurst' }],
+        data: [
+          {
+            ...makeControlRow(),
+            id: 'c1',
+            position: 1,
+            notes: null,
+            distance_km: 0,
+            leg_rwgps_id: '101',
+            leg_name: 'Day 1',
+          },
+          {
+            ...makeControlRow(),
+            id: 'c2',
+            position: 2,
+            notes: null,
+            distance_km: 100.4,
+            leg_rwgps_id: '101',
+            leg_name: 'Day 1',
+          },
+          {
+            ...makeControlRow(),
+            id: 'c3',
+            position: 3,
+            notes: null,
+            distance_km: 40,
+            leg_rwgps_id: '102',
+            leg_name: 'Day 2',
+          },
+        ],
         error: null,
       },
     }
 
     const card = await getBrevetCardByToken(TOKEN)
 
-    expect(card!.controls[0].opensAt).toBeNull()
-    expect(card!.controls[0].closesAt).toBeNull()
+    // The event runs on one clock from the start, so the leg-2 control's
+    // window is the 140.4 km one, not the 40 km one its stored distance
+    // would give.
+    const expected = computeControlWindow(eventStart, 140.4, 200)
+    expect(card!.controls[2].opensAt).toBe(expected.openAt.toISOString())
+    expect(card!.controls[2].closesAt).toBe(expected.closeAt.toISOString())
   })
 
   it('keeps the computed window for single-route controls', async () => {
@@ -1224,11 +1317,11 @@ describe('getBrevetCardByToken', () => {
     expect(card!.controls[0].closesAt).toEqual(expect.any(String))
   })
 
-  it('derives no late flag for a leg-tagged control tap that the restarted distance would call late', async () => {
-    // Event started 3 hours ago. A leg-2 control's per-leg distance restarts
-    // at 0 km, so the (wrong) window computed from the event start would
-    // close 1 hour in — a tap now would read "late". Leg controls have no
-    // window: the overall event limit governs.
+  it('derives late/early flags for leg-tagged taps from the cumulative window', async () => {
+    // Event started 3 hours ago. Leg 1 tops out at 40 km, so leg 2's 0 km
+    // start control carries a 40 km window (closed 2h40m in — the tap is
+    // late) and its 50 km control a 90 km one (open 2h39m in, closing at
+    // 6h — the tap is inside it).
     const past = torontoNowParts(-3 * 60 * 60 * 1000)
     const reg = makeRegistration()
     reg.events.event_date = past.date
@@ -1240,10 +1333,38 @@ describe('getBrevetCardByToken', () => {
         data: [
           {
             ...makeControlRow(),
+            id: 'ctrl-l1a',
+            position: 1,
+            notes: null,
+            distance_km: 0,
+            leg_rwgps_id: '101',
+            leg_name: 'Leg 1: Base',
+          },
+          {
+            ...makeControlRow(),
+            id: 'ctrl-l1b',
+            position: 2,
+            notes: null,
+            distance_km: 40,
+            leg_rwgps_id: '101',
+            leg_name: 'Leg 1: Base',
+          },
+          {
+            ...makeControlRow(),
             id: 'ctrl-l2',
             position: 3,
-            distance_km: 0,
             notes: null,
+            distance_km: 0,
+            leg_rwgps_id: '102',
+            leg_name: 'Leg 2: Haliburton',
+          },
+          {
+            ...makeControlRow(),
+            id: 'ctrl-l2b',
+            position: 4,
+            notes: null,
+            distance_km: 50,
+            leg_rwgps_id: '102',
             leg_name: 'Leg 2: Haliburton',
           },
         ],
@@ -1260,6 +1381,13 @@ describe('getBrevetCardByToken', () => {
             method: 'gps',
             distance_to_control_m: 0,
           },
+          {
+            control_id: 'ctrl-l2b',
+            checked_in_at: nowIso,
+            received_at: nowIso,
+            method: 'gps',
+            distance_to_control_m: 0,
+          },
         ],
         error: null,
       },
@@ -1267,9 +1395,9 @@ describe('getBrevetCardByToken', () => {
 
     const card = await getBrevetCardByToken(TOKEN)
 
-    expect(card!.checkins).toHaveLength(1)
-    expect(card!.checkins[0].flags.late).toBe(false)
-    expect(card!.checkins[0].flags.early).toBe(false)
+    expect(card!.checkins).toHaveLength(2)
+    expect(card!.checkins[0].flags).toMatchObject({ late: true, early: false })
+    expect(card!.checkins[1].flags).toMatchObject({ late: false, early: false })
   })
 
   it('still derives the late flag for the same tap on a single-route control (non-vacuous)', async () => {

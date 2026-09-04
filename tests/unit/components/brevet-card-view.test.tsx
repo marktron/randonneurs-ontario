@@ -11,6 +11,7 @@ import userEvent from '@testing-library/user-event'
 import { BrevetCard } from '@/components/brevet-card-view'
 import type { BrevetCardData } from '@/lib/actions/brevet-card'
 import { checkInAtControl, undoCheckin } from '@/lib/actions/brevet-card'
+import { formatControlTime } from '@/lib/brmTimes'
 
 vi.mock('@/lib/actions/brevet-card', () => ({
   checkInAtControl: vi.fn(),
@@ -2002,8 +2003,8 @@ describe('BrevetCard proactive location check', () => {
 
 function makeLegSectionData(): BrevetCardData {
   const data = makeData()
-  // Leg-tagged controls carry no window (per-leg distances restart at 0;
-  // the overall event limit governs) — the payload sends nulls.
+  // Section headings only; these fixtures leave the windows out to keep the
+  // heading assertions independent of the times line.
   data.controls = [
     {
       id: 'l1-c1',
@@ -2075,7 +2076,24 @@ describe('BrevetCard leg section headings', () => {
 })
 
 describe('BrevetCard leg-control windows', () => {
-  it('renders no open/close times line for leg-tagged controls (null window)', () => {
+  it('renders the open/close times line for leg-tagged controls', () => {
+    const data = makeLegSectionData()
+    // Windows come from the cumulative event distance, so legs-2+ controls
+    // carry one just like single-route controls do.
+    const opensAt = new Date(Date.now() - 30 * 60 * 1000)
+    const closesAt = new Date(Date.now() + 3 * 60 * 60 * 1000)
+    data.controls = data.controls.map((control) => ({
+      ...control,
+      opensAt: opensAt.toISOString(),
+      closesAt: closesAt.toISOString(),
+    }))
+    render(<BrevetCard token="tok" initialData={data} />)
+
+    const label = `${formatControlTime(opensAt)} – ${formatControlTime(closesAt)}`
+    expect(screen.getAllByText(label)).toHaveLength(data.controls.length)
+  })
+
+  it('renders no times line when a control carries no window', () => {
     render(<BrevetCard token="tok" initialData={makeLegSectionData()} />)
     // The times line is the only " – " range on the card.
     expect(screen.queryAllByText(/–/)).toHaveLength(0)

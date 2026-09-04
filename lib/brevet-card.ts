@@ -172,10 +172,10 @@ export interface CheckinForFlags {
 }
 
 /**
- * `window` is null for leg-tagged controls (collection events): per-leg
- * distances restart at 0, so a window computed from the event start would be
- * wrong for legs 2+. No window means early/late are never derived — the
- * overall event limit governs, same as the printed leg cards.
+ * A null `window` means early/late are never derived. Callers pass one for
+ * every control today (collection-event windows come from the cumulative
+ * event distance); the null case stays for controls whose window cannot be
+ * resolved.
  */
 export function deriveCheckinFlags(
   checkin: CheckinForFlags,

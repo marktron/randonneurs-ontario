@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { ChevronLeft } from 'lucide-react'
 import { formatControlTime } from '@/lib/brmTimes'
 import { computeEventStart, computeControlWindow, isDigitalCardEventType } from '@/lib/brevet-card'
-import { cumulativeLegDistanceKm } from '@/lib/controlPoints'
+import { controlWindowDistancesKm, cumulativeLegDistanceKm } from '@/lib/controlPoints'
 import { getEventControlsForAdmin } from '@/lib/actions/event-controls'
 import { getChapterOrganizerDefaults, type OrganizerContact } from '@/lib/actions/event-organizer'
 import { getEventCheckinsForAdmin } from '@/lib/actions/control-checkins'
@@ -72,21 +72,16 @@ export default async function BrevetCardAdminPage({ params }: BrevetCardAdminPag
   // Collection events store per-leg distances; the grid mirrors the rider's
   // card, which displays cumulative event distances. Null for single-route.
   const cumulativeDistances = cumulativeLegDistanceKm(controls)
+  // Windows run on one clock from the event start, so leg-tagged controls
+  // get theirs from the cumulative event distance too.
+  const windowDistances = controlWindowDistancesKm(controls)
   const gridControls: GridControl[] = controls.map((control, i) => {
-    // Leg-tagged controls have no per-control window (stored per-leg
-    // distances restart at 0; the overall event limit governs) — omit the
-    // label.
-    const window =
-      control.legName !== null
-        ? null
-        : computeControlWindow(eventStart, control.distanceKm, typedEvent.distance_km)
+    const window = computeControlWindow(eventStart, windowDistances[i], typedEvent.distance_km)
     return {
       id: control.id,
       name: control.name,
       distanceKm: cumulativeDistances?.[i] ?? control.distanceKm,
-      windowLabel: window
-        ? `${formatControlTime(window.openAt)} – ${formatControlTime(window.closeAt)}`
-        : null,
+      windowLabel: `${formatControlTime(window.openAt)} – ${formatControlTime(window.closeAt)}`,
       lat: control.lat,
       lng: control.lng,
       radiusM: control.radiusM,

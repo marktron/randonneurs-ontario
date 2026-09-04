@@ -14,7 +14,7 @@ import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { createActionResult, handleActionError, handleSupabaseError, logError } from '@/lib/errors'
 import { isRateLimited } from '@/lib/rate-limit'
 import { haversineMeters } from '@/lib/geo'
-import { cumulativeLegDistanceKm } from '@/lib/controlPoints'
+import { controlWindowDistancesKm, cumulativeLegDistanceKm } from '@/lib/controlPoints'
 import {
   resolveRiderStart,
   computeControlWindow,
@@ -100,8 +100,9 @@ export interface CardControl {
   legName: string | null
   /**
    * ISO timestamps, computed from distance + event start (never stored).
-   * Null for leg-tagged controls: per-leg distances restart at 0, so no
-   * per-control window exists — the overall event limit governs.
+   * On collection events the distance is the control's cumulative event
+   * distance, since stored per-leg distances restart at 0 while the event
+   * runs on a single clock from the start.
    */
   opensAt: string | null
   closesAt: string | null
@@ -275,13 +276,16 @@ export async function getBrevetCardByToken(token: string): Promise<BrevetCardDat
   // Collection events store per-leg distances (restarting at 0 each leg);
   // legs-2+ controls also display the cumulative event distance. Null for
   // single-route events, whose stored distances are already cumulative.
-  const cumulativeDistances = cumulativeLegDistanceKm(
-    controls.map((c) => ({
-      distanceKm: c.distance_km,
-      legRwgpsId: c.leg_rwgps_id,
-      legName: c.leg_name,
-    }))
-  )
+  const controlDistanceRows = controls.map((c) => ({
+    distanceKm: c.distance_km,
+    legRwgpsId: c.leg_rwgps_id,
+    legName: c.leg_name,
+  }))
+  const cumulativeDistances = cumulativeLegDistanceKm(controlDistanceRows)
+  // ACP windows run on one clock from the event start, so they come from the
+  // cumulative event distance on collection events.
+  const windowDistances = controlWindowDistancesKm(controlDistanceRows)
+  const windowDistanceById = new Map(controls.map((c, i) => [c.id, windowDistances[i]]))
   const firstLegRwgpsId = controls[0]?.leg_rwgps_id ?? null
 
   return {
@@ -313,13 +317,7 @@ export async function getBrevetCardByToken(token: string): Promise<BrevetCardDat
       lastName: reg.riders.last_name,
     },
     controls: controls.map((control, i) => {
-      // Leg-tagged controls carry no window — their stored distances restart
-      // at 0 per leg, so a window from the event start would be wrong for
-      // legs 2+.
-      const window =
-        control.leg_name !== null
-          ? null
-          : computeControlWindow(eventStart, control.distance_km, event.distance_km)
+      const window = computeControlWindow(eventStart, windowDistances[i], event.distance_km)
       return {
         id: control.id,
         position: control.position,
@@ -334,18 +332,19 @@ export async function getBrevetCardByToken(token: string): Promise<BrevetCardDat
         radiusM: control.radius_m,
         notes: control.notes,
         legName: control.leg_name,
-        opensAt: window === null ? null : window.openAt.toISOString(),
-        closesAt: window === null ? null : window.closeAt.toISOString(),
+        opensAt: window.openAt.toISOString(),
+        closesAt: window.closeAt.toISOString(),
       }
     }),
     checkins: checkins.flatMap((checkin) => {
       const control = controlById.get(checkin.control_id)
       // A check-in for a deleted/replaced control has nothing to render.
       if (!control) return []
-      const window =
-        control.leg_name !== null
-          ? null
-          : computeControlWindow(eventStart, control.distance_km, event.distance_km)
+      const window = computeControlWindow(
+        eventStart,
+        windowDistanceById.get(control.id) ?? control.distance_km,
+        event.distance_km
+      )
       return [
         {
           controlId: checkin.control_id,
@@ -591,12 +590,13 @@ export async function checkInAtControl(token: string, input: CheckinInput): Prom
     }
 
     // Verify the control belongs to this registration's event, and — in the
-    // same round trip — find the event's highest control position, so the
-    // finish flow below doesn't need a second sequential event_controls
-    // query to know whether this was the final control.
+    // same round trip — read the event's position-ordered control list. It
+    // supplies the highest control position (so the finish flow below needs
+    // no second sequential query) and the distances the ACP window is
+    // computed from (cumulative across legs on collection events).
     const [
       { data: controlRow, error: controlError },
-      { data: maxPositionRow, error: maxPositionError },
+      { data: eventControlRows, error: eventControlsError },
     ] = await Promise.all([
       supabase
         .from('event_controls')
@@ -605,11 +605,9 @@ export async function checkInAtControl(token: string, input: CheckinInput): Prom
         .single(),
       supabase
         .from('event_controls')
-        .select('position')
+        .select('id, position, distance_km, leg_rwgps_id, leg_name')
         .eq('event_id', event.id)
-        .order('position', { ascending: false })
-        .limit(1)
-        .maybeSingle(),
+        .order('position', { ascending: true }),
     ])
 
     if (controlError || !controlRow) {
@@ -632,9 +630,21 @@ export async function checkInAtControl(token: string, input: CheckinInput): Prom
       return { success: false, error: 'Control not found' }
     }
 
+    const eventControls = (eventControlRows || []) as {
+      id: string
+      position: number
+      distance_km: number
+      leg_rwgps_id: string | null
+      leg_name: string | null
+    }[]
+    const maxPositionRow =
+      eventControls.length > 0
+        ? { position: Math.max(...eventControls.map((c) => c.position)) }
+        : null
+
     const isFinalControl = deriveIsFinalControl(
-      maxPositionRow as { position: number } | null,
-      maxPositionError,
+      maxPositionRow,
+      eventControlsError,
       control.position,
       { operation: 'checkInAtControl.maxPosition', context: { eventId: event.id } }
     )
@@ -809,12 +819,22 @@ export async function checkInAtControl(token: string, input: CheckinInput): Prom
       return { success: false, error: 'Failed to record check-in', retryable: true }
     }
 
-    // Null for leg-tagged controls — no per-control window exists (see
-    // CardControl.opensAt), so the returned flags never read early/late.
-    const window =
-      control.leg_name !== null
-        ? null
-        : computeControlWindow(eventStart, control.distance_km, event.distance_km)
+    // Collection events store per-leg distances that restart at 0, but the
+    // event runs on one clock from the start, so the window comes from the
+    // control's cumulative event distance (see CardControl.opensAt).
+    const windowDistances = controlWindowDistancesKm(
+      eventControls.map((c) => ({
+        distanceKm: c.distance_km,
+        legRwgpsId: c.leg_rwgps_id,
+        legName: c.leg_name,
+      }))
+    )
+    const windowDistanceById = new Map(eventControls.map((c, i) => [c.id, windowDistances[i]]))
+    const window = computeControlWindow(
+      eventStart,
+      windowDistanceById.get(control.id) ?? control.distance_km,
+      event.distance_km
+    )
 
     // Final-control check-ins pre-fill the rider's result and send the
     // "add your track" email. Never blocks the check-in (module never throws).
