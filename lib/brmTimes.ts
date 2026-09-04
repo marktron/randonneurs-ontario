@@ -66,18 +66,23 @@ const OPEN_SEGMENTS = [
 
 /**
  * Closing time in hours for distance d (km):
- *  - 0–600 km: 15 km/h
+ *  - 0 km (start): 1 hour
+ *  - 1–60 km: 1 hour + d / 20 km/h
+ *  - 60–600 km: 15 km/h (continuous with the previous band: 4h at 60 km)
  *  - 600–1000 km: 11.428 km/h
  *  - 1000–1300 km: 13.333 km/h
  */
 export function closeHours(d: number): number {
   if (d <= 0) return 1 // 1 hour for start control (km 0)
 
-  let h = 0
-  let remaining = d
+  // 1–60 km at 1h + 20 km/h
+  if (d <= 60) return 1 + d / 20
 
-  // 0–600 at 15 km/h
-  const span1 = Math.min(remaining, 600)
+  let h = 4 // 1 + 60/20, matching the 60 km at 15 km/h band boundary
+  let remaining = d - 60
+
+  // 60–600 at 15 km/h
+  const span1 = Math.min(remaining, 540)
   h += span1 / 15
   remaining -= span1
   if (remaining <= 0) return h

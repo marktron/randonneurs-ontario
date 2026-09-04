@@ -123,6 +123,18 @@ It is deliberately strict, matching only a **trailing number equal to the distan
 
 This is the only piece of real domain logic. It implements ACP/BRM control opening and closing rules and should be changed with care — the tests in `tests/unit/lib/brmTimes.test.ts` encode the expected behavior.
 
+### Official ACP rule
+
+> Overall time limits vary for each brevet according to the distance. These are: (in hours and minutes, HH:MM) 13:30 for 200 KM, 20:00 for 300 KM, 27:00 for 400 KM, 40:00 for 600 KM, and 75:00 for 1000 KM. Riders must reach the finish of each of these distances inside the respective time limit; intermediate control times are an advisory to help keep the rider inside the final time limit.
+>
+> Additionally, riders are invited to arrive at each checkpoint between the opening and closing time for the checkpoint and calculated as follows:
+>
+> Opening: 34 km/h (km 1 to 200); 32 km/h (km 201 to 400); 30 km/h (km 401 to 600); 28 km/h (km 601 to 1000); commercial rounded by the minute.
+>
+> Closing: 1 hour + 20 km/h (km 1 to 60); 15 km/h (km 61 to 600); 11.428 km/h (km 601 to 1000); commercial rounded by the minute.
+
+`lib/brmTimes.ts` implements this rule plus the ACP 1200/1300 km extension the official text above doesn't cover: opening continues at 26 km/h (km 1000–1300), closing continues at 13.333 km/h above 1000 km, and the overall time limits extend to 90h (1200 km) and 108h 20m (1300 km).
+
 ### Nominal distances
 
 `getNominalDistance(distance)` rounds up to one of: `200 | 300 | 400 | 600 | 1000 | 1200 | 1300`. This is what `NominalDistance` means everywhere else — the official BRM category, not the measured route length.
@@ -141,10 +153,11 @@ Piecewise speed by segment (km/h):
 
 ### Closing times
 
-- 0 km (start): always 1 hour.
-- 0–600 km: 15 km/h.
+- 0 km (start): 1 hour.
+- 1–60 km: 1 hour + distance at 20 km/h.
+- 60–600 km: 15 km/h (continuous with the previous band: 4h at 60 km).
 - 600–1000 km: 11.428 km/h.
-- 1000–1300 km: 13.333 km/h.
+- 1000–1300 km: 13.333 km/h (ACP 1200/1300 extension).
 
 ### Finish clamping
 

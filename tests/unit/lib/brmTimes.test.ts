@@ -18,8 +18,21 @@ describe('closeHours', () => {
     expect(closeHours(-10)).toBe(1)
   })
 
+  // 1–60 km band at 1h + 20 km/h
+  it('calculates closing time for 20 km (1 + 20/20 = 2h)', () => {
+    expect(closeHours(20)).toBeCloseTo(2, 2)
+  })
+
+  it('calculates closing time for 30 km (1 + 30/20 = 2.5h)', () => {
+    expect(closeHours(30)).toBeCloseTo(2.5, 2)
+  })
+
+  it('calculates closing time for 45 km (1 + 45/20 = 3.25h)', () => {
+    expect(closeHours(45)).toBeCloseTo(3.25, 2)
+  })
+
   // 0–600 km band at 15 km/h
-  it('calculates closing time for 60 km (60/15 = 4h)', () => {
+  it('calculates closing time for 60 km (1 + 60/20 = 4h)', () => {
     expect(closeHours(60)).toBeCloseTo(4, 2)
   })
 
@@ -215,6 +228,11 @@ describe('computeControlTimes', () => {
     const { closeAt, closeMin } = computeControlTimes(start, 200, 300)
     const expected = new Date(start.getTime() + closeMin * 60 * 1000)
     expect(closeAt.getTime()).toBe(expected.getTime())
+  })
+
+  it('closes a 30 km control on a 200 km event at 150 minutes (1h + 30/20)', () => {
+    const { closeMin } = computeControlTimes(start, 30, 200)
+    expect(closeMin).toBe(150)
   })
 })
 
