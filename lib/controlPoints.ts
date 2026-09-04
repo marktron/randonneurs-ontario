@@ -238,6 +238,19 @@ export function cumulativeLegDistanceKm(
 }
 
 /**
+ * The distance a control's ACP open/close window is computed from. Fully
+ * leg-tagged collection lists get their cumulative event distance (stored
+ * per-leg distances restart at 0, but the event runs on one clock from the
+ * event start); every other list keeps its stored distance, which is already
+ * cumulative. Rows must be position-ordered.
+ */
+export function controlWindowDistancesKm(
+  rows: { distanceKm: number; legRwgpsId?: string | null; legName?: string | null }[]
+): number[] {
+  return cumulativeLegDistanceKm(rows) ?? rows.map((row) => row.distanceKm)
+}
+
+/**
  * Flatten leg-tagged controls into one whole-event control list. Distances
  * become cumulative across legs, and the adjacent finish/start pair at each
  * leg boundary is collapsed because it represents the same checkpoint on a
@@ -276,8 +289,10 @@ export function buildWholeEventControlsFromRows(
  * come out in first-appearance order, each leg's distance is its largest
  * stored control distance (that day's ride, matching the leg's RWGPS route),
  * control distances stay per-leg with legs-2+ controls also carrying the
- * cumulative event distance (see `cumulativeLegDistanceKm`), and leg
- * controls never carry open/close times — the overall event limit governs.
+ * cumulative event distance (see `cumulativeLegDistanceKm`), and printed leg
+ * controls carry no open/close times — the overall event limit governs on
+ * paper. (The digital card computes windows from the cumulative distance;
+ * see `controlWindowDistancesKm`.)
  *
  * Returns null unless every row is leg-tagged (mirrors `groupControlsByLeg`):
  * a mixed or untagged list is a single-route card.

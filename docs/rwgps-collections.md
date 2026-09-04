@@ -138,7 +138,8 @@ cumulative event distances on the controls (`cumulativeLegDistanceKm` offsets
 each restarted leg by the previous overall total at display time, while
 preserving legacy rows that are already cumulative) and no open/close
 times; the digital card shows one leg-sectioned card with the same
-cumulative distances. See `docs/control-cards.md` → "Collection routes
+cumulative distances, and computes each control's open/close window from
+that cumulative distance. See `docs/control-cards.md` → "Collection routes
 (per-leg cards)".
 
 ## Deployment requirement

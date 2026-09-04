@@ -11,6 +11,7 @@ import {
   buildCardLegsFromRows,
   buildWholeEventControlsFromRows,
   cumulativeLegDistanceKm,
+  controlWindowDistancesKm,
   titleStatesDistance,
 } from '@/lib/controlPoints'
 
@@ -387,6 +388,31 @@ describe('cumulativeLegDistanceKm', () => {
       ])
     ).toBeNull()
     expect(cumulativeLegDistanceKm([])).toBeNull()
+  })
+})
+
+describe('controlWindowDistancesKm', () => {
+  it('returns cumulative event distances for a fully leg-tagged list', () => {
+    const rows = [
+      { distanceKm: 0, legRwgpsId: '101', legName: 'Day 1' },
+      { distanceKm: 205.3, legRwgpsId: '101', legName: 'Day 1' },
+      { distanceKm: 0, legRwgpsId: '102', legName: 'Day 2' },
+      { distanceKm: 96.9, legRwgpsId: '102', legName: 'Day 2' },
+    ]
+    expect(controlWindowDistancesKm(rows)).toEqual([0, 205.3, 205.3, 302.2])
+  })
+
+  it('returns the stored distances for an untagged single-route list', () => {
+    const rows = [
+      { distanceKm: 0, legRwgpsId: null, legName: null },
+      { distanceKm: 103.4, legRwgpsId: null, legName: null },
+      { distanceKm: 200, legRwgpsId: null, legName: null },
+    ]
+    expect(controlWindowDistancesKm(rows)).toEqual([0, 103.4, 200])
+  })
+
+  it('returns an empty list for no rows', () => {
+    expect(controlWindowDistancesKm([])).toEqual([])
   })
 })
 

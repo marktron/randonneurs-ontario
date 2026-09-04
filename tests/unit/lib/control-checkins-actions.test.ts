@@ -282,18 +282,30 @@ describe('getEventCheckinsForAdmin', () => {
     expect(checkinCall?.selectColumns).not.toContain(', location_context')
   })
 
-  it('derives no early/late flags for check-ins at leg-tagged controls', async () => {
-    // Per-leg distances restart at 0, so the window computed from the event
-    // start is wrong for legs 2+. Leg controls carry no window — no false
-    // "late" badges in the organizer grid.
+  it('derives early/late flags at leg-tagged controls from the cumulative event distance', async () => {
+    // Per-leg distances restart at 0, so the leg-2 control's window comes
+    // from its cumulative event distance: leg 1 tops out at 100 km, making
+    // this a 150 km control that opens 4h25m after the 08:00 start. A 10:00
+    // check-in is early against that window; against the stored 50 km it
+    // would not be.
     setupEvent()
     tables.event_controls = {
       selectResponse: {
         data: [
           {
+            id: 'control-0',
+            position: 1,
+            distance_km: 100,
+            radius_m: 500,
+            leg_rwgps_id: '101',
+            leg_name: 'Leg 1: Base',
+          },
+          {
             id: 'control-1',
+            position: 2,
             distance_km: 50,
             radius_m: 500,
+            leg_rwgps_id: '102',
             leg_name: 'Leg 2: Haliburton',
           },
         ],
@@ -322,9 +334,9 @@ describe('getEventCheckinsForAdmin', () => {
             id: 'chk-1',
             control_id: 'control-1',
             registration_id: 'reg-1',
-            // Two days after the event start — far beyond any control window.
-            checked_in_at: '2026-07-13T13:00:00.000Z',
-            received_at: '2026-07-13T13:00:00.000Z',
+            // 10:00 local, two hours into the ride.
+            checked_in_at: '2026-07-11T14:00:00.000Z',
+            received_at: '2026-07-11T14:00:00.000Z',
             method: 'gps',
             lat: 43.6532,
             lng: -79.3832,
@@ -341,8 +353,26 @@ describe('getEventCheckinsForAdmin', () => {
 
     expect(result.success).toBe(true)
     const checkin = result.data![0].checkins[0]
+    expect(checkin.flags.early).toBe(true)
     expect(checkin.flags.late).toBe(false)
-    expect(checkin.flags.early).toBe(false)
+  })
+
+  it('reads the controls position-ordered with the leg columns the windows need', async () => {
+    setupEvent()
+    tables.event_controls = {
+      selectResponse: {
+        data: [{ id: 'control-1', position: 1, distance_km: 50, radius_m: 500, leg_name: null }],
+        error: null,
+      },
+    }
+    tables.registrations = { selectResponse: { data: [], error: null } }
+
+    await getEventCheckinsForAdmin('event-1')
+
+    const controlsCall = fromCalls.find((call) => call.table === 'event_controls')
+    expect(controlsCall!.selectColumns).toContain('position')
+    expect(controlsCall!.selectColumns).toContain('leg_rwgps_id')
+    expect(controlsCall!.ops).toContain('order')
   })
 
   it('still derives the late flag for the same check-in at an untagged control (non-vacuous)', async () => {

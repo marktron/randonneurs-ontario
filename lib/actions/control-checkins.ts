@@ -15,6 +15,7 @@ import {
   deriveCheckinFlags,
   type CheckinFlags,
 } from '@/lib/brevet-card'
+import { controlWindowDistancesKm } from '@/lib/controlPoints'
 import { assertEventMutable } from '@/lib/actions/event-mutability'
 import { handleActionError, handleSupabaseError, createActionResult } from '@/lib/errors'
 import type { ActionResult } from '@/types/actions'
@@ -95,8 +96,9 @@ export async function getEventCheckinsForAdmin(
     ] = await Promise.all([
       supabase
         .from('event_controls')
-        .select('id, distance_km, radius_m, leg_name')
-        .eq('event_id', eventId),
+        .select('id, position, distance_km, radius_m, leg_rwgps_id, leg_name')
+        .eq('event_id', eventId)
+        .order('position', { ascending: true }),
       supabase
         .from('registrations')
         .select(
@@ -124,8 +126,10 @@ export async function getEventCheckinsForAdmin(
 
     const controls = (controlRows || []) as {
       id: string
+      position: number
       distance_km: number
       radius_m: number
+      leg_rwgps_id: string | null
       leg_name: string | null
     }[]
     const registrations = (registrationRows || []) as {
@@ -193,6 +197,17 @@ export async function getEventCheckinsForAdmin(
       registrations.map((reg) => [reg.id, resolveRiderStart(typedEvent, reg)])
     )
     const controlById = new Map(controls.map((c) => [c.id, c]))
+    // Collection events store per-leg distances that restart at 0, but the
+    // event runs on one clock from the start: windows come from each
+    // control's cumulative event distance (position-ordered above).
+    const windowDistances = controlWindowDistancesKm(
+      controls.map((c) => ({
+        distanceKm: c.distance_km,
+        legRwgpsId: c.leg_rwgps_id,
+        legName: c.leg_name,
+      }))
+    )
+    const windowDistanceById = new Map(controls.map((c, i) => [c.id, windowDistances[i]]))
     const byRegistration = new Map<string, AdminCheckin[]>()
 
     for (const checkin of checkins) {
@@ -204,12 +219,11 @@ export async function getEventCheckinsForAdmin(
       // here too.
       const riderStart = startByRegistration.get(checkin.registration_id)
       if (!riderStart) continue
-      // Leg-tagged controls have no per-control window (per-leg distances
-      // restart at 0) — early/late flags are never derived for them.
-      const window =
-        control.leg_name !== null
-          ? null
-          : computeControlWindow(riderStart, control.distance_km, typedEvent.distance_km)
+      const window = computeControlWindow(
+        riderStart,
+        windowDistanceById.get(control.id) ?? control.distance_km,
+        typedEvent.distance_km
+      )
       const entry: AdminCheckin = {
         id: checkin.id,
         controlId: checkin.control_id,

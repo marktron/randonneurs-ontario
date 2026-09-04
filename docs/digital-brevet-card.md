@@ -201,9 +201,10 @@ Design notes:
   `N km this event` line with the cumulative event distance on legs-2+
   collection controls (offset by `cumulativeLegDistanceKm`; leg 1's would
   be identical to the route km), open/close (computed server-side,
-  displayed in local time; omitted for leg-tagged collection controls,
-  whose stored per-leg distances restart at 0 — the overall event limit
-  governs, see docs/control-cards.md), and per-control status:
+  displayed in local time; on collection events the window comes from the
+  control's cumulative event distance, the same whole-event clock the
+  printed whole-event card uses, since stored per-leg distances restart at
+  0 — see docs/control-cards.md), and per-control status:
   ✓ checked in at HH:MM · **next** (highlighted) · upcoming · queued
   (offline, waiting to sync).
 - **Check in** button on any un-checked control (the next expected one is

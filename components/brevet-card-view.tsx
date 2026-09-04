@@ -253,8 +253,8 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
     fix: CheckinFix
   } | null>(null)
   // Early-window confirm (all methods): tapped a control before it opens.
-  // `opensAt` is the non-null window start — leg-tagged controls have no
-  // window (opensAt null) and never trigger this confirm.
+  // `opensAt` is the non-null window start; a control without a window never
+  // triggers this confirm.
   const [earlyConfirm, setEarlyConfirm] = useState<{
     control: CardControl
     opensAt: string

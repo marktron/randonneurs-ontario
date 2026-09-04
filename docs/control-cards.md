@@ -249,7 +249,9 @@ Registered Riders section to print one card per rider for the whole event.
   `saveEventControls` also rejects a control list that mixes leg-tagged and
   untagged rows within one event, before any write: `groupControlsByLeg` /
   `buildCardLegsFromRows` are all-or-nothing, so a saved mix would silently
-  fall back to the single-route BRM-time path with wrong per-leg windows.
+  fall back to the single-route path, printing wrong per-leg cards and
+  computing digital windows from the restarted per-leg distances instead of
+  the cumulative event distance.
   "All tagged or none" is therefore an enforced write-time invariant, not
   just a read-time convention.
 - Import is available from both admin pages via the shared
@@ -341,14 +343,17 @@ true })`) — leg-event printing reads the saved `event_controls` rows, so
   offsets as the printed leg cards) rendered as a second `N km this event`
   line; the admin check-ins grid shows the cumulative distance. Check-in/
   start/completion logic is untouched.
-- Like the printed leg cards, **leg-tagged controls carry no per-control
-  window** anywhere digital: _stored_ per-leg distances restart at 0, so a
-  window computed from the event start would be wrong for legs 2+. The card payload
-  sends `opensAt`/`closesAt` as null (`CardControl` in
-  `lib/actions/brevet-card.ts`), the rider card renders no times line,
-  `deriveCheckinFlags` never derives `early`/`late` for a null window, and
-  the admin check-ins grid omits `windowLabel` for leg rows. The overall
-  event limit governs.
+- Unlike the printed leg cards, **leg-tagged controls do carry a per-control
+  window** everywhere digital. _Stored_ per-leg distances restart at 0, so
+  the window is computed from the control's cumulative event distance
+  (`controlWindowDistancesKm` in `lib/controlPoints.ts`, which falls back to
+  the stored distance for single-route lists) against the event start — the
+  same ACP computation the whole-event printed card uses, on one continuous
+  clock. The card payload sends real `opensAt`/`closesAt` (`CardControl` in
+  `lib/actions/brevet-card.ts`), the rider card renders the times line and
+  its early-tap confirm applies, `deriveCheckinFlags` derives `early`/`late`
+  from that window, and the admin check-ins grid shows a `windowLabel` for
+  leg rows.
 
 ## RWGPS import
 
