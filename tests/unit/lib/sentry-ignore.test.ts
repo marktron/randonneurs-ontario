@@ -104,6 +104,26 @@ describe('isIgnoredServerError', () => {
     )
   })
 
+  it('ignores the aborted-response stream error (JAVASCRIPT-NEXTJS-2J)', () => {
+    // Server-side mirror of the client "Connection closed." filter: the browser
+    // closed the response stream (navigated away, closed the tab, flaky
+    // connection) before React finished streaming the page, so React's
+    // destination "close" handler aborts the render with this message. Handled
+    // by React, zero user impact, no first-party frames.
+    expect(isIgnoredServerError('The destination stream closed early.')).toBe(true)
+  })
+
+  it('ignores the write-side variant of the same aborted stream', () => {
+    expect(isIgnoredServerError('The destination stream errored while writing data.')).toBe(true)
+  })
+
+  it('does NOT ignore a partial/substring match of the stream-abort messages', () => {
+    // Anchored so a real error that merely quotes the phrase still reports.
+    expect(
+      isIgnoredServerError('Upload failed: The destination stream closed early. retrying')
+    ).toBe(false)
+  })
+
   it('does NOT ignore an unrelated server error', () => {
     expect(isIgnoredServerError('Cannot read properties of undefined')).toBe(false)
   })
