@@ -379,7 +379,7 @@ separately via `serverIgnoreErrors` in `lib/sentry-ignore.ts`, wired into
 `ignoreErrors` in `beforeSend` for every event, including `captureRequestError`
 ones, so a message match there drops the event.
 
-Two patterns live in the server list:
+Three kinds of pattern live in the server list:
 
 - `/Invalid character in header content/` — bots/fuzzers request URLs with
   control chars (e.g. `/%0A`), which crash inside Next.js when it writes the slug
@@ -393,6 +393,18 @@ find Server Action. This request might be from an older or newer deployment.`
   framework, benign. This is distinct from the **client** pattern `/Server Action
 .* was not found on the server/` in `clientIgnoreErrors` — different runtime,
   different wording.
+- `/^The destination stream closed early\.$/` and `/^The destination stream
+errored while writing data\.$/` (Sentry issue `JAVASCRIPT-NEXTJS-2S`) — the
+  **server-side** mirror of the client `/^Connection closed\.$/` filter. When
+  React streams a page it attaches `close`/`error` handlers to the destination
+  Node stream; if the browser goes away first (navigated away, closed the tab,
+  flaky connection, aborted prefetch), that handler aborts the in-flight render
+  with one of these messages and Next.js reports it through
+  `captureRequestError`. Seen on `GET /riders/[slug]`, but it is route-agnostic
+  — any streamed page can produce it. The stack sits entirely inside React/Next's
+  `PassThrough` handler with no first-party frames, and the request is already
+  gone, so there is nothing to fix. Both patterns are anchored so a real error
+  that merely quotes the phrase still reports.
 
 ## Related Files
 

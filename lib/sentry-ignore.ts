@@ -64,6 +64,17 @@ export const serverIgnoreErrors: RegExp[] = [
   // benign (JAVASCRIPT-NEXTJS-2A). The client variant ("Server Action ... was
   // not found on the server") is filtered separately in clientIgnoreErrors.
   /Failed to find Server Action/,
+  // The browser closed the response stream before React finished streaming the
+  // page (user navigated away, closed the tab, flaky connection, aborted
+  // prefetch). React attaches "close"/"error" handlers to the destination Node
+  // stream and aborts the in-flight render with these exact messages, which
+  // Next.js then reports through captureRequestError. The stack is entirely
+  // inside React/Next's PassThrough handler — no first-party frames — and the
+  // user is already gone, so there is nothing to fix (JAVASCRIPT-NEXTJS-2S).
+  // Server-side mirror of the client `/^Connection closed\.$/` filter above.
+  // Anchored so a real error that merely quotes the phrase still reports.
+  /^The destination stream closed early\.$/,
+  /^The destination stream errored while writing data\.$/,
 ]
 
 // Mirrors how Sentry's `ignoreErrors` matches a regex against an event's
