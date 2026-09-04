@@ -70,7 +70,7 @@ export const serverIgnoreErrors: RegExp[] = [
   // stream and aborts the in-flight render with these exact messages, which
   // Next.js then reports through captureRequestError. The stack is entirely
   // inside React/Next's PassThrough handler — no first-party frames — and the
-  // user is already gone, so there is nothing to fix (JAVASCRIPT-NEXTJS-2J).
+  // user is already gone, so there is nothing to fix (JAVASCRIPT-NEXTJS-2S).
   // Server-side mirror of the client `/^Connection closed\.$/` filter above.
   // Anchored so a real error that merely quotes the phrase still reports.
   /^The destination stream closed early\.$/,

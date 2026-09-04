@@ -104,7 +104,7 @@ describe('isIgnoredServerError', () => {
     )
   })
 
-  it('ignores the aborted-response stream error (JAVASCRIPT-NEXTJS-2J)', () => {
+  it('ignores the aborted-response stream error (JAVASCRIPT-NEXTJS-2S)', () => {
     // Server-side mirror of the client "Connection closed." filter: the browser
     // closed the response stream (navigated away, closed the tab, flaky
     // connection) before React finished streaming the page, so React's

@@ -394,7 +394,7 @@ find Server Action. This request might be from an older or newer deployment.`
 .* was not found on the server/` in `clientIgnoreErrors` — different runtime,
   different wording.
 - `/^The destination stream closed early\.$/` and `/^The destination stream
-errored while writing data\.$/` (Sentry issue `JAVASCRIPT-NEXTJS-2J`) — the
+errored while writing data\.$/` (Sentry issue `JAVASCRIPT-NEXTJS-2S`) — the
   **server-side** mirror of the client `/^Connection closed\.$/` filter. When
   React streams a page it attaches `close`/`error` handlers to the destination
   Node stream; if the browser goes away first (navigated away, closed the tab,
