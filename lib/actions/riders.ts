@@ -412,6 +412,12 @@ export async function mergeRiders(data: MergeRidersData): Promise<MergeRidersRes
       .from('riders')
       .select('id, auth_user_id, linked_at, bio, photo_path')
       .in('id', [targetRiderId, ...ridersToDelete])
+      // Without an explicit order PostgREST's row order is arbitrary, so with
+      // three or more riders both the surviving link and the bio/photo
+      // fallbacks below would be a coin flip. Earliest link wins; the oldest
+      // rider row breaks ties (and orders the unlinked rows behind them).
+      .order('linked_at', { ascending: true, nullsFirst: false })
+      .order('created_at', { ascending: true })
 
     if (linkReadError) {
       // Carrying on would treat every rider as unlinked and profile-less: the
@@ -424,12 +430,14 @@ export async function mergeRiders(data: MergeRidersData): Promise<MergeRidersRes
     const sourceRows = (linkRows ?? []).filter((r) => r.id !== targetRiderId)
     const linkedSources = sourceRows.filter((r) => r.auth_user_id)
     let droppedLinks = 0
-    let linkToMove: { auth_user_id: string; linked_at: string | null } | null = null
+    let linkToMove: { riderId: string; auth_user_id: string; linked_at: string | null } | null =
+      null
 
     if (targetRow?.auth_user_id) {
       droppedLinks = linkedSources.length
     } else if (linkedSources.length > 0) {
       linkToMove = {
+        riderId: linkedSources[0].id,
         auth_user_id: linkedSources[0].auth_user_id!,
         linked_at: linkedSources[0].linked_at,
       }
@@ -496,6 +504,14 @@ export async function mergeRiders(data: MergeRidersData): Promise<MergeRidersRes
       return { success: false, error: 'Failed to update merged rider' }
     }
 
+    // Name the surviving link explicitly: with several linked sources, which
+    // one won is otherwise unrecoverable from the audit trail.
+    const linkNotes: string[] = []
+    if (linkToMove) linkNotes.push(`kept link from rider ${linkToMove.riderId}`)
+    if (droppedLinks > 0) {
+      linkNotes.push(`dropped account link${droppedLinks > 1 ? 's' : ''}: ${droppedLinks}`)
+    }
+
     await logAuditEvent({
       adminId: admin.id,
       action: 'merge',
@@ -503,9 +519,7 @@ export async function mergeRiders(data: MergeRidersData): Promise<MergeRidersRes
       entityId: targetRiderId,
       description:
         `Merged ${sourceRiderIds.length} riders into: ${riderData.firstName} ${riderData.lastName}` +
-        (droppedLinks > 0
-          ? ` (dropped account link${droppedLinks > 1 ? 's' : ''}: ${droppedLinks})`
-          : ''),
+        (linkNotes.length > 0 ? ` (${linkNotes.join('; ')})` : ''),
     })
 
     revalidateTag('riders', { expire: 0 })

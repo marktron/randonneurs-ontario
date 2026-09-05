@@ -8,6 +8,7 @@ const USER_B = 'inttest-merge-user-b@example.com'
 const RIDERS = {
   target: { id: '00000000-10c4-4000-a000-000000000001', slug: 'inttest-merge-target' },
   source: { id: '00000000-10c4-4000-a000-000000000002', slug: 'inttest-merge-source' },
+  source2: { id: '00000000-10c4-4000-a000-000000000003', slug: 'inttest-merge-source-2' },
 }
 let adminId = ''
 
@@ -26,8 +27,14 @@ describe('mergeRiders with linked accounts (real DB)', () => {
   const admin = getTestSupabase()
 
   async function cleanup() {
-    await admin.from('audit_logs').delete().in('entity_id', [RIDERS.target.id, RIDERS.source.id])
-    await admin.from('riders').delete().in('id', [RIDERS.target.id, RIDERS.source.id])
+    await admin
+      .from('audit_logs')
+      .delete()
+      .in('entity_id', [RIDERS.target.id, RIDERS.source.id, RIDERS.source2.id])
+    await admin
+      .from('riders')
+      .delete()
+      .in('id', [RIDERS.target.id, RIDERS.source.id, RIDERS.source2.id])
     await admin.from('admins').delete().eq('email', ADMIN_EMAIL)
     await deleteAuthUsersByEmail([ADMIN_EMAIL, USER_A, USER_B])
   }
@@ -129,6 +136,59 @@ describe('mergeRiders with linked accounts (real DB)', () => {
     expect(data?.photo_path).toBe('riders/source.jpg')
     expect(data?.auth_user_id).toBe(userA)
     expect(data?.linked_at).not.toBeNull()
+  })
+
+  it('keeps the earliest-linked source when several sources are linked', async () => {
+    const userA = await createAuthUser(USER_A)
+    const userB = await createAuthUser(USER_B)
+    const earlier = new Date(Date.now() - 60 * 60 * 1000).toISOString()
+    const later = new Date().toISOString()
+
+    // `source` was inserted before `source2`, so an unordered read returns it
+    // first. Give it the *later* link: only an explicit ORDER BY linked_at can
+    // pick `source2` here, so an arbitrary row order fails this test.
+    await checked(
+      admin
+        .from('riders')
+        .update({ auth_user_id: userA, linked_at: later })
+        .eq('id', RIDERS.source.id),
+      'link source with the later timestamp'
+    )
+    await checked(
+      admin.from('riders').insert({
+        id: RIDERS.source2.id,
+        slug: RIDERS.source2.slug,
+        first_name: 'Source Two',
+        last_name: 'Rider',
+        auth_user_id: userB,
+        linked_at: earlier,
+      }),
+      'seed the earlier-linked second source'
+    )
+
+    const result = await mergeRiders({
+      sourceRiderIds: [RIDERS.target.id, RIDERS.source.id, RIDERS.source2.id],
+      targetRiderId: RIDERS.target.id,
+      riderData: { firstName: 'Target', lastName: 'Rider', email: null, gender: null },
+    })
+    expect(result.success).toBe(true)
+
+    const { data } = await admin
+      .from('riders')
+      .select('auth_user_id, linked_at')
+      .eq('id', RIDERS.target.id)
+      .single()
+    expect(data?.auth_user_id).toBe(userB)
+    // Postgres renders the offset as +00:00, so compare instants, not strings.
+    expect(new Date(data!.linked_at!).toISOString()).toBe(earlier)
+
+    const { data: logs } = await admin
+      .from('audit_logs')
+      .select('description')
+      .eq('entity_id', RIDERS.target.id)
+      .eq('action', 'merge')
+    expect(logs?.[0]?.description).toContain(`kept link from rider ${RIDERS.source2.id}`)
+    expect(logs?.[0]?.description).toMatch(/dropped account link/i)
   })
 
   it('keeps the target link when both are linked and records the dropped one', async () => {
