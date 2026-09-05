@@ -21,12 +21,22 @@ vi.mock('@/lib/supabase-server', () => ({
   getSupabaseAdmin: vi.fn(() => ({
     from: vi.fn(() => ({
       select: vi.fn(() => ({ eq: riderSelectEq })),
-      update: vi.fn((values: unknown) => ({
-        eq: (...args: unknown[]) => {
-          riderUpdateEq(...args)
-          return riderUpdate(values)
-        },
-      })),
+      update: vi.fn((values: unknown) => {
+        // Thenable builder so `.eq(...).eq(...)` chains any number of times
+        // (the ownership-scoping fix adds a second filter) while still
+        // resolving to the same mocked result whenever it's awaited.
+        const builder: {
+          eq: (...args: unknown[]) => typeof builder
+          then: Promise<unknown>['then']
+        } = {
+          eq: (...args: unknown[]) => {
+            riderUpdateEq(...args)
+            return builder
+          },
+          then: (onFulfilled, onRejected) => riderUpdate(values).then(onFulfilled, onRejected),
+        }
+        return builder
+      }),
     })),
   })),
 }))
@@ -172,6 +182,10 @@ describe('verifySignInCode', () => {
     expect(riderSelectEq).toHaveBeenCalledWith('auth_user_id', 'u1')
     expect(riderUpdate).toHaveBeenCalledWith({ email: 'new@example.com' })
     expect(riderUpdateEq).toHaveBeenCalledWith('id', 'r1')
+    // Scoped to the same auth user that was looked up, so a rider unlinked or
+    // reassigned between the lookup and this update can't be overwritten by
+    // the former account's email sync.
+    expect(riderUpdateEq).toHaveBeenCalledWith('auth_user_id', 'u1')
     expect(result.data?.next).toBe('/account')
   })
 

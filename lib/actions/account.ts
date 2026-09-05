@@ -133,7 +133,15 @@ async function afterSignIn(userId: string, email: string): Promise<string> {
 
   if (rider) {
     if ((rider.email ?? '').toLowerCase() !== email) {
-      const { error: updateError } = await admin.from('riders').update({ email }).eq('id', rider.id)
+      // Scoped to both the rider id and the auth user: if an admin unlinks or
+      // reassigns this rider between the lookup above and this update, the
+      // auth_user_id filter keeps the former account from overwriting the
+      // rider's email out from under its new owner.
+      const { error: updateError } = await admin
+        .from('riders')
+        .update({ email })
+        .eq('id', rider.id)
+        .eq('auth_user_id', userId)
       if (updateError) {
         logError(updateError, {
           operation: 'afterSignIn',
