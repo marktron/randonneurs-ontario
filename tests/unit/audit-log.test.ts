@@ -13,9 +13,10 @@ describe('audit log writers', () => {
     mockInsert.mockResolvedValue({ error: null })
   })
 
-  it('logAuditEvent writes admin_id and no actor', async () => {
+  it('logAuditEvent writes actor_user_id: adminId and actor_label', async () => {
     await logAuditEvent({
       adminId: 'admin-1',
+      actorLabel: 'Admin One',
       action: 'update',
       entityType: 'rider',
       entityId: 'r1',
@@ -23,7 +24,8 @@ describe('audit log writers', () => {
     })
     expect(mockInsert).toHaveBeenCalledWith({
       admin_id: 'admin-1',
-      actor_user_id: null,
+      actor_user_id: 'admin-1',
+      actor_label: 'Admin One',
       action: 'update',
       entity_type: 'rider',
       entity_id: 'r1',
@@ -31,7 +33,23 @@ describe('audit log writers', () => {
     })
   })
 
-  it('logRiderAction writes actor_user_id with a null admin_id', async () => {
+  it('logAuditEvent defaults actor_label to null when not provided', async () => {
+    await logAuditEvent({
+      adminId: 'admin-1',
+      action: 'update',
+      entityType: 'rider',
+      entityId: 'r1',
+      description: 'x',
+    })
+    expect(mockInsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actor_user_id: 'admin-1',
+        actor_label: null,
+      })
+    )
+  })
+
+  it('logRiderAction writes actor_user_id with a null admin_id and null actor_label', async () => {
     await logRiderAction({
       actorUserId: 'user-1',
       action: 'account_link',
@@ -42,6 +60,7 @@ describe('audit log writers', () => {
     expect(mockInsert).toHaveBeenCalledWith({
       admin_id: null,
       actor_user_id: 'user-1',
+      actor_label: null,
       action: 'account_link',
       entity_type: 'rider',
       entity_id: 'r1',

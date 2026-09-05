@@ -98,6 +98,7 @@ ${content}
     if (result.success) {
       await logAuditEvent({
         adminId: admin.id,
+        actorLabel: admin.name,
         action: 'update',
         entityType: 'page',
         entityId: slug,
@@ -168,6 +169,7 @@ ${content}
 
     await logAuditEvent({
       adminId: admin.id,
+      actorLabel: admin.name,
       action: 'update',
       entityType: 'page',
       entityId: slug,

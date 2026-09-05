@@ -101,6 +101,7 @@ export async function setPreRideStart(input: {
 
     await logAuditEvent({
       adminId: admin.id,
+      actorLabel: admin.name,
       action: 'update',
       entityType: 'event',
       entityId: reg.events.id,

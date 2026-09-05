@@ -87,6 +87,7 @@ export async function createResult(data: CreateResultData): Promise<ActionResult
 
   await logAuditEvent({
     adminId: admin.id,
+    actorLabel: admin.name,
     action: 'create',
     entityType: 'result',
     entityId: eventId,
@@ -218,6 +219,7 @@ export async function addRegistration(data: AddRegistrationData): Promise<Action
 
   await logAuditEvent({
     adminId: admin.id,
+    actorLabel: admin.name,
     action: revived ? 'update' : 'create',
     entityType: 'result',
     entityId: eventId,
@@ -282,6 +284,7 @@ export async function updateResult(
 
   await logAuditEvent({
     adminId: admin.id,
+    actorLabel: admin.name,
     action: 'update',
     entityType: 'result',
     entityId: resultId,
@@ -381,6 +384,7 @@ export async function adminCancelRegistration(registrationId: string): Promise<A
 
   await logAuditEvent({
     adminId: admin.id,
+    actorLabel: admin.name,
     action: 'update',
     entityType: 'registration',
     entityId: registrationId,
@@ -455,6 +459,7 @@ export async function adminRestoreRegistration(registrationId: string): Promise<
 
   await logAuditEvent({
     adminId: admin.id,
+    actorLabel: admin.name,
     action: 'update',
     entityType: 'registration',
     entityId: registrationId,
@@ -504,6 +509,7 @@ export async function deleteResult(resultId: string): Promise<ActionResult> {
 
   await logAuditEvent({
     adminId: admin.id,
+    actorLabel: admin.name,
     action: 'delete',
     entityType: 'result',
     entityId: resultId,
@@ -562,6 +568,7 @@ export async function createBulkResults(
 
   await logAuditEvent({
     adminId: admin.id,
+    actorLabel: admin.name,
     action: 'create',
     entityType: 'result',
     entityId: eventId,

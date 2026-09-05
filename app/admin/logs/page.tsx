@@ -12,6 +12,7 @@ export interface AuditLogRow {
   description: string
   created_at: string
   actor_user_id: string | null
+  actor_label: string | null
   admins: {
     name: string
   } | null
@@ -45,7 +46,7 @@ export default async function AuditLogsPage() {
     getSupabaseAdmin()
       .from('audit_logs')
       .select(
-        'id, action, entity_type, entity_id, description, created_at, actor_user_id, admins (name)'
+        'id, action, entity_type, entity_id, description, created_at, actor_user_id, actor_label, admins (name)'
       )
       .order('created_at', { ascending: false })
       .limit(100),

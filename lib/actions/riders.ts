@@ -146,6 +146,7 @@ export async function createRider(data: CreateRiderData): Promise<CreateRiderRes
 
   await logAuditEvent({
     adminId: admin.id,
+    actorLabel: admin.name,
     action: 'create',
     entityType: 'rider',
     entityId: typedNewRider.id,
@@ -215,6 +216,7 @@ export async function updateRider(riderId: string, data: UpdateRiderData): Promi
 
   await logAuditEvent({
     adminId: admin.id,
+    actorLabel: admin.name,
     action: 'update',
     entityType: 'rider',
     entityId: riderId,
@@ -514,6 +516,7 @@ export async function mergeRiders(data: MergeRidersData): Promise<MergeRidersRes
 
     await logAuditEvent({
       adminId: admin.id,
+      actorLabel: admin.name,
       action: 'merge',
       entityType: 'rider',
       entityId: targetRiderId,
@@ -621,6 +624,7 @@ export async function linkRiderAccount(riderId: string, email: string): Promise<
 
     await logAuditEvent({
       adminId: admin.id,
+      actorLabel: admin.name,
       action: 'account_link',
       entityType: 'rider',
       entityId: riderId,
@@ -655,6 +659,7 @@ export async function unlinkRiderAccount(riderId: string): Promise<ActionResult>
 
     await logAuditEvent({
       adminId: admin.id,
+      actorLabel: admin.name,
       action: 'account_unlink',
       entityType: 'rider',
       entityId: riderId,

@@ -96,7 +96,9 @@ export function AuditLogTabs({ logs, merges }: AuditLogTabsProps) {
                         <LocalTime dateString={log.created_at} />
                       </TableCell>
                       <TableCell className="hidden sm:table-cell">
-                        {log.admins?.name ?? (log.actor_user_id ? 'Rider' : 'Unknown')}
+                        {log.admins?.name ??
+                          log.actor_label ??
+                          (log.actor_user_id ? 'Rider' : 'Unknown')}
                       </TableCell>
                       <TableCell>
                         <Badge variant={actionInfo.variant}>{actionInfo.label}</Badge>

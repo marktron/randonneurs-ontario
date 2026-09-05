@@ -149,6 +149,7 @@ export async function createAdminUser(data: AdminUserData): Promise<ActionResult
       // rolled back (the old hash is gone) — record it honestly instead.
       await logAuditEvent({
         adminId: currentAdmin.id,
+        actorLabel: currentAdmin.name,
         action: 'update',
         entityType: 'admin_user',
         entityId: authUserId,
@@ -166,6 +167,7 @@ export async function createAdminUser(data: AdminUserData): Promise<ActionResult
 
   await logAuditEvent({
     adminId: currentAdmin.id,
+    actorLabel: currentAdmin.name,
     action: 'create',
     entityType: 'admin_user',
     entityId: authUserId,
@@ -227,6 +229,7 @@ export async function updateAdminUser(
 
   await logAuditEvent({
     adminId: currentAdmin.id,
+    actorLabel: currentAdmin.name,
     action: 'update',
     entityType: 'admin_user',
     entityId: userId,
@@ -308,6 +311,7 @@ export async function deleteAdminUser(userId: string): Promise<ActionResult> {
 
   await logAuditEvent({
     adminId: currentAdmin.id,
+    actorLabel: currentAdmin.name,
     action: 'delete',
     entityType: 'admin_user',
     entityId: userId,

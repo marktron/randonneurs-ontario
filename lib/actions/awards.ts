@@ -157,6 +157,7 @@ export async function assignResultAward(data: AssignResultAwardData): Promise<Ac
 
     await logAuditEvent({
       adminId: admin.id,
+      actorLabel: admin.name,
       action: 'create',
       entityType: 'award',
       entityId: `${data.awardId}:${data.resultId}`,
@@ -259,6 +260,7 @@ export async function assignSeasonAward(data: AssignSeasonAwardData): Promise<Ac
 
     await logAuditEvent({
       adminId: admin.id,
+      actorLabel: admin.name,
       action: 'create',
       entityType: 'award',
       entityId: data.awardId,
