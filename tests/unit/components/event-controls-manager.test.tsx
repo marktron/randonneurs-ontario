@@ -374,3 +374,82 @@ describe('EventControlsManager collection import', () => {
     expect(screen.getByRole('button', { name: /import 3 legs/i })).toBeEnabled()
   })
 })
+
+describe('EventControlsManager collapsible sections', () => {
+  it('folds a populated controls table by default so the check-in grid is reachable', () => {
+    render(
+      <EventControlsManager
+        eventId="event-1"
+        initialControls={[makeSaved({ name: 'Oakville' })]}
+        hasRwgpsRoute={false}
+        hasRwgpsCollection={false}
+        initialOrganizer={emptyOrganizer}
+      />
+    )
+
+    expect(screen.getByRole('button', { name: 'Show Controls' })).toHaveAttribute(
+      'aria-expanded',
+      'false'
+    )
+    // Folded, not unmounted — the rows keep their values for when it reopens.
+    expect(controlNameInputs().map((i) => i.value)).toEqual(['Oakville'])
+    expect(screen.getByText('1 control')).toBeInTheDocument()
+  })
+
+  it('leaves the controls section open when there is nothing saved to fold', () => {
+    render(
+      <EventControlsManager
+        eventId="event-1"
+        initialControls={[]}
+        hasRwgpsRoute={false}
+        hasRwgpsCollection={false}
+        initialOrganizer={emptyOrganizer}
+      />
+    )
+
+    expect(screen.getByRole('button', { name: 'Hide Controls' })).toHaveAttribute(
+      'aria-expanded',
+      'true'
+    )
+  })
+
+  it('folds the ride organizer and names the saved organizer in its summary', () => {
+    render(
+      <EventControlsManager
+        eventId="event-1"
+        initialControls={[]}
+        hasRwgpsRoute={false}
+        hasRwgpsCollection={false}
+        initialOrganizer={{ name: 'Ada Lovelace', phone: '', email: '' }}
+      />
+    )
+
+    expect(screen.getByRole('button', { name: 'Show Ride organizer' })).toHaveAttribute(
+      'aria-expanded',
+      'false'
+    )
+    expect(screen.getByText('Ada Lovelace')).toBeInTheDocument()
+  })
+
+  it('reopens the controls section on tap', async () => {
+    const user = userEvent.setup()
+    render(
+      <EventControlsManager
+        eventId="event-1"
+        initialControls={[makeSaved({ name: 'Oakville' })]}
+        hasRwgpsRoute={false}
+        hasRwgpsCollection={false}
+        initialOrganizer={emptyOrganizer}
+      />
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Show Controls' }))
+
+    expect(screen.getByRole('button', { name: 'Hide Controls' })).toBeInTheDocument()
+    // Save folds away with the rest of the header actions, so reopening has
+    // to bring it back.
+    expect(
+      screen.getByRole('button', { name: /save controls/i }).parentElement!.className
+    ).not.toContain('hidden')
+  })
+})

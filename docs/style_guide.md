@@ -121,6 +121,29 @@ Registration forms follow these mobile-first conventions:
 - **Touch targets:** Submit buttons and popover triggers use `h-12` (48px) on mobile for comfortable tapping. Radio group items in selection dialogs use generous vertical padding.
 - **Scroll-to-error:** When a validation error appears, the error message scrolls into view automatically via `scrollIntoView({ behavior: 'smooth', block: 'nearest' })`.
 
+### 10b) Collapsible sections on tall admin screens (mobile)
+
+Admin screens that stack several data tables get unusable on a phone: row
+"cardification" (§7) turns one table into thousands of pixels, burying every
+section below it. Wrap each `h2`-level section in `CollapsibleSection`
+(`components/admin/collapsible-section.tsx`) so the next heading is one swipe
+away. The digital brevet card admin
+(`app/admin/events/[id]/brevet-card`) is the reference use.
+
+- **Mobile only.** The body is unconditionally visible from `sm` up and the
+  toggle is `sm:hidden` — a desktop layout must not change.
+- **Fold with CSS, not conditional rendering.** `hidden sm:block` on each
+  folded region: the collapsed markup is identical on server and client (no
+  hydration flash), and inputs stay mounted so unsaved edits survive a fold.
+- **Fold the description and the header actions too**, not just the body —
+  on a phone those are most of what's in the way.
+- **A folded heading keeps a summary** ("12 controls", "24 riders") so it
+  still says what it's hiding.
+- **Default folded only for sections the admin isn't there for.** Reference
+  data and set-once panels start folded; the section being browsed starts
+  open.
+- Toggle is `min-h-11` (44px) per §9.
+
 ### 11) Implementation notes (Tailwind + shadcn/ui)
 
 - Define tokens in CSS variables (shadcn theme): `background/foreground`, `muted`, `border`, `ring`, `accent`.
