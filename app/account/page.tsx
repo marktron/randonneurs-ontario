@@ -32,9 +32,6 @@ export default async function AccountPage() {
           <Link href={`/riders/${account.rider.slug}`} className="underline underline-offset-4">
             Public profile
           </Link>
-          <Link href="/account/settings" className="underline underline-offset-4">
-            Settings
-          </Link>
         </nav>
       </header>
       <RidesList upcoming={rides.upcoming} past={rides.past} />

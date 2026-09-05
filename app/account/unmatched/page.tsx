@@ -2,7 +2,6 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { getAccount } from '@/lib/auth/get-rider'
-import { SignOutButton } from '@/components/account/sign-out-button'
 
 export const metadata: Metadata = { title: 'My account', robots: { index: false, follow: false } }
 
@@ -37,7 +36,6 @@ export default async function UnmatchedPage() {
           and we&apos;ll link it for you.
         </li>
       </ul>
-      <SignOutButton />
     </div>
   )
 }
