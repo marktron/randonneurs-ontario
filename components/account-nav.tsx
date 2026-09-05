@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { createClient } from '@/lib/supabase-browser'
@@ -17,16 +17,20 @@ interface AccountNavProps {
  * the session refreshed while a rider browses public pages.
  *
  * Sign-in/out run through server actions, which set the auth cookie without
- * telling this component's browser client. Re-checking on every pathname
- * change (both flows redirect once they're done) picks that up without
- * requiring a full page reload.
+ * telling this component's browser client, so a single mount-time check
+ * would go stale (both flows redirect once they're done, but nothing here
+ * would notice). Two effects split the concerns: one creates the client
+ * once and subscribes to auth changes for the component's lifetime; the
+ * other just re-checks the session whenever the route changes, which is
+ * enough to pick up a sign-in/out without tearing down and resubscribing
+ * the listener on every navigation across the site.
  */
 export function AccountNav({ className, onNavigate }: AccountNavProps) {
   const [signedIn, setSignedIn] = useState(false)
   const pathname = usePathname()
+  const supabase = useMemo(() => createClient(), [])
 
   useEffect(() => {
-    const supabase = createClient()
     let active = true
     supabase.auth.getSession().then(({ data }) => {
       if (active) setSignedIn(Boolean(data.session))
@@ -38,7 +42,17 @@ export function AccountNav({ className, onNavigate }: AccountNavProps) {
       active = false
       subscription.unsubscribe()
     }
-  }, [pathname])
+  }, [supabase])
+
+  useEffect(() => {
+    let active = true
+    supabase.auth.getSession().then(({ data }) => {
+      if (active) setSignedIn(Boolean(data.session))
+    })
+    return () => {
+      active = false
+    }
+  }, [supabase, pathname])
 
   return (
     <Link

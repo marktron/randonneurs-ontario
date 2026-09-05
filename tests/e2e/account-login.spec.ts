@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test'
 import { createClient } from '@supabase/supabase-js'
 import { loadEnvConfig } from '@next/env'
-import { getTestData } from './helpers/test-data'
+import { getTestData, type E2ETestData } from './helpers/test-data'
 
 const MAILPIT = process.env.MAILPIT_URL || 'http://127.0.0.1:54324'
 // Unique per run: a fixed address would trip the dev server's in-process
@@ -67,10 +67,16 @@ test.describe('rider account sign-in', () => {
   // attempts against the same email.
   test.describe.configure({ mode: 'serial' })
 
-  const data = getTestData()
-  if (!data) throw new Error('[account-login] E2E test data missing — did globalSetup run?')
+  // Deferred to beforeAll: calling getTestData() at describe scope throws on
+  // a fresh checkout (globalSetup hasn't run yet), which breaks
+  // `playwright test --list`.
+  let data: E2ETestData
 
   test.beforeAll(async () => {
+    const seeded = getTestData()
+    if (!seeded) throw new Error('[account-login] E2E test data missing — did globalSetup run?')
+    data = seeded
+
     const supabase = admin()
     await deleteStaleAuthUsers(EMAIL_PREFIX)
     await deleteStaleRiders(EMAIL_PREFIX, RIDER_ID)
