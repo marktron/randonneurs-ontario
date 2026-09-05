@@ -40,6 +40,7 @@ vi.mock('@/lib/supabase-server', () => {
     })
 
     builder.single = vi.fn().mockResolvedValue({ data: null, error: { code: 'PGRST116' } })
+    builder.maybeSingle = vi.fn().mockResolvedValue({ data: null, error: null })
     builder.then = vi.fn((resolve) => {
       resolve({ data: null, error: null })
     })
@@ -78,6 +79,8 @@ vi.mock('@/lib/supabase-server', () => {
     __reset: () => {
       queryBuilder.single.mockReset()
       queryBuilder.single.mockResolvedValue({ data: null, error: { code: 'PGRST116' } })
+      queryBuilder.maybeSingle.mockReset()
+      queryBuilder.maybeSingle.mockResolvedValue({ data: null, error: null })
       queryBuilder.then.mockReset()
       queryBuilder.then.mockImplementation((resolve) => {
         resolve({ data: null, error: null })
@@ -153,6 +156,10 @@ vi.mock('@/lib/auth/get-admin', () => ({
   }),
 }))
 
+vi.mock('@/lib/audit-log', () => ({
+  logAuditEvent: vi.fn().mockResolvedValue(undefined),
+}))
+
 vi.mock('next/cache', () => ({
   revalidatePath: vi.fn(),
 }))
@@ -189,6 +196,10 @@ const mockModule = await vi.importMock<{
 const mockRequireAdmin = await vi.importMock<{
   requireAdmin: ReturnType<typeof vi.fn>
 }>('@/lib/auth/get-admin')
+
+const mockAuditLog = await vi.importMock<{
+  logAuditEvent: ReturnType<typeof vi.fn>
+}>('@/lib/audit-log')
 
 describe('createAdminUser', () => {
   beforeEach(() => {
@@ -363,6 +374,56 @@ describe('createAdminUser', () => {
 
       expect(result.success).toBe(false)
       expect(mockModule.__deleteUserMock).not.toHaveBeenCalled()
+    })
+
+    it('refuses to promote an email that already belongs to an admin, without touching the account', async () => {
+      mockModule.__mockExistingAuthUser('rider-user-id')
+      mockModule.__queryBuilder.maybeSingle.mockResolvedValueOnce({
+        data: { id: 'rider-user-id' },
+        error: null,
+      })
+
+      const result = await createAdminUser({
+        email: 'rider@example.com',
+        name: 'Rider Admin',
+        password: 'password123',
+        role: 'super_admin',
+      })
+
+      expect(result.success).toBe(false)
+      expect(result.error).toBeDefined()
+      expect(mockModule.__updateUserByIdMock).not.toHaveBeenCalled()
+      expect(mockModule.__queryBuilder.insert).not.toHaveBeenCalled()
+    })
+
+    it('records an audit entry if the admins insert still fails with a duplicate after the password was updated', async () => {
+      mockModule.__mockExistingAuthUser('rider-user-id')
+      mockModule.__queryBuilder.maybeSingle.mockResolvedValueOnce({ data: null, error: null })
+      mockModule.__mockInsertError({
+        code: '23505',
+        message: 'duplicate key',
+      })
+
+      const result = await createAdminUser({
+        email: 'rider@example.com',
+        name: 'Rider Admin',
+        password: 'password123',
+        role: 'super_admin',
+      })
+
+      expect(result.success).toBe(false)
+      expect(mockModule.__updateUserByIdMock).toHaveBeenCalledWith('rider-user-id', {
+        password: 'password123',
+        email_confirm: true,
+      })
+      expect(mockAuditLog.logAuditEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: 'update',
+          entityType: 'admin_user',
+          entityId: 'rider-user-id',
+          description: expect.stringContaining('Password reset on existing admin'),
+        })
+      )
     })
 
     it('still creates a new auth user and rolls it back on failure when no existing user is found', async () => {

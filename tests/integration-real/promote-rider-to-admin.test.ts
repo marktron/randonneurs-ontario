@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterAll, vi } from 'vitest'
 import { getTestSupabase, checked } from './helpers/supabase'
-import { createAuthUser, deleteAuthUsersByEmail } from './helpers/auth-users'
+import { createAuthUser, deleteAuthUsersByEmail, getAnonClient } from './helpers/auth-users'
 
 const SUPER_ADMIN_EMAIL = 'inttest-promote-super-admin@example.com'
 const RIDER_EMAIL = 'inttest-promote-rider@example.com'
@@ -140,5 +140,43 @@ describe('createAdminUser promoting an existing rider (real DB)', () => {
     )
     expect(matches).toHaveLength(1)
     expect(matches[0].id).toBe(riderUserId)
+  })
+
+  it('refuses to promote an email that already belongs to an admin, and leaves the password unchanged', async () => {
+    const { data: authData, error: authError } = await admin.auth.admin.createUser({
+      email: RIDER_EMAIL,
+      password: 'OldPassword123!',
+      email_confirm: true,
+    })
+    if (authError || !authData.user) {
+      throw new Error(`[integration-real] createUser(${RIDER_EMAIL}): ${authError?.message}`)
+    }
+    const riderUserId = authData.user.id
+
+    await checked(
+      admin.from('admins').insert({
+        id: riderUserId,
+        email: RIDER_EMAIL,
+        name: 'Existing Admin Row',
+        role: 'admin',
+      }),
+      'seed pre-existing admin row'
+    )
+
+    const result = await createAdminUser({
+      email: RIDER_EMAIL,
+      name: 'Promote Rider',
+      password: 'NewPassword456!',
+      role: 'admin',
+    })
+
+    expect(result.success).toBe(false)
+
+    // The old password must still work — it was never overwritten.
+    const { error: signInError } = await getAnonClient().auth.signInWithPassword({
+      email: RIDER_EMAIL,
+      password: 'OldPassword123!',
+    })
+    expect(signInError).toBeNull()
   })
 })

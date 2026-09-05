@@ -156,6 +156,7 @@ Supabase session in one browser. Behaviour:
 | Delete account                        | Blocked entirely; the dialog trigger is disabled with an explanatory message.                                                                                                                               |
 | Linking                               | Allowed and independent — `admins.id` and `riders.auth_user_id` don't interact.                                                                                                                             |
 | Promoting a rider to admin            | `createAdminUser()` looks the email up via `auth_user_id_for_email` and reuses the existing auth user (setting its password) instead of failing on "email already registered"; the rider link is untouched. |
+| Promoting an email already an admin   | Refused before any mutation — `createAdminUser()` checks for an existing `admins` row first, so a super admin cannot reset another admin's password by "creating" them again.                               |
 
 ## My rides
 

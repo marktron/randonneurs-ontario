@@ -73,6 +73,27 @@ export async function createAdminUser(data: AdminUserData): Promise<ActionResult
 
   if (existingUserId) {
     authUserId = existingUserId
+
+    // Guard against resetting an existing admin's password: if this email
+    // already belongs to an admins row, refuse before touching auth at all.
+    const { data: existingAdminRow, error: existingAdminCheckError } = await getSupabaseAdmin()
+      .from('admins')
+      .select('id')
+      .eq('id', existingUserId)
+      .maybeSingle()
+
+    if (existingAdminCheckError) {
+      return handleSupabaseError(
+        existingAdminCheckError,
+        { operation: 'createAdminUser.checkExisting' },
+        'Failed to check existing admin'
+      )
+    }
+
+    if (existingAdminRow) {
+      return { success: false, error: 'A record with this value already exists' }
+    }
+
     const { error: updateError } = await getSupabaseAdmin().auth.admin.updateUserById(
       existingUserId,
       { password, email_confirm: true }
@@ -121,6 +142,18 @@ export async function createAdminUser(data: AdminUserData): Promise<ActionResult
     // (rider) auth user must never be deleted.
     if (createdAuthUser) {
       await getSupabaseAdmin().auth.admin.deleteUser(authUserId)
+    } else if (adminError.code === '23505') {
+      // Residual race: the pre-check above found no admins row, but the
+      // insert now hits one anyway (created concurrently). The password on
+      // the existing auth user was already overwritten above and can't be
+      // rolled back (the old hash is gone) — record it honestly instead.
+      await logAuditEvent({
+        adminId: currentAdmin.id,
+        action: 'update',
+        entityType: 'admin_user',
+        entityId: authUserId,
+        description: `Password reset on existing admin during failed promotion by ${currentAdmin.email}`,
+      })
     }
     return handleSupabaseError(
       adminError,
