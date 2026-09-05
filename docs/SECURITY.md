@@ -4,11 +4,31 @@ This document describes the security measures in place and guidelines for mainta
 
 ## Authentication & Authorization
 
-- **Admin authentication** uses Supabase Auth with email/password
-- **Middleware** (`proxy.ts`) protects all `/admin/*` routes by verifying:
-  1. User is authenticated (has valid session)
-  2. User exists in the `admins` table
-- **Server actions** use `requireAdmin()` to verify admin access before mutations
+There are two independent audiences, sharing one Supabase Auth instance:
+
+- **Admins** sign in with email/password. **Middleware** (`proxy.ts`) protects
+  all `/admin/*` routes by verifying (1) the user is authenticated and (2) the
+  user exists in the `admins` table. **Server actions** use `requireAdmin()`
+  (`lib/auth/get-admin.ts`) to verify admin access before mutations.
+- **Riders** sign in with a passwordless 6-digit email code (Supabase email
+  OTP) at `/account/login` — no password, ever. Anyone with an email address
+  can obtain a session this way; there is no admission check at sign-in time.
+  Server actions and pages that need a rider identity use `requireRider()` /
+  `requireAccount()` (`lib/auth/get-rider.ts`), which resolve the rider (and
+  whether the same user also has an `admins` row) with the service-role
+  client. See `docs/rider-accounts.md` for the full sign-in, linking, and
+  settings flow.
+
+Because rider sign-in has no admission check, **`authenticated` is a public
+role**: `authenticated` may hold the same public grants as `anon` and nothing
+more. Private or owner-scoped data is never gated on role membership alone —
+it goes through a server action using the service-role client, gated by
+`requireAdmin()`/`requireRider()` in application code. Migration
+`20260905100000_lock_down_authenticated_role.sql` is where this was enforced
+for the tables that predate rider accounts (`riders`, `registrations`,
+`results`, `event_controls`, `control_checkins` all had legacy blanket grants
+to `authenticated` until then); any new table's grants to `authenticated`
+must mirror `anon`'s.
 
 ### Admin roles
 
@@ -42,6 +62,12 @@ All Supabase tables have RLS policies. The three-client pattern ensures proper a
 | `getSupabase()`                | Public reads | Enforced                    |
 | `createSupabaseServerClient()` | Auth checks  | Enforced                    |
 | `getSupabaseAdmin()`           | Admin writes | Bypassed (server-side only) |
+
+`createSupabaseServerClient()` is also how `requireRider()`/`requireAccount()`
+(`lib/auth/get-rider.ts`, next to `requireAdmin()` in `lib/auth/get-admin.ts`)
+validate the session — `auth.getUser()` on the cookie client — before falling
+back to `getSupabaseAdmin()` to read the rider/admin rows, which are
+deliberately not exposed to the `authenticated` role.
 
 **Never import `getSupabaseAdmin()` in client components.**
 
@@ -121,6 +147,8 @@ The app uses two Supabase Storage buckets with distinct access policies:
 | `rider-submissions` | Yes         | No               | Rider uploads via service-role client in `lib/actions/rider-results.ts` |
 
 Both buckets restrict write access to the service-role client (`getSupabaseAdmin()`), which bypasses RLS. Anonymous/public INSERT policies are not used — application-level token validation (submission tokens for riders, admin auth for images) gates access before the service-role upload occurs.
+
+`rider-submissions` previously also had `"Authenticated update for rider submissions"` and `"Authenticated delete for rider submissions"` storage policies, letting any signed-in user overwrite or delete any rider's control-card photo or GPX file. Once rider sign-in shipped, "any signed-in user" stopped meaning "an admin" and started meaning "anyone with an email address" — `20260905100000_lock_down_authenticated_role.sql` drops both policies. Writes to this bucket go through the service-role client exclusively now.
 
 Regression tests verify these policies against the local DB:
 

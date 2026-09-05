@@ -59,6 +59,47 @@ npm run test:e2e
 > `npx supabase start`. It is gated in CI by its own job (see
 > [CI/CD Integration](#cicd-integration)).
 
+> **Node version:** `npm run test:integration-real` needs Node 24 —
+> `@supabase/supabase-js` relies on the native `WebSocket` global, which Node
+> 20 (this shell's default, in this project) doesn't have; running it there
+> fails with `native WebSocket not found`. Prefix with `nvm use 24 &&` (or
+> `source ~/.nvm/nvm.sh && nvm use 24 &&`) before the command. CI installs
+> Node 24 directly, so this only matters locally.
+
+### Rider-account real-DB suites
+
+Rider accounts (`docs/rider-accounts.md`) touch grants, RLS, and triggers, so
+their coverage lives in `tests/integration-real/`, not the mocked
+`tests/integration/` suite:
+
+- `authenticated-role-lockdown.test.ts` — the phase 0 grant matrix: a fresh,
+  unlinked signed-in user cannot read rider `email`/`phone`/`emergency_contact_*`/
+  `auth_user_id`/`linked_at`, `registrations.management_token`, or
+  `results.submission_token`, and cannot write `riders` or any storage bucket.
+- `rider-account-columns.test.ts` — the `riders_link_pair` CHECK, the
+  `trg_riders_clear_linked_at` trigger, and `bio`/`photo_path` grants.
+- `account-linking.test.ts` — 0/1/N candidate resolution, the atomic claim
+  under a concurrent-link race, and admin link/unlink.
+- `account-deletion.test.ts` — deleting the auth user, unlinking (not
+  deleting) the rider row, and that an admin's own deletion is refused.
+- `merge-riders-accounts.test.ts` — link/bio/photo precedence when merging
+  riders that carry account links on one or both sides.
+
+`tests/integration-real/helpers/auth-users.ts` is shared setup for all of
+these: `createAuthUser(email)`, `createUserClient(email)` (signs in via
+`generateLink` + `verifyOtp` so no real email is sent), and
+`deleteAuthUsersByEmail(emails)` for cleanup. Clean up by **both** rider id
+and email, and by auth user email — the usual real-DB idempotency rules
+apply (see "Avoiding Test Rot" below).
+
+`tests/e2e/account-login.spec.ts` is the one Playwright spec for this
+feature: it requests a real code, reads it back from **Mailpit**'s API
+(`http://127.0.0.1:54324`, started by `npx supabase start`), verifies it, and
+asserts the rider lands on `/account` with their seeded ride. It needs both
+the dev server and local Supabase running, and is not part of the `chromium`
+project's brevet-card-only CI job yet (see "CI/CD Integration" below) — run
+it locally with `npx playwright test tests/e2e/account-login.spec.ts`.
+
 ### Run with Coverage
 
 ```bash
