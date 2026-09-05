@@ -113,7 +113,9 @@ test.describe('rider account sign-in', () => {
     await expect(page).toHaveURL(/\/account$/)
     await expect(page.getByRole('heading', { name: /hi, ada/i })).toBeVisible()
     await expect(page.getByRole('link', { name: /manage registration/i })).toBeVisible()
-    await expect(page.getByRole('link', { name: /my account/i })).toBeVisible()
+    await expect(
+      page.locator('#main-content').getByRole('link', { name: /my account/i })
+    ).toBeVisible()
     await page.screenshot({ path: 'test-results/account-overview.png', fullPage: true })
   })
 
