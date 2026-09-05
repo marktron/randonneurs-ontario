@@ -89,6 +89,13 @@ describe('updateSession', () => {
     expect(location(await updateSession(req('/account/login')))?.pathname).toBe('/account')
   })
 
+  it('sends a signed-in admin on /account/login to /account without consulting admins', async () => {
+    mockUser = { id: 'u1' }
+    mockAdmin = { id: 'u1', role: 'admin' }
+    expect(location(await updateSession(req('/account/login')))?.pathname).toBe('/account')
+    expect(fromMock).not.toHaveBeenCalled()
+  })
+
   it('does not consult the admins table on account routes, but does on admin routes', async () => {
     mockUser = { id: 'u1' }
 
@@ -102,6 +109,11 @@ describe('updateSession', () => {
     fromMock.mockClear()
     await updateSession(req('/admin/events'))
     expect(fromMock).toHaveBeenCalledWith('admins')
+  })
+
+  it('lets a signed-out visitor open /admin/login', async () => {
+    const res = await updateSession(req('/admin/login'))
+    expect(res.status).toBe(200)
   })
 
   it('sends a signed-in non-admin on /admin/login to /account (no loop)', async () => {
@@ -132,6 +144,18 @@ describe('updateSession', () => {
     const loc = location(await updateSession(req('/admin/events')))
     expect(loc?.pathname).toBe('/admin/login')
     expect(loc?.searchParams.get('redirect')).toBe('/admin/events')
+  })
+
+  it('lets an admin through to bare /admin', async () => {
+    mockUser = { id: 'u1' }
+    mockAdmin = { id: 'u1', role: 'admin' }
+    expect((await updateSession(req('/admin'))).status).toBe(200)
+  })
+
+  it('sends a signed-out visitor on bare /admin to login with a redirect param', async () => {
+    const loc = location(await updateSession(req('/admin')))
+    expect(loc?.pathname).toBe('/admin/login')
+    expect(loc?.searchParams.get('redirect')).toBe('/admin')
   })
 
   it('always lets /admin/update-password through', async () => {
