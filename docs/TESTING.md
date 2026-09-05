@@ -59,12 +59,15 @@ npm run test:e2e
 > `npx supabase start`. It is gated in CI by its own job (see
 > [CI/CD Integration](#cicd-integration)).
 
-> **Node version:** `npm run test:integration-real` needs Node 24 —
+> **Node version:** only `npm run test:integration-real` needs Node 24 —
 > `@supabase/supabase-js` relies on the native `WebSocket` global, which Node
 > 20 (this shell's default, in this project) doesn't have; running it there
 > fails with `native WebSocket not found`. Prefix with `nvm use 24 &&` (or
 > `source ~/.nvm/nvm.sh && nvm use 24 &&`) before the command. CI installs
-> Node 24 directly, so this only matters locally.
+> Node 24 directly, so this only matters locally. `npm test` /
+> `npm run test:run` (unit + mock-based integration) run on Node 20 as-is; if
+> they don't, that is a bug in the code under test, not a Node version to work
+> around.
 
 ### Rider-account real-DB suites
 
@@ -73,17 +76,28 @@ their coverage lives in `tests/integration-real/`, not the mocked
 `tests/integration/` suite:
 
 - `authenticated-role-lockdown.test.ts` — the phase 0 grant matrix: a fresh,
-  unlinked signed-in user cannot read rider `email`/`phone`/`emergency_contact_*`/
-  `auth_user_id`/`linked_at`, `registrations.management_token`, or
-  `results.submission_token`, and cannot write `riders` or any storage bucket.
-- `rider-account-columns.test.ts` — the `riders_link_pair` CHECK, the
+  unlinked signed-in user cannot read rider
+  `email`/`phone`/`emergency_contact_*`/`hidden`, the `registrations` base
+  table, or `results.submission_token`, and cannot write `riders` or any
+  storage bucket. (`auth_user_id`/`linked_at` are asserted in
+  `rider-account-columns.test.ts`, below.)
+- `rider-account-columns.test.ts` — that `authenticated` cannot read
+  `auth_user_id`/`linked_at`, the `riders_link_pair` CHECK, the
   `trg_riders_clear_linked_at` trigger, and `bio`/`photo_path` grants.
-- `account-linking.test.ts` — 0/1/N candidate resolution, the atomic claim
-  under a concurrent-link race, and admin link/unlink.
-- `account-deletion.test.ts` — deleting the auth user, unlinking (not
-  deleting) the rider row, and that an admin's own deletion is refused.
+- `account-linking.test.ts` — 0/1/N candidate resolution and the atomic claim
+  under a concurrent-link race.
+- `account-deletion.test.ts` — deleting the auth user and unlinking (not
+  deleting) the rider row.
 - `merge-riders-accounts.test.ts` — link/bio/photo precedence when merging
   riders that carry account links on one or both sides.
+
+The admin-facing and refusal cases are server-action behaviour, not schema
+behaviour, so they live in the mock suite instead:
+
+- `tests/integration/actions/rider-accounts-admin.test.ts` — admin
+  `linkRiderAccount`/`unlinkRiderAccount`, including the chapter-admin refusal.
+- `tests/integration/actions/account.test.ts` — that an admin's own
+  `changeAccountEmail`/`deleteAccount` is refused.
 
 `tests/integration-real/helpers/auth-users.ts` is shared setup for all of
 these: `createAuthUser(email)`, `createUserClient(email)` (signs in via
@@ -96,9 +110,9 @@ apply (see "Avoiding Test Rot" below).
 feature: it requests a real code, reads it back from **Mailpit**'s API
 (`http://127.0.0.1:54324`, started by `npx supabase start`), verifies it, and
 asserts the rider lands on `/account` with their seeded ride. It needs both
-the dev server and local Supabase running, and is not part of the `chromium`
-project's brevet-card-only CI job yet (see "CI/CD Integration" below) — run
-it locally with `npx playwright test tests/e2e/account-login.spec.ts`.
+the dev server and local Supabase running. CI runs it in the
+`integration-real` job (see "CI/CD Integration" below); locally, run it with
+`npx playwright test tests/e2e/account-login.spec.ts --project=chromium`.
 
 ### Run with Coverage
 
@@ -777,10 +791,12 @@ changed business logic) is caught — things the mock-based suite cannot see. It
    `tests/e2e/brevet-card.spec.ts` against three Playwright projects:
    `webkit-iphone-8-plus`, `webkit-card-mutation`, and
    `chromium-card-mutation` (see `.github/workflows/ci.yml`).
+6. Runs `tests/e2e/account-login.spec.ts` on `--project=chromium` — the rider
+   sign-in flow, which reads its code back from the Mailpit that
+   `supabase start` boots.
 
-The rest of the Playwright suite — the full `chromium` project in
-`playwright.config.ts`, covering everything outside the digital brevet card —
-is not yet wired into CI.
+The rest of the Playwright suite — everything else in the `chromium` project in
+`playwright.config.ts` — is not yet wired into CI.
 
 > **The e2e gate must not be able to pass by skipping.** Every seeded card test
 > begins `if (!card) test.skip(...)`, and `getTestData()` returns null whenever

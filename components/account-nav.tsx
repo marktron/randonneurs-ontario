@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { createClient } from '@/lib/supabase-browser'
@@ -28,9 +28,13 @@ interface AccountNavProps {
 export function AccountNav({ className, onNavigate }: AccountNavProps) {
   const [signedIn, setSignedIn] = useState(false)
   const pathname = usePathname()
-  const supabase = useMemo(() => createClient(), [])
+  // Built inside the mount effect, never during render: this component sits in
+  // the header of every public page, so a render-time createClient() also runs
+  // during SSR/prerender, where there is no browser storage to talk to.
+  const supabaseRef = useRef<ReturnType<typeof createClient> | null>(null)
 
   useEffect(() => {
+    const supabase = (supabaseRef.current ??= createClient())
     let active = true
     supabase.auth.getSession().then(({ data }) => {
       if (active) setSignedIn(Boolean(data.session))
@@ -42,9 +46,11 @@ export function AccountNav({ className, onNavigate }: AccountNavProps) {
       active = false
       subscription.unsubscribe()
     }
-  }, [supabase])
+  }, [])
 
   useEffect(() => {
+    const supabase = supabaseRef.current
+    if (!supabase) return
     let active = true
     supabase.auth.getSession().then(({ data }) => {
       if (active) setSignedIn(Boolean(data.session))
@@ -52,7 +58,7 @@ export function AccountNav({ className, onNavigate }: AccountNavProps) {
     return () => {
       active = false
     }
-  }, [supabase, pathname])
+  }, [pathname])
 
   return (
     <Link

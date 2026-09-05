@@ -101,8 +101,11 @@ export function handleActionError<T = void>(
       }
     }
 
-    // Permission errors
-    if (error.message.includes('permission') || error.message.includes('unauthorized')) {
+    // Permission errors. Matched case-insensitively so the bare
+    // `Error('Unauthorized')` thrown by requireAdmin/requireAccount/requireRider
+    // lands here rather than in the generic branch.
+    const message = error.message.toLowerCase()
+    if (message.includes('permission') || message.includes('unauthorized')) {
       return {
         success: false,
         error: context?.userMessage || 'You do not have permission to perform this action',

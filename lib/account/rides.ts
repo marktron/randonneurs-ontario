@@ -48,7 +48,13 @@ function toAccountRide(
 
 /**
  * Upcoming = scheduled, on or after today, and not cancelled by the rider.
- * Everything else is past. Pure so it can be unit-tested.
+ * Past = everything the "upcoming" date/status test rejects, cancelled or not.
+ *
+ * A registration the rider cancelled for a still-future scheduled event
+ * therefore lands in **neither** list: it is not something they are riding,
+ * and showing it under "past rides" before the date would misread. It
+ * reappears in "past" once the event date passes or the event stops being
+ * scheduled. Pure so it can be unit-tested.
  */
 export function splitRides(
   rows: AccountRideRow[],

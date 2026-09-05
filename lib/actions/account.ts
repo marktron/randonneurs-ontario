@@ -154,6 +154,11 @@ async function afterSignIn(userId: string, email: string): Promise<string> {
  * True for the "not signed in" error thrown by requireAccount/requireRider.
  * Shared so the actions Task 10 adds to this file can reuse it — an expired
  * or missing session isn't a failure worth logging to Sentry.
+ *
+ * Kept even though handleActionError now matches "unauthorized"
+ * case-insensitively: its permission branch says "You do not have permission
+ * to perform this action", which is wrong for an expired session, and it logs
+ * to Sentry on the way there.
  */
 function isUnauthorizedError(error: unknown): boolean {
   return error instanceof Error && error.message === 'Unauthorized'

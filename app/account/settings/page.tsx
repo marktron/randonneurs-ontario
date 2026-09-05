@@ -76,7 +76,10 @@ export default async function AccountSettingsPage() {
       <Card>
         <CardHeader>
           <CardTitle>Sign out</CardTitle>
-          <CardDescription>Signs you out of this browser only.</CardDescription>
+          <CardDescription>
+            Signs you out of this browser only.
+            {account.isAdmin ? ' This also ends your admin session in this browser.' : ''}
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <SignOutButton />

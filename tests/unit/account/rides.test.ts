@@ -62,7 +62,7 @@ describe('splitRides', () => {
     expect(past.map((r) => r.registrationId)).toEqual(['newer', 'old'])
   })
 
-  it('drops cancelled registrations from upcoming but keeps them in past', () => {
+  it('hides a cancelled future ride entirely and keeps a cancelled past one', () => {
     const { upcoming, past } = splitRides(
       [
         row({ id: 'c1', status: 'cancelled' }),

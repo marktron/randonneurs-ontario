@@ -66,9 +66,10 @@ account has no linked rider yet (`lib/account/linking.ts`):
 - **0 candidates** (no rider shares this email and is unlinked) → redirect to
   `/account/unmatched`. The account persists, unlinked; linking is
   re-evaluated on every future sign-in the rider hasn't linked by, so an
-  admin link made in the meantime is picked up automatically. (The
-  `/account/unmatched` copy also promises this happens on registering while
-  signed in — that's phase 2's registration prefill, not built yet.)
+  admin link made in the meantime is picked up automatically — and so is a
+  first registration, which is what the `/account/unmatched` copy tells a
+  brand-new rider to do (sign in again afterwards). Linking _during_
+  registration is phase 2 and is deliberately not promised anywhere.
 - **1 candidate** → linked immediately, redirect to `/account`.
 - **N candidates** (a shared family email) → redirect to `/account/choose`,
   which lists each candidate as "First L." and lets the rider pick themselves.
@@ -132,11 +133,14 @@ any signed-in user overwrite or delete another rider's control-card photos or
 GPX files). `20260905100100_add_rider_account_columns.sql` extends that same
 column allow-list with `bio`/`photo_path` only — `auth_user_id` and
 `linked_at` are never granted to `anon` or `authenticated`.
-`tests/integration-real/authenticated-role-lockdown.test.ts` is the
-regression test: it signs in as a fresh, unlinked user and asserts it cannot
-read rider `email`/`phone`/`emergency_contact_*`/`auth_user_id`/`linked_at`,
-`registrations.management_token`, or `results.submission_token`, and cannot
-write to `riders` or any storage bucket.
+Two real-DB suites are the regression tests.
+`tests/integration-real/authenticated-role-lockdown.test.ts` signs in as a
+fresh, unlinked user and asserts it cannot read rider
+`email`/`phone`/`emergency_contact_*`, the `registrations` base table, or
+`results.submission_token`, and cannot write to `riders` or any storage
+bucket. `tests/integration-real/rider-account-columns.test.ts` covers the two
+account columns added later — it is where "authenticated cannot read
+`auth_user_id` or `linked_at`" is asserted.
 
 ## Dual-role users (admin who is also a rider)
 
@@ -162,7 +166,10 @@ rider's `results.status` for that event, split into upcoming/past by
 everything else is past. Each row links to `/registration/manage/[token]` and,
 for upcoming rides, `/card/[token]` — tokens are read with the service-role
 client and only ever rendered for the account's own `riderId` (never a
-client-supplied id).
+client-supplied id). A past ride links through its
+`registrations.management_token` too — `results.submission_token` is
+deliberately never surfaced to the page, so `authenticated` gaining a way to
+read it would still expose nothing here.
 
 The homepage widget (`components/my-rides-section.tsx`,
 `docs/my-rides.md`) now checks the signed-in account first
@@ -186,7 +193,9 @@ to show, and no email to look up).
 - **Delete account** — requires a **freshly emailed code**, not the existing
   session: the dialog runs `requestSignInCode` again (with its own Turnstile
   challenge) and then `deleteAccount(code)` re-verifies via `verifyOtp`
-  before doing anything. `deleteAccountData()` (`lib/account/deletion.ts`)
+  before doing anything — a deliberate choice over inspecting an `auth_time`
+  claim on the existing JWT, which Supabase does not refresh per action and
+  which would let a session left open on a shared machine delete the account. `deleteAccountData()` (`lib/account/deletion.ts`)
   clears `auth_user_id`/`linked_at`/`bio`/`photo_path` on the rider row (if
   linked), logs `account_delete`, then deletes the auth user with
   `auth.admin.deleteUser`. **What survives:** the rider row itself, and every
@@ -237,17 +246,37 @@ to show, and no email to look up).
 
 1. **Custom SMTP** — Supabase Dashboard → Authentication → SMTP Settings: host `email-smtp.<region>.amazonaws.com`, port 587, SES SMTP credentials, sender `no-reply@randonneurs.to`, sender name `Randonneurs Ontario`. Without this the default sender is capped at 2 emails/hour.
 2. **Email template** — Authentication → Email Templates: paste the token-only HTML (`supabase/templates/rider-otp.html`) into **both** "Magic Link" and "Confirm signup", subject `Your Randonneurs Ontario sign-in code` on each. A new address on a project with email confirmation enabled receives the Confirm-signup template, not Magic Link, so both must contain `{{ .Token }}` and no `{{ .ConfirmationURL }}`.
-3. **CAPTCHA** — Authentication → Attack Protection → Enable CAPTCHA, provider Turnstile, secret from Cloudflare. Add `NEXT_PUBLIC_TURNSTILE_SITE_KEY` to Vercel (production and preview). Add the production and preview hostnames to the Turnstile widget's allowed domains.
-4. **Rate limits** — Authentication → Rate Limits: emails sent 2 → 60 per hour. Leave the others.
-5. **Sign-ups** — Authentication → Providers → Email: "Allow new users to sign up" ON (it is today), "Confirm email" irrelevant for OTP.
-6. **Migrations** — merge to main; `deploy-migrations.yml` applies `20260905100000`, `20260905100100`, `20260905100200`. Verify in the SQL editor:
+3. **Turnstile site key first** — create the widget in Cloudflare, add the production and preview hostnames to its allowed domains, then add `NEXT_PUBLIC_TURNSTILE_SITE_KEY` to Vercel (production **and** preview) and redeploy. Load `/account/login` and confirm the widget actually renders. Do this **before** step 4: `TurnstileField` renders nothing when the key is unset, so enabling CAPTCHA in Supabase first locks every rider out of sign-in with "Please complete the verification and try again" and no widget to complete.
+4. **CAPTCHA** — Authentication → Attack Protection → Enable CAPTCHA, provider Turnstile, secret from Cloudflare. Only once step 3 is verified in the deployed app.
+5. **Site URL and redirect allow-list** — Authentication → URL Configuration: Site URL is the production origin (`https://randonneurs.to`), and the Redirect URLs list covers it plus any preview origins in use. The email-change confirmation links Supabase sends from `changeAccountEmail` are built from these; a stale Site URL sends riders to the wrong host and the change never confirms.
+6. **Rate limits** — Authentication → Rate Limits: emails sent 2 → 60 per hour. Leave the others.
+7. **Sign-ups** — Authentication → Providers → Email: "Allow new users to sign up" ON (it is today), "Confirm email" irrelevant for OTP.
+8. **Migrations** — merge to main; `deploy-migrations.yml` applies `20260905100000`, `20260905100100`, `20260905100200`. Verify in the SQL editor:
+
    ```sql
    select column_name, has_column_privilege('authenticated', 'public.riders', column_name, 'SELECT') as can_select
    from information_schema.columns where table_schema = 'public' and table_name = 'riders' order by 1;
    ```
+
    `can_select` should be true for exactly `id, slug, first_name, last_name, gender, rider_number, created_at, updated_at, bio, photo_path` and false for everything else (notably `email`, `phone`, `emergency_contact_*`, `auth_user_id`, `linked_at`, `hidden`). (`information_schema.column_privileges` is not used here — it reports false positives for `anon`/`authenticated` on this project.)
-7. **Advisors** — Dashboard → Advisors → Security: no new findings for `riders`, `audit_logs`, `auth_user_id_for_email`.
-8. **Smoke test** — sign in with a real rider email on production, confirm the code arrives from `no-reply@randonneurs.to`, the account links, and `/account` lists rides.
+
+   Then confirm the other two tables the lockdown migration touched — `authenticated` must hold **no** privilege on `registrations`, and on `results` only the same columns `anon` has:
+
+   ```sql
+   -- every one of these must be false
+   select p as privilege, has_table_privilege('authenticated', 'public.registrations', p) as granted
+   from unnest(array['SELECT','INSERT','UPDATE','DELETE','REFERENCES','TRIGGER']) as p;
+
+   -- can_select must match anon exactly; submission_token in particular must be false
+   select column_name,
+          has_column_privilege('anon', 'public.results', column_name, 'SELECT') as anon_can_select,
+          has_column_privilege('authenticated', 'public.results', column_name, 'SELECT') as auth_can_select
+   from information_schema.columns
+   where table_schema = 'public' and table_name = 'results' order by 1;
+   ```
+
+9. **Advisors** — Dashboard → Advisors → Security: no new findings for `riders`, `audit_logs`, `auth_user_id_for_email`.
+10. **Smoke test** — sign in with a real rider email on production, confirm the code arrives from `no-reply@randonneurs.to`, the account links, and `/account` lists rides.
 
 ## Testing
 

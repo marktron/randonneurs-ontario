@@ -26,8 +26,8 @@ export default async function UnmatchedPage() {
           that address instead.
         </li>
         <li>
-          If you&apos;ve never ridden with us, there&apos;s nothing to link yet. Your account will
-          connect automatically the first time you register while signed in.
+          If you&apos;ve never ridden with us, there&apos;s nothing to link yet &mdash; sign in
+          again after your first registration and we&apos;ll connect it.
         </li>
         <li>
           Otherwise,{' '}

@@ -30,6 +30,14 @@ for the tables that predate rider accounts (`riders`, `registrations`,
 to `authenticated` until then); any new table's grants to `authenticated`
 must mirror `anon`'s.
 
+Two real-DB suites hold this line:
+`tests/integration-real/authenticated-role-lockdown.test.ts` (a fresh
+signed-in user cannot read rider `email`/`phone`/`emergency_contact_*`, the
+`registrations` base table, or `results.submission_token`, and cannot write
+`riders` or any storage bucket) and
+`tests/integration-real/rider-account-columns.test.ts` (the same role cannot
+read `riders.auth_user_id` or `riders.linked_at`).
+
 ### Admin roles
 
 There are three roles in the `admins` table: `super_admin`, `admin`, and
