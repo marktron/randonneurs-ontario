@@ -4,16 +4,23 @@ import { createAuthUser, deleteAuthUsersByEmail } from './helpers/auth-users'
 import { deleteAccountData } from '@/lib/account/deletion'
 
 const USER_EMAIL = 'inttest-delete-user@example.com'
+const OTHER_USER_EMAIL = 'inttest-delete-other@example.com'
 const RIDER = { id: '00000000-10c3-4000-a000-000000000001', slug: 'inttest-delete-rider' }
 
 describe('deleteAccountData (real DB)', () => {
   const admin = getTestSupabase()
-  let userId: string
+  let userId: string | undefined
+  let otherUserId: string | undefined
 
   async function cleanup() {
     await admin.from('audit_logs').delete().eq('entity_id', RIDER.id)
+    // The unlinked-account case logs with entity_id: null, so it isn't caught
+    // above — clean it up by actor_user_id too, using whatever ids the
+    // previous test (or run) assigned.
+    if (userId) await admin.from('audit_logs').delete().eq('actor_user_id', userId)
+    if (otherUserId) await admin.from('audit_logs').delete().eq('actor_user_id', otherUserId)
     await admin.from('riders').delete().eq('id', RIDER.id)
-    await deleteAuthUsersByEmail([USER_EMAIL])
+    await deleteAuthUsersByEmail([USER_EMAIL, OTHER_USER_EMAIL])
   }
 
   beforeEach(async () => {
@@ -37,7 +44,7 @@ describe('deleteAccountData (real DB)', () => {
   afterAll(cleanup)
 
   it('unlinks the rider, clears profile fields, keeps the rider, deletes the auth user, and logs it', async () => {
-    await deleteAccountData({ userId, riderId: RIDER.id })
+    await deleteAccountData({ userId: userId!, riderId: RIDER.id })
 
     const { data: rider } = await admin
       .from('riders')
@@ -58,9 +65,9 @@ describe('deleteAccountData (real DB)', () => {
 
     const { data: logs } = await admin
       .from('audit_logs')
-      .select('action, actor_user_id')
+      .select('action, actor_user_id, admin_id')
       .eq('entity_id', RIDER.id)
-    expect(logs).toEqual([{ action: 'account_delete', actor_user_id: userId }])
+    expect(logs).toEqual([{ action: 'account_delete', actor_user_id: userId, admin_id: null }])
   })
 
   it('handles an unlinked account', async () => {
@@ -68,8 +75,39 @@ describe('deleteAccountData (real DB)', () => {
       admin.from('riders').update({ auth_user_id: null, linked_at: null }).eq('id', RIDER.id),
       'unlink'
     )
-    await expect(deleteAccountData({ userId, riderId: null })).resolves.toBeUndefined()
+    await expect(deleteAccountData({ userId: userId!, riderId: null })).resolves.toBeUndefined()
     const { data: users } = await admin.auth.admin.listUsers({ perPage: 1000 })
     expect(users.users.some((u) => u.id === userId)).toBe(false)
+  })
+
+  it('does not unlink a rider now linked to a different auth user, but still deletes the caller', async () => {
+    otherUserId = await createAuthUser(OTHER_USER_EMAIL)
+    await checked(
+      admin
+        .from('riders')
+        .update({ auth_user_id: otherUserId, linked_at: new Date().toISOString() })
+        .eq('id', RIDER.id),
+      're-link rider to the other user'
+    )
+
+    // userId no longer owns this rider's link (otherUserId does). The unlink
+    // UPDATE is scoped by `.eq('auth_user_id', input.userId)`, so it must be a
+    // no-op here — a caller can only ever unlink their own rider. Deleting
+    // their own auth user, however, always proceeds: that's the account they
+    // asked to delete, independent of which rider (if any) they're linked to.
+    await deleteAccountData({ userId: userId!, riderId: RIDER.id })
+
+    const { data: rider } = await admin
+      .from('riders')
+      .select('auth_user_id, linked_at, bio')
+      .eq('id', RIDER.id)
+      .single()
+    expect(rider?.auth_user_id).toBe(otherUserId)
+    expect(rider?.linked_at).not.toBeNull()
+    expect(rider?.bio).toBe('I ride bikes')
+
+    const { data: users } = await admin.auth.admin.listUsers({ perPage: 1000 })
+    expect(users.users.some((u) => u.id === userId)).toBe(false)
+    expect(users.users.some((u) => u.id === otherUserId)).toBe(true)
   })
 })

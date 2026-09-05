@@ -19,6 +19,7 @@ import { Label } from '@/components/ui/label'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { AlertCircle, Loader2 } from 'lucide-react'
 import { requestSignInCode, deleteAccount } from '@/lib/actions/account'
+import { TurnstileField } from '@/components/account/turnstile-field'
 
 export function DeleteAccountDialog({
   email,
@@ -31,13 +32,14 @@ export function DeleteAccountDialog({
   const [open, setOpen] = useState(false)
   const [sent, setSent] = useState(false)
   const [code, setCode] = useState('')
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
 
   const sendCode = () => {
     setError(null)
     startTransition(async () => {
-      const result = await requestSignInCode(email ?? '')
+      const result = await requestSignInCode(email ?? '', captchaToken ?? undefined)
       if (result.success) setSent(true)
       else setError(result.error || 'Could not send a code.')
     })
@@ -65,6 +67,7 @@ export function DeleteAccountDialog({
         if (!next) {
           setSent(false)
           setCode('')
+          setCaptchaToken(null)
           setError(null)
         }
       }}
@@ -103,10 +106,13 @@ export function DeleteAccountDialog({
             />
           </div>
         ) : (
-          <Button type="button" variant="outline" onClick={sendCode} disabled={isPending}>
-            {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Email me a code
-          </Button>
+          <div className="space-y-3">
+            <TurnstileField onToken={setCaptchaToken} />
+            <Button type="button" variant="outline" onClick={sendCode} disabled={isPending}>
+              {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Email me a code
+            </Button>
+          </div>
         )}
         <AlertDialogFooter>
           <AlertDialogCancel disabled={isPending}>Keep my account</AlertDialogCancel>

@@ -267,6 +267,15 @@ describe('changeAccountEmail', () => {
     expect(updateUser).toHaveBeenCalledWith({ email: 'new@example.com' })
     expect(result.success).toBe(true)
   })
+
+  it('requires a session', async () => {
+    mockAccount = null
+    expect(await changeAccountEmail('new@example.com')).toEqual({
+      success: false,
+      error: 'Please sign in again.',
+    })
+    expect(updateUser).not.toHaveBeenCalled()
+  })
 })
 
 describe('deleteAccount', () => {
@@ -303,5 +312,15 @@ describe('deleteAccount', () => {
     expect(deleteAccountData).toHaveBeenCalledWith({ userId: 'u1', riderId: 'r1' })
     expect(signOut).toHaveBeenCalledWith({ scope: 'local' })
     expect(result).toEqual({ success: true })
+  })
+
+  it('requires a session', async () => {
+    mockAccount = null
+    expect(await deleteAccount('123456')).toEqual({
+      success: false,
+      error: 'Please sign in again.',
+    })
+    expect(verifyOtp).not.toHaveBeenCalled()
+    expect(deleteAccountData).not.toHaveBeenCalled()
   })
 })
