@@ -228,6 +228,12 @@ otp_expiry = 3600
 # subject = "You have been invited"
 # content_path = "./supabase/templates/invite.html"
 
+# Rider sign-in codes. `{{ .Token }}` only, so Supabase sends a code, never a link.
+# Production: paste the same HTML into Authentication → Email Templates → Magic Link.
+[auth.email.template.magic_link]
+subject = "Your Randonneurs Ontario sign-in code"
+content_path = "./supabase/templates/rider-otp.html"
+
 [auth.sms]
 # Allow/disallow new user signups via SMS to your project.
 enable_signup = false
