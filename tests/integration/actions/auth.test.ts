@@ -17,6 +17,11 @@ let mockUpdateResult: { error: Error | null } = { error: null }
 let mockAdminRecord: { id: string } | null = { id: 'admin-1' }
 let mockProfileUpdateResult: { error: Error | null } = { error: null }
 
+// Shared spy so tests can assert the args a given call was made with —
+// recreating this inside the factory would give each createSupabaseServerClient()
+// call a fresh, unobservable vi.fn().
+const signInWithPassword = vi.fn(() => Promise.resolve(mockSignInResult))
+
 // Mock Supabase server client
 vi.mock('@/lib/supabase-server-client', () => ({
   createSupabaseServerClient: vi.fn(() =>
@@ -28,7 +33,7 @@ vi.mock('@/lib/supabase-server-client', () => ({
             error: null,
           })
         ),
-        signInWithPassword: vi.fn(() => Promise.resolve(mockSignInResult)),
+        signInWithPassword,
         updateUser: vi.fn(() =>
           Promise.resolve({
             data: mockUser ? { user: mockUser } : null,
@@ -66,6 +71,7 @@ function resetMockState() {
   mockUpdateResult = { error: null }
   mockAdminRecord = { id: 'admin-1' }
   mockProfileUpdateResult = { error: null }
+  signInWithPassword.mockClear()
 }
 
 describe('login', () => {
@@ -79,6 +85,28 @@ describe('login', () => {
 
       expect(result.success).toBe(true)
       expect(result.error).toBeUndefined()
+    })
+  })
+
+  describe('captcha', () => {
+    it('passes the captcha token through to signInWithPassword', async () => {
+      await login('a@b.c', 'pw', 'tok')
+
+      expect(signInWithPassword).toHaveBeenCalledWith({
+        email: 'a@b.c',
+        password: 'pw',
+        options: { captchaToken: 'tok' },
+      })
+    })
+
+    it('sends no captcha token when none is supplied (unchanged behaviour)', async () => {
+      await login('a@b.c', 'pw')
+
+      expect(signInWithPassword).toHaveBeenCalledWith({
+        email: 'a@b.c',
+        password: 'pw',
+        options: { captchaToken: undefined },
+      })
     })
   })
 
@@ -154,6 +182,28 @@ describe('changePassword', () => {
 
       expect(result.success).toBe(false)
       expect(result.error).toBe('Current password is incorrect')
+    })
+  })
+
+  describe('captcha', () => {
+    it('forwards the captcha token to the re-authentication call', async () => {
+      await changePassword('currentpass', 'newpassword123', 'tok')
+
+      expect(signInWithPassword).toHaveBeenCalledWith({
+        email: 'admin@example.com',
+        password: 'currentpass',
+        options: { captchaToken: 'tok' },
+      })
+    })
+
+    it('sends no captcha token when none is supplied (unchanged behaviour)', async () => {
+      await changePassword('currentpass', 'newpassword123')
+
+      expect(signInWithPassword).toHaveBeenCalledWith({
+        email: 'admin@example.com',
+        password: 'currentpass',
+        options: { captchaToken: undefined },
+      })
     })
   })
 

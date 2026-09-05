@@ -9,7 +9,12 @@ There are two independent audiences, sharing one Supabase Auth instance:
 - **Admins** sign in with email/password. **Middleware** (`proxy.ts`) protects
   all `/admin/*` routes by verifying (1) the user is authenticated and (2) the
   user exists in the `admins` table. **Server actions** use `requireAdmin()`
-  (`lib/auth/get-admin.ts`) to verify admin access before mutations.
+  (`lib/auth/get-admin.ts`) to verify admin access before mutations. Both
+  admin sign-in (`login`) and the admin change-password re-authentication
+  (`changePassword`, `lib/actions/auth.ts`) accept an optional Turnstile
+  `captchaToken` and pass it to `signInWithPassword`, since Supabase CAPTCHA,
+  once enabled, applies to every auth endpoint (not just rider sign-in) — see
+  "Rate limits and Turnstile" in `docs/rider-accounts.md`.
 - **Riders** sign in with a passwordless 6-digit email code (Supabase email
   OTP) at `/account/login` — no password, ever. Anyone with an email address
   can obtain a session this way; there is no admission check at sign-in time.

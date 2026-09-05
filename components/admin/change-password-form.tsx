@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { AlertCircle, Loader2, Check } from 'lucide-react'
 import { changePassword } from '@/lib/actions/auth'
+import { TurnstileField } from '@/components/account/turnstile-field'
 
 export function ChangePasswordForm() {
   const [isPending, startTransition] = useTransition()
@@ -16,6 +17,10 @@ export function ChangePasswordForm() {
   const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null)
+  // Bumped on every attempt so the Turnstile widget remounts. Cloudflare tokens
+  // are single-use, so a retry after a failed attempt needs a fresh challenge.
+  const [attempt, setAttempt] = useState(0)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -32,8 +37,12 @@ export function ChangePasswordForm() {
       return
     }
 
+    const token = captchaToken ?? undefined
+    setCaptchaToken(null)
+    setAttempt((n) => n + 1)
+
     startTransition(async () => {
-      const result = await changePassword(currentPassword, newPassword)
+      const result = await changePassword(currentPassword, newPassword, token)
 
       if (result.success) {
         setSuccess(true)
@@ -50,9 +59,7 @@ export function ChangePasswordForm() {
     <Card>
       <CardHeader>
         <CardTitle>Change Password</CardTitle>
-        <CardDescription>
-          Update your account password
-        </CardDescription>
+        <CardDescription>Update your account password</CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -107,6 +114,8 @@ export function ChangePasswordForm() {
               disabled={isPending}
             />
           </div>
+
+          <TurnstileField key={attempt} onToken={setCaptchaToken} />
 
           <Button type="submit" disabled={isPending}>
             {isPending ? (

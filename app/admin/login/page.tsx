@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { login } from '@/lib/actions/auth'
 import { AlertCircle, Loader2 } from 'lucide-react'
+import { TurnstileField } from '@/components/account/turnstile-field'
 
 function getSafeRedirectUrl(redirect: string | null): string {
   if (!redirect) return '/admin'
@@ -29,13 +30,21 @@ export default function LoginPage() {
     urlError === 'unauthorized' ? 'You do not have admin access' : null
   )
   const [isPending, startTransition] = useTransition()
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null)
+  // Bumped on every attempt so the Turnstile widget remounts. Cloudflare tokens
+  // are single-use, so a retry after a failed login needs a fresh challenge.
+  const [attempt, setAttempt] = useState(0)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
 
+    const token = captchaToken ?? undefined
+    setCaptchaToken(null)
+    setAttempt((n) => n + 1)
+
     startTransition(async () => {
-      const result = await login(email, password)
+      const result = await login(email, password, token)
       if (result.success) {
         router.push(redirectTo)
         router.refresh()
@@ -50,9 +59,7 @@ export default function LoginPage() {
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           <CardTitle className="text-2xl">Admin Login</CardTitle>
-          <CardDescription>
-            Sign in to access the Randonneurs Ontario admin panel
-          </CardDescription>
+          <CardDescription>Sign in to access the Randonneurs Ontario admin panel</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -89,6 +96,8 @@ export default function LoginPage() {
                 disabled={isPending}
               />
             </div>
+
+            <TurnstileField key={attempt} onToken={setCaptchaToken} />
 
             <Button type="submit" className="w-full" disabled={isPending}>
               {isPending ? (

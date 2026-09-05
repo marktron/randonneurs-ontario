@@ -219,6 +219,12 @@ to show, and no email to look up).
   unset, which is the local-dev and test default. When Supabase's own CAPTCHA
   setting is enabled (production only — see the checklist), the widget's
   token is required and Supabase itself rejects requests without a valid one.
+  CAPTCHA is a project-wide Supabase Auth setting, so it also gates admin
+  password sign-in and the admin change-password re-authentication, not just
+  rider OTP — `app/admin/login/page.tsx` and
+  `components/admin/change-password-form.tsx` render `TurnstileField` and
+  pass the token into `login`/`changePassword` (`lib/actions/auth.ts`) the
+  same way the rider sign-in form does.
 
 ## Local development
 
@@ -247,7 +253,7 @@ to show, and no email to look up).
 1. **Custom SMTP** — Supabase Dashboard → Authentication → SMTP Settings: host `email-smtp.<region>.amazonaws.com`, port 587, SES SMTP credentials, sender `no-reply@randonneurs.to`, sender name `Randonneurs Ontario`. Without this the default sender is capped at 2 emails/hour.
 2. **Email template** — Authentication → Email Templates: paste the token-only HTML (`supabase/templates/rider-otp.html`) into **both** "Magic Link" and "Confirm signup", subject `Your Randonneurs Ontario sign-in code` on each. A new address on a project with email confirmation enabled receives the Confirm-signup template, not Magic Link, so both must contain `{{ .Token }}` and no `{{ .ConfirmationURL }}`.
 3. **Turnstile site key first** — create the widget in Cloudflare, add the production and preview hostnames to its allowed domains, then add `NEXT_PUBLIC_TURNSTILE_SITE_KEY` to Vercel (production **and** preview) and redeploy. Load `/account/login` and confirm the widget actually renders. Do this **before** step 4: `TurnstileField` renders nothing when the key is unset, so enabling CAPTCHA in Supabase first locks every rider out of sign-in with "Please complete the verification and try again" and no widget to complete.
-4. **CAPTCHA** — Authentication → Attack Protection → Enable CAPTCHA, provider Turnstile, secret from Cloudflare. Only once step 3 is verified in the deployed app.
+4. **CAPTCHA** — Authentication → Attack Protection → Enable CAPTCHA, provider Turnstile, secret from Cloudflare. Only once step 3 is verified in the deployed app. This setting is global: once enabled it also covers admin password sign-in (`app/admin/login/page.tsx`) and the admin change-password re-authentication (`components/admin/change-password-form.tsx`), both of which already render `TurnstileField` and forward the token to `lib/actions/auth.ts`'s `login`/`changePassword`. The Turnstile site key from step 3 must be deployed before this step for admin flows too, or admins are locked out the same way riders would be.
 5. **Site URL and redirect allow-list** — Authentication → URL Configuration: Site URL is the production origin (`https://randonneurs.to`), and the Redirect URLs list covers it plus any preview origins in use. The email-change confirmation links Supabase sends from `changeAccountEmail` are built from these; a stale Site URL sends riders to the wrong host and the change never confirms.
 6. **Rate limits** — Authentication → Rate Limits: emails sent 2 → 60 per hour. Leave the others.
 7. **Sign-ups** — Authentication → Providers → Email: "Allow new users to sign up" ON (it is today), "Confirm email" irrelevant for OTP.

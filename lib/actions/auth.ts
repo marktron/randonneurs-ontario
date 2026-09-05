@@ -12,7 +12,11 @@ export interface LoginResult {
   error?: string
 }
 
-export async function login(email: string, password: string): Promise<LoginResult> {
+export async function login(
+  email: string,
+  password: string,
+  captchaToken?: string
+): Promise<LoginResult> {
   const normalizedEmail = email.toLowerCase().trim()
   if (isRateLimited('login', normalizedEmail, 5, 15 * 60 * 1000)) {
     return { success: false, error: 'Too many login attempts. Please try again later.' }
@@ -23,6 +27,7 @@ export async function login(email: string, password: string): Promise<LoginResul
   const { data, error } = await supabase.auth.signInWithPassword({
     email,
     password,
+    options: { captchaToken },
   })
 
   if (error) {
@@ -53,7 +58,8 @@ export async function logout(): Promise<void> {
 
 export async function changePassword(
   currentPassword: string,
-  newPassword: string
+  newPassword: string,
+  captchaToken?: string
 ): Promise<ActionResult> {
   if (!newPassword || newPassword.length < 8) {
     return { success: false, error: 'New password must be at least 8 characters' }
@@ -73,6 +79,7 @@ export async function changePassword(
   const { error: signInError } = await supabase.auth.signInWithPassword({
     email: user.email,
     password: currentPassword,
+    options: { captchaToken },
   })
 
   if (signInError) {
