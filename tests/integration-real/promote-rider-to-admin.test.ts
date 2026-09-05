@@ -23,9 +23,23 @@ describe('createAdminUser promoting an existing rider (real DB)', () => {
   const admin = getTestSupabase()
 
   async function cleanup() {
+    // audit_logs.admin_id FKs to admins.id, which FKs to auth.users, so stale
+    // audit rows wedge every later run. Clear them by the admin ids these
+    // emails own rather than by description alone: not every description
+    // embeds an email, and one that doesn't would never be matched below.
+    const { data: staleAdmins } = await admin
+      .from('admins')
+      .select('id')
+      .in('email', [SUPER_ADMIN_EMAIL, RIDER_EMAIL])
+    const staleIds = (staleAdmins ?? []).map((a) => a.id)
+    if (staleIds.length > 0) {
+      await admin.from('audit_logs').delete().in('admin_id', staleIds)
+      await admin.from('audit_logs').delete().in('actor_user_id', staleIds)
+      await admin.from('audit_logs').delete().in('entity_id', staleIds)
+    }
     // The audit log for createAdminUser records entity_id = the promoted
     // user's auth id (generated fresh per test run), not the rider's row id,
-    // so match on the description text (which embeds the email) instead.
+    // so match on the description text (which embeds the email) too.
     await admin.from('audit_logs').delete().ilike('description', `%${RIDER_EMAIL}%`)
     await admin.from('audit_logs').delete().ilike('description', `%${SUPER_ADMIN_EMAIL}%`)
     await admin.from('riders').delete().in('id', [RIDER.id])
