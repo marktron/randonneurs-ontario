@@ -30,7 +30,7 @@ export default async function AccountSettingsPage() {
         <h1 className="font-serif text-4xl tracking-tight">Account settings</h1>
         {account.isAdmin && (
           <p className="mt-2 text-sm text-muted-foreground">
-            This also ends your admin session in this browser.
+            Signing out from the links above also ends your admin session in this browser.
           </p>
         )}
       </header>
