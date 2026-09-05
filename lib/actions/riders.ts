@@ -1,11 +1,17 @@
 'use server'
 
-import { revalidateTag } from 'next/cache'
+import { revalidatePath, revalidateTag } from 'next/cache'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { requireAdmin } from '@/lib/auth/get-admin'
+import { isFullAdmin } from '@/lib/auth/roles'
 import { applyRiderSearchFilter } from '@/lib/utils/rider-search'
 import { logAuditEvent } from '@/lib/audit-log'
-import { handleActionError, handleSupabaseError, handleDataError } from '@/lib/errors'
+import {
+  handleActionError,
+  handleSupabaseError,
+  handleDataError,
+  createActionResult,
+} from '@/lib/errors'
 import { createSlug } from '@/lib/utils'
 import { emailIlikePattern } from '@/lib/utils/validation'
 import type { ActionResult } from '@/types/actions'
@@ -399,6 +405,48 @@ export async function mergeRiders(data: MergeRidersData): Promise<MergeRidersRes
       }
     }
 
+    // Step 3b: Reconcile account links and rider-authored profile fields.
+    // auth_user_id is UNIQUE, so a source's link must be cleared before it can
+    // move to the target. The target's own link always wins.
+    const { data: linkRows } = await getSupabaseAdmin()
+      .from('riders')
+      .select('id, auth_user_id, linked_at, bio, photo_path')
+      .in('id', [targetRiderId, ...ridersToDelete])
+    const targetRow = linkRows?.find((r) => r.id === targetRiderId)
+    const sourceRows = (linkRows ?? []).filter((r) => r.id !== targetRiderId)
+    const linkedSources = sourceRows.filter((r) => r.auth_user_id)
+    let droppedLinks = 0
+    let linkToMove: { auth_user_id: string; linked_at: string | null } | null = null
+
+    if (targetRow?.auth_user_id) {
+      droppedLinks = linkedSources.length
+    } else if (linkedSources.length > 0) {
+      linkToMove = {
+        auth_user_id: linkedSources[0].auth_user_id!,
+        linked_at: linkedSources[0].linked_at,
+      }
+      droppedLinks = linkedSources.length - 1
+    }
+
+    if (linkedSources.length > 0) {
+      const { error: clearError } = await getSupabaseAdmin()
+        .from('riders')
+        .update({ auth_user_id: null, linked_at: null })
+        .in(
+          'id',
+          linkedSources.map((r) => r.id)
+        )
+      if (clearError) {
+        console.error('Error clearing source account links:', clearError)
+        return { success: false, error: 'Failed to move account link' }
+      }
+    }
+
+    const profileFromSources = {
+      bio: targetRow?.bio ?? sourceRows.find((r) => r.bio)?.bio ?? null,
+      photo_path: targetRow?.photo_path ?? sourceRows.find((r) => r.photo_path)?.photo_path ?? null,
+    }
+
     // Step 4: Delete the other riders (cascades remaining rider_memberships with duplicate seasons)
     const { error: deleteError } = await getSupabaseAdmin()
       .from('riders')
@@ -421,6 +469,13 @@ export async function mergeRiders(data: MergeRidersData): Promise<MergeRidersRes
       last_name: riderData.lastName.trim(),
       email: riderData.email?.trim().toLowerCase() || null,
       gender: parsedGender,
+      ...profileFromSources,
+      ...(linkToMove
+        ? {
+            auth_user_id: linkToMove.auth_user_id,
+            linked_at: linkToMove.linked_at ?? new Date().toISOString(),
+          }
+        : {}),
     }
 
     const { error: updateRiderError } = await getSupabaseAdmin()
@@ -438,7 +493,11 @@ export async function mergeRiders(data: MergeRidersData): Promise<MergeRidersRes
       action: 'merge',
       entityType: 'rider',
       entityId: targetRiderId,
-      description: `Merged ${sourceRiderIds.length} riders into: ${riderData.firstName} ${riderData.lastName}`,
+      description:
+        `Merged ${sourceRiderIds.length} riders into: ${riderData.firstName} ${riderData.lastName}` +
+        (droppedLinks > 0
+          ? ` (dropped account link${droppedLinks > 1 ? 's' : ''}: ${droppedLinks})`
+          : ''),
     })
 
     revalidateTag('riders', { expire: 0 })
@@ -496,4 +555,92 @@ export async function getRiderCounts(
   }
 
   return counts
+}
+
+/** Admin: attach an existing auth user (looked up by email) to a rider. */
+export async function linkRiderAccount(riderId: string, email: string): Promise<ActionResult> {
+  try {
+    const admin = await requireAdmin()
+    if (!isFullAdmin(admin.role)) return { success: false, error: 'Not authorized' }
+
+    const normalized = email.trim().toLowerCase()
+    if (!normalized) return { success: false, error: 'Email is required' }
+
+    const supabase = getSupabaseAdmin()
+    const { data: userId, error: lookupError } = await supabase.rpc('auth_user_id_for_email', {
+      p_email: normalized,
+    })
+    if (lookupError) {
+      return handleSupabaseError(
+        lookupError,
+        { operation: 'linkRiderAccount' },
+        'Failed to look up account'
+      )
+    }
+    if (!userId) {
+      return { success: false, error: 'No account has signed in with that email yet.' }
+    }
+
+    const { data, error } = await supabase
+      .from('riders')
+      .update({ auth_user_id: userId, linked_at: new Date().toISOString() })
+      .eq('id', riderId)
+      .is('auth_user_id', null)
+      .select('id, first_name, last_name')
+    if (error) {
+      if (error.code === '23505') {
+        return { success: false, error: 'That account is already linked to another rider.' }
+      }
+      return handleSupabaseError(error, { operation: 'linkRiderAccount' }, 'Failed to link account')
+    }
+    if (!data || data.length !== 1) {
+      return { success: false, error: 'This rider is already linked to an account.' }
+    }
+
+    await logAuditEvent({
+      adminId: admin.id,
+      action: 'account_link',
+      entityType: 'rider',
+      entityId: riderId,
+      description: `Linked account ${normalized} to rider: ${data[0].first_name} ${data[0].last_name}`,
+    })
+    revalidatePath(`/admin/riders/${riderId}`)
+    return createActionResult()
+  } catch (error) {
+    return handleActionError(error, { operation: 'linkRiderAccount' }, 'Failed to link account')
+  }
+}
+
+/** Admin: detach the auth user from a rider. The auth user itself is untouched. */
+export async function unlinkRiderAccount(riderId: string): Promise<ActionResult> {
+  try {
+    const admin = await requireAdmin()
+    if (!isFullAdmin(admin.role)) return { success: false, error: 'Not authorized' }
+
+    const { data, error } = await getSupabaseAdmin()
+      .from('riders')
+      .update({ auth_user_id: null, linked_at: null })
+      .eq('id', riderId)
+      .select('id, first_name, last_name')
+    if (error) {
+      return handleSupabaseError(
+        error,
+        { operation: 'unlinkRiderAccount' },
+        'Failed to unlink account'
+      )
+    }
+    if (!data || data.length !== 1) return { success: false, error: 'Rider not found' }
+
+    await logAuditEvent({
+      adminId: admin.id,
+      action: 'account_unlink',
+      entityType: 'rider',
+      entityId: riderId,
+      description: `Unlinked account from rider: ${data[0].first_name} ${data[0].last_name}`,
+    })
+    revalidatePath(`/admin/riders/${riderId}`)
+    return createActionResult()
+  } catch (error) {
+    return handleActionError(error, { operation: 'unlinkRiderAccount' }, 'Failed to unlink account')
+  }
 }
