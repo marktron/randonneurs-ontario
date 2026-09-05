@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { usePathname } from 'next/navigation'
 import { createClient } from '@/lib/supabase-browser'
 
 interface AccountNavProps {
@@ -14,9 +15,15 @@ interface AccountNavProps {
  * the label is cosmetic (authorization happens server-side), so the
  * unvalidated browser session is fine here. The browser client also keeps
  * the session refreshed while a rider browses public pages.
+ *
+ * Sign-in/out run through server actions, which set the auth cookie without
+ * telling this component's browser client. Re-checking on every pathname
+ * change (both flows redirect once they're done) picks that up without
+ * requiring a full page reload.
  */
 export function AccountNav({ className, onNavigate }: AccountNavProps) {
   const [signedIn, setSignedIn] = useState(false)
+  const pathname = usePathname()
 
   useEffect(() => {
     const supabase = createClient()
@@ -31,7 +38,7 @@ export function AccountNav({ className, onNavigate }: AccountNavProps) {
       active = false
       subscription.unsubscribe()
     }
-  }, [])
+  }, [pathname])
 
   return (
     <Link
