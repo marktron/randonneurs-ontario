@@ -244,6 +244,7 @@ describe('signOutRider', () => {
 describe('changeAccountEmail', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    resetRateLimitStores()
     mockAccount = { userId: 'u1', email: 'old@example.com', rider: { id: 'r1' }, isAdmin: false }
     updateUser.mockResolvedValue({ data: {}, error: null })
   })
@@ -266,6 +267,25 @@ describe('changeAccountEmail', () => {
     const result = await changeAccountEmail(' New@Example.com ')
     expect(updateUser).toHaveBeenCalledWith({ email: 'new@example.com' })
     expect(result.success).toBe(true)
+  })
+
+  it('stops asking Supabase once the per-account limit is hit', async () => {
+    for (let i = 0; i < 3; i++) {
+      expect((await changeAccountEmail(`new${i}@example.com`)).success).toBe(true)
+    }
+    updateUser.mockClear()
+    const result = await changeAccountEmail('new4@example.com')
+    expect(result.success).toBe(false)
+    expect(result.error).toMatch(/too many email changes/i)
+    expect(updateUser).not.toHaveBeenCalled()
+  })
+
+  it('limits per account, not globally', async () => {
+    for (let i = 0; i < 3; i++) await changeAccountEmail(`new${i}@example.com`)
+    mockAccount = { userId: 'u2', email: 'other@example.com', rider: { id: 'r2' }, isAdmin: false }
+    updateUser.mockClear()
+    expect((await changeAccountEmail('fresh@example.com')).success).toBe(true)
+    expect(updateUser).toHaveBeenCalledWith({ email: 'fresh@example.com' })
   })
 
   it('requires a session', async () => {

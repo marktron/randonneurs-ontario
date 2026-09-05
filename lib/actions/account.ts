@@ -208,6 +208,11 @@ export async function changeAccountEmail(newEmail: string): Promise<ActionResult
     if (normalized === normalizeEmail(account.email)) {
       return { success: false, error: 'That is already your email address.' }
     }
+    // Each accepted change makes Supabase send two confirmations
+    // (double_confirm_changes) out of the shared project email budget.
+    if (isRateLimited('rider-email-change', account.userId, 3, TEN_MINUTES)) {
+      return { success: false, error: 'Too many email changes. Try again in a few minutes.' }
+    }
 
     const supabase = await createSupabaseServerClient()
     const { error } = await supabase.auth.updateUser({ email: normalized })

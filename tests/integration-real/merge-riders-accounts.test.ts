@@ -93,6 +93,44 @@ describe('mergeRiders with linked accounts (real DB)', () => {
     expect(data?.bio).toBe('from source')
   })
 
+  it('keeps the target profile and fills the gaps from the source', async () => {
+    const userA = await createAuthUser(USER_A)
+    await checked(
+      admin
+        .from('riders')
+        .update({ bio: 'target bio', photo_path: null })
+        .eq('id', RIDERS.target.id),
+      'seed target profile'
+    )
+    await checked(
+      admin
+        .from('riders')
+        .update({
+          bio: 'source bio',
+          photo_path: 'riders/source.jpg',
+          auth_user_id: userA,
+          linked_at: new Date().toISOString(),
+        })
+        .eq('id', RIDERS.source.id),
+      'seed source profile and link'
+    )
+
+    const result = await merge()
+    expect(result.success).toBe(true)
+
+    const { data } = await admin
+      .from('riders')
+      .select('auth_user_id, linked_at, bio, photo_path')
+      .eq('id', RIDERS.target.id)
+      .single()
+    // The target's own profile always wins; only its empty fields are filled
+    // from a source. A discarded read error used to wipe both.
+    expect(data?.bio).toBe('target bio')
+    expect(data?.photo_path).toBe('riders/source.jpg')
+    expect(data?.auth_user_id).toBe(userA)
+    expect(data?.linked_at).not.toBeNull()
+  })
+
   it('keeps the target link when both are linked and records the dropped one', async () => {
     const userA = await createAuthUser(USER_A)
     const userB = await createAuthUser(USER_B)

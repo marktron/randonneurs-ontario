@@ -43,7 +43,17 @@ export async function updateSession(request: NextRequest) {
     url.pathname = path
     url.search = ''
     for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value)
-    return NextResponse.redirect(url)
+    const response = NextResponse.redirect(url)
+    // A bare redirect would drop anything setAll() wrote during a token
+    // refresh: the rotated cookies (the rider would be signed out on the very
+    // request that refreshed them) and the no-store headers that keep a
+    // refreshed session off any CDN.
+    for (const cookie of supabaseResponse.cookies.getAll()) response.cookies.set(cookie)
+    for (const header of ['Cache-Control', 'Expires', 'Pragma']) {
+      const value = supabaseResponse.headers.get(header)
+      if (value !== null) response.headers.set(header, value)
+    }
+    return response
   }
 
   // ---- Rider account routes ------------------------------------------------

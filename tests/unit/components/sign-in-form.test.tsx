@@ -19,7 +19,15 @@ vi.mock('next/navigation', () => ({
   useSearchParams: () => ({ get: (key: string) => (key === 'redirect' ? redirectParam : null) }),
 }))
 
-vi.mock('@/components/account/turnstile-field', () => ({ TurnstileField: () => null }))
+// Stand-in for the Cloudflare widget: a click "solves" the challenge and hands
+// back a single-use token, exactly like a real Turnstile success callback.
+vi.mock('@/components/account/turnstile-field', () => ({
+  TurnstileField: ({ onToken }: { onToken: (token: string | null) => void }) => (
+    <button type="button" data-testid="captcha" onClick={() => onToken('captcha-token')}>
+      solve captcha
+    </button>
+  ),
+}))
 
 import { SignInForm } from '@/components/account/sign-in-form'
 
@@ -79,5 +87,37 @@ describe('SignInForm', () => {
     await screen.findByLabelText(/6-digit code/i)
     fireEvent.click(screen.getByRole('button', { name: /different email/i }))
     expect(screen.getByLabelText(/email/i)).toHaveValue('r@example.com')
+  })
+
+  it('does not reuse a spent captcha token when resending the code', async () => {
+    render(<SignInForm />)
+    fireEvent.change(screen.getByLabelText(/email/i), { target: { value: 'r@example.com' } })
+    fireEvent.click(screen.getByTestId('captcha'))
+    fireEvent.click(screen.getByRole('button', { name: /send code/i }))
+    await waitFor(() =>
+      expect(requestSignInCode).toHaveBeenNthCalledWith(1, 'r@example.com', 'captcha-token')
+    )
+
+    // A fresh challenge is offered on the code step; resending before it is
+    // solved must send no token rather than replaying the spent one.
+    const resend = await screen.findByRole('button', { name: /resend code/i })
+    expect(screen.getByTestId('captcha')).toBeInTheDocument()
+    fireEvent.click(resend)
+    await waitFor(() => expect(requestSignInCode).toHaveBeenCalledTimes(2))
+    expect(requestSignInCode).toHaveBeenNthCalledWith(2, 'r@example.com', undefined)
+  })
+
+  it('sends the newly solved token when the rider completes the fresh challenge', async () => {
+    render(<SignInForm />)
+    fireEvent.change(screen.getByLabelText(/email/i), { target: { value: 'r@example.com' } })
+    fireEvent.click(screen.getByRole('button', { name: /send code/i }))
+    await waitFor(() =>
+      expect(requestSignInCode).toHaveBeenNthCalledWith(1, 'r@example.com', undefined)
+    )
+
+    fireEvent.click(await screen.findByTestId('captcha'))
+    fireEvent.click(screen.getByRole('button', { name: /resend code/i }))
+    await waitFor(() => expect(requestSignInCode).toHaveBeenCalledTimes(2))
+    expect(requestSignInCode).toHaveBeenNthCalledWith(2, 'r@example.com', 'captcha-token')
   })
 })

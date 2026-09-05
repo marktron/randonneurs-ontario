@@ -408,10 +408,18 @@ export async function mergeRiders(data: MergeRidersData): Promise<MergeRidersRes
     // Step 3b: Reconcile account links and rider-authored profile fields.
     // auth_user_id is UNIQUE, so a source's link must be cleared before it can
     // move to the target. The target's own link always wins.
-    const { data: linkRows } = await getSupabaseAdmin()
+    const { data: linkRows, error: linkReadError } = await getSupabaseAdmin()
       .from('riders')
       .select('id, auth_user_id, linked_at, bio, photo_path')
       .in('id', [targetRiderId, ...ridersToDelete])
+
+    if (linkReadError) {
+      // Carrying on would treat every rider as unlinked and profile-less: the
+      // target's bio/photo would be wiped and a source's account link dropped.
+      console.error('Error reading rider account links:', linkReadError)
+      return { success: false, error: 'Failed to read account links' }
+    }
+
     const targetRow = linkRows?.find((r) => r.id === targetRiderId)
     const sourceRows = (linkRows ?? []).filter((r) => r.id !== targetRiderId)
     const linkedSources = sourceRows.filter((r) => r.auth_user_id)

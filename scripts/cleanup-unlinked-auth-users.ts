@@ -23,10 +23,16 @@ async function main() {
     auth: { autoRefreshToken: false, persistSession: false },
   })
 
-  const [{ data: admins }, { data: linked }] = await Promise.all([
-    supabase.from('admins').select('id'),
-    supabase.from('riders').select('auth_user_id').not('auth_user_id', 'is', null),
-  ])
+  const [{ data: admins, error: adminsError }, { data: linked, error: linkedError }] =
+    await Promise.all([
+      supabase.from('admins').select('id'),
+      supabase.from('riders').select('auth_user_id').not('auth_user_id', 'is', null),
+    ])
+  // Fail before listing users: an empty keep set would make --apply delete
+  // every idle auth user, admins and linked riders included.
+  if (adminsError) throw new Error(`Failed to read admins: ${adminsError.message}`)
+  if (linkedError) throw new Error(`Failed to read linked riders: ${linkedError.message}`)
+
   const keep = new Set<string>([
     ...(admins ?? []).map((a) => a.id),
     ...(linked ?? []).map((r) => r.auth_user_id as string),

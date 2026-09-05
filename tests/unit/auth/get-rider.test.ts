@@ -1,8 +1,10 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 let mockUser: { id: string; email?: string } | null = null
 let mockRider: { id: string; auth_user_id: string } | null = null
 let mockAdmin: { id: string } | null = null
+let mockRiderError: { message: string } | null = null
+let mockAdminError: { message: string } | null = null
 
 vi.mock('@/lib/supabase-server-client', () => ({
   createSupabaseServerClient: vi.fn(() =>
@@ -18,7 +20,11 @@ vi.mock('@/lib/supabase-server', () => ({
       select: vi.fn(() => ({
         eq: vi.fn(() => ({
           maybeSingle: vi.fn(() =>
-            Promise.resolve({ data: table === 'riders' ? mockRider : mockAdmin, error: null })
+            Promise.resolve(
+              table === 'riders'
+                ? { data: mockRider, error: mockRiderError }
+                : { data: mockAdmin, error: mockAdminError }
+            )
           ),
         })),
       })),
@@ -33,6 +39,13 @@ describe('getAccount / requireAccount / requireRider', () => {
     mockUser = null
     mockRider = null
     mockAdmin = null
+    mockRiderError = null
+    mockAdminError = null
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
   })
 
   it('returns null when there is no session', async () => {
@@ -55,6 +68,21 @@ describe('getAccount / requireAccount / requireRider', () => {
     const linked = await requireRider()
     expect(linked.rider.id).toBe('r1')
     expect(linked.isAdmin).toBe(true)
+  })
+
+  it('fails closed when the admins lookup errors', async () => {
+    // Swallowing this would report isAdmin: false and lift the admin guards
+    // on changeAccountEmail/deleteAccount.
+    mockUser = { id: 'u1', email: 'a@example.com' }
+    mockAdminError = { message: 'connection reset' }
+    await expect(getAccount()).rejects.toThrow('Account lookup failed')
+    await expect(requireAccount()).rejects.toThrow('Account lookup failed')
+  })
+
+  it('fails closed when the riders lookup errors', async () => {
+    mockUser = { id: 'u1', email: 'a@example.com' }
+    mockRiderError = { message: 'connection reset' }
+    await expect(getAccount()).rejects.toThrow('Account lookup failed')
   })
 
   it('uses null email when the auth user has none', async () => {

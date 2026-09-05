@@ -23,6 +23,9 @@ export function SignInForm() {
   const [email, setEmail] = useState('')
   const [code, setCode] = useState('')
   const [captchaToken, setCaptchaToken] = useState<string | null>(null)
+  // Bumped on every send so the Turnstile widget remounts. Cloudflare tokens
+  // are single-use, so a resend needs a fresh challenge, not the spent token.
+  const [attempt, setAttempt] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
@@ -30,8 +33,12 @@ export function SignInForm() {
   const sendCode = () => {
     setError(null)
     setNotice(null)
+    const token = captchaToken ?? undefined
+    // Clear before awaiting: the token is spent the moment it is submitted.
+    setCaptchaToken(null)
+    setAttempt((n) => n + 1)
     startTransition(async () => {
-      const result = await requestSignInCode(email, captchaToken ?? undefined)
+      const result = await requestSignInCode(email, token)
       if (result.success) {
         setNotice(CODE_SENT_MESSAGE)
         setStep('code')
@@ -93,7 +100,7 @@ export function SignInForm() {
               Use the address you register for rides with. We&apos;ll email you a 6-digit code.
             </p>
           </div>
-          <TurnstileField onToken={setCaptchaToken} />
+          <TurnstileField key={attempt} onToken={setCaptchaToken} />
           <Button type="submit" disabled={isPending} className="w-full sm:w-auto">
             {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             Send code
@@ -118,6 +125,7 @@ export function SignInForm() {
               required
             />
           </div>
+          <TurnstileField key={attempt} onToken={setCaptchaToken} />
           <div className="flex flex-wrap gap-2">
             <Button type="submit" disabled={isPending}>
               {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}

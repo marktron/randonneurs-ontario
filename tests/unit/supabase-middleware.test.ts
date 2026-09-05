@@ -72,6 +72,16 @@ describe('updateSession', () => {
     expect(res.cookies.get('sb-token')?.value).toBe('fresh')
   })
 
+  it('carries refreshed cookies and cache headers onto a redirect', async () => {
+    refreshCookies = true
+    const res = await updateSession(req('/account/settings'))
+    const loc = location(res)
+    expect(loc?.pathname).toBe('/account/login')
+    expect(res.cookies.get('sb-token')?.value).toBe('fresh')
+    expect(res.headers.get('cache-control')).toContain('no-store')
+    expect(res.headers.get('pragma')).toBe('no-cache')
+  })
+
   it('sends a signed-out visitor on /account/* to login with a redirect param', async () => {
     const res = await updateSession(req('/account/settings'))
     const loc = location(res)

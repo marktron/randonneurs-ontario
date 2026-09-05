@@ -1,6 +1,7 @@
 import { cache } from 'react'
 import { createSupabaseServerClient } from '@/lib/supabase-server-client'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
+import { logError } from '@/lib/errors'
 import type { Rider } from '@/types/queries'
 
 export interface Account {
@@ -41,10 +42,22 @@ export const getAccount = cache(async (): Promise<Account | null> => {
   if (!user) return null
 
   const admin = getSupabaseAdmin()
-  const [{ data: rider }, { data: adminRow }] = await Promise.all([
-    admin.from('riders').select('*').eq('auth_user_id', user.id).maybeSingle(),
-    admin.from('admins').select('id').eq('id', user.id).maybeSingle(),
-  ])
+  const [{ data: rider, error: riderError }, { data: adminRow, error: adminError }] =
+    await Promise.all([
+      admin.from('riders').select('*').eq('auth_user_id', user.id).maybeSingle(),
+      admin.from('admins').select('id').eq('id', user.id).maybeSingle(),
+    ])
+
+  // Fail closed. A swallowed admins error would report isAdmin: false, which
+  // lifts the admin guards in changeAccountEmail/deleteAccount; a swallowed
+  // riders error would present a linked rider as unlinked.
+  if (riderError || adminError) {
+    logError(riderError ?? adminError, {
+      operation: 'getAccount',
+      context: { userId: user.id, source: riderError ? 'riders' : 'admins' },
+    })
+    throw new Error('Account lookup failed')
+  }
 
   return {
     userId: user.id,
