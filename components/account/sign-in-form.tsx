@@ -10,7 +10,7 @@ import { AlertCircle, Loader2 } from 'lucide-react'
 import { requestSignInCode, verifySignInCode } from '@/lib/actions/account'
 import { getSafeAccountRedirect } from '@/lib/account/redirect'
 import { CODE_SENT_MESSAGE } from '@/lib/account/messages'
-import { TurnstileField } from '@/components/account/turnstile-field'
+import { useTurnstile } from '@/hooks/use-turnstile'
 
 type Step = 'email' | 'code'
 
@@ -22,10 +22,7 @@ export function SignInForm() {
   const [step, setStep] = useState<Step>('email')
   const [email, setEmail] = useState('')
   const [code, setCode] = useState('')
-  const [captchaToken, setCaptchaToken] = useState<string | null>(null)
-  // Bumped on every send so the Turnstile widget remounts. Cloudflare tokens
-  // are single-use, so a resend needs a fresh challenge, not the spent token.
-  const [attempt, setAttempt] = useState(0)
+  const captcha = useTurnstile()
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
@@ -33,10 +30,8 @@ export function SignInForm() {
   const sendCode = () => {
     setError(null)
     setNotice(null)
-    const token = captchaToken ?? undefined
-    // Clear before awaiting: the token is spent the moment it is submitted.
-    setCaptchaToken(null)
-    setAttempt((n) => n + 1)
+    // Take before awaiting: the token is spent the moment it is submitted.
+    const token = captcha.takeToken()
     startTransition(async () => {
       const result = await requestSignInCode(email, token)
       if (result.success) {
@@ -100,7 +95,7 @@ export function SignInForm() {
               Use the address you register for rides with. We&apos;ll email you a 6-digit code.
             </p>
           </div>
-          <TurnstileField key={attempt} onToken={setCaptchaToken} />
+          {captcha.widget}
           <Button type="submit" disabled={isPending} className="w-full sm:w-auto">
             {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             Send code
@@ -125,7 +120,7 @@ export function SignInForm() {
               required
             />
           </div>
-          <TurnstileField key={attempt} onToken={setCaptchaToken} />
+          {captcha.widget}
           <div className="flex flex-wrap gap-2">
             <Button type="submit" disabled={isPending}>
               {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}

@@ -19,7 +19,7 @@ import { Label } from '@/components/ui/label'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { AlertCircle, Loader2 } from 'lucide-react'
 import { requestSignInCode, deleteAccount } from '@/lib/actions/account'
-import { TurnstileField } from '@/components/account/turnstile-field'
+import { useTurnstile } from '@/hooks/use-turnstile'
 
 export function DeleteAccountDialog({
   email,
@@ -32,19 +32,14 @@ export function DeleteAccountDialog({
   const [open, setOpen] = useState(false)
   const [sent, setSent] = useState(false)
   const [code, setCode] = useState('')
-  const [captchaToken, setCaptchaToken] = useState<string | null>(null)
-  // Bumped on every send so the Turnstile widget remounts. Cloudflare tokens
-  // are single-use, so a resend needs a fresh challenge, not the spent token.
-  const [attempt, setAttempt] = useState(0)
+  const captcha = useTurnstile()
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
 
   const sendCode = () => {
     setError(null)
-    const token = captchaToken ?? undefined
-    // Clear before awaiting: the token is spent the moment it is submitted.
-    setCaptchaToken(null)
-    setAttempt((n) => n + 1)
+    // Take before awaiting: the token is spent the moment it is submitted.
+    const token = captcha.takeToken()
     startTransition(async () => {
       const result = await requestSignInCode(email ?? '', token)
       if (result.success) setSent(true)
@@ -74,7 +69,7 @@ export function DeleteAccountDialog({
         if (!next) {
           setSent(false)
           setCode('')
-          setCaptchaToken(null)
+          captcha.reset()
           setError(null)
         }
       }}
@@ -113,14 +108,14 @@ export function DeleteAccountDialog({
                 className="tracking-[0.3em] tabular-nums"
               />
             </div>
-            <TurnstileField key={attempt} onToken={setCaptchaToken} />
+            {captcha.widget}
             <Button type="button" variant="ghost" disabled={isPending} onClick={sendCode}>
               Resend code
             </Button>
           </div>
         ) : (
           <div className="space-y-3">
-            <TurnstileField key={attempt} onToken={setCaptchaToken} />
+            {captcha.widget}
             <Button type="button" variant="outline" onClick={sendCode} disabled={isPending}>
               {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Email me a code

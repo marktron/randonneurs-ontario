@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { AlertCircle, Loader2, Check } from 'lucide-react'
 import { changePassword } from '@/lib/actions/auth'
-import { TurnstileField } from '@/components/account/turnstile-field'
+import { useTurnstile } from '@/hooks/use-turnstile'
 
 export function ChangePasswordForm() {
   const [isPending, startTransition] = useTransition()
@@ -17,10 +17,7 @@ export function ChangePasswordForm() {
   const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
-  const [captchaToken, setCaptchaToken] = useState<string | null>(null)
-  // Bumped on every attempt so the Turnstile widget remounts. Cloudflare tokens
-  // are single-use, so a retry after a failed attempt needs a fresh challenge.
-  const [attempt, setAttempt] = useState(0)
+  const captcha = useTurnstile()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -37,9 +34,8 @@ export function ChangePasswordForm() {
       return
     }
 
-    const token = captchaToken ?? undefined
-    setCaptchaToken(null)
-    setAttempt((n) => n + 1)
+    // Take before awaiting: the token is spent the moment it is submitted.
+    const token = captcha.takeToken()
 
     startTransition(async () => {
       const result = await changePassword(currentPassword, newPassword, token)
@@ -115,7 +111,7 @@ export function ChangePasswordForm() {
             />
           </div>
 
-          <TurnstileField key={attempt} onToken={setCaptchaToken} />
+          {captcha.widget}
 
           <Button type="submit" disabled={isPending}>
             {isPending ? (
