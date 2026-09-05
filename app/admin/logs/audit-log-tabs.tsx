@@ -23,6 +23,11 @@ const actionLabels: Record<
   status_change: { label: 'Status Change', variant: 'outline' },
   merge: { label: 'Merge', variant: 'secondary' },
   submit: { label: 'Submit', variant: 'default' },
+  account_link: { label: 'Account linked', variant: 'default' },
+  account_unlink: { label: 'Account unlinked', variant: 'secondary' },
+  account_delete: { label: 'Account deleted', variant: 'destructive' },
+  approve: { label: 'Approved', variant: 'default' },
+  reject: { label: 'Rejected', variant: 'destructive' },
 }
 
 const entityTypeLabels: Record<string, string> = {
@@ -34,6 +39,9 @@ const entityTypeLabels: Record<string, string> = {
   admin_user: 'Admin User',
   news: 'News',
   navigation: 'Navigation',
+  registration: 'Registration',
+  award: 'Award',
+  external_result: 'External result',
 }
 
 const mergeSourceLabels: Record<string, string> = {
@@ -88,7 +96,7 @@ export function AuditLogTabs({ logs, merges }: AuditLogTabsProps) {
                         <LocalTime dateString={log.created_at} />
                       </TableCell>
                       <TableCell className="hidden sm:table-cell">
-                        {log.admins?.name || 'Unknown'}
+                        {log.admins?.name ?? (log.actor_user_id ? 'Rider' : 'Unknown')}
                       </TableCell>
                       <TableCell>
                         <Badge variant={actionInfo.variant}>{actionInfo.label}</Badge>

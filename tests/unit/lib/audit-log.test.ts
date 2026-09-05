@@ -30,6 +30,7 @@ describe('logAuditEvent', () => {
     expect(mockFrom).toHaveBeenCalledWith('audit_logs')
     expect(mockInsert).toHaveBeenCalledWith({
       admin_id: 'admin-123',
+      actor_user_id: null,
       action: 'create',
       entity_type: 'event',
       entity_id: 'event-456',

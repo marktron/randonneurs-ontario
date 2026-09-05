@@ -11,6 +11,7 @@ export interface AuditLogRow {
   entity_id: string | null
   description: string
   created_at: string
+  actor_user_id: string | null
   admins: {
     name: string
   } | null
@@ -43,7 +44,9 @@ export default async function AuditLogsPage() {
   const [{ data: logs }, { data: merges }] = await Promise.all([
     getSupabaseAdmin()
       .from('audit_logs')
-      .select('id, action, entity_type, entity_id, description, created_at, admins (name)')
+      .select(
+        'id, action, entity_type, entity_id, description, created_at, actor_user_id, admins (name)'
+      )
       .order('created_at', { ascending: false })
       .limit(100),
     getSupabaseAdmin()
