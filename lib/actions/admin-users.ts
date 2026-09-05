@@ -248,13 +248,35 @@ export async function deleteAdminUser(userId: string): Promise<ActionResult> {
     return { success: false, error: 'You cannot delete your own account' }
   }
 
-  // Fetch name before deleting for audit log
+  // Fetch name/email before deleting for audit log
   const { data: adminToDelete } = await getSupabaseAdmin()
     .from('admins')
-    .select('name')
+    .select('name, email')
     .eq('id', userId)
     .single()
-  const deletedAdminName = (adminToDelete as { name: string } | null)?.name || userId
+  const deletedAdmin = adminToDelete as { name: string; email: string } | null
+  const deletedAdminName = deletedAdmin?.name || userId
+  const deletedAdminEmail = deletedAdmin?.email || userId
+
+  // createAdminUser reuses a rider's existing auth user when promoting them, so
+  // this auth user may also be someone's rider sign-in. Deleting it would cascade
+  // riders.auth_user_id to NULL (FK ON DELETE SET NULL) and silently sign them
+  // out, so in that case drop only the admin role and keep the account.
+  const { data: linkedRider, error: linkedRiderError } = await getSupabaseAdmin()
+    .from('riders')
+    .select('id, first_name, last_name')
+    .eq('auth_user_id', userId)
+    .maybeSingle()
+
+  if (linkedRiderError) {
+    return handleSupabaseError(
+      linkedRiderError,
+      { operation: 'deleteAdminUser.riderLookup' },
+      'Failed to check for a linked rider account'
+    )
+  }
+
+  const rider = linkedRider as { id: string; first_name: string; last_name: string } | null
 
   // Delete admin record first
   const { error: adminError } = await getSupabaseAdmin().from('admins').delete().eq('id', userId)
@@ -267,17 +289,19 @@ export async function deleteAdminUser(userId: string): Promise<ActionResult> {
     )
   }
 
-  // Delete auth user
-  const { error: authError } = await getSupabaseAdmin().auth.admin.deleteUser(userId)
+  if (!rider) {
+    // Delete auth user
+    const { error: authError } = await getSupabaseAdmin().auth.admin.deleteUser(userId)
 
-  if (authError) {
-    // Note: Admin record is already deleted, but auth user remains
-    // This is a partial failure state
-    return handleSupabaseError(
-      authError,
-      { operation: 'deleteAdminUser.auth' },
-      'Admin record deleted but auth user deletion failed'
-    )
+    if (authError) {
+      // Note: Admin record is already deleted, but auth user remains
+      // This is a partial failure state
+      return handleSupabaseError(
+        authError,
+        { operation: 'deleteAdminUser.auth' },
+        'Admin record deleted but auth user deletion failed'
+      )
+    }
   }
 
   revalidatePath('/admin/users')
@@ -287,7 +311,9 @@ export async function deleteAdminUser(userId: string): Promise<ActionResult> {
     action: 'delete',
     entityType: 'admin_user',
     entityId: userId,
-    description: `Deleted admin user: ${deletedAdminName}`,
+    description: rider
+      ? `Removed admin role from ${deletedAdminEmail}; account kept because it is linked to rider ${rider.first_name} ${rider.last_name}`
+      : `Deleted admin user: ${deletedAdminName}`,
   })
 
   return createActionResult()

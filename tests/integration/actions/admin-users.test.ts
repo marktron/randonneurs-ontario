@@ -569,6 +569,46 @@ describe('deleteAdminUser', () => {
     const result = await deleteAdminUser('user-1')
 
     expect(result.success).toBe(true)
+    expect(mockModule.__deleteUserMock).toHaveBeenCalledWith('user-1')
+  })
+
+  it('keeps the auth user when a rider is linked to it', async () => {
+    // admins row lookup (name/email for the audit entry)
+    mockModule.__queryBuilder.single.mockResolvedValueOnce({
+      data: { name: 'Dual Role', email: 'dual@example.com' },
+      error: null,
+    })
+    // riders lookup: this auth user is also a rider's sign-in
+    mockModule.__queryBuilder.maybeSingle.mockResolvedValueOnce({
+      data: { id: 'rider-1', first_name: 'Dual', last_name: 'Role' },
+      error: null,
+    })
+    mockModule.__mockDeleteSuccess()
+
+    const result = await deleteAdminUser('user-1')
+
+    expect(result.success).toBe(true)
+    // The admins row still goes...
+    expect(mockModule.__queryBuilder.delete).toHaveBeenCalled()
+    // ...but the shared auth user must survive, or the rider is signed out.
+    expect(mockModule.__deleteUserMock).not.toHaveBeenCalled()
+    expect(mockAuditLog.logAuditEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        description:
+          'Removed admin role from dual@example.com; account kept because it is linked to rider Dual Role',
+      })
+    )
+  })
+
+  it('deletes the auth user when no rider is linked', async () => {
+    mockModule.__queryBuilder.maybeSingle.mockResolvedValueOnce({ data: null, error: null })
+    mockModule.__mockDeleteSuccess()
+    mockModule.__mockAuthDeleteSuccess()
+
+    const result = await deleteAdminUser('user-1')
+
+    expect(result.success).toBe(true)
+    expect(mockModule.__deleteUserMock).toHaveBeenCalledWith('user-1')
   })
 
   it('handles auth deletion failure after admin record deleted', async () => {

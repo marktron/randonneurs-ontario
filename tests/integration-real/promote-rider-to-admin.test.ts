@@ -17,7 +17,7 @@ vi.mock('@/lib/auth/get-admin', () => ({
   })),
 }))
 
-import { createAdminUser } from '@/lib/actions/admin-users'
+import { createAdminUser, deleteAdminUser } from '@/lib/actions/admin-users'
 
 describe('createAdminUser promoting an existing rider (real DB)', () => {
   const admin = getTestSupabase()
@@ -140,6 +140,53 @@ describe('createAdminUser promoting an existing rider (real DB)', () => {
     )
     expect(matches).toHaveLength(1)
     expect(matches[0].id).toBe(riderUserId)
+  })
+
+  it('keeps the shared auth user and the rider link when the admin role is removed', async () => {
+    const riderUserId = await createAuthUser(RIDER_EMAIL)
+    await checked(
+      admin.from('riders').insert({
+        id: RIDER.id,
+        slug: RIDER.slug,
+        first_name: 'Promote',
+        last_name: 'Rider',
+        email: RIDER_EMAIL,
+        auth_user_id: riderUserId,
+        linked_at: new Date().toISOString(),
+      }),
+      'seed rider'
+    )
+
+    const promoted = await createAdminUser({
+      email: RIDER_EMAIL,
+      name: 'Promote Rider',
+      password: 'password123',
+      role: 'admin',
+    })
+    expect(promoted.success).toBe(true)
+
+    const removed = await deleteAdminUser(riderUserId)
+    expect(removed.success).toBe(true)
+
+    // The admins row is gone...
+    const { data: adminRows } = await admin.from('admins').select('id').eq('id', riderUserId)
+    expect(adminRows ?? []).toHaveLength(0)
+
+    // ...but the auth user survives, so the rider can still sign in.
+    const { data: authUsers } = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 })
+    const matches = authUsers.users.filter(
+      (u) => u.email?.toLowerCase() === RIDER_EMAIL.toLowerCase()
+    )
+    expect(matches).toHaveLength(1)
+    expect(matches[0].id).toBe(riderUserId)
+
+    // And the rider link is untouched.
+    const riderRow = await checked(
+      admin.from('riders').select('auth_user_id, linked_at').eq('id', RIDER.id).single(),
+      'read rider row'
+    )
+    expect(riderRow?.auth_user_id).toBe(riderUserId)
+    expect(riderRow?.linked_at).not.toBeNull()
   })
 
   it('refuses to promote an email that already belongs to an admin, and leaves the password unchanged', async () => {
