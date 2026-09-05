@@ -167,6 +167,13 @@ async function erwFetch<T>(
 // Payload building
 // ---------------------------------------------------------------------------
 
+function routeStartDate(event: ErwEventData): string {
+  // startTime is HH:MM — append :00 for seconds only if needed
+  const startTime = event.startTime || '08:00'
+  const timeWithSeconds = startTime.split(':').length === 2 ? `${startTime}:00` : startTime
+  return `${event.eventDate}T${timeWithSeconds}`
+}
+
 function buildErwPayload(event: ErwEventData): Record<string, unknown> {
   // Always use production URL — ERW events should link to the live site, not localhost
   const baseUrl = 'https://www.randonneursontario.ca'
@@ -199,14 +206,11 @@ function buildErwPayload(event: ErwEventData): Record<string, unknown> {
   }
 
   if (event.rwgpsId) {
-    // startTime is HH:MM — append :00 for seconds only if needed
-    const startTime = event.startTime || '08:00'
-    const timeWithSeconds = startTime.split(':').length === 2 ? `${startTime}:00` : startTime
     payload.routes = [
       {
         name: erwName,
         sourceRouteUrl: `https://ridewithgps.com/routes/${event.rwgpsId}`,
-        startDate: `${event.eventDate}T${timeWithSeconds}`,
+        startDate: routeStartDate(event),
         averageSpeed: 5.56, // 20 km/h in m/s
       },
     ]
@@ -223,7 +227,7 @@ export async function createErwEvent(event: ErwEventData): Promise<ErwResult<Erw
   try {
     // Initial POST is published:false — RWGPS route import is async on ERW's side,
     // so publishErwEvent below retries with delays until the import completes.
-    const payload = { ...buildErwPayload(event), published: false }
+    const payload: Record<string, unknown> = { ...buildErwPayload(event), published: false }
     const result = await erwFetch<{ id: string; canonicalUrl: string }>({
       method: 'POST',
       path: '/events',
@@ -245,8 +249,11 @@ export async function createErwEvent(event: ErwEventData): Promise<ErwResult<Erw
       return { success: false, error: 'ERW returned incomplete data' }
     }
 
-    // Attempt to publish after route import completes
-    await publishErwEvent(data.id)
+    // Attempt to publish after route import completes. A routeless event can
+    // never satisfy ERW's publish validation, so don't burn the retry loop on it.
+    if (payload.routes !== undefined) {
+      await publishErwEvent(data.id)
+    }
 
     return {
       success: true,
@@ -300,6 +307,20 @@ function mergeRouteIds(
   })
 }
 
+// A PUT replaces the event's whole routes collection, so omitting `routes`
+// clears them on ERW — and a published event with no routes is rejected with
+// "Published events must have at least one route." buildErwPayload only emits a
+// route when the event has an RWGPS id, so an event whose route link was
+// cleared (or whose route has no rwgps_id) must carry ERW's existing routes
+// forward, with the start date refreshed to the event's current date/time.
+function carryExistingRoutes(
+  event: ErwEventData,
+  existing: Array<Record<string, unknown>> | undefined
+): Array<Record<string, unknown>> | undefined {
+  if (!existing?.length) return undefined
+  return existing.map((route) => ({ ...route, startDate: routeStartDate(event) }))
+}
+
 function buildUpdatePayload(
   event: ErwEventData,
   existing: ErwExistingEvent
@@ -311,6 +332,15 @@ function buildUpdatePayload(
   }
   if (base.routes !== undefined) {
     merged.routes = mergeRouteIds(base.routes, existing.routes)
+  } else {
+    const carried = carryExistingRoutes(event, existing.routes)
+    if (carried) {
+      merged.routes = carried
+    } else {
+      // Nothing to publish with — update as a draft instead of sending a
+      // payload ERW can only reject.
+      merged.published = false
+    }
   }
   return merged
 }

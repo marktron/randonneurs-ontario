@@ -563,6 +563,144 @@ describe('ERW API Client', () => {
       expect(putBody.routes[0].name).toBe('Gentle Start 200')
     })
 
+    it('carries the existing ERW routes forward when the event has no RWGPS route', async () => {
+      // Token
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          access_token: 'test-jwt',
+          token_type: 'Bearer',
+          expires_in: 3600,
+        }),
+      })
+      // GET returns a published event whose route was imported earlier
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          updated: '2026-06-01T10:00:00.000Z',
+          published: true,
+          routes: [
+            {
+              routeId: 'rt-abc',
+              name: 'Test Brevet 200',
+              startDate: '2026-05-01T06:00:00',
+              averageSpeed: 5.56,
+            },
+          ],
+        }),
+      })
+      // PUT update
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ id: 'erw-123', canonicalUrl: 'https://erw.com/e/erw-123' }),
+      })
+
+      const { updateErwEvent } = await import('@/lib/erw/client')
+      // The event's route link was cleared (or its route has no RWGPS id), so the
+      // builder produces no routes. Omitting them would wipe ERW's routes and the
+      // published:true payload would fail "Published events must have at least one route."
+      const result = await updateErwEvent('erw-123', { ...testEvent, rwgpsId: null })
+
+      expect(result.success).toBe(true)
+      const putBody = JSON.parse(mockFetch.mock.calls[2][1].body)
+      expect(putBody.published).toBe(true)
+      expect(putBody.routes).toHaveLength(1)
+      expect(putBody.routes[0].routeId).toBe('rt-abc')
+      // Start date follows the event's current date/time so the forecast stays right
+      expect(putBody.routes[0].startDate).toBe('2026-06-15T07:30:00')
+    })
+
+    it('updates as a draft when neither the event nor ERW has a route', async () => {
+      // Token
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          access_token: 'test-jwt',
+          token_type: 'Bearer',
+          expires_in: 3600,
+        }),
+      })
+      // GET returns an event with no routes at all
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ updated: '2026-06-01T10:00:00.000Z', published: false, routes: [] }),
+      })
+      // PUT update
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ id: 'erw-123', canonicalUrl: 'https://erw.com/e/erw-123' }),
+      })
+
+      const { updateErwEvent } = await import('@/lib/erw/client')
+      const result = await updateErwEvent('erw-123', { ...testEvent, rwgpsId: null })
+
+      expect(result.success).toBe(true)
+      // ERW rejects a published event with no routes, so update it as a draft
+      // rather than sending a payload that can only 400.
+      const putBody = JSON.parse(mockFetch.mock.calls[2][1].body)
+      expect(putBody.published).toBe(false)
+      expect(putBody.routes).toBeUndefined()
+    })
+
+    it('carries existing routes forward on the 409 conflict retry too', async () => {
+      // Token
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          access_token: 'test-jwt',
+          token_type: 'Bearer',
+          expires_in: 3600,
+        }),
+      })
+      // Initial GET
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          updated: '2026-06-01T10:00:00.000Z',
+          published: true,
+          routes: [{ routeId: 'rt-abc', startDate: '2026-05-01T06:00:00' }],
+        }),
+      })
+      // PUT returns 409 conflict
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 409,
+        json: async () => ({ error: 'Conflict' }),
+      })
+      // Fresh GET after conflict
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          updated: '2026-06-01T10:05:00.000Z',
+          published: true,
+          routes: [{ routeId: 'rt-abc', startDate: '2026-05-01T06:00:00' }],
+        }),
+      })
+      // Retry PUT succeeds
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ id: 'erw-123', canonicalUrl: 'https://erw.com/e/erw-123' }),
+      })
+
+      const { updateErwEvent } = await import('@/lib/erw/client')
+      const result = await updateErwEvent('erw-123', { ...testEvent, rwgpsId: null })
+
+      expect(result.success).toBe(true)
+      const retryBody = JSON.parse(mockFetch.mock.calls[4][1].body)
+      expect(retryBody.published).toBe(true)
+      expect(retryBody.routes[0].routeId).toBe('rt-abc')
+    })
+
     it('retries on 409 conflict with fresh GET', async () => {
       // Token
       mockFetch.mockResolvedValueOnce({
