@@ -2,7 +2,11 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { getMyUpcomingRides, type MyUpcomingRide } from '@/lib/actions/my-rides'
+import {
+  getMyUpcomingRides,
+  getAccountUpcomingRides,
+  type MyUpcomingRide,
+} from '@/lib/actions/my-rides'
 import { getSavedRegistrationData } from '@/lib/registration-storage'
 
 const MAX_COLLAPSED = 3
@@ -18,18 +22,28 @@ export function MyRidesSection() {
   const [rides, setRides] = useState<MyUpcomingRide[] | null>(null)
   const [firstName, setFirstName] = useState('')
   const [expanded, setExpanded] = useState(false)
+  const [fromAccount, setFromAccount] = useState(false)
 
   useEffect(() => {
-    const data = getSavedRegistrationData()
-    if (!data?.email) return
-
-    setFirstName(data.firstName || '')
-
-    getMyUpcomingRides(data.email).then((result) => {
-      if (result.success && result.data && result.data.length > 0) {
-        setRides(result.data)
+    let active = true
+    getAccountUpcomingRides().then((accountResult) => {
+      if (!active) return
+      if (accountResult.success && accountResult.data?.signedIn) {
+        setFromAccount(true)
+        setFirstName(accountResult.data.firstName)
+        if (accountResult.data.rides.length > 0) setRides(accountResult.data.rides)
+        return
       }
+      const data = getSavedRegistrationData()
+      if (!data?.email) return
+      setFirstName(data.firstName || '')
+      getMyUpcomingRides(data.email).then((result) => {
+        if (active && result.success && result.data && result.data.length > 0) setRides(result.data)
+      })
     })
+    return () => {
+      active = false
+    }
   }, [])
 
   if (!rides || rides.length === 0) return null
@@ -78,6 +92,15 @@ export function MyRidesSection() {
           )
         })}
       </ul>
+
+      {fromAccount && (
+        <Link
+          href="/account"
+          className="mt-3 inline-block text-xs font-medium text-primary hover:underline underline-offset-2"
+        >
+          All my rides
+        </Link>
+      )}
 
       {hasOverflow && (
         <button

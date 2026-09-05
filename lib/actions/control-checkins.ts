@@ -365,6 +365,7 @@ export async function adminSetCheckin(input: {
 
     await logAuditEvent({
       adminId: admin.id,
+      actorLabel: admin.name,
       action: 'update',
       entityType: 'event',
       entityId: input.eventId,
@@ -427,6 +428,7 @@ export async function adminDeleteCheckin(input: {
 
     await logAuditEvent({
       adminId: admin.id,
+      actorLabel: admin.name,
       action: 'delete',
       entityType: 'event',
       entityId: input.eventId,

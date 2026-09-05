@@ -13,19 +13,48 @@ Returning visitors who have previously registered for a ride see a personalized 
 
 ## Behavior Matrix
 
-| Visitor type                             | What they see                                                              |
-| ---------------------------------------- | -------------------------------------------------------------------------- |
-| First-time visitor (no localStorage)     | Normal homepage — no extra section                                         |
-| Returning visitor with upcoming rides    | "Your Rides" section in sidebar with ride list (first 3 shown, expandable) |
-| Returning visitor with no upcoming rides | Normal homepage — section not rendered                                     |
-| Corrupted localStorage                   | Normal homepage — section not rendered                                     |
+| Visitor type                             | What they see                                                                                                         |
+| ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| First-time visitor (no localStorage)     | Normal homepage — no extra section                                                                                    |
+| Returning visitor with upcoming rides    | "Your Rides" section in sidebar with ride list (first 3 shown, expandable)                                            |
+| Returning visitor with no upcoming rides | Normal homepage — section not rendered                                                                                |
+| Corrupted localStorage                   | Normal homepage — section not rendered                                                                                |
+| Signed in (rider account, linked)        | Same section, sourced from the account instead of localStorage, plus an "All my rides" link to `/account` (see below) |
+
+## Signed-in riders
+
+Since rider accounts shipped (`docs/rider-accounts.md`), `MyRidesSection`
+checks the signed-in account **before** falling back to `localStorage`:
+`getAccountUpcomingRides()` (`lib/actions/my-rides.ts`) calls `getAccount()`
+and, if there is a linked rider, returns `{ signedIn: true, firstName,
+rides }` sourced by `rider.id` rather than by email lookup. The component
+only reads `localStorage` when `getAccountUpcomingRides()` reports
+`signedIn: false` (no session at all). This means:
+
+- A signed-in, linked rider always sees their own account's rides, even if
+  the browser's `localStorage` has a stale or different `ro-registration`
+  email.
+- A signed-in, **unlinked** account (no rider row yet) shows nothing extra —
+  there is no rider to look up, and it does not fall back to `localStorage`
+  either, since the visitor is authenticated and any locally-saved email is
+  moot.
+- When the account is linked, the section adds an **"All my rides"** link to
+  `/account`, which lists the complete upcoming/past history (this widget
+  still only ever shows the first 3, expandable). Anonymous
+  (`localStorage`-sourced) rendering has no such link.
+
+`/account` itself (`lib/account/rides.ts`, `docs/rider-accounts.md`) is the
+full picture: every registration, tokens included, split upcoming/past. This
+homepage widget is a small preview of the same data for a signed-in rider,
+and the pre-existing fallback for everyone else.
 
 ## Files
 
 | File                              | Purpose                                                                      |
 | --------------------------------- | ---------------------------------------------------------------------------- |
-| `lib/actions/my-rides.ts`         | Server action: `getMyUpcomingRides(email)`                                   |
-| `components/my-rides-section.tsx` | Client component: reads localStorage, calls server action, renders UI        |
+| `lib/actions/my-rides.ts`         | Server actions: `getMyUpcomingRides(email)`, `getAccountUpcomingRides()`     |
+| `lib/account/rides.ts`            | `getAccountRides(riderId)` — the full `/account` history, not just upcoming  |
+| `components/my-rides-section.tsx` | Client component: checks the account, falls back to localStorage, renders UI |
 | `app/page.tsx`                    | Homepage: includes `<MyRidesSection />` in sidebar above `<UpcomingRides />` |
 
 ## Security

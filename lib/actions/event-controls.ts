@@ -337,6 +337,7 @@ export async function saveEventControls(
 
     await logAuditEvent({
       adminId: admin.id,
+      actorLabel: admin.name,
       action: 'update',
       entityType: 'event',
       entityId: eventId,

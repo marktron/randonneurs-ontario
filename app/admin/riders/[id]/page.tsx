@@ -6,6 +6,7 @@ import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
 import { ChevronLeft, Clock } from 'lucide-react'
 import { RiderEditForm } from '@/components/admin/rider-edit-form'
+import { RiderAccountCard } from '@/components/admin/rider-account-card'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -186,68 +187,79 @@ export default async function RiderDetailPage({ params }: RiderPageProps) {
           }}
         />
 
-        {/* Membership & Season History */}
-        {(() => {
-          const currentYear = new Date().getFullYear()
-          const startYear = 2018
-          const years = Array.from(
-            { length: currentYear - startYear + 1 },
-            (_, i) => currentYear - i
-          )
-          const seasonSet = new Set(memberSeasons)
-          const seasonStats = new Map<number, { events: number; distance: number }>()
-          for (const r of results) {
-            if (r.status === 'finished' && r.season) {
-              const s = seasonStats.get(r.season) ?? { events: 0, distance: 0 }
-              s.events++
-              s.distance += r.distance_km
-              seasonStats.set(r.season, s)
+        <div className="space-y-6 lg:w-64">
+          <RiderAccountCard
+            rider={{
+              id: rider.id,
+              email: rider.email,
+              auth_user_id: rider.auth_user_id,
+              linked_at: rider.linked_at,
+            }}
+          />
+
+          {/* Membership & Season History */}
+          {(() => {
+            const currentYear = new Date().getFullYear()
+            const startYear = 2018
+            const years = Array.from(
+              { length: currentYear - startYear + 1 },
+              (_, i) => currentYear - i
+            )
+            const seasonSet = new Set(memberSeasons)
+            const seasonStats = new Map<number, { events: number; distance: number }>()
+            for (const r of results) {
+              if (r.status === 'finished' && r.season) {
+                const s = seasonStats.get(r.season) ?? { events: 0, distance: 0 }
+                s.events++
+                s.distance += r.distance_km
+                seasonStats.set(r.season, s)
+              }
             }
-          }
-          return (
-            <Card className="lg:w-64">
-              <CardHeader>
-                <CardTitle>Season History</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-[auto_1fr_1fr] gap-x-3 text-sm tabular-nums whitespace-nowrap">
-                  <div className="col-span-3 grid grid-cols-subgrid text-xs text-muted-foreground pb-1 mb-1 border-b">
-                    <span>Year</span>
-                    <span className="text-right">Events</span>
-                    <span className="text-right">Distance</span>
+            return (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Season History</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-[auto_1fr_1fr] gap-x-3 text-sm tabular-nums whitespace-nowrap">
+                    <div className="col-span-3 grid grid-cols-subgrid text-xs text-muted-foreground pb-1 mb-1 border-b">
+                      <span>Year</span>
+                      <span className="text-right">Events</span>
+                      <span className="text-right">Distance</span>
+                    </div>
+                    {years.map((year) => {
+                      const isMember = seasonSet.has(year)
+                      const stats = seasonStats.get(year)
+                      const hasActivity = isMember || stats
+                      return (
+                        <div
+                          key={year}
+                          className={`col-span-3 grid grid-cols-subgrid items-center py-1 ${
+                            hasActivity ? 'text-foreground' : 'text-muted-foreground/30'
+                          }`}
+                        >
+                          <span className="flex items-center gap-1.5">
+                            {isMember && (
+                              <span className="inline-block h-1.5 w-1.5 rounded-full bg-green-600 dark:bg-green-500" />
+                            )}
+                            {!isMember && <span className="inline-block h-1.5 w-1.5" />}
+                            {year}
+                          </span>
+                          <span className="text-right text-muted-foreground">
+                            {stats ? stats.events : ''}
+                          </span>
+                          <span className="text-right">
+                            {stats ? `${stats.distance.toLocaleString()}` : ''}
+                          </span>
+                        </div>
+                      )
+                    })}
                   </div>
-                  {years.map((year) => {
-                    const isMember = seasonSet.has(year)
-                    const stats = seasonStats.get(year)
-                    const hasActivity = isMember || stats
-                    return (
-                      <div
-                        key={year}
-                        className={`col-span-3 grid grid-cols-subgrid items-center py-1 ${
-                          hasActivity ? 'text-foreground' : 'text-muted-foreground/30'
-                        }`}
-                      >
-                        <span className="flex items-center gap-1.5">
-                          {isMember && (
-                            <span className="inline-block h-1.5 w-1.5 rounded-full bg-green-600 dark:bg-green-500" />
-                          )}
-                          {!isMember && <span className="inline-block h-1.5 w-1.5" />}
-                          {year}
-                        </span>
-                        <span className="text-right text-muted-foreground">
-                          {stats ? stats.events : ''}
-                        </span>
-                        <span className="text-right">
-                          {stats ? `${stats.distance.toLocaleString()}` : ''}
-                        </span>
-                      </div>
-                    )
-                  })}
-                </div>
-              </CardContent>
-            </Card>
-          )
-        })()}
+                </CardContent>
+              </Card>
+            )
+          })()}
+        </div>
       </div>
 
       {/* Registrations */}

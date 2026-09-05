@@ -29,6 +29,7 @@ Randonneurs Ontario is a volunteer-run organization dedicated to **randonneuring
 ```
 randonneurs-ontario/
 ├── app/                      # Next.js App Router (pages & API routes)
+│   ├── account/              # Optional rider sign-in area (docs/rider-accounts.md)
 │   ├── admin/                # Protected admin dashboard
 │   │   ├── settings/         # Admin profile & password management
 │   │   └── users/            # Admin user management (super admin only)
@@ -43,12 +44,14 @@ randonneurs-ontario/
 │   └── page.tsx              # Homepage
 │
 ├── components/               # React components
+│   ├── account/               # Rider sign-in/settings form building blocks (docs/rider-accounts.md)
 │   ├── admin/                # Admin-specific components
 │   ├── registration/         # Shared registration form building blocks (docs/registration-forms.md)
 │   ├── ui/                   # shadcn/ui primitive components
 │   └── *.tsx                 # Page-level components
 │
 ├── lib/                      # Core logic & utilities
+│   ├── account/               # Rider linking, "My rides", deletion (docs/rider-accounts.md)
 │   ├── actions/              # Server actions (write operations)
 │   ├── data/                 # Data fetching (read operations)
 │   ├── email/                # Email templates and sending
@@ -302,7 +305,10 @@ The `news` table stores homepage announcements managed through `/admin/news`. Ea
 
 This site has a **split authentication model**:
 
-- **Riders**: No accounts needed - they register with name/email
+- **Riders**: Registration itself never required an account (name/email is
+  enough). Riders can optionally sign in with a passwordless 6-digit email
+  code at `/account/login`, which links to their existing rider record and
+  unlocks "My rides" from any device — see `docs/rider-accounts.md`.
 - **Admins**: Use Supabase Auth (email/password) for the admin dashboard
 
 Admin roles (three-tier hierarchy):

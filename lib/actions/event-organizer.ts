@@ -68,6 +68,7 @@ export async function saveEventOrganizer(
 
     await logAuditEvent({
       adminId: admin.id,
+      actorLabel: admin.name,
       action: 'update',
       entityType: 'event',
       entityId: eventId,

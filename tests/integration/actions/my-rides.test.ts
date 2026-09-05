@@ -12,7 +12,10 @@ vi.mock('@/lib/supabase-server', () => ({
   })),
 }))
 
-import { getMyUpcomingRides } from '@/lib/actions/my-rides'
+let mockAccount: { rider: { id: string; first_name: string } | null } | null = null
+vi.mock('@/lib/auth/get-rider', () => ({ getAccount: vi.fn(() => Promise.resolve(mockAccount)) }))
+
+import { getMyUpcomingRides, getAccountUpcomingRides } from '@/lib/actions/my-rides'
 
 /**
  * ISO date string (YYYY-MM-DD) `days` from today, in UTC. The action computes
@@ -286,5 +289,50 @@ describe('getMyUpcomingRides', () => {
     expect(result.data![0].startTime).toBe('08:00')
     expect(result.data![0].startLocation).toBe('')
     expect(result.data![0].chapterName).toBe('')
+  })
+})
+
+describe('getAccountUpcomingRides', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockAccount = null
+  })
+
+  it('reports signedIn false without touching the database when signed out', async () => {
+    const result = await getAccountUpcomingRides()
+    expect(result).toEqual({ success: true, data: { signedIn: false, firstName: '', rides: [] } })
+    expect(mockFrom).not.toHaveBeenCalled()
+  })
+
+  it('reports signedIn true with no rides for an unlinked account', async () => {
+    mockAccount = { rider: null }
+    const result = await getAccountUpcomingRides()
+    expect(result.data).toEqual({ signedIn: true, firstName: '', rides: [] })
+    expect(mockFrom).not.toHaveBeenCalled()
+  })
+
+  it('fetches by rider id, never by email, for a linked account', async () => {
+    mockAccount = { rider: { id: 'rider-1', first_name: 'Pat' } }
+    const regChain = setupRegistrationsQuery([
+      {
+        events: {
+          slug: 'toronto-200',
+          name: 'Toronto 200',
+          event_date: isoDaysFromNow(10),
+          distance_km: 200,
+          start_time: '07:00',
+          start_location: 'Start',
+          status: 'scheduled',
+          chapters: { name: 'Toronto' },
+        },
+      },
+    ])
+    mockFrom.mockReturnValueOnce(regChain)
+    const result = await getAccountUpcomingRides()
+    expect(mockFrom).toHaveBeenCalledTimes(1)
+    expect(mockFrom).toHaveBeenCalledWith('registrations')
+    expect(regChain.eq).toHaveBeenCalledWith('rider_id', 'rider-1')
+    expect(result.data?.firstName).toBe('Pat')
+    expect(result.data?.rides.map((r) => r.slug)).toEqual(['toronto-200'])
   })
 })

@@ -228,6 +228,22 @@ otp_expiry = 3600
 # subject = "You have been invited"
 # content_path = "./supabase/templates/invite.html"
 
+# Rider sign-in codes. `{{ .Token }}` only, so Supabase sends a code, never a
+# link. shouldCreateUser:true on requestSignInCode means a brand-new address
+# goes through "Confirm signup", not "Magic Link" — both must be overridden,
+# or a first-time rider on a project with email confirmation enabled (the
+# hosted default; masked locally by enable_confirmations = false above) gets
+# a link instead of a code.
+# Production: paste the same HTML into Authentication → Email Templates, into
+# BOTH "Magic Link" and "Confirm signup".
+[auth.email.template.magic_link]
+subject = "Your Randonneurs Ontario sign-in code"
+content_path = "./supabase/templates/rider-otp.html"
+
+[auth.email.template.confirmation]
+subject = "Your Randonneurs Ontario sign-in code"
+content_path = "./supabase/templates/rider-otp.html"
+
 [auth.sms]
 # Allow/disallow new user signups via SMS to your project.
 enable_signup = false

@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { AlertCircle, Loader2, Check } from 'lucide-react'
 import { changePassword } from '@/lib/actions/auth'
+import { useTurnstile } from '@/hooks/use-turnstile'
 
 export function ChangePasswordForm() {
   const [isPending, startTransition] = useTransition()
@@ -16,6 +17,7 @@ export function ChangePasswordForm() {
   const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
+  const captcha = useTurnstile()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -32,8 +34,11 @@ export function ChangePasswordForm() {
       return
     }
 
+    // Take before awaiting: the token is spent the moment it is submitted.
+    const token = captcha.takeToken()
+
     startTransition(async () => {
-      const result = await changePassword(currentPassword, newPassword)
+      const result = await changePassword(currentPassword, newPassword, token)
 
       if (result.success) {
         setSuccess(true)
@@ -50,9 +55,7 @@ export function ChangePasswordForm() {
     <Card>
       <CardHeader>
         <CardTitle>Change Password</CardTitle>
-        <CardDescription>
-          Update your account password
-        </CardDescription>
+        <CardDescription>Update your account password</CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -107,6 +110,8 @@ export function ChangePasswordForm() {
               disabled={isPending}
             />
           </div>
+
+          {captcha.widget}
 
           <Button type="submit" disabled={isPending}>
             {isPending ? (

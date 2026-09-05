@@ -143,6 +143,7 @@ export async function createRoute(data: RouteData): Promise<ActionResult> {
 
   await logAuditEvent({
     adminId: admin.id,
+    actorLabel: admin.name,
     action: 'create',
     entityType: 'route',
     description: `Created route: ${name}`,
@@ -227,6 +228,7 @@ export async function updateRoute(
 
   await logAuditEvent({
     adminId: admin.id,
+    actorLabel: admin.name,
     action: 'update',
     entityType: 'route',
     entityId: routeId,
@@ -277,6 +279,7 @@ export async function deleteRoute(routeId: string): Promise<ActionResult> {
 
   await logAuditEvent({
     adminId: admin.id,
+    actorLabel: admin.name,
     action: 'delete',
     entityType: 'route',
     entityId: routeId,
@@ -319,6 +322,7 @@ export async function toggleRouteActive(routeId: string, isActive: boolean): Pro
 
   await logAuditEvent({
     adminId: admin.id,
+    actorLabel: admin.name,
     action: 'update',
     entityType: 'route',
     entityId: routeId,
@@ -427,6 +431,7 @@ export async function mergeRoutes(data: MergeRoutesData): Promise<MergeResult> {
 
     await logAuditEvent({
       adminId: admin.id,
+      actorLabel: admin.name,
       action: 'merge',
       entityType: 'route',
       entityId: targetRouteId,

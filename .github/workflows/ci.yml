@@ -112,12 +112,13 @@ jobs:
       - name: Install browsers
         run: npx playwright install --with-deps webkit chromium
 
-      - name: Test the digital card on WebKit and Chromium
-        run: >-
-          npx playwright test tests/e2e/brevet-card.spec.ts
-          --project=webkit-iphone-8-plus
-          --project=webkit-card-mutation
-          --project=chromium-card-mutation
+      - name: Test the digital card and rider sign-in end to end
+        run: |
+          npx playwright test tests/e2e/brevet-card.spec.ts \
+            --project=webkit-iphone-8-plus \
+            --project=webkit-card-mutation \
+            --project=chromium-card-mutation
+          npx playwright test tests/e2e/account-login.spec.ts --project=chromium
 
       - name: Stop Supabase
         if: always()

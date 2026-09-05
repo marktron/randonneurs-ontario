@@ -50,24 +50,84 @@ export async function createAdminUser(data: AdminUserData): Promise<ActionResult
     normalizedPhone = phoneResult.formatted
   }
 
-  // Create auth user first
-  const { data: authData, error: authError } = await getSupabaseAdmin().auth.admin.createUser({
-    email,
-    password,
-    email_confirm: true,
-  })
+  const normalizedEmail = email.trim().toLowerCase()
 
-  if (authError || !authData.user) {
+  // A rider may already have signed in, creating an auth user tied to
+  // riders.auth_user_id. Reuse that auth user instead of failing with
+  // "email already registered" — admin + rider can be the same person.
+  const { data: existingUserId, error: lookupError } = await getSupabaseAdmin().rpc(
+    'auth_user_id_for_email',
+    { p_email: normalizedEmail }
+  )
+
+  if (lookupError) {
     return handleSupabaseError(
-      authError,
-      { operation: 'createAdminUser.auth', skipSentry: true }, // Don't log auth errors
-      authError?.message || 'Failed to create user'
+      lookupError,
+      { operation: 'createAdminUser.lookup' },
+      'Failed to look up existing account'
     )
+  }
+
+  let authUserId: string
+  let createdAuthUser = false
+
+  if (existingUserId) {
+    authUserId = existingUserId
+
+    // Guard against resetting an existing admin's password: if this email
+    // already belongs to an admins row, refuse before touching auth at all.
+    const { data: existingAdminRow, error: existingAdminCheckError } = await getSupabaseAdmin()
+      .from('admins')
+      .select('id')
+      .eq('id', existingUserId)
+      .maybeSingle()
+
+    if (existingAdminCheckError) {
+      return handleSupabaseError(
+        existingAdminCheckError,
+        { operation: 'createAdminUser.checkExisting' },
+        'Failed to check existing admin'
+      )
+    }
+
+    if (existingAdminRow) {
+      return { success: false, error: 'A record with this value already exists' }
+    }
+
+    const { error: updateError } = await getSupabaseAdmin().auth.admin.updateUserById(
+      existingUserId,
+      { password, email_confirm: true }
+    )
+    if (updateError) {
+      return handleSupabaseError(
+        updateError,
+        { operation: 'createAdminUser.auth', skipSentry: true }, // Don't log auth errors
+        updateError.message || 'Failed to update existing account'
+      )
+    }
+  } else {
+    // Create auth user
+    const { data: authData, error: authError } = await getSupabaseAdmin().auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true,
+    })
+
+    if (authError || !authData.user) {
+      return handleSupabaseError(
+        authError,
+        { operation: 'createAdminUser.auth', skipSentry: true }, // Don't log auth errors
+        authError?.message || 'Failed to create user'
+      )
+    }
+
+    authUserId = authData.user.id
+    createdAuthUser = true
   }
 
   // Create admin record
   const adminInsert: AdminInsert = {
-    id: authData.user.id,
+    id: authUserId,
     email,
     name,
     phone: normalizedPhone,
@@ -78,8 +138,24 @@ export async function createAdminUser(data: AdminUserData): Promise<ActionResult
   const { error: adminError } = await getSupabaseAdmin().from('admins').insert(adminInsert)
 
   if (adminError) {
-    // Rollback: delete the auth user
-    await getSupabaseAdmin().auth.admin.deleteUser(authData.user.id)
+    // Rollback: only delete the auth user if we created it. A pre-existing
+    // (rider) auth user must never be deleted.
+    if (createdAuthUser) {
+      await getSupabaseAdmin().auth.admin.deleteUser(authUserId)
+    } else if (adminError.code === '23505') {
+      // Residual race: the pre-check above found no admins row, but the
+      // insert now hits one anyway (created concurrently). The password on
+      // the existing auth user was already overwritten above and can't be
+      // rolled back (the old hash is gone) — record it honestly instead.
+      await logAuditEvent({
+        adminId: currentAdmin.id,
+        actorLabel: currentAdmin.name,
+        action: 'update',
+        entityType: 'admin_user',
+        entityId: authUserId,
+        description: `Password reset on existing admin during failed promotion by ${currentAdmin.email}`,
+      })
+    }
     return handleSupabaseError(
       adminError,
       { operation: 'createAdminUser.admin' },
@@ -91,10 +167,13 @@ export async function createAdminUser(data: AdminUserData): Promise<ActionResult
 
   await logAuditEvent({
     adminId: currentAdmin.id,
+    actorLabel: currentAdmin.name,
     action: 'create',
     entityType: 'admin_user',
-    entityId: authData.user.id,
-    description: `Created admin user: ${name} (${email})`,
+    entityId: authUserId,
+    description: createdAuthUser
+      ? `Created admin user: ${name} (${email})`
+      : `Promoted existing account to admin: ${name} (${email})`,
   })
 
   return createActionResult()
@@ -150,6 +229,7 @@ export async function updateAdminUser(
 
   await logAuditEvent({
     adminId: currentAdmin.id,
+    actorLabel: currentAdmin.name,
     action: 'update',
     entityType: 'admin_user',
     entityId: userId,
@@ -171,13 +251,35 @@ export async function deleteAdminUser(userId: string): Promise<ActionResult> {
     return { success: false, error: 'You cannot delete your own account' }
   }
 
-  // Fetch name before deleting for audit log
+  // Fetch name/email before deleting for audit log
   const { data: adminToDelete } = await getSupabaseAdmin()
     .from('admins')
-    .select('name')
+    .select('name, email')
     .eq('id', userId)
     .single()
-  const deletedAdminName = (adminToDelete as { name: string } | null)?.name || userId
+  const deletedAdmin = adminToDelete as { name: string; email: string } | null
+  const deletedAdminName = deletedAdmin?.name || userId
+  const deletedAdminEmail = deletedAdmin?.email || userId
+
+  // createAdminUser reuses a rider's existing auth user when promoting them, so
+  // this auth user may also be someone's rider sign-in. Deleting it would cascade
+  // riders.auth_user_id to NULL (FK ON DELETE SET NULL) and silently sign them
+  // out, so in that case drop only the admin role and keep the account.
+  const { data: linkedRider, error: linkedRiderError } = await getSupabaseAdmin()
+    .from('riders')
+    .select('id, first_name, last_name')
+    .eq('auth_user_id', userId)
+    .maybeSingle()
+
+  if (linkedRiderError) {
+    return handleSupabaseError(
+      linkedRiderError,
+      { operation: 'deleteAdminUser.riderLookup' },
+      'Failed to check for a linked rider account'
+    )
+  }
+
+  const rider = linkedRider as { id: string; first_name: string; last_name: string } | null
 
   // Delete admin record first
   const { error: adminError } = await getSupabaseAdmin().from('admins').delete().eq('id', userId)
@@ -190,27 +292,32 @@ export async function deleteAdminUser(userId: string): Promise<ActionResult> {
     )
   }
 
-  // Delete auth user
-  const { error: authError } = await getSupabaseAdmin().auth.admin.deleteUser(userId)
+  if (!rider) {
+    // Delete auth user
+    const { error: authError } = await getSupabaseAdmin().auth.admin.deleteUser(userId)
 
-  if (authError) {
-    // Note: Admin record is already deleted, but auth user remains
-    // This is a partial failure state
-    return handleSupabaseError(
-      authError,
-      { operation: 'deleteAdminUser.auth' },
-      'Admin record deleted but auth user deletion failed'
-    )
+    if (authError) {
+      // Note: Admin record is already deleted, but auth user remains
+      // This is a partial failure state
+      return handleSupabaseError(
+        authError,
+        { operation: 'deleteAdminUser.auth' },
+        'Admin record deleted but auth user deletion failed'
+      )
+    }
   }
 
   revalidatePath('/admin/users')
 
   await logAuditEvent({
     adminId: currentAdmin.id,
+    actorLabel: currentAdmin.name,
     action: 'delete',
     entityType: 'admin_user',
     entityId: userId,
-    description: `Deleted admin user: ${deletedAdminName}`,
+    description: rider
+      ? `Removed admin role from ${deletedAdminEmail}; account kept because it is linked to rider ${rider.first_name} ${rider.last_name}`
+      : `Deleted admin user: ${deletedAdminName}`,
   })
 
   return createActionResult()

@@ -72,7 +72,9 @@ export type Database = {
       audit_logs: {
         Row: {
           action: string
-          admin_id: string
+          actor_label: string | null
+          actor_user_id: string | null
+          admin_id: string | null
           created_at: string | null
           description: string
           entity_id: string | null
@@ -81,7 +83,9 @@ export type Database = {
         }
         Insert: {
           action: string
-          admin_id: string
+          actor_label?: string | null
+          actor_user_id?: string | null
+          admin_id?: string | null
           created_at?: string | null
           description: string
           entity_id?: string | null
@@ -90,7 +94,9 @@ export type Database = {
         }
         Update: {
           action?: string
-          admin_id?: string
+          actor_label?: string | null
+          actor_user_id?: string | null
+          admin_id?: string | null
           created_at?: string | null
           description?: string
           entity_id?: string | null
@@ -357,7 +363,7 @@ export type Database = {
           slug: string
           start_location?: string | null
           start_time?: string | null
-          status?: string | null
+          status?: string
           updated_at?: string | null
         }
         Update: {
@@ -384,7 +390,7 @@ export type Database = {
           slug?: string
           start_location?: string | null
           start_time?: string | null
-          status?: string | null
+          status?: string
           updated_at?: string | null
         }
         Relationships: [
@@ -690,6 +696,7 @@ export type Database = {
       }
       rider_awards: {
         Row: {
+          auto_assigned: boolean
           award_id: string
           created_at: string | null
           id: string
@@ -699,6 +706,7 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
+          auto_assigned?: boolean
           award_id: string
           created_at?: string | null
           id?: string
@@ -708,6 +716,7 @@ export type Database = {
           updated_at?: string | null
         }
         Update: {
+          auto_assigned?: boolean
           award_id?: string
           created_at?: string | null
           id?: string
@@ -860,6 +869,8 @@ export type Database = {
       }
       riders: {
         Row: {
+          auth_user_id: string | null
+          bio: string | null
           birth_year: number | null
           ccn_id: number | null
           created_at: string | null
@@ -872,13 +883,17 @@ export type Database = {
           hidden: boolean
           id: string
           last_name: string
+          linked_at: string | null
           member_since: number | null
           phone: string | null
+          photo_path: string | null
           rider_number: number | null
           slug: string
           updated_at: string | null
         }
         Insert: {
+          auth_user_id?: string | null
+          bio?: string | null
           birth_year?: number | null
           ccn_id?: number | null
           created_at?: string | null
@@ -891,13 +906,17 @@ export type Database = {
           hidden?: boolean
           id?: string
           last_name: string
+          linked_at?: string | null
           member_since?: number | null
           phone?: string | null
+          photo_path?: string | null
           rider_number?: number | null
           slug: string
           updated_at?: string | null
         }
         Update: {
+          auth_user_id?: string | null
+          bio?: string | null
           birth_year?: number | null
           ccn_id?: number | null
           created_at?: string | null
@@ -910,8 +929,10 @@ export type Database = {
           hidden?: boolean
           id?: string
           last_name?: string
+          linked_at?: string | null
           member_since?: number | null
           phone?: string | null
+          photo_path?: string | null
           rider_number?: number | null
           slug?: string
           updated_at?: string | null
@@ -1067,31 +1088,37 @@ export type Database = {
       }
       public_riders: {
         Row: {
+          bio: string | null
           created_at: string | null
           first_name: string | null
           gender: string | null
           id: string | null
           last_name: string | null
+          photo_path: string | null
           rider_number: number | null
           slug: string | null
           updated_at: string | null
         }
         Insert: {
+          bio?: string | null
           created_at?: string | null
           first_name?: string | null
           gender?: string | null
           id?: string | null
           last_name?: string | null
+          photo_path?: string | null
           rider_number?: number | null
           slug?: string | null
           updated_at?: string | null
         }
         Update: {
+          bio?: string | null
           created_at?: string | null
           first_name?: string | null
           gender?: string | null
           id?: string | null
           last_name?: string | null
+          photo_path?: string | null
           rider_number?: number | null
           slug?: string | null
           updated_at?: string | null
@@ -1100,6 +1127,7 @@ export type Database = {
       }
     }
     Functions: {
+      auth_user_id_for_email: { Args: { p_email: string }; Returns: string }
       get_award_recipients: {
         Args: { p_award_slug: string }
         Returns: {
@@ -1420,6 +1448,10 @@ export type Database = {
       }
       reconcile_first_brevet_for_rider: {
         Args: { p_rider_id: string }
+        Returns: undefined
+      }
+      reconcile_super_randonneur_for_rider_season: {
+        Args: { p_rider_id: string; p_season: number }
         Returns: undefined
       }
     }

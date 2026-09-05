@@ -109,6 +109,7 @@ export async function saveNavigation(config: NavigationConfigRaw): Promise<SaveN
 
     await logAuditEvent({
       adminId: admin.id,
+      actorLabel: admin.name,
       action: 'update',
       entityType: 'navigation',
       entityId: 'navigation',
@@ -117,7 +118,11 @@ export async function saveNavigation(config: NavigationConfigRaw): Promise<SaveN
 
     return createActionResult()
   } catch (error) {
-    return handleActionError(error, { operation: 'saveNavigation' }, 'An error occurred while saving')
+    return handleActionError(
+      error,
+      { operation: 'saveNavigation' },
+      'An error occurred while saving'
+    )
   }
 }
 
@@ -142,6 +147,10 @@ async function saveLocalFile(content: string, adminId: string): Promise<SaveNavi
 
     return createActionResult()
   } catch (error) {
-    return handleActionError(error, { operation: 'saveNavigation.local' }, 'Failed to save file locally')
+    return handleActionError(
+      error,
+      { operation: 'saveNavigation.local' },
+      'Failed to save file locally'
+    )
   }
 }

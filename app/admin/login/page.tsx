@@ -9,18 +9,13 @@ import { Label } from '@/components/ui/label'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { login } from '@/lib/actions/auth'
 import { AlertCircle, Loader2 } from 'lucide-react'
-
-function getSafeRedirectUrl(redirect: string | null): string {
-  if (!redirect) return '/admin'
-  // Only allow relative paths starting with /admin to prevent open redirects
-  if (redirect.startsWith('/admin')) return redirect
-  return '/admin'
-}
+import { useTurnstile } from '@/hooks/use-turnstile'
+import { getSafeRedirect } from '@/lib/safe-redirect'
 
 export default function LoginPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const redirectTo = getSafeRedirectUrl(searchParams.get('redirect'))
+  const redirectTo = getSafeRedirect(searchParams.get('redirect'), ['/admin'], '/admin')
   const urlError = searchParams.get('error')
 
   const [email, setEmail] = useState('')
@@ -29,13 +24,17 @@ export default function LoginPage() {
     urlError === 'unauthorized' ? 'You do not have admin access' : null
   )
   const [isPending, startTransition] = useTransition()
+  const captcha = useTurnstile()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
 
+    // Take before awaiting: the token is spent the moment it is submitted.
+    const token = captcha.takeToken()
+
     startTransition(async () => {
-      const result = await login(email, password)
+      const result = await login(email, password, token)
       if (result.success) {
         router.push(redirectTo)
         router.refresh()
@@ -50,9 +49,7 @@ export default function LoginPage() {
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           <CardTitle className="text-2xl">Admin Login</CardTitle>
-          <CardDescription>
-            Sign in to access the Randonneurs Ontario admin panel
-          </CardDescription>
+          <CardDescription>Sign in to access the Randonneurs Ontario admin panel</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -89,6 +86,8 @@ export default function LoginPage() {
                 disabled={isPending}
               />
             </div>
+
+            {captcha.widget}
 
             <Button type="submit" className="w-full" disabled={isPending}>
               {isPending ? (

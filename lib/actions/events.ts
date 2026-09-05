@@ -186,6 +186,7 @@ export async function createEvent(data: CreateEventData): Promise<ActionResult<{
 
     await logAuditEvent({
       adminId: admin.id,
+      actorLabel: admin.name,
       action: 'create',
       entityType: 'event',
       entityId: typedNewEvent.id,
@@ -310,6 +311,7 @@ export async function updateEvent(eventId: string, data: UpdateEventData): Promi
 
     await logAuditEvent({
       adminId: admin.id,
+      actorLabel: admin.name,
       action: 'update',
       entityType: 'event',
       entityId: eventId,
@@ -376,6 +378,7 @@ export async function deleteEvent(eventId: string): Promise<ActionResult> {
 
     await logAuditEvent({
       adminId: admin.id,
+      actorLabel: admin.name,
       action: 'delete',
       entityType: 'event',
       entityId: eventId,
@@ -512,6 +515,7 @@ export async function updateEventStatus(
 
     await logAuditEvent({
       adminId: admin.id,
+      actorLabel: admin.name,
       action: 'status_change',
       entityType: 'event',
       entityId: eventId,
@@ -607,6 +611,7 @@ export async function publishSeasonDrafts(
 
     await logAuditEvent({
       adminId: admin.id,
+      actorLabel: admin.name,
       action: 'status_change',
       entityType: 'event',
       entityId: String(season),
@@ -667,6 +672,7 @@ export async function sendResultReminderEmails(
 
     await logAuditEvent({
       adminId: admin.id,
+      actorLabel: admin.name,
       action: 'update',
       entityType: 'event',
       entityId: eventId,
@@ -887,6 +893,7 @@ This email was sent from the Randonneurs Ontario admin system.
 
     await logAuditEvent({
       adminId: admin.id,
+      actorLabel: admin.name,
       action: 'submit',
       entityType: 'event',
       entityId: eventId,

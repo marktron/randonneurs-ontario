@@ -40,6 +40,7 @@ vi.mock('@/lib/supabase-server', () => {
     })
 
     builder.single = vi.fn().mockResolvedValue({ data: null, error: { code: 'PGRST116' } })
+    builder.maybeSingle = vi.fn().mockResolvedValue({ data: null, error: null })
     builder.then = vi.fn((resolve) => {
       resolve({ data: null, error: null })
     })
@@ -56,10 +57,12 @@ vi.mock('@/lib/supabase-server', () => {
   })
   const deleteUserMock = vi.fn().mockResolvedValue({ error: null })
   const updateUserByIdMock = vi.fn().mockResolvedValue({ error: null })
+  const rpcMock = vi.fn().mockResolvedValue({ data: null, error: null })
 
   return {
     getSupabaseAdmin: vi.fn(() => ({
       from: vi.fn(() => queryBuilder),
+      rpc: rpcMock,
       auth: {
         admin: {
           createUser: createUserMock,
@@ -72,9 +75,12 @@ vi.mock('@/lib/supabase-server', () => {
     __createUserMock: createUserMock,
     __deleteUserMock: deleteUserMock,
     __updateUserByIdMock: updateUserByIdMock,
+    __rpcMock: rpcMock,
     __reset: () => {
       queryBuilder.single.mockReset()
       queryBuilder.single.mockResolvedValue({ data: null, error: { code: 'PGRST116' } })
+      queryBuilder.maybeSingle.mockReset()
+      queryBuilder.maybeSingle.mockResolvedValue({ data: null, error: null })
       queryBuilder.then.mockReset()
       queryBuilder.then.mockImplementation((resolve) => {
         resolve({ data: null, error: null })
@@ -88,6 +94,11 @@ vi.mock('@/lib/supabase-server', () => {
       deleteUserMock.mockResolvedValue({ error: null })
       updateUserByIdMock.mockReset()
       updateUserByIdMock.mockResolvedValue({ error: null })
+      rpcMock.mockReset()
+      rpcMock.mockResolvedValue({ data: null, error: null })
+    },
+    __mockExistingAuthUser: (userId: string) => {
+      rpcMock.mockResolvedValueOnce({ data: userId, error: null })
     },
     __mockAuthCreateSuccess: (userId: string) => {
       createUserMock.mockResolvedValueOnce({
@@ -145,6 +156,10 @@ vi.mock('@/lib/auth/get-admin', () => ({
   }),
 }))
 
+vi.mock('@/lib/audit-log', () => ({
+  logAuditEvent: vi.fn().mockResolvedValue(undefined),
+}))
+
 vi.mock('next/cache', () => ({
   revalidatePath: vi.fn(),
 }))
@@ -162,6 +177,7 @@ const mockModule = await vi.importMock<{
   __createUserMock: ReturnType<typeof vi.fn>
   __deleteUserMock: ReturnType<typeof vi.fn>
   __updateUserByIdMock: ReturnType<typeof vi.fn>
+  __rpcMock: ReturnType<typeof vi.fn>
   __reset: () => void
   __mockAuthCreateSuccess: (userId: string) => void
   __mockAuthCreateError: (error: unknown) => void
@@ -173,12 +189,17 @@ const mockModule = await vi.importMock<{
   __mockAuthDeleteError: (error: unknown) => void
   __mockAuthUpdateSuccess: () => void
   __mockAuthUpdateError: (error: unknown) => void
+  __mockExistingAuthUser: (userId: string) => void
 }>('@/lib/supabase-server')
 
 // Helper to mock requireAdmin with different roles
 const mockRequireAdmin = await vi.importMock<{
   requireAdmin: ReturnType<typeof vi.fn>
 }>('@/lib/auth/get-admin')
+
+const mockAuditLog = await vi.importMock<{
+  logAuditEvent: ReturnType<typeof vi.fn>
+}>('@/lib/audit-log')
 
 describe('createAdminUser', () => {
   beforeEach(() => {
@@ -307,6 +328,124 @@ describe('createAdminUser', () => {
 
       expect(result.success).toBe(false)
       expect(result.error).toBeDefined()
+      expect(mockModule.__deleteUserMock).toHaveBeenCalledWith('new-user-id')
+    })
+  })
+
+  describe('promoting an existing (rider) auth user', () => {
+    it('reuses the existing auth user instead of creating a new one', async () => {
+      mockModule.__mockExistingAuthUser('rider-user-id')
+      mockModule.__mockInsertSuccess()
+
+      const result = await createAdminUser({
+        email: 'Rider@Example.com',
+        name: 'Rider Admin',
+        password: 'password123',
+        role: 'super_admin',
+      })
+
+      expect(result.success).toBe(true)
+      expect(mockModule.__rpcMock).toHaveBeenCalledWith('auth_user_id_for_email', {
+        p_email: 'rider@example.com',
+      })
+      expect(mockModule.__createUserMock).not.toHaveBeenCalled()
+      expect(mockModule.__updateUserByIdMock).toHaveBeenCalledWith('rider-user-id', {
+        password: 'password123',
+        email_confirm: true,
+      })
+      expect(mockModule.__queryBuilder.insert).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'rider-user-id' })
+      )
+    })
+
+    it('does not delete the existing auth user when the admin insert fails', async () => {
+      mockModule.__mockExistingAuthUser('rider-user-id')
+      mockModule.__mockInsertError({
+        code: '23505',
+        message: 'duplicate key',
+      })
+
+      const result = await createAdminUser({
+        email: 'rider@example.com',
+        name: 'Rider Admin',
+        password: 'password123',
+        role: 'super_admin',
+      })
+
+      expect(result.success).toBe(false)
+      expect(mockModule.__deleteUserMock).not.toHaveBeenCalled()
+    })
+
+    it('refuses to promote an email that already belongs to an admin, without touching the account', async () => {
+      mockModule.__mockExistingAuthUser('rider-user-id')
+      mockModule.__queryBuilder.maybeSingle.mockResolvedValueOnce({
+        data: { id: 'rider-user-id' },
+        error: null,
+      })
+
+      const result = await createAdminUser({
+        email: 'rider@example.com',
+        name: 'Rider Admin',
+        password: 'password123',
+        role: 'super_admin',
+      })
+
+      expect(result.success).toBe(false)
+      expect(result.error).toBeDefined()
+      expect(mockModule.__updateUserByIdMock).not.toHaveBeenCalled()
+      expect(mockModule.__queryBuilder.insert).not.toHaveBeenCalled()
+    })
+
+    it('records an audit entry if the admins insert still fails with a duplicate after the password was updated', async () => {
+      mockModule.__mockExistingAuthUser('rider-user-id')
+      mockModule.__queryBuilder.maybeSingle.mockResolvedValueOnce({ data: null, error: null })
+      mockModule.__mockInsertError({
+        code: '23505',
+        message: 'duplicate key',
+      })
+
+      const result = await createAdminUser({
+        email: 'rider@example.com',
+        name: 'Rider Admin',
+        password: 'password123',
+        role: 'super_admin',
+      })
+
+      expect(result.success).toBe(false)
+      expect(mockModule.__updateUserByIdMock).toHaveBeenCalledWith('rider-user-id', {
+        password: 'password123',
+        email_confirm: true,
+      })
+      expect(mockAuditLog.logAuditEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: 'update',
+          entityType: 'admin_user',
+          entityId: 'rider-user-id',
+          description: expect.stringContaining('Password reset on existing admin'),
+        })
+      )
+    })
+
+    it('still creates a new auth user and rolls it back on failure when no existing user is found', async () => {
+      mockModule.__mockAuthCreateSuccess('new-user-id')
+      mockModule.__mockInsertError({
+        code: '23505',
+        message: 'duplicate key',
+      })
+
+      const result = await createAdminUser({
+        email: 'new@example.com',
+        name: 'New User',
+        password: 'password123',
+        role: 'super_admin',
+      })
+
+      expect(result.success).toBe(false)
+      expect(mockModule.__rpcMock).toHaveBeenCalledWith('auth_user_id_for_email', {
+        p_email: 'new@example.com',
+      })
+      expect(mockModule.__createUserMock).toHaveBeenCalled()
+      expect(mockModule.__deleteUserMock).toHaveBeenCalledWith('new-user-id')
     })
   })
 })
@@ -430,6 +569,46 @@ describe('deleteAdminUser', () => {
     const result = await deleteAdminUser('user-1')
 
     expect(result.success).toBe(true)
+    expect(mockModule.__deleteUserMock).toHaveBeenCalledWith('user-1')
+  })
+
+  it('keeps the auth user when a rider is linked to it', async () => {
+    // admins row lookup (name/email for the audit entry)
+    mockModule.__queryBuilder.single.mockResolvedValueOnce({
+      data: { name: 'Dual Role', email: 'dual@example.com' },
+      error: null,
+    })
+    // riders lookup: this auth user is also a rider's sign-in
+    mockModule.__queryBuilder.maybeSingle.mockResolvedValueOnce({
+      data: { id: 'rider-1', first_name: 'Dual', last_name: 'Role' },
+      error: null,
+    })
+    mockModule.__mockDeleteSuccess()
+
+    const result = await deleteAdminUser('user-1')
+
+    expect(result.success).toBe(true)
+    // The admins row still goes...
+    expect(mockModule.__queryBuilder.delete).toHaveBeenCalled()
+    // ...but the shared auth user must survive, or the rider is signed out.
+    expect(mockModule.__deleteUserMock).not.toHaveBeenCalled()
+    expect(mockAuditLog.logAuditEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        description:
+          'Removed admin role from dual@example.com; account kept because it is linked to rider Dual Role',
+      })
+    )
+  })
+
+  it('deletes the auth user when no rider is linked', async () => {
+    mockModule.__queryBuilder.maybeSingle.mockResolvedValueOnce({ data: null, error: null })
+    mockModule.__mockDeleteSuccess()
+    mockModule.__mockAuthDeleteSuccess()
+
+    const result = await deleteAdminUser('user-1')
+
+    expect(result.success).toBe(true)
+    expect(mockModule.__deleteUserMock).toHaveBeenCalledWith('user-1')
   })
 
   it('handles auth deletion failure after admin record deleted', async () => {

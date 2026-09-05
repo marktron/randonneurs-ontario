@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest'
-import { buildRegistrationConfirmationEmail, buildResultSubmissionRequestEmail } from '@/lib/email/templates'
+import {
+  buildRegistrationConfirmationEmail,
+  buildResultSubmissionRequestEmail,
+} from '@/lib/email/templates'
+import { getSafeRedirect } from '@/lib/safe-redirect'
 
 describe('Email template HTML escaping', () => {
   const baseData = {
@@ -142,12 +146,10 @@ describe('Result submission email HTML escaping', () => {
 })
 
 describe('Admin login redirect validation', () => {
-  // Test the getSafeRedirectUrl logic that was added to the login page
-  function getSafeRedirectUrl(redirect: string | null): string {
-    if (!redirect) return '/admin'
-    if (redirect.startsWith('/admin')) return redirect
-    return '/admin'
-  }
+  // Exercise the real guard the login page calls, not a copy of it: an inline
+  // re-implementation here kept passing while the page's own version drifted.
+  const getSafeRedirectUrl = (redirect: string | null) =>
+    getSafeRedirect(redirect, ['/admin'], '/admin')
 
   it('returns /admin for null redirect', () => {
     expect(getSafeRedirectUrl(null)).toBe('/admin')
@@ -173,5 +175,13 @@ describe('Admin login redirect validation', () => {
 
   it('blocks javascript: protocol', () => {
     expect(getSafeRedirectUrl('javascript:alert(1)')).toBe('/admin')
+  })
+
+  it('blocks path traversal out of /admin', () => {
+    expect(getSafeRedirectUrl('/admin/../account')).toBe('/admin')
+  })
+
+  it('does not accept a route that merely starts with the string /admin', () => {
+    expect(getSafeRedirectUrl('/adminland')).toBe('/admin')
   })
 })

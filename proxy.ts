@@ -7,7 +7,9 @@ export async function proxy(request: NextRequest) {
 
 export const config = {
   matcher: [
-    // Match all admin routes
+    // Admin dashboard
     '/admin/:path*',
+    // Rider accounts
+    '/account/:path*',
   ],
 }

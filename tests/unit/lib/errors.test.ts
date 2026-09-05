@@ -140,6 +140,25 @@ describe('lib/errors', () => {
       expect(result.success).toBe(false)
       expect(Sentry.captureException).toHaveBeenCalled()
     })
+
+    it('matches the permission branch case-insensitively', () => {
+      // requireAdmin/requireAccount/requireRider throw a bare
+      // `Error('Unauthorized')` — capitalized, so a case-sensitive
+      // `includes('unauthorized')` missed it and fell through to the generic
+      // "unexpected error" message.
+      expect(handleActionError(new Error('Unauthorized'))).toEqual({
+        success: false,
+        error: 'You do not have permission to perform this action',
+      })
+      expect(handleActionError(new Error('Permission denied'))).toEqual({
+        success: false,
+        error: 'You do not have permission to perform this action',
+      })
+      expect(handleActionError(new Error('unauthorized'))).toEqual({
+        success: false,
+        error: 'You do not have permission to perform this action',
+      })
+    })
   })
 
   describe('handleSupabaseError', () => {

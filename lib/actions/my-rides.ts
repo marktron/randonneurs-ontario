@@ -3,6 +3,7 @@
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { handleSupabaseError } from '@/lib/errors'
 import { emailIlikePattern } from '@/lib/utils/validation'
+import { getAccount } from '@/lib/auth/get-rider'
 import type { ActionResult } from '@/types/actions'
 
 export interface MyUpcomingRide {
@@ -15,52 +16,23 @@ export interface MyUpcomingRide {
   chapterName: string
 }
 
-/**
- * Get upcoming registered rides for a rider by email.
- * Returns [] for unknown emails — no enumeration possible.
- */
-export async function getMyUpcomingRides(email: string): Promise<ActionResult<MyUpcomingRide[]>> {
-  const normalizedEmail = email?.toLowerCase().trim()
-  if (!normalizedEmail) {
-    return { success: true, data: [] }
-  }
-
+async function fetchUpcomingRidesForRider(
+  riderId: string
+): Promise<ActionResult<MyUpcomingRide[]>> {
   const supabase = getSupabaseAdmin()
-
-  // Find rider by email (case-insensitive — legacy rows may have mixed-case emails)
-  const { data: rider, error: riderError } = await supabase
-    .from('riders')
-    .select('id')
-    .ilike('email', emailIlikePattern(normalizedEmail))
-    .maybeSingle()
-
-  if (riderError || !rider) {
-    // Unknown email — return empty array (no enumeration)
-    return { success: true, data: [] }
-  }
-
   const today = new Date().toISOString().split('T')[0]
 
-  // Get registrations for future events
   const { data: registrations, error } = await supabase
     .from('registrations')
     .select(
       `
       events (
-        slug,
-        name,
-        event_date,
-        distance_km,
-        start_time,
-        start_location,
-        status,
-        chapters (
-          name
-        )
+        slug, name, event_date, distance_km, start_time, start_location, status,
+        chapters ( name )
       )
     `
     )
-    .eq('rider_id', rider.id)
+    .eq('rider_id', riderId)
     .eq('status', 'registered')
 
   if (error) {
@@ -71,7 +43,6 @@ export async function getMyUpcomingRides(email: string): Promise<ActionResult<My
     )
   }
 
-  // Filter to only future scheduled events and transform
   const upcomingRides: MyUpcomingRide[] = []
   for (const reg of registrations || []) {
     const event = reg.events as {
@@ -84,7 +55,6 @@ export async function getMyUpcomingRides(email: string): Promise<ActionResult<My
       status: string
       chapters: { name: string } | null
     } | null
-
     if (event && event.status === 'scheduled' && event.event_date >= today) {
       upcomingRides.push({
         slug: event.slug,
@@ -97,9 +67,43 @@ export async function getMyUpcomingRides(email: string): Promise<ActionResult<My
       })
     }
   }
-
-  // Sort by date ascending
   upcomingRides.sort((a, b) => a.date.localeCompare(b.date))
-
   return { success: true, data: upcomingRides }
+}
+
+/**
+ * Get upcoming registered rides for a rider by email (anonymous homepage widget).
+ * Returns [] for unknown emails — no enumeration possible.
+ */
+export async function getMyUpcomingRides(email: string): Promise<ActionResult<MyUpcomingRide[]>> {
+  const normalizedEmail = email?.toLowerCase().trim()
+  if (!normalizedEmail) return { success: true, data: [] }
+
+  const { data: rider, error: riderError } = await getSupabaseAdmin()
+    .from('riders')
+    .select('id')
+    .ilike('email', emailIlikePattern(normalizedEmail))
+    .maybeSingle()
+
+  if (riderError || !rider) return { success: true, data: [] }
+  return fetchUpcomingRidesForRider(rider.id)
+}
+
+/**
+ * Upcoming rides for the signed-in account. `signedIn: false` means the
+ * caller should fall back to the localStorage email.
+ */
+export async function getAccountUpcomingRides(): Promise<
+  ActionResult<{ signedIn: boolean; firstName: string; rides: MyUpcomingRide[] }>
+> {
+  const account = await getAccount()
+  if (!account) return { success: true, data: { signedIn: false, firstName: '', rides: [] } }
+  if (!account.rider) return { success: true, data: { signedIn: true, firstName: '', rides: [] } }
+
+  const result = await fetchUpcomingRidesForRider(account.rider.id)
+  if (!result.success) return { success: false, error: result.error }
+  return {
+    success: true,
+    data: { signedIn: true, firstName: account.rider.first_name, rides: result.data ?? [] },
+  }
 }

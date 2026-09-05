@@ -47,6 +47,7 @@ export async function createNewsItem(input: NewsItemInput): Promise<ActionResult
 
     await logAuditEvent({
       adminId: admin.id,
+      actorLabel: admin.name,
       action: 'create',
       entityType: 'news',
       entityId: data.id,
@@ -84,6 +85,7 @@ export async function updateNewsItem(id: string, input: NewsItemInput): Promise<
 
     await logAuditEvent({
       adminId: admin.id,
+      actorLabel: admin.name,
       action: 'update',
       entityType: 'news',
       entityId: id,
@@ -120,6 +122,7 @@ export async function deleteNewsItem(id: string): Promise<ActionResult> {
 
     await logAuditEvent({
       adminId: admin.id,
+      actorLabel: admin.name,
       action: 'delete',
       entityType: 'news',
       entityId: id,

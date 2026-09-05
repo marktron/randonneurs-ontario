@@ -42,20 +42,21 @@ For local development, the environment variables will be populated after startin
 
 ### Required Environment Variables
 
-| Variable                        | Description                                           | Where to Get It                                         |
-| ------------------------------- | ----------------------------------------------------- | ------------------------------------------------------- |
-| `NEXT_PUBLIC_SUPABASE_URL`      | Supabase API URL                                      | `npx supabase status` after starting                    |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Public anonymous key                                  | `npx supabase status` after starting                    |
-| `SUPABASE_SERVICE_ROLE_KEY`     | Server-side admin key                                 | `npx supabase status` after starting                    |
-| `AWS_ACCESS_KEY_ID`             | AWS IAM access key for SES (optional for dev)         | [AWS IAM Console](https://console.aws.amazon.com/iam)   |
-| `AWS_SECRET_ACCESS_KEY`         | AWS IAM secret key for SES (optional for dev)         | [AWS IAM Console](https://console.aws.amazon.com/iam)   |
-| `AWS_REGION`                    | AWS region for SES (default: `us-east-1`)             | Set in `.env.local`                                     |
-| `SES_FROM_EMAIL`                | Verified sender address for SES                       | Set in `.env.local`                                     |
-| `SES_CONFIGURATION_SET`         | SES configuration set for monitoring (optional)       | Set in `.env.local`                                     |
-| `SES_OVERRIDE_RECIPIENT`        | Redirect all emails to this address (dev only)        | Set in `.env.local`                                     |
-| `NEXT_PUBLIC_CURRENT_SEASON`    | Current riding season year                            | Set to current year (e.g., `2025`)                      |
-| `CRON_SECRET`                   | Secret for authenticating cron jobs (production only) | Generate a random string (e.g., `openssl rand -hex 32`) |
-| `REVALIDATE_SECRET`             | Secret for on-demand cache revalidation (production)  | Generate a random string (e.g., `openssl rand -hex 32`) |
+| Variable                         | Description                                                                     | Where to Get It                                                                                              |
+| -------------------------------- | ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `NEXT_PUBLIC_SUPABASE_URL`       | Supabase API URL                                                                | `npx supabase status` after starting                                                                         |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY`  | Public anonymous key                                                            | `npx supabase status` after starting                                                                         |
+| `SUPABASE_SERVICE_ROLE_KEY`      | Server-side admin key                                                           | `npx supabase status` after starting                                                                         |
+| `AWS_ACCESS_KEY_ID`              | AWS IAM access key for SES (optional for dev)                                   | [AWS IAM Console](https://console.aws.amazon.com/iam)                                                        |
+| `AWS_SECRET_ACCESS_KEY`          | AWS IAM secret key for SES (optional for dev)                                   | [AWS IAM Console](https://console.aws.amazon.com/iam)                                                        |
+| `AWS_REGION`                     | AWS region for SES (default: `us-east-1`)                                       | Set in `.env.local`                                                                                          |
+| `SES_FROM_EMAIL`                 | Verified sender address for SES                                                 | Set in `.env.local`                                                                                          |
+| `SES_CONFIGURATION_SET`          | SES configuration set for monitoring (optional)                                 | Set in `.env.local`                                                                                          |
+| `SES_OVERRIDE_RECIPIENT`         | Redirect all emails to this address (dev only)                                  | Set in `.env.local`                                                                                          |
+| `NEXT_PUBLIC_CURRENT_SEASON`     | Current riding season year                                                      | Set to current year (e.g., `2025`)                                                                           |
+| `CRON_SECRET`                    | Secret for authenticating cron jobs (production only)                           | Generate a random string (e.g., `openssl rand -hex 32`)                                                      |
+| `REVALIDATE_SECRET`              | Secret for on-demand cache revalidation (production)                            | Generate a random string (e.g., `openssl rand -hex 32`)                                                      |
+| `NEXT_PUBLIC_TURNSTILE_SITE_KEY` | Cloudflare Turnstile site key for rider sign-in (optional; leave unset locally) | [Cloudflare dashboard](https://dash.cloudflare.com/) — production/preview only, see `docs/rider-accounts.md` |
 
 ## Step 4: Start Local Supabase
 
