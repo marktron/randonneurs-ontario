@@ -147,14 +147,15 @@ account columns added later — it is where "authenticated cannot read
 An admin and a rider can be the same `auth.users` row — they share one
 Supabase session in one browser. Behaviour:
 
-| Action                                | Behaviour                                                                                                          |
-| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| Sign in with a code                   | Works; the session is both admin and rider at once.                                                                |
-| `/admin/login` while signed in        | Admin → `/admin`; a signed-in non-admin → `/account` (not an infinite redirect loop).                              |
-| Rider sign-out (`/account/settings`)  | Ends the shared browser session, including the admin session.                                                      |
-| Change email from `/account/settings` | Blocked; the form is disabled and points the admin to the admin settings page, which keeps `admins.email` in sync. |
-| Delete account                        | Blocked entirely; the dialog trigger is disabled with an explanatory message.                                      |
-| Linking                               | Allowed and independent — `admins.id` and `riders.auth_user_id` don't interact.                                    |
+| Action                                | Behaviour                                                                                                                                                                                                   |
+| ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Sign in with a code                   | Works; the session is both admin and rider at once.                                                                                                                                                         |
+| `/admin/login` while signed in        | Admin → `/admin`; a signed-in non-admin → `/account` (not an infinite redirect loop).                                                                                                                       |
+| Rider sign-out (`/account/settings`)  | Ends the shared browser session, including the admin session.                                                                                                                                               |
+| Change email from `/account/settings` | Blocked; the form is disabled and points the admin to the admin settings page, which keeps `admins.email` in sync.                                                                                          |
+| Delete account                        | Blocked entirely; the dialog trigger is disabled with an explanatory message.                                                                                                                               |
+| Linking                               | Allowed and independent — `admins.id` and `riders.auth_user_id` don't interact.                                                                                                                             |
+| Promoting a rider to admin            | `createAdminUser()` looks the email up via `auth_user_id_for_email` and reuses the existing auth user (setting its password) instead of failing on "email already registered"; the rider link is untouched. |
 
 ## My rides
 

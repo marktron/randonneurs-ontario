@@ -56,10 +56,12 @@ vi.mock('@/lib/supabase-server', () => {
   })
   const deleteUserMock = vi.fn().mockResolvedValue({ error: null })
   const updateUserByIdMock = vi.fn().mockResolvedValue({ error: null })
+  const rpcMock = vi.fn().mockResolvedValue({ data: null, error: null })
 
   return {
     getSupabaseAdmin: vi.fn(() => ({
       from: vi.fn(() => queryBuilder),
+      rpc: rpcMock,
       auth: {
         admin: {
           createUser: createUserMock,
@@ -72,6 +74,7 @@ vi.mock('@/lib/supabase-server', () => {
     __createUserMock: createUserMock,
     __deleteUserMock: deleteUserMock,
     __updateUserByIdMock: updateUserByIdMock,
+    __rpcMock: rpcMock,
     __reset: () => {
       queryBuilder.single.mockReset()
       queryBuilder.single.mockResolvedValue({ data: null, error: { code: 'PGRST116' } })
@@ -88,6 +91,11 @@ vi.mock('@/lib/supabase-server', () => {
       deleteUserMock.mockResolvedValue({ error: null })
       updateUserByIdMock.mockReset()
       updateUserByIdMock.mockResolvedValue({ error: null })
+      rpcMock.mockReset()
+      rpcMock.mockResolvedValue({ data: null, error: null })
+    },
+    __mockExistingAuthUser: (userId: string) => {
+      rpcMock.mockResolvedValueOnce({ data: userId, error: null })
     },
     __mockAuthCreateSuccess: (userId: string) => {
       createUserMock.mockResolvedValueOnce({
@@ -162,6 +170,7 @@ const mockModule = await vi.importMock<{
   __createUserMock: ReturnType<typeof vi.fn>
   __deleteUserMock: ReturnType<typeof vi.fn>
   __updateUserByIdMock: ReturnType<typeof vi.fn>
+  __rpcMock: ReturnType<typeof vi.fn>
   __reset: () => void
   __mockAuthCreateSuccess: (userId: string) => void
   __mockAuthCreateError: (error: unknown) => void
@@ -173,6 +182,7 @@ const mockModule = await vi.importMock<{
   __mockAuthDeleteError: (error: unknown) => void
   __mockAuthUpdateSuccess: () => void
   __mockAuthUpdateError: (error: unknown) => void
+  __mockExistingAuthUser: (userId: string) => void
 }>('@/lib/supabase-server')
 
 // Helper to mock requireAdmin with different roles
@@ -307,6 +317,74 @@ describe('createAdminUser', () => {
 
       expect(result.success).toBe(false)
       expect(result.error).toBeDefined()
+      expect(mockModule.__deleteUserMock).toHaveBeenCalledWith('new-user-id')
+    })
+  })
+
+  describe('promoting an existing (rider) auth user', () => {
+    it('reuses the existing auth user instead of creating a new one', async () => {
+      mockModule.__mockExistingAuthUser('rider-user-id')
+      mockModule.__mockInsertSuccess()
+
+      const result = await createAdminUser({
+        email: 'Rider@Example.com',
+        name: 'Rider Admin',
+        password: 'password123',
+        role: 'super_admin',
+      })
+
+      expect(result.success).toBe(true)
+      expect(mockModule.__rpcMock).toHaveBeenCalledWith('auth_user_id_for_email', {
+        p_email: 'rider@example.com',
+      })
+      expect(mockModule.__createUserMock).not.toHaveBeenCalled()
+      expect(mockModule.__updateUserByIdMock).toHaveBeenCalledWith('rider-user-id', {
+        password: 'password123',
+        email_confirm: true,
+      })
+      expect(mockModule.__queryBuilder.insert).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'rider-user-id' })
+      )
+    })
+
+    it('does not delete the existing auth user when the admin insert fails', async () => {
+      mockModule.__mockExistingAuthUser('rider-user-id')
+      mockModule.__mockInsertError({
+        code: '23505',
+        message: 'duplicate key',
+      })
+
+      const result = await createAdminUser({
+        email: 'rider@example.com',
+        name: 'Rider Admin',
+        password: 'password123',
+        role: 'super_admin',
+      })
+
+      expect(result.success).toBe(false)
+      expect(mockModule.__deleteUserMock).not.toHaveBeenCalled()
+    })
+
+    it('still creates a new auth user and rolls it back on failure when no existing user is found', async () => {
+      mockModule.__mockAuthCreateSuccess('new-user-id')
+      mockModule.__mockInsertError({
+        code: '23505',
+        message: 'duplicate key',
+      })
+
+      const result = await createAdminUser({
+        email: 'new@example.com',
+        name: 'New User',
+        password: 'password123',
+        role: 'super_admin',
+      })
+
+      expect(result.success).toBe(false)
+      expect(mockModule.__rpcMock).toHaveBeenCalledWith('auth_user_id_for_email', {
+        p_email: 'new@example.com',
+      })
+      expect(mockModule.__createUserMock).toHaveBeenCalled()
+      expect(mockModule.__deleteUserMock).toHaveBeenCalledWith('new-user-id')
     })
   })
 })

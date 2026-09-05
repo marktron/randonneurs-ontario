@@ -50,24 +50,63 @@ export async function createAdminUser(data: AdminUserData): Promise<ActionResult
     normalizedPhone = phoneResult.formatted
   }
 
-  // Create auth user first
-  const { data: authData, error: authError } = await getSupabaseAdmin().auth.admin.createUser({
-    email,
-    password,
-    email_confirm: true,
-  })
+  const normalizedEmail = email.trim().toLowerCase()
 
-  if (authError || !authData.user) {
+  // A rider may already have signed in, creating an auth user tied to
+  // riders.auth_user_id. Reuse that auth user instead of failing with
+  // "email already registered" — admin + rider can be the same person.
+  const { data: existingUserId, error: lookupError } = await getSupabaseAdmin().rpc(
+    'auth_user_id_for_email',
+    { p_email: normalizedEmail }
+  )
+
+  if (lookupError) {
     return handleSupabaseError(
-      authError,
-      { operation: 'createAdminUser.auth', skipSentry: true }, // Don't log auth errors
-      authError?.message || 'Failed to create user'
+      lookupError,
+      { operation: 'createAdminUser.lookup' },
+      'Failed to look up existing account'
     )
+  }
+
+  let authUserId: string
+  let createdAuthUser = false
+
+  if (existingUserId) {
+    authUserId = existingUserId
+    const { error: updateError } = await getSupabaseAdmin().auth.admin.updateUserById(
+      existingUserId,
+      { password, email_confirm: true }
+    )
+    if (updateError) {
+      return handleSupabaseError(
+        updateError,
+        { operation: 'createAdminUser.auth', skipSentry: true }, // Don't log auth errors
+        updateError.message || 'Failed to update existing account'
+      )
+    }
+  } else {
+    // Create auth user
+    const { data: authData, error: authError } = await getSupabaseAdmin().auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true,
+    })
+
+    if (authError || !authData.user) {
+      return handleSupabaseError(
+        authError,
+        { operation: 'createAdminUser.auth', skipSentry: true }, // Don't log auth errors
+        authError?.message || 'Failed to create user'
+      )
+    }
+
+    authUserId = authData.user.id
+    createdAuthUser = true
   }
 
   // Create admin record
   const adminInsert: AdminInsert = {
-    id: authData.user.id,
+    id: authUserId,
     email,
     name,
     phone: normalizedPhone,
@@ -78,8 +117,11 @@ export async function createAdminUser(data: AdminUserData): Promise<ActionResult
   const { error: adminError } = await getSupabaseAdmin().from('admins').insert(adminInsert)
 
   if (adminError) {
-    // Rollback: delete the auth user
-    await getSupabaseAdmin().auth.admin.deleteUser(authData.user.id)
+    // Rollback: only delete the auth user if we created it. A pre-existing
+    // (rider) auth user must never be deleted.
+    if (createdAuthUser) {
+      await getSupabaseAdmin().auth.admin.deleteUser(authUserId)
+    }
     return handleSupabaseError(
       adminError,
       { operation: 'createAdminUser.admin' },
@@ -93,8 +135,10 @@ export async function createAdminUser(data: AdminUserData): Promise<ActionResult
     adminId: currentAdmin.id,
     action: 'create',
     entityType: 'admin_user',
-    entityId: authData.user.id,
-    description: `Created admin user: ${name} (${email})`,
+    entityId: authUserId,
+    description: createdAuthUser
+      ? `Created admin user: ${name} (${email})`
+      : `Promoted existing account to admin: ${name} (${email})`,
   })
 
   return createActionResult()
