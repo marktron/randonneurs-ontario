@@ -6,6 +6,8 @@ import { deleteAccountData } from '@/lib/account/deletion'
 const USER_EMAIL = 'inttest-delete-user@example.com'
 const OTHER_USER_EMAIL = 'inttest-delete-other@example.com'
 const RIDER = { id: '00000000-10c3-4000-a000-000000000001', slug: 'inttest-delete-rider' }
+// A uuid that is deliberately not an auth.users row, so deleteUser() errors.
+const MISSING_USER_ID = '00000000-10c3-4000-a000-0000000000ff'
 
 describe('deleteAccountData (real DB)', () => {
   const admin = getTestSupabase()
@@ -19,6 +21,7 @@ describe('deleteAccountData (real DB)', () => {
     // previous test (or run) assigned.
     if (userId) await admin.from('audit_logs').delete().eq('actor_user_id', userId)
     if (otherUserId) await admin.from('audit_logs').delete().eq('actor_user_id', otherUserId)
+    await admin.from('audit_logs').delete().eq('actor_user_id', MISSING_USER_ID)
     await admin.from('riders').delete().eq('id', RIDER.id)
     await deleteAuthUsersByEmail([USER_EMAIL, OTHER_USER_EMAIL])
   }
@@ -90,11 +93,12 @@ describe('deleteAccountData (real DB)', () => {
       're-link rider to the other user'
     )
 
-    // userId no longer owns this rider's link (otherUserId does). The unlink
-    // UPDATE is scoped by `.eq('auth_user_id', input.userId)`, so it must be a
-    // no-op here — a caller can only ever unlink their own rider. Deleting
-    // their own auth user, however, always proceeds: that's the account they
-    // asked to delete, independent of which rider (if any) they're linked to.
+    // userId no longer owns this rider's link (otherUserId does). Deleting the
+    // caller's own auth user always proceeds — that's the account they asked to
+    // delete — but the FK cascade only clears a link pointing at *them*, so this
+    // rider keeps otherUserId. The profile-clearing UPDATE is then scoped by
+    // `.is('auth_user_id', null)`, so it is a no-op too and the bio survives:
+    // a caller can never wipe a profile that now belongs to someone else.
     await deleteAccountData({ userId: userId!, riderId: RIDER.id })
 
     const { data: rider } = await admin
@@ -109,5 +113,29 @@ describe('deleteAccountData (real DB)', () => {
     const { data: users } = await admin.auth.admin.listUsers({ perPage: 1000 })
     expect(users.users.some((u) => u.id === userId)).toBe(false)
     expect(users.users.some((u) => u.id === otherUserId)).toBe(true)
+  })
+
+  it('changes nothing and logs nothing when deleting the auth user fails', async () => {
+    // deleteUser runs first, so a failure must leave the rider exactly as it
+    // was and write no audit row — otherwise a retry stacks a second one.
+    await expect(deleteAccountData({ userId: MISSING_USER_ID, riderId: RIDER.id })).rejects.toThrow(
+      /deleteUser/
+    )
+
+    const { data: rider } = await admin
+      .from('riders')
+      .select('auth_user_id, linked_at, bio')
+      .eq('id', RIDER.id)
+      .single()
+    expect(rider?.auth_user_id).toBe(userId)
+    expect(rider?.linked_at).not.toBeNull()
+    expect(rider?.bio).toBe('I ride bikes')
+
+    const { data: logs } = await admin
+      .from('audit_logs')
+      .select('action')
+      .eq('entity_id', RIDER.id)
+      .eq('action', 'account_delete')
+    expect(logs ?? []).toHaveLength(0)
   })
 })

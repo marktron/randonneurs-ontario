@@ -199,9 +199,15 @@ to show, and no email to look up).
   before doing anything — a deliberate choice over inspecting an `auth_time`
   claim on the existing JWT, which Supabase does not refresh per action and
   which would let a session left open on a shared machine delete the account. `deleteAccountData()` (`lib/account/deletion.ts`)
-  clears `auth_user_id`/`linked_at`/`bio`/`photo_path` on the rider row (if
-  linked), logs `account_delete`, then deletes the auth user with
-  `auth.admin.deleteUser`. **What survives:** the rider row itself, and every
+  works in that order deliberately: (1) `auth.admin.deleteUser` — it throws on
+  failure, and until it succeeds nothing has changed, so a retry is clean; the
+  FK on `riders.auth_user_id` (`ON DELETE SET NULL`) and its trigger clear the
+  link and `linked_at`, but only for a rider still pointing at that user;
+  (2) null out `bio`/`photo_path`, scoped by `auth_user_id IS NULL` so that an
+  admin re-pointing the rider at someone else in between makes it a no-op
+  rather than wiping the new owner's profile; (3) log `account_delete`, last,
+  so an audit row only ever describes work that actually
+  happened. **What survives:** the rider row itself, and every
   registration and result — those are club records, not account data.
   Pending/rejected external results would be deleted once that phase ships;
   none exist yet. Blocked entirely for admins.
