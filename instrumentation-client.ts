@@ -7,7 +7,10 @@ import { initBotId } from 'botid/client/core'
 import { clientIgnoreErrors } from '@/lib/sentry-ignore'
 
 initBotId({
-  protect: [{ path: '/register/*', method: 'POST' }],
+  protect: [
+    { path: '/register/*', method: 'POST' },
+    { path: '/account/*', method: 'POST' },
+  ],
 })
 
 Sentry.init({

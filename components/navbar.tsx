@@ -14,6 +14,7 @@ import {
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Button } from '@/components/ui/button'
+import { AccountNav } from '@/components/account-nav'
 import type { NavItem } from '@/types/navigation'
 
 const dropdownLinkStyles = 'block rounded-md px-3 py-2 text-sm hover:bg-muted transition-colors'
@@ -45,41 +46,44 @@ export function Navbar({ items }: NavbarProps) {
         </Link>
 
         {/* Desktop Navigation */}
-        <NavigationMenu viewport={false} className="hidden lg:flex">
-          <NavigationMenuList>
-            {items.map((item, i) => {
-              if (item.style === 'cta') {
-                return (
-                  <NavigationMenuItem key={i}>
-                    <Link
-                      href={item.href!}
-                      className="inline-flex items-center rounded-full bg-red-600 ml-3 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-700"
-                    >
-                      {item.label}
-                    </Link>
-                  </NavigationMenuItem>
-                )
-              }
-              if (item.children) {
-                return (
-                  <NavigationMenuItem key={i}>
-                    <NavigationMenuTrigger className="bg-transparent hover:bg-muted/50 data-open:bg-muted/50">
-                      {item.label}
-                    </NavigationMenuTrigger>
-                    <NavigationMenuContent>
-                      <ul className="grid w-52 gap-1 p-2">
-                        {item.children.map((child, j) => (
-                          <NavChildItem key={j} item={child} />
-                        ))}
-                      </ul>
-                    </NavigationMenuContent>
-                  </NavigationMenuItem>
-                )
-              }
-              return null
-            })}
-          </NavigationMenuList>
-        </NavigationMenu>
+        <div className="hidden lg:flex items-center">
+          <NavigationMenu viewport={false}>
+            <NavigationMenuList>
+              {items.map((item, i) => {
+                if (item.style === 'cta') {
+                  return (
+                    <NavigationMenuItem key={i}>
+                      <Link
+                        href={item.href!}
+                        className="inline-flex items-center rounded-full bg-red-600 ml-3 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-700"
+                      >
+                        {item.label}
+                      </Link>
+                    </NavigationMenuItem>
+                  )
+                }
+                if (item.children) {
+                  return (
+                    <NavigationMenuItem key={i}>
+                      <NavigationMenuTrigger className="bg-transparent hover:bg-muted/50 data-open:bg-muted/50">
+                        {item.label}
+                      </NavigationMenuTrigger>
+                      <NavigationMenuContent>
+                        <ul className="grid w-52 gap-1 p-2">
+                          {item.children.map((child, j) => (
+                            <NavChildItem key={j} item={child} />
+                          ))}
+                        </ul>
+                      </NavigationMenuContent>
+                    </NavigationMenuItem>
+                  )
+                }
+                return null
+              })}
+            </NavigationMenuList>
+          </NavigationMenu>
+          <AccountNav className="hidden lg:inline-flex ml-4 text-sm font-medium hover:underline underline-offset-4" />
+        </div>
 
         {/* Mobile Menu */}
         <Sheet open={open} onOpenChange={setOpen}>
@@ -122,6 +126,11 @@ export function Navbar({ items }: NavbarProps) {
                 }
                 return null
               })}
+              <div className="border-t border-border my-1" />
+              <AccountNav
+                className="block px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors"
+                onNavigate={() => setOpen(false)}
+              />
             </nav>
           </SheetContent>
         </Sheet>

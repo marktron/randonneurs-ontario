@@ -11,10 +11,23 @@ import type { ActionResult } from '@/types/actions'
 
 // Mock server action
 const mockGetMyUpcomingRides = vi.fn<(email: string) => Promise<ActionResult<MyUpcomingRide[]>>>()
+const mockGetAccountUpcomingRides =
+  vi.fn<
+    () => Promise<ActionResult<{ signedIn: boolean; firstName: string; rides: MyUpcomingRide[] }>>
+  >()
 
 vi.mock('@/lib/actions/my-rides', () => ({
   getMyUpcomingRides: (...args: unknown[]) => mockGetMyUpcomingRides(args[0] as string),
+  getAccountUpcomingRides: () => mockGetAccountUpcomingRides(),
 }))
+
+/**
+ * ISO date string (YYYY-MM-DD) `days` from today, so fixtures don't silently
+ * become "past" as the calendar advances.
+ */
+function isoDaysFromNow(days: number): string {
+  return new Date(Date.now() + days * 86_400_000).toISOString().split('T')[0]
+}
 
 const sampleRides: MyUpcomingRide[] = [
   {
@@ -41,6 +54,10 @@ describe('MyRidesSection', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     localStorage.clear()
+    mockGetAccountUpcomingRides.mockResolvedValue({
+      success: true,
+      data: { signedIn: false, firstName: '', rides: [] },
+    })
   })
 
   afterEach(() => {
@@ -191,5 +208,50 @@ describe('MyRidesSection', () => {
 
     expect(screen.queryByText(/more/)).not.toBeInTheDocument()
     expect(screen.queryByText('Show less')).not.toBeInTheDocument()
+  })
+
+  it('prefers the signed-in account over localStorage', async () => {
+    mockGetAccountUpcomingRides.mockResolvedValue({
+      success: true,
+      data: {
+        signedIn: true,
+        firstName: 'Pat',
+        rides: [
+          {
+            slug: 's',
+            name: 'Account Ride',
+            date: isoDaysFromNow(3),
+            distance: 200,
+            startTime: '07:00',
+            startLocation: '',
+            chapterName: 'Toronto',
+          },
+        ],
+      },
+    })
+    localStorage.setItem(
+      'ro-registration',
+      JSON.stringify({ email: 'x@example.com', firstName: 'Local' })
+    )
+    render(<MyRidesSection />)
+    expect(await screen.findByText('Account Ride')).toBeInTheDocument()
+    expect(screen.getByText(/welcome back, pat/i)).toBeInTheDocument()
+    expect(mockGetMyUpcomingRides).not.toHaveBeenCalled()
+    expect(screen.getByRole('link', { name: /all my rides/i })).toHaveAttribute('href', '/account')
+  })
+
+  it('renders nothing for a signed-in account with no upcoming rides, without falling back to localStorage', async () => {
+    mockGetAccountUpcomingRides.mockResolvedValue({
+      success: true,
+      data: { signedIn: true, firstName: 'Pat', rides: [] },
+    })
+    localStorage.setItem(
+      'ro-registration',
+      JSON.stringify({ email: 'x@example.com', firstName: 'Local' })
+    )
+    const { container } = render(<MyRidesSection />)
+    await waitFor(() => expect(mockGetAccountUpcomingRides).toHaveBeenCalled())
+    expect(mockGetMyUpcomingRides).not.toHaveBeenCalled()
+    expect(container).toBeEmptyDOMElement()
   })
 })
