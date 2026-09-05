@@ -462,3 +462,46 @@ describe('EventCheckinsGrid mobile card layout', () => {
     expect(screen.getByText('Control 2 · 100 km')).toBeTruthy()
   })
 })
+
+describe('EventCheckinsGrid collapsible section', () => {
+  it('starts open — this is the section the admin scrolls to find', () => {
+    render(
+      <EventCheckinsGrid
+        eventId="event-1"
+        eventSubmitted={false}
+        controls={controls}
+        riders={[makeRider({})]}
+      />
+    )
+
+    expect(screen.getByRole('button', { name: 'Hide Check-ins' })).toHaveAttribute(
+      'aria-expanded',
+      'true'
+    )
+  })
+
+  it('folds away on tap and counts the riders inside', async () => {
+    const user = userEvent.setup()
+    render(
+      <EventCheckinsGrid
+        eventId="event-1"
+        eventSubmitted={false}
+        controls={controls}
+        riders={[makeRider({}), makeRider({ registrationId: 'reg-2', riderName: 'Grace Hopper' })]}
+      />
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Hide Check-ins' }))
+
+    expect(screen.getByText('2 riders')).toBeInTheDocument()
+
+    // The grid folds on mobile widths only; `sm:block` keeps it on screen for
+    // an organizer working from a laptop.
+    const toggle = screen.getByRole('button', { name: 'Show Check-ins' })
+    const bodyId = toggle.getAttribute('aria-controls')!.split(' ').at(-1)!
+    const gridBody = document.getElementById(bodyId)!
+    expect(gridBody).toContainElement(screen.getByText('Ada Lovelace'))
+    expect(gridBody.className).toContain('hidden')
+    expect(gridBody.className).toContain('sm:block')
+  })
+})

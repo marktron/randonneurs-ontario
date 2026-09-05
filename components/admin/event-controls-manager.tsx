@@ -23,6 +23,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { CollectionLegImportDialog } from '@/components/admin/collection-leg-import-dialog'
+import { CollapsibleSection } from '@/components/admin/collapsible-section'
 import {
   saveEventControls,
   importEventControlsFromRwgps,
@@ -388,97 +389,99 @@ export function EventControlsManager({
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <h2 className="text-xl font-semibold">Controls</h2>
-          <p className="text-sm text-muted-foreground">
-            Controls power the riders&apos; digital brevet card. Open/close times are computed from
-            distance — coordinates enable GPS check-in.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {(hasRwgpsRoute || hasRwgpsCollection) && (
-            <Button
-              variant="outline"
-              onClick={hasRwgpsCollection ? () => setLegDialogOpen(true) : handleImport}
-              disabled={isImporting || isPending}
-            >
-              {isImporting ? (
+      <CollapsibleSection
+        title="Controls"
+        description="Controls power the riders' digital brevet card. Open/close times are computed from distance — coordinates enable GPS check-in."
+        summary={`${rows.length} control${rows.length === 1 ? '' : 's'}`}
+        // Each control is a full stacked card on a phone, so a saved route
+        // buries everything below it. Events still awaiting their first
+        // import open expanded — that is the section the admin came for.
+        defaultCollapsed={initialControls.length > 0}
+        actions={
+          <>
+            {(hasRwgpsRoute || hasRwgpsCollection) && (
+              <Button
+                variant="outline"
+                onClick={hasRwgpsCollection ? () => setLegDialogOpen(true) : handleImport}
+                disabled={isImporting || isPending}
+              >
+                {isImporting ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <Download className="h-4 w-4 mr-2" />
+                )}
+                Import from RWGPS
+              </Button>
+            )}
+            {!hasLegRows && (
+              <Button variant="outline" onClick={() => addRow()} disabled={isPending}>
+                <Plus className="h-4 w-4 mr-2" />
+                Add control
+              </Button>
+            )}
+            <Button onClick={handleSave} disabled={isPending}>
+              {isPending ? (
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
               ) : (
-                <Download className="h-4 w-4 mr-2" />
+                <Save className="h-4 w-4 mr-2" />
               )}
-              Import from RWGPS
+              Save controls
             </Button>
-          )}
-          {!hasLegRows && (
-            <Button variant="outline" onClick={() => addRow()} disabled={isPending}>
-              <Plus className="h-4 w-4 mr-2" />
-              Add control
-            </Button>
-          )}
-          <Button onClick={handleSave} disabled={isPending}>
-            {isPending ? (
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-            ) : (
-              <Save className="h-4 w-4 mr-2" />
-            )}
-            Save controls
-          </Button>
-        </div>
-      </div>
-
-      {rows.length === 0 ? (
-        <p className="text-sm text-muted-foreground border rounded-md p-6 text-center">
-          No controls yet. Import them from the route&apos;s RideWithGPS data or add them manually.
-          The digital brevet card stays hidden from riders until controls are saved.
-        </p>
-      ) : (
-        <div className="overflow-x-auto border rounded-md">
-          <Table className="block sm:table">
-            <TableHeader className="hidden sm:table-header-group">
-              <TableRow>
-                <TableHead className="min-w-[180px]">Name</TableHead>
-                <TableHead className="w-24 text-right">Km</TableHead>
-                <TableHead className="w-32">Latitude</TableHead>
-                <TableHead className="w-32">Longitude</TableHead>
-                <TableHead className="w-24 text-right">Radius (m)</TableHead>
-                <TableHead className="min-w-[140px]">Notes</TableHead>
-                <TableHead className="w-24 text-right">Check-ins</TableHead>
-                <TableHead className="w-12" />
-              </TableRow>
-            </TableHeader>
-            <TableBody className="block sm:table-row-group">
-              {groupRows(rows).map((group) => (
-                <Fragment key={group.legRwgpsId ?? 'no-leg'}>
-                  {group.legRwgpsId !== null && (
-                    <TableRow className="block bg-muted/50 sm:table-row">
-                      <TableCell colSpan={8} className="block p-3 sm:table-cell">
-                        <div className="flex items-center justify-between gap-3">
-                          <span className="font-medium">{group.legName}</span>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            aria-label={`Add control to ${group.legName}`}
-                            onClick={() =>
-                              addRow({ legRwgpsId: group.legRwgpsId!, legName: group.legName! })
-                            }
-                            disabled={isPending}
-                          >
-                            <Plus className="h-4 w-4 mr-1" />
-                            Add control
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  )}
-                  {group.rows.map((row) => renderControlRow(row))}
-                </Fragment>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-      )}
+          </>
+        }
+      >
+        {rows.length === 0 ? (
+          <p className="text-sm text-muted-foreground border rounded-md p-6 text-center">
+            No controls yet. Import them from the route&apos;s RideWithGPS data or add them
+            manually. The digital brevet card stays hidden from riders until controls are saved.
+          </p>
+        ) : (
+          <div className="overflow-x-auto border rounded-md">
+            <Table className="block sm:table">
+              <TableHeader className="hidden sm:table-header-group">
+                <TableRow>
+                  <TableHead className="min-w-[180px]">Name</TableHead>
+                  <TableHead className="w-24 text-right">Km</TableHead>
+                  <TableHead className="w-32">Latitude</TableHead>
+                  <TableHead className="w-32">Longitude</TableHead>
+                  <TableHead className="w-24 text-right">Radius (m)</TableHead>
+                  <TableHead className="min-w-[140px]">Notes</TableHead>
+                  <TableHead className="w-24 text-right">Check-ins</TableHead>
+                  <TableHead className="w-12" />
+                </TableRow>
+              </TableHeader>
+              <TableBody className="block sm:table-row-group">
+                {groupRows(rows).map((group) => (
+                  <Fragment key={group.legRwgpsId ?? 'no-leg'}>
+                    {group.legRwgpsId !== null && (
+                      <TableRow className="block bg-muted/50 sm:table-row">
+                        <TableCell colSpan={8} className="block p-3 sm:table-cell">
+                          <div className="flex items-center justify-between gap-3">
+                            <span className="font-medium">{group.legName}</span>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              aria-label={`Add control to ${group.legName}`}
+                              onClick={() =>
+                                addRow({ legRwgpsId: group.legRwgpsId!, legName: group.legName! })
+                              }
+                              disabled={isPending}
+                            >
+                              <Plus className="h-4 w-4 mr-1" />
+                              Add control
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    )}
+                    {group.rows.map((row) => renderControlRow(row))}
+                  </Fragment>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+      </CollapsibleSection>
 
       <AlertDialog open={confirmSaveOpen} onOpenChange={setConfirmSaveOpen}>
         <AlertDialogContent>
@@ -510,58 +513,67 @@ export function EventControlsManager({
         onImported={handleCollectionImported}
       />
 
-      <div className="space-y-3 border rounded-md p-4">
-        <div>
-          <h2 className="text-xl font-semibold">Ride organizer</h2>
-          <p className="text-sm text-muted-foreground">
-            Shown to riders on the digital brevet card. Prefilled from the chapter VP — edit for
-            this event&apos;s organizer.
-          </p>
+      <CollapsibleSection
+        title="Ride organizer"
+        description="Shown to riders on the digital brevet card. Prefilled from the chapter VP — edit for this event's organizer."
+        summary={organizer.name || 'Not set'}
+        // Set once per event and rarely revisited — folded by default so it
+        // doesn't sit between the controls and the check-in grid on a phone.
+        defaultCollapsed
+        className="space-y-3 border rounded-md p-4"
+      >
+        <div className="space-y-3">
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground" htmlFor="organizer-name">
+                Name
+              </label>
+              <Input
+                id="organizer-name"
+                value={organizer.name}
+                onChange={(e) => setOrganizer((o) => ({ ...o, name: e.target.value }))}
+                placeholder="Organizer name"
+              />
+            </div>
+            <div className="space-y-1">
+              <label
+                className="text-xs font-medium text-muted-foreground"
+                htmlFor="organizer-phone"
+              >
+                Phone
+              </label>
+              <Input
+                id="organizer-phone"
+                value={organizer.phone}
+                onChange={(e) => setOrganizer((o) => ({ ...o, phone: e.target.value }))}
+                placeholder="416-555-0101"
+              />
+            </div>
+            <div className="space-y-1">
+              <label
+                className="text-xs font-medium text-muted-foreground"
+                htmlFor="organizer-email"
+              >
+                Email
+              </label>
+              <Input
+                id="organizer-email"
+                value={organizer.email}
+                onChange={(e) => setOrganizer((o) => ({ ...o, email: e.target.value }))}
+                placeholder="name@example.ca"
+              />
+            </div>
+          </div>
+          <Button variant="outline" onClick={handleSaveOrganizer} disabled={isSavingOrganizer}>
+            {isSavingOrganizer ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <Save className="h-4 w-4 mr-2" />
+            )}
+            Save organizer
+          </Button>
         </div>
-        <div className="grid gap-3 sm:grid-cols-3">
-          <div className="space-y-1">
-            <label className="text-xs font-medium text-muted-foreground" htmlFor="organizer-name">
-              Name
-            </label>
-            <Input
-              id="organizer-name"
-              value={organizer.name}
-              onChange={(e) => setOrganizer((o) => ({ ...o, name: e.target.value }))}
-              placeholder="Organizer name"
-            />
-          </div>
-          <div className="space-y-1">
-            <label className="text-xs font-medium text-muted-foreground" htmlFor="organizer-phone">
-              Phone
-            </label>
-            <Input
-              id="organizer-phone"
-              value={organizer.phone}
-              onChange={(e) => setOrganizer((o) => ({ ...o, phone: e.target.value }))}
-              placeholder="416-555-0101"
-            />
-          </div>
-          <div className="space-y-1">
-            <label className="text-xs font-medium text-muted-foreground" htmlFor="organizer-email">
-              Email
-            </label>
-            <Input
-              id="organizer-email"
-              value={organizer.email}
-              onChange={(e) => setOrganizer((o) => ({ ...o, email: e.target.value }))}
-              placeholder="name@example.ca"
-            />
-          </div>
-        </div>
-        <Button variant="outline" onClick={handleSaveOrganizer} disabled={isSavingOrganizer}>
-          {isSavingOrganizer ? (
-            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-          ) : (
-            <Save className="h-4 w-4 mr-2" />
-          )}
-          Save organizer
-        </Button>
-      </div>
+      </CollapsibleSection>
     </div>
   )
 }

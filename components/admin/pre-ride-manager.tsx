@@ -36,6 +36,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { CollapsibleSection } from '@/components/admin/collapsible-section'
 import { setPreRideStart } from '@/lib/actions/pre-ride'
 import type { AdminCheckinGridRider } from '@/lib/actions/control-checkins'
 import { parseLocalDate } from '@/lib/utils'
@@ -113,16 +114,12 @@ export function PreRideManager({ riders, eventStartTime, eventScheduled }: PreRi
   if (riders.length === 0) return null
 
   return (
-    <section className="space-y-3">
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div>
-          <h2 className="text-xl font-semibold">Pre-Rides</h2>
-          <p className="text-sm text-muted-foreground">
-            An approved pre-rider&apos;s digital card runs off their own start date and time. Their
-            finish email still sends when they complete the ride; printed cards come from the
-            control-cards generator with the custom start.
-          </p>
-        </div>
+    <CollapsibleSection
+      title="Pre-Rides"
+      description="An approved pre-rider's digital card runs off their own start date and time. Their finish email still sends when they complete the ride; printed cards come from the control-cards generator with the custom start."
+      summary={`${preRiders.length} pre-rider${preRiders.length === 1 ? '' : 's'}`}
+      className="space-y-3"
+      actions={
         <Button
           variant="outline"
           onClick={openAdd}
@@ -131,43 +128,45 @@ export function PreRideManager({ riders, eventStartTime, eventScheduled }: PreRi
           <Plus className="h-4 w-4 mr-2" />
           Add pre-rider
         </Button>
-      </div>
-
-      {preRiders.length === 0 ? (
-        <p className="text-sm text-muted-foreground border rounded-md p-6 text-center">
-          No pre-rides for this event.
-        </p>
-      ) : (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Rider</TableHead>
-              <TableHead>Pre-ride start</TableHead>
-              <TableHead className="w-24" />
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {preRiders.map((rider) => (
-              <TableRow key={rider.registrationId}>
-                <TableCell>{rider.riderName}</TableCell>
-                <TableCell>
-                  {formatPreRideLabel(rider.preRideDate!, rider.preRideStartTime)}
-                </TableCell>
-                <TableCell>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => openEdit(rider)}
-                    disabled={!eventScheduled}
-                  >
-                    Edit
-                  </Button>
-                </TableCell>
+      }
+    >
+      <div className="space-y-3">
+        {preRiders.length === 0 ? (
+          <p className="text-sm text-muted-foreground border rounded-md p-6 text-center">
+            No pre-rides for this event.
+          </p>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Rider</TableHead>
+                <TableHead>Pre-ride start</TableHead>
+                <TableHead className="w-24" />
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      )}
+            </TableHeader>
+            <TableBody>
+              {preRiders.map((rider) => (
+                <TableRow key={rider.registrationId}>
+                  <TableCell>{rider.riderName}</TableCell>
+                  <TableCell>
+                    {formatPreRideLabel(rider.preRideDate!, rider.preRideStartTime)}
+                  </TableCell>
+                  <TableCell>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => openEdit(rider)}
+                      disabled={!eventScheduled}
+                    >
+                      Edit
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+      </div>
 
       <Dialog open={dialogState !== null} onOpenChange={(open) => !open && setDialogState(null)}>
         <DialogContent>
@@ -249,6 +248,6 @@ export function PreRideManager({ riders, eventStartTime, eventScheduled }: PreRi
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </section>
+    </CollapsibleSection>
   )
 }

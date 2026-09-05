@@ -39,6 +39,7 @@ import { toast } from 'sonner'
 import Link from 'next/link'
 import { Link as LinkIcon, Loader2, RefreshCw } from 'lucide-react'
 import { CheckinMap } from '@/components/admin/checkin-map'
+import { CollapsibleSection } from '@/components/admin/collapsible-section'
 
 export interface GridControl {
   id: string
@@ -95,69 +96,72 @@ export function EventCheckinsGrid({
   const closeDialog = () => setEditing(null)
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <h2 className="text-xl font-semibold">Check-ins</h2>
-          <p className="text-sm text-muted-foreground">
-            Times shown in Toronto time. Flags mark anomalies to review — they don&apos;t block
-            anything.{' '}
-            {eventSubmitted
-              ? 'Results have been submitted; check-ins are frozen.'
-              : 'Click a cell to add or correct a check-in.'}
-          </p>
-        </div>
+    <CollapsibleSection
+      title="Check-ins"
+      description={
+        <>
+          Times shown in Toronto time. Flags mark anomalies to review — they don&apos;t block
+          anything.{' '}
+          {eventSubmitted
+            ? 'Results have been submitted; check-ins are frozen.'
+            : 'Click a cell to add or correct a check-in.'}
+        </>
+      }
+      summary={`${riders.length} rider${riders.length === 1 ? '' : 's'}`}
+      actions={
         <Button variant="outline" onClick={() => router.refresh()}>
           <RefreshCw className="h-4 w-4 mr-2" />
           Refresh
         </Button>
-      </div>
-
-      {riders.length === 0 || controls.length === 0 ? (
-        <p className="text-sm text-muted-foreground border rounded-md p-6 text-center">
-          {controls.length === 0
-            ? 'Save controls above to start tracking check-ins.'
-            : 'No registered riders yet.'}
-        </p>
-      ) : (
-        <div className="overflow-x-auto border rounded-md">
-          <Table className="block sm:table">
-            <TableHeader className="hidden sm:table-header-group">
-              <TableRow>
-                <TableHead className="min-w-[160px] sticky left-0 bg-background">Rider</TableHead>
-                {controls.map((control) => (
-                  <TableHead key={control.id} className="min-w-[130px]">
-                    <div className="font-medium">{control.name}</div>
-                    <div className="text-xs font-normal text-muted-foreground tabular-nums">
-                      {control.distanceKm} km
-                      {control.windowLabel !== null && ` · ${control.windowLabel}`}
-                    </div>
-                  </TableHead>
+      }
+    >
+      <div className="space-y-4">
+        {riders.length === 0 || controls.length === 0 ? (
+          <p className="text-sm text-muted-foreground border rounded-md p-6 text-center">
+            {controls.length === 0
+              ? 'Save controls above to start tracking check-ins.'
+              : 'No registered riders yet.'}
+          </p>
+        ) : (
+          <div className="overflow-x-auto border rounded-md">
+            <Table className="block sm:table">
+              <TableHeader className="hidden sm:table-header-group">
+                <TableRow>
+                  <TableHead className="min-w-[160px] sticky left-0 bg-background">Rider</TableHead>
+                  {controls.map((control) => (
+                    <TableHead key={control.id} className="min-w-[130px]">
+                      <div className="font-medium">{control.name}</div>
+                      <div className="text-xs font-normal text-muted-foreground tabular-nums">
+                        {control.distanceKm} km
+                        {control.windowLabel !== null && ` · ${control.windowLabel}`}
+                      </div>
+                    </TableHead>
+                  ))}
+                </TableRow>
+              </TableHeader>
+              <TableBody className="block sm:table-row-group">
+                {riders.map((rider) => (
+                  <RiderRow
+                    key={rider.registrationId}
+                    rider={rider}
+                    controls={controls}
+                    eventSubmitted={eventSubmitted}
+                    onOpenCell={openCell}
+                  />
                 ))}
-              </TableRow>
-            </TableHeader>
-            <TableBody className="block sm:table-row-group">
-              {riders.map((rider) => (
-                <RiderRow
-                  key={rider.registrationId}
-                  rider={rider}
-                  controls={controls}
-                  eventSubmitted={eventSubmitted}
-                  onOpenCell={openCell}
-                />
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-      )}
+              </TableBody>
+            </Table>
+          </div>
+        )}
 
-      <CheckinDialog
-        eventId={eventId}
-        editing={editing}
-        onClose={closeDialog}
-        onSaved={() => router.refresh()}
-      />
-    </div>
+        <CheckinDialog
+          eventId={eventId}
+          editing={editing}
+          onClose={closeDialog}
+          onSaved={() => router.refresh()}
+        />
+      </div>
+    </CollapsibleSection>
   )
 }
 
