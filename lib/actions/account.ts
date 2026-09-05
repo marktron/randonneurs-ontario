@@ -4,7 +4,7 @@ import { redirect } from 'next/navigation'
 import { createSupabaseServerClient } from '@/lib/supabase-server-client'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { isRateLimited } from '@/lib/rate-limit'
-import { handleActionError, createActionResult } from '@/lib/errors'
+import { handleActionError, createActionResult, logError } from '@/lib/errors'
 import { requireAccount } from '@/lib/auth/get-rider'
 import { resolveLink, claimRider, findLinkCandidates } from '@/lib/account/linking'
 import { CODE_INVALID_MESSAGE } from '@/lib/account/messages'
@@ -80,6 +80,8 @@ export async function verifySignInCode(
     return { success: false, error: 'Too many attempts. Request a new code.' }
   }
 
+  let userId: string
+  let verifiedEmail: string
   try {
     const supabase = await createSupabaseServerClient()
     const { data, error } = await supabase.auth.verifyOtp({
@@ -90,10 +92,21 @@ export async function verifySignInCode(
     if (error || !data.user) {
       return { success: false, error: CODE_INVALID_MESSAGE }
     }
-    const next = await afterSignIn(data.user.id, normalized)
-    return createActionResult({ next })
+    userId = data.user.id
+    verifiedEmail = data.user.email ?? normalized
   } catch (error) {
     return handleActionError(error, { operation: 'verifySignInCode' }, CODE_INVALID_MESSAGE)
+  }
+
+  // The rider is signed in at this point (verifyOtp succeeded). A failure in
+  // linking/syncing below must not be reported as a bad code — fall back to
+  // /account, which re-derives link state from the database on its own.
+  try {
+    const next = await afterSignIn(userId, verifiedEmail)
+    return createActionResult({ next })
+  } catch (error) {
+    logError(error, { operation: 'verifySignInCode', context: { step: 'afterSignIn', userId } })
+    return createActionResult({ next: '/account' })
   }
 }
 
@@ -104,15 +117,28 @@ export async function verifySignInCode(
  */
 async function afterSignIn(userId: string, email: string): Promise<string> {
   const admin = getSupabaseAdmin()
-  const { data: rider } = await admin
+  const { data: rider, error: lookupError } = await admin
     .from('riders')
     .select('id, email')
     .eq('auth_user_id', userId)
     .maybeSingle()
 
+  if (lookupError) {
+    // Don't fall through to resolveLink on a lookup failure — an
+    // already-linked account could be re-run through linking by mistake.
+    logError(lookupError, { operation: 'afterSignIn', context: { step: 'lookup', userId } })
+    return '/account'
+  }
+
   if (rider) {
     if ((rider.email ?? '').toLowerCase() !== email) {
-      await admin.from('riders').update({ email }).eq('id', rider.id)
+      const { error: updateError } = await admin.from('riders').update({ email }).eq('id', rider.id)
+      if (updateError) {
+        logError(updateError, {
+          operation: 'afterSignIn',
+          context: { step: 'update', riderId: rider.id },
+        })
+      }
     }
     return '/account'
   }
@@ -121,6 +147,15 @@ async function afterSignIn(userId: string, email: string): Promise<string> {
   if (outcome.kind === 'linked') return '/account'
   if (outcome.kind === 'choose') return '/account/choose'
   return '/account/unmatched'
+}
+
+/**
+ * True for the "not signed in" error thrown by requireAccount/requireRider.
+ * Shared so the actions Task 10 adds to this file can reuse it — an expired
+ * or missing session isn't a failure worth logging to Sentry.
+ */
+function isUnauthorizedError(error: unknown): boolean {
+  return error instanceof Error && error.message === 'Unauthorized'
 }
 
 /** Family-email picker: claim one of the riders that share the account's email. */
@@ -140,6 +175,9 @@ export async function chooseRider(riderId: string): Promise<ActionResult<{ next:
     }
     return createActionResult({ next: '/account' })
   } catch (error) {
+    if (isUnauthorizedError(error)) {
+      return { success: false, error: 'Please sign in again.' }
+    }
     return handleActionError(error, { operation: 'chooseRider' }, 'Could not link that rider.')
   }
 }

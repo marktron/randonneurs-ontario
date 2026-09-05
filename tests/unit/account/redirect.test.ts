@@ -17,4 +17,7 @@ describe('getSafeAccountRedirect', () => {
     expect(getSafeAccountRedirect('/admin')).toBe('/account')
     expect(getSafeAccountRedirect('/accounts-payable')).toBe('/account')
   })
+  it('rejects path traversal', () => {
+    expect(getSafeAccountRedirect('/account/../admin')).toBe('/account')
+  })
 })

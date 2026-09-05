@@ -11,11 +11,21 @@ vi.mock('@/lib/supabase-server-client', () => ({
 
 const riderMaybeSingle = vi.fn()
 const riderUpdate = vi.fn()
+// Separate spies for the `.eq(...)` calls themselves (not just their
+// resolved values), so tests can assert the filter that keeps one account
+// from touching another rider's row (e.g. `eq('auth_user_id', userId)`).
+const riderSelectEq = vi.fn(() => ({ maybeSingle: riderMaybeSingle }))
+const riderUpdateEq = vi.fn()
 vi.mock('@/lib/supabase-server', () => ({
   getSupabaseAdmin: vi.fn(() => ({
     from: vi.fn(() => ({
-      select: vi.fn(() => ({ eq: vi.fn(() => ({ maybeSingle: riderMaybeSingle })) })),
-      update: vi.fn((values: unknown) => ({ eq: vi.fn(() => riderUpdate(values)) })),
+      select: vi.fn(() => ({ eq: riderSelectEq })),
+      update: vi.fn((values: unknown) => ({
+        eq: (...args: unknown[]) => {
+          riderUpdateEq(...args)
+          return riderUpdate(values)
+        },
+      })),
     })),
   })),
 }))
@@ -46,8 +56,14 @@ vi.mock('@/lib/auth/get-rider', () => ({
 
 vi.mock('next/navigation', () => ({ redirect: vi.fn() }))
 
+import { redirect } from 'next/navigation'
 import { resetRateLimitStores } from '@/lib/rate-limit'
-import { requestSignInCode, verifySignInCode, chooseRider } from '@/lib/actions/account'
+import {
+  requestSignInCode,
+  verifySignInCode,
+  chooseRider,
+  signOutRider,
+} from '@/lib/actions/account'
 
 describe('requestSignInCode', () => {
   beforeEach(() => {
@@ -147,7 +163,9 @@ describe('verifySignInCode', () => {
     })
     const result = await verifySignInCode('new@example.com', '123456')
     expect(resolveLink).not.toHaveBeenCalled()
+    expect(riderSelectEq).toHaveBeenCalledWith('auth_user_id', 'u1')
     expect(riderUpdate).toHaveBeenCalledWith({ email: 'new@example.com' })
+    expect(riderUpdateEq).toHaveBeenCalledWith('id', 'r1')
     expect(result.data?.next).toBe('/account')
   })
 
@@ -171,7 +189,10 @@ describe('chooseRider', () => {
 
   it('requires a session', async () => {
     mockAccount = null
-    expect((await chooseRider('r1')).success).toBe(false)
+    expect(await chooseRider('r1')).toEqual({
+      success: false,
+      error: 'Please sign in again.',
+    })
   })
 
   it('refuses ids outside the candidate set', async () => {
@@ -199,5 +220,17 @@ describe('chooseRider', () => {
     mockAccount = { userId: 'u1', email: 'fam@example.com', rider: { id: 'r9' }, isAdmin: false }
     expect(await chooseRider('r1')).toEqual({ success: true, data: { next: '/account' } })
     expect(claimRider).not.toHaveBeenCalled()
+  })
+})
+
+describe('signOutRider', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('signs out this browser only, then redirects home', async () => {
+    await signOutRider()
+    expect(signOut).toHaveBeenCalledWith({ scope: 'local' })
+    expect(redirect).toHaveBeenCalledWith('/')
   })
 })
