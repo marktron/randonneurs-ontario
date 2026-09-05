@@ -5,7 +5,6 @@ import { getAccount } from '@/lib/auth/get-rider'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { ChangeEmailForm } from '@/components/account/change-email-form'
 import { DeleteAccountDialog } from '@/components/account/delete-account-dialog'
-import { SignOutButton } from '@/components/account/sign-out-button'
 
 export const metadata: Metadata = {
   title: 'Account settings',
@@ -28,10 +27,12 @@ export default async function AccountSettingsPage() {
   return (
     <div className="space-y-8">
       <header>
-        <Link href="/account" className="text-sm text-muted-foreground hover:text-foreground">
-          ← My account
-        </Link>
-        <h1 className="mt-2 font-serif text-4xl tracking-tight">Account settings</h1>
+        <h1 className="font-serif text-4xl tracking-tight">Account settings</h1>
+        {account.isAdmin && (
+          <p className="mt-2 text-sm text-muted-foreground">
+            This also ends your admin session in this browser.
+          </p>
+        )}
       </header>
 
       <Card>
@@ -70,19 +71,6 @@ export default async function AccountSettingsPage() {
         </CardHeader>
         <CardContent>
           <ChangeEmailForm currentEmail={account.email} disabled={account.isAdmin} />
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Sign out</CardTitle>
-          <CardDescription>
-            Signs you out of this browser only.
-            {account.isAdmin ? ' This also ends your admin session in this browser.' : ''}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <SignOutButton />
         </CardContent>
       </Card>
 
