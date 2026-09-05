@@ -115,13 +115,25 @@ describe('authenticated role lockdown (real DB)', () => {
   })
 
   it('cannot upload to any bucket', async () => {
-    for (const bucket of ['images', 'rider-submissions']) {
+    // Content-type must be in each bucket's allowed_mime_types
+    // (supabase/migrations/20260111022059_add_image_storage.sql,
+    // 20260112200000_add_rider_result_submission.sql) so the upload gets far
+    // enough to be rejected by RLS rather than by MIME validation -- neither
+    // bucket has an INSERT policy for any role, so this should always be an
+    // RLS denial, not a MIME rejection.
+    const cases: Array<[string, string]> = [
+      ['images', 'image/png'],
+      ['rider-submissions', 'text/xml'],
+    ]
+    for (const [bucket, contentType] of cases) {
       const { error } = await user.storage
         .from(bucket)
-        .upload(`inttest-lockdown/${Date.now()}.txt`, new Blob(['x']), {
-          contentType: 'text/plain',
+        .upload(`inttest-lockdown/${Date.now()}.dat`, new Blob(['x'], { type: contentType }), {
+          contentType,
         })
       expect(error, bucket).not.toBeNull()
+      expect(error?.message, bucket).toMatch(/row-level security/i)
+      expect(error?.statusCode, bucket).toBe('403')
     }
   })
 
