@@ -7,6 +7,7 @@ import { isRateLimited } from '@/lib/rate-limit'
 import { handleActionError, createActionResult, logError } from '@/lib/errors'
 import { requireAccount } from '@/lib/auth/get-rider'
 import { resolveLink, claimRider, findLinkCandidates } from '@/lib/account/linking'
+import { deleteAccountData } from '@/lib/account/deletion'
 import { CODE_INVALID_MESSAGE } from '@/lib/account/messages'
 import type { ActionResult } from '@/types/actions'
 
@@ -187,4 +188,84 @@ export async function signOutRider(): Promise<void> {
   const supabase = await createSupabaseServerClient()
   await supabase.auth.signOut({ scope: 'local' })
   redirect('/')
+}
+
+/**
+ * Change the sign-in email. Supabase sends a confirmation to both addresses
+ * (double_confirm_changes). riders.email follows on the next sign-in.
+ */
+export async function changeAccountEmail(newEmail: string): Promise<ActionResult> {
+  try {
+    const account = await requireAccount()
+    if (account.isAdmin) {
+      return {
+        success: false,
+        error: 'Admin email addresses are changed from the admin settings page.',
+      }
+    }
+    const normalized = normalizeEmail(newEmail)
+    if (!EMAIL_RE.test(normalized)) return { success: false, error: 'Enter a valid email address.' }
+    if (normalized === normalizeEmail(account.email)) {
+      return { success: false, error: 'That is already your email address.' }
+    }
+
+    const supabase = await createSupabaseServerClient()
+    const { error } = await supabase.auth.updateUser({ email: normalized })
+    if (error) {
+      return handleActionError(
+        error,
+        { operation: 'changeAccountEmail' },
+        'Could not start the email change.'
+      )
+    }
+    return createActionResult()
+  } catch (error) {
+    if (isUnauthorizedError(error)) {
+      return { success: false, error: 'Please sign in again.' }
+    }
+    return handleActionError(
+      error,
+      { operation: 'changeAccountEmail' },
+      'Could not start the email change.'
+    )
+  }
+}
+
+/**
+ * Delete the account after re-verifying a freshly emailed code.
+ * Rider rows, registrations and results are club records and stay.
+ */
+export async function deleteAccount(code: string): Promise<ActionResult> {
+  try {
+    const account = await requireAccount()
+    if (account.isAdmin) {
+      return { success: false, error: 'Admin accounts are managed from the admin settings page.' }
+    }
+    if (!account.email) return { success: false, error: 'Your account has no email address.' }
+
+    const token = (code ?? '').replace(/\s+/g, '')
+    if (!/^\d{6}$/.test(token))
+      return { success: false, error: 'Enter the 6-digit code from your email.' }
+
+    const supabase = await createSupabaseServerClient()
+    const { data, error } = await supabase.auth.verifyOtp({
+      email: account.email,
+      token,
+      type: 'email',
+    })
+    if (error || !data.user) return { success: false, error: CODE_INVALID_MESSAGE }
+
+    await deleteAccountData({ userId: account.userId, riderId: account.rider?.id ?? null })
+    await supabase.auth.signOut({ scope: 'local' })
+    return createActionResult()
+  } catch (error) {
+    if (isUnauthorizedError(error)) {
+      return { success: false, error: 'Please sign in again.' }
+    }
+    return handleActionError(
+      error,
+      { operation: 'deleteAccount' },
+      'Could not delete your account.'
+    )
+  }
 }

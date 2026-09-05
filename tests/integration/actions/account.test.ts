@@ -3,9 +3,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 const signInWithOtp = vi.fn()
 const verifyOtp = vi.fn()
 const signOut = vi.fn()
+const updateUser = vi.fn()
 vi.mock('@/lib/supabase-server-client', () => ({
   createSupabaseServerClient: vi.fn(() =>
-    Promise.resolve({ auth: { signInWithOtp, verifyOtp, signOut } })
+    Promise.resolve({ auth: { signInWithOtp, verifyOtp, signOut, updateUser } })
   ),
 }))
 
@@ -40,6 +41,9 @@ const { resolveLink, claimRider, findLinkCandidates } = vi.hoisted(() => ({
 }))
 vi.mock('@/lib/account/linking', () => ({ resolveLink, claimRider, findLinkCandidates }))
 
+const { deleteAccountData } = vi.hoisted(() => ({ deleteAccountData: vi.fn() }))
+vi.mock('@/lib/account/deletion', () => ({ deleteAccountData }))
+
 let mockAccount: {
   userId: string
   email: string | null
@@ -63,6 +67,8 @@ import {
   verifySignInCode,
   chooseRider,
   signOutRider,
+  changeAccountEmail,
+  deleteAccount,
 } from '@/lib/actions/account'
 
 describe('requestSignInCode', () => {
@@ -232,5 +238,70 @@ describe('signOutRider', () => {
     await signOutRider()
     expect(signOut).toHaveBeenCalledWith({ scope: 'local' })
     expect(redirect).toHaveBeenCalledWith('/')
+  })
+})
+
+describe('changeAccountEmail', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockAccount = { userId: 'u1', email: 'old@example.com', rider: { id: 'r1' }, isAdmin: false }
+    updateUser.mockResolvedValue({ data: {}, error: null })
+  })
+
+  it('is blocked for admins', async () => {
+    mockAccount = { ...mockAccount!, isAdmin: true }
+    const result = await changeAccountEmail('new@example.com')
+    expect(result.success).toBe(false)
+    expect(result.error).toMatch(/admin settings/i)
+    expect(updateUser).not.toHaveBeenCalled()
+  })
+
+  it('rejects an invalid or unchanged address', async () => {
+    expect((await changeAccountEmail('nope')).success).toBe(false)
+    expect((await changeAccountEmail('OLD@example.com')).success).toBe(false)
+    expect(updateUser).not.toHaveBeenCalled()
+  })
+
+  it('asks Supabase to change the email and reports the double confirmation', async () => {
+    const result = await changeAccountEmail(' New@Example.com ')
+    expect(updateUser).toHaveBeenCalledWith({ email: 'new@example.com' })
+    expect(result.success).toBe(true)
+  })
+})
+
+describe('deleteAccount', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockAccount = { userId: 'u1', email: 'r@example.com', rider: { id: 'r1' }, isAdmin: false }
+    verifyOtp.mockResolvedValue({ data: { user: { id: 'u1' } }, error: null })
+    deleteAccountData.mockResolvedValue(undefined)
+    signOut.mockResolvedValue({ error: null })
+  })
+
+  it('is blocked for admins before any code is checked', async () => {
+    mockAccount = { ...mockAccount!, isAdmin: true }
+    const result = await deleteAccount('123456')
+    expect(result.success).toBe(false)
+    expect(verifyOtp).not.toHaveBeenCalled()
+    expect(deleteAccountData).not.toHaveBeenCalled()
+  })
+
+  it('requires a valid fresh code', async () => {
+    verifyOtp.mockResolvedValue({ data: { user: null }, error: { message: 'expired' } })
+    const result = await deleteAccount('123456')
+    expect(result).toEqual({ success: false, error: 'That code is invalid or expired.' })
+    expect(deleteAccountData).not.toHaveBeenCalled()
+  })
+
+  it('deletes the account data, signs out locally', async () => {
+    const result = await deleteAccount('123 456')
+    expect(verifyOtp).toHaveBeenCalledWith({
+      email: 'r@example.com',
+      token: '123456',
+      type: 'email',
+    })
+    expect(deleteAccountData).toHaveBeenCalledWith({ userId: 'u1', riderId: 'r1' })
+    expect(signOut).toHaveBeenCalledWith({ scope: 'local' })
+    expect(result).toEqual({ success: true })
   })
 })
