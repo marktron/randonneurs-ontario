@@ -26,7 +26,6 @@ describe('createAdminUser promoting an existing rider (real DB)', () => {
     // The audit log for createAdminUser records entity_id = the promoted
     // user's auth id (generated fresh per test run), not the rider's row id,
     // so match on the description text (which embeds the email) instead.
-    await admin.from('audit_logs').delete().in('entity_id', [RIDER.id])
     await admin.from('audit_logs').delete().ilike('description', `%${RIDER_EMAIL}%`)
     await admin.from('audit_logs').delete().ilike('description', `%${SUPER_ADMIN_EMAIL}%`)
     await admin.from('riders').delete().in('id', [RIDER.id])

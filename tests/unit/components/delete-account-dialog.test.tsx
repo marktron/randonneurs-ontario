@@ -2,6 +2,7 @@
  * @vitest-environment happy-dom
  */
 
+import React from 'react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 
@@ -21,10 +22,12 @@ vi.mock('next/navigation', () => ({
 let tokenCounter = 0
 vi.mock('@/components/account/turnstile-field', () => ({
   TurnstileField: ({ onToken }: { onToken: (token: string | null) => void }) => {
-    // Simulate a fresh token on every mount
-    const token = `tok-${++tokenCounter}`
+    // Issue a fresh token only on mount
+    React.useEffect(() => {
+      onToken(`tok-${++tokenCounter}`)
+    }, [onToken])
     return (
-      <button type="button" data-testid="captcha" onClick={() => onToken(token)}>
+      <button type="button" data-testid="captcha" onClick={() => {}}>
         solve captcha
       </button>
     )
