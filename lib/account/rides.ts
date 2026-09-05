@@ -93,16 +93,28 @@ export async function getAccountRides(
 
   // results join on event, not registration
   const resultByEvent = new Map((results ?? []).map((r) => [r.event_id, r.status]))
-  const rows: AccountRideRow[] = (registrations ?? []).map((reg) => ({
-    id: reg.id,
+  const rows: AccountRideRow[] = []
+  for (const reg of registrations ?? []) {
+    const status = reg.status ?? 'registered'
     // Both columns carry a DB default and are practically always populated;
     // the type is nullable only because Postgres doesn't enforce NOT NULL here
     // (a historical bug briefly nulled management_token on some cancellations).
-    management_token: reg.management_token ?? '',
-    status: reg.status ?? 'registered',
-    events: reg.events as AccountRideRow['events'],
-    result_status: resultByEvent.get(reg.event_id) ?? null,
-  }))
+    // A cancelled registration renders no management link either way, so a
+    // missing token there is harmless. A live registration with no token is
+    // an invariant break worth surfacing instead of silently rendering a
+    // dead `/registration/manage/` link — skip it and warn.
+    if (reg.management_token == null && status !== 'cancelled') {
+      console.warn(`getAccountRides: registration ${reg.id} has no management_token`)
+      continue
+    }
+    rows.push({
+      id: reg.id,
+      management_token: reg.management_token ?? '',
+      status,
+      events: reg.events as AccountRideRow['events'],
+      result_status: resultByEvent.get(reg.event_id) ?? null,
+    })
+  }
 
   const today = new Date().toISOString().split('T')[0]
   return splitRides(rows, today)

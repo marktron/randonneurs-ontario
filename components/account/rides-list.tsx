@@ -17,8 +17,8 @@ function ResultBadge({ status }: { status: string | null }) {
     finished: 'Finished',
     dnf: 'DNF',
     dns: 'DNS',
-    pending: 'Result pending',
     otl: 'OTL',
+    dq: 'DQ',
   }
   return <Badge variant="outline">{labels[status] ?? status}</Badge>
 }
