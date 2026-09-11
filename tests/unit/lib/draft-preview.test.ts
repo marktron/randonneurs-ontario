@@ -22,6 +22,11 @@ describe('isDraftPreviewEnabled', () => {
   })
 
   it('returns false when unset', () => {
+    vi.stubEnv('SHOW_DRAFT_EVENTS', undefined)
+    expect(isDraftPreviewEnabled()).toBe(false)
+  })
+
+  it('returns false when set to an empty string', () => {
     vi.stubEnv('SHOW_DRAFT_EVENTS', '')
     expect(isDraftPreviewEnabled()).toBe(false)
   })

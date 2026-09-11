@@ -15,7 +15,7 @@ vi.mock('@/lib/auth/get-admin', () => ({
 }))
 vi.mock('@/lib/audit-log', () => ({ logAuditEvent: vi.fn(async () => {}) }))
 
-import { describe, it, expect, beforeAll, afterAll, afterEach } from 'vitest'
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest'
 import { createClient, SupabaseClient } from '@supabase/supabase-js'
 import { getTestSupabase, checked } from './helpers/supabase'
 import { TORONTO_CHAPTER_ID } from './registration/helpers'
@@ -184,6 +184,18 @@ describe('events_select_public RLS', () => {
 })
 
 describe('getEventBySlug', () => {
+  // Pin the flag off explicitly - a developer's local .env.development.local
+  // (loaded with override: true in setup.ts) may already set
+  // SHOW_DRAFT_EVENTS=true, which would otherwise make this "excludes
+  // drafts" assertion fail depending on the machine it runs on.
+  beforeEach(() => {
+    vi.stubEnv('SHOW_DRAFT_EVENTS', undefined)
+  })
+
+  afterEach(() => {
+    vi.unstubAllEnvs()
+  })
+
   it('returns null for a draft and the event for a scheduled one', async () => {
     expect(await getEventBySlug(SLUGS.draft)).toBeNull()
     const scheduled = await getEventBySlug(SLUGS.scheduled)
@@ -192,6 +204,16 @@ describe('getEventBySlug', () => {
 })
 
 describe('getEventBySlug with SHOW_DRAFT_EVENTS', () => {
+  // Same reasoning as above: pin the flag off by default so the "unset"
+  // case is correct regardless of the developer's local env, then let the
+  // "enabled" case explicitly override it to 'true'. isDraftPreviewEnabled()
+  // reads process.env on every call (no memoization of its own), and
+  // cache()/unstable_cache are mocked pass-through in this suite's
+  // setup.ts, so there's no stale caching between the two cases either.
+  beforeEach(() => {
+    vi.stubEnv('SHOW_DRAFT_EVENTS', undefined)
+  })
+
   afterEach(() => {
     vi.unstubAllEnvs()
   })
