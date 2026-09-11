@@ -24,6 +24,8 @@
 import { cache } from 'react'
 import { unstable_cache } from 'next/cache'
 import { getSupabase } from '@/lib/supabase'
+import { getSupabaseAdmin } from '@/lib/supabase-server'
+import { isDraftPreviewEnabled } from '@/lib/draft-preview'
 import { formatEventType } from '@/lib/utils'
 import { handleDataError } from '@/lib/errors'
 import type { Event } from '@/components/event-card'
@@ -48,6 +50,30 @@ import type {
 export { getChapterInfo, getAllChapterSlugs, type ChapterInfo }
 
 // ============================================================================
+// DRAFT PREVIEW
+// ============================================================================
+
+/**
+ * Client for the public event reads gated by the draft preview flag. The
+ * anon RLS policy (`events_select_public`) hides drafts, so when the flag is
+ * on these reads switch to the service-role client to see them; when it's
+ * off, the ordinary public client is used and behaviour is unchanged.
+ *
+ * @see lib/draft-preview.ts
+ */
+function publicEventsClient() {
+  return isDraftPreviewEnabled() ? getSupabaseAdmin() : getSupabase()
+}
+
+/**
+ * Status whitelist for the public event reads gated by the draft preview
+ * flag.
+ */
+function publicEventStatuses(): Array<'scheduled' | 'cancelled' | 'draft'> {
+  return isDraftPreviewEnabled() ? ['scheduled', 'cancelled', 'draft'] : ['scheduled', 'cancelled']
+}
+
+// ============================================================================
 // EVENT QUERIES
 // ============================================================================
 
@@ -70,27 +96,30 @@ const getEventsByChapterInner = cache(async (urlSlug: string): Promise<Event[]> 
   // Fetch upcoming events for this chapter using a join, ordered by date
   const today = new Date().toISOString().split('T')[0]
 
+  const client = publicEventsClient()
+  const statuses = publicEventStatuses()
+
   // Fetch chapter events and fleche events in parallel
   // Fleche events are shown on all chapter calendars since every chapter participates
   const [chapterResult, flecheResult] = await Promise.all([
-    getSupabase()
+    client
       .from('events')
       .select(
         '*, public_registrations(count), chapters!inner(slug), routes(rwgps_id, rwgps_collection_id)'
       )
       .eq('chapters.slug', dbSlug)
       .eq('public_registrations.status', 'registered')
-      .in('status', ['scheduled', 'cancelled'])
+      .in('status', statuses)
       .neq('event_type', 'permanent')
       .neq('event_type', 'fleche')
       .gte('event_date', today)
       .order('event_date', { ascending: true })
       .order('distance_km', { ascending: false }),
-    getSupabase()
+    client
       .from('events')
       .select('*, public_registrations(count), routes(rwgps_id, rwgps_collection_id)')
       .eq('public_registrations.status', 'registered')
-      .in('status', ['scheduled', 'cancelled'])
+      .in('status', statuses)
       .eq('event_type', 'fleche')
       .gte('event_date', today),
   ])
@@ -112,7 +141,7 @@ const getEventsByChapterInner = cache(async (urlSlug: string): Promise<Event[]> 
     distance: event.distance_km.toString(),
     startLocation: event.start_location || '',
     startTime: event.start_time || '08:00',
-    status: event.status as 'scheduled' | 'cancelled',
+    status: event.status as 'scheduled' | 'cancelled' | 'draft',
     registeredCount: event.public_registrations?.[0]?.count ?? 0,
     rwgpsId: event.routes?.rwgps_id ?? null,
     rwgpsCollectionId: event.routes?.rwgps_collection_id ?? null,
@@ -156,13 +185,13 @@ export async function getEventsByChapter(urlSlug: string): Promise<Event[]> {
  */
 const getAllUpcomingEventsInner = cache(async (): Promise<Event[]> => {
   const today = new Date().toISOString().split('T')[0]
-  const { data: events, error } = await getSupabase()
+  const { data: events, error } = await publicEventsClient()
     .from('events')
     .select(
       '*, public_registrations(count), chapters!inner(slug, name), routes(rwgps_id, rwgps_collection_id)'
     )
     .eq('public_registrations.status', 'registered')
-    .in('status', ['scheduled', 'cancelled'])
+    .in('status', publicEventStatuses())
     .neq('event_type', 'permanent')
     .gte('event_date', today)
     .order('event_date', { ascending: true })
@@ -181,7 +210,7 @@ const getAllUpcomingEventsInner = cache(async (): Promise<Event[]> => {
     distance: event.distance_km.toString(),
     startLocation: event.start_location || '',
     startTime: event.start_time || '08:00',
-    status: event.status as 'scheduled' | 'cancelled',
+    status: event.status as 'scheduled' | 'cancelled' | 'draft',
     registeredCount: event.public_registrations?.[0]?.count ?? 0,
     chapterName: event.chapters?.name || '',
     rwgpsId: event.routes?.rwgps_id ?? null,
@@ -204,12 +233,12 @@ export async function getAllUpcomingEvents(): Promise<Event[]> {
 const getPermanentEventsInner = cache(async (): Promise<Event[]> => {
   // Fetch upcoming permanent events, ordered by date
   const today = new Date().toISOString().split('T')[0]
-  const { data: events, error } = await getSupabase()
+  const { data: events, error } = await publicEventsClient()
     .from('events')
     .select('*, public_registrations(count), routes(rwgps_id, rwgps_collection_id)')
     .eq('public_registrations.status', 'registered')
     .eq('event_type', 'permanent')
-    .in('status', ['scheduled', 'cancelled'])
+    .in('status', publicEventStatuses())
     .gte('event_date', today)
     .order('event_date', { ascending: true })
     .order('distance_km', { ascending: false })
@@ -228,7 +257,7 @@ const getPermanentEventsInner = cache(async (): Promise<Event[]> => {
     distance: event.distance_km.toString(),
     startLocation: event.start_location || '',
     startTime: event.start_time || '08:00',
-    status: event.status as 'scheduled' | 'cancelled',
+    status: event.status as 'scheduled' | 'cancelled' | 'draft',
     registeredCount: event.public_registrations?.[0]?.count ?? 0,
     rwgpsId: event.routes?.rwgps_id ?? null,
     rwgpsCollectionId: event.routes?.rwgps_collection_id ?? null,
@@ -267,7 +296,7 @@ export interface EventDetails {
   description: string | null // Optional markdown event description
   imageUrl: string | null // Optional event image URL
   erwCanonicalUrl: string | null // Epic Ride Weather event page URL
-  status: 'scheduled' | 'cancelled' // For cancelled-event UI on /register/[slug]
+  status: 'scheduled' | 'cancelled' | 'draft' // Drives cancelled/draft UI on /register/[slug]
 }
 
 /**
@@ -484,7 +513,7 @@ export async function getAllEventSlugs(): Promise<EventSlugWithUpdatedAt[]> {
  */
 const getEventBySlugInner = cache(async (slug: string): Promise<EventDetails | null> => {
   // Fetch event with joined chapter and route data
-  const { data: event, error } = await getSupabase()
+  let query = publicEventsClient()
     .from('events')
     .select(
       `
@@ -505,8 +534,12 @@ const getEventBySlugInner = cache(async (slug: string): Promise<EventDetails | n
     `
     )
     .eq('slug', slug)
-    .neq('status', 'draft')
-    .single()
+
+  if (!isDraftPreviewEnabled()) {
+    query = query.neq('status', 'draft')
+  }
+
+  const { data: event, error } = await query.single()
 
   if (error || !event) {
     // PGRST116 means "not found" - this is expected, don't log as error
@@ -537,8 +570,11 @@ const getEventBySlugInner = cache(async (slug: string): Promise<EventDetails | n
     description: typedEvent.description || null,
     imageUrl: typedEvent.image_url || null,
     erwCanonicalUrl: typedEvent.erw_canonical_url || null,
-    status: (typedEvent.status === 'cancelled' ? 'cancelled' : 'scheduled') as
-      'scheduled' | 'cancelled',
+    status: (typedEvent.status === 'cancelled'
+      ? 'cancelled'
+      : typedEvent.status === 'draft'
+        ? 'draft'
+        : 'scheduled') as 'scheduled' | 'cancelled' | 'draft',
   }
 })
 

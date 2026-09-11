@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 /**
  * Integration tests for event data fetching functions.
@@ -10,8 +10,14 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
  * 4. Query building logic
  */
 
-// Mock dependencies before imports
-vi.mock('@/lib/supabase', () => {
+// Shared query builder + client mocks, hoisted so both the `@/lib/supabase`
+// and `@/lib/supabase-server` mock factories (and the test bodies below) can
+// reference the same instances. Draft-preview reads swap between the anon
+// (`getSupabase`) and admin (`getSupabaseAdmin`) client depending on the
+// flag, but both return the same builder here, so assertions on the builder
+// work regardless of which client served the call; assertions on the two
+// client mocks themselves confirm which one was actually used.
+const { queryBuilder, rpcMock, getSupabaseMock, getSupabaseAdminMock } = vi.hoisted(() => {
   const createQueryBuilder = () => {
     const builder: Record<string, ReturnType<typeof vi.fn>> = {}
     // Include ALL methods that might be called in query chains
@@ -51,12 +57,22 @@ vi.mock('@/lib/supabase', () => {
   const queryBuilder = createQueryBuilder()
   // Shared RPC mock - created once and reused
   const rpcMock = vi.fn().mockResolvedValue({ data: [], error: null })
+  const getSupabaseMock = vi.fn(() => ({
+    from: vi.fn(() => queryBuilder),
+    rpc: rpcMock,
+  }))
+  const getSupabaseAdminMock = vi.fn(() => ({
+    from: vi.fn(() => queryBuilder),
+    rpc: rpcMock,
+  }))
 
+  return { queryBuilder, rpcMock, getSupabaseMock, getSupabaseAdminMock }
+})
+
+// Mock dependencies before imports
+vi.mock('@/lib/supabase', () => {
   return {
-    getSupabase: vi.fn(() => ({
-      from: vi.fn(() => queryBuilder),
-      rpc: rpcMock,
-    })),
+    getSupabase: getSupabaseMock,
     __queryBuilder: queryBuilder,
     __rpcMock: rpcMock,
     __reset: () => {
@@ -69,6 +85,8 @@ vi.mock('@/lib/supabase', () => {
       queryBuilder.single.mockResolvedValue({ data: null, error: { code: 'PGRST116' } })
       rpcMock.mockReset()
       rpcMock.mockResolvedValue({ data: [], error: null })
+      getSupabaseMock.mockClear()
+      getSupabaseAdminMock.mockClear()
     },
     __mockEventsFound: (events: unknown[]) => {
       queryBuilder.then.mockImplementationOnce((resolve) => {
@@ -99,6 +117,14 @@ vi.mock('@/lib/supabase', () => {
     },
   }
 })
+
+// Admin (service-role) client used by the draft-preview reads when
+// SHOW_DRAFT_EVENTS is enabled. Returns the same queryBuilder as the anon
+// client above so assertions on the builder don't need to know which client
+// served the call.
+vi.mock('@/lib/supabase-server', () => ({
+  getSupabaseAdmin: getSupabaseAdminMock,
+}))
 
 vi.mock('react', () => ({
   cache: vi.fn((fn) => fn),
@@ -514,5 +540,140 @@ describe('getRegisteredRiders', () => {
     const result = await getRegisteredRiders('event-1')
 
     expect(result).toEqual([])
+  })
+})
+
+describe('draft preview flag (SHOW_DRAFT_EVENTS)', () => {
+  beforeEach(() => {
+    mockModule.__reset()
+    vi.clearAllMocks()
+  })
+
+  afterEach(() => {
+    vi.unstubAllEnvs()
+  })
+
+  describe('when disabled (default)', () => {
+    it('getEventsByChapter keeps the scheduled/cancelled filter and the public client', async () => {
+      mockModule.__mockEventsEmpty()
+
+      await getEventsByChapter('toronto')
+
+      expect(mockModule.__queryBuilder.in).toHaveBeenCalledWith('status', [
+        'scheduled',
+        'cancelled',
+      ])
+      expect(getSupabaseAdminMock).not.toHaveBeenCalled()
+    })
+
+    it('getAllUpcomingEvents keeps the scheduled/cancelled filter and the public client', async () => {
+      mockModule.__mockEventsEmpty()
+
+      await getAllUpcomingEvents()
+
+      expect(mockModule.__queryBuilder.in).toHaveBeenCalledWith('status', [
+        'scheduled',
+        'cancelled',
+      ])
+      expect(getSupabaseAdminMock).not.toHaveBeenCalled()
+    })
+
+    it('getPermanentEvents keeps the scheduled/cancelled filter and the public client', async () => {
+      mockModule.__mockEventsEmpty()
+
+      await getPermanentEvents()
+
+      expect(mockModule.__queryBuilder.in).toHaveBeenCalledWith('status', [
+        'scheduled',
+        'cancelled',
+      ])
+      expect(getSupabaseAdminMock).not.toHaveBeenCalled()
+    })
+
+    it('getEventBySlug still excludes drafts and uses the public client', async () => {
+      mockModule.__mockEventNotFound()
+
+      await getEventBySlug('some-draft-slug')
+
+      expect(mockModule.__queryBuilder.neq).toHaveBeenCalledWith('status', 'draft')
+      expect(getSupabaseAdminMock).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('when enabled', () => {
+    beforeEach(() => {
+      vi.stubEnv('SHOW_DRAFT_EVENTS', 'true')
+    })
+
+    it('getEventsByChapter includes drafts and uses the admin client', async () => {
+      mockModule.__mockEventsEmpty()
+
+      await getEventsByChapter('toronto')
+
+      expect(mockModule.__queryBuilder.in).toHaveBeenCalledWith('status', [
+        'scheduled',
+        'cancelled',
+        'draft',
+      ])
+      expect(getSupabaseAdminMock).toHaveBeenCalled()
+    })
+
+    it('getAllUpcomingEvents includes drafts and uses the admin client', async () => {
+      mockModule.__mockEventsEmpty()
+
+      await getAllUpcomingEvents()
+
+      expect(mockModule.__queryBuilder.in).toHaveBeenCalledWith('status', [
+        'scheduled',
+        'cancelled',
+        'draft',
+      ])
+      expect(getSupabaseAdminMock).toHaveBeenCalled()
+    })
+
+    it('getPermanentEvents includes drafts and uses the admin client', async () => {
+      mockModule.__mockEventsEmpty()
+
+      await getPermanentEvents()
+
+      expect(mockModule.__queryBuilder.in).toHaveBeenCalledWith('status', [
+        'scheduled',
+        'cancelled',
+        'draft',
+      ])
+      expect(getSupabaseAdminMock).toHaveBeenCalled()
+    })
+
+    it('getEventBySlug does not exclude drafts and uses the admin client', async () => {
+      mockModule.__mockEventNotFound()
+
+      await getEventBySlug('some-draft-slug')
+
+      expect(mockModule.__queryBuilder.neq).not.toHaveBeenCalledWith('status', 'draft')
+      expect(getSupabaseAdminMock).toHaveBeenCalled()
+    })
+
+    it('getEventBySlug returns status "draft" for a draft event', async () => {
+      mockModule.__mockEventFound({
+        id: 'event-1',
+        slug: 'draft-event',
+        name: 'Draft Event',
+        event_date: '2025-05-15',
+        start_time: '08:00',
+        start_location: 'Toronto',
+        distance_km: 200,
+        event_type: 'brevet',
+        description: null,
+        image_url: null,
+        chapters: { name: 'Toronto', slug: 'toronto' },
+        routes: null,
+        status: 'draft',
+      })
+
+      const result = await getEventBySlug('draft-event')
+
+      expect(result).not.toBeNull()
+      expect(result?.status).toBe('draft')
+    })
   })
 })

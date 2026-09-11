@@ -13,7 +13,7 @@ export interface Event {
   distance: string
   startLocation: string
   startTime: string // HH:MM format
-  status: 'scheduled' | 'cancelled' | 'draft' // Drives cancelled/draft rendering; public reads never emit 'draft'
+  status: 'scheduled' | 'cancelled' | 'draft' // Drives cancelled/draft rendering; public reads only emit 'draft' when SHOW_DRAFT_EVENTS is enabled
   registeredCount?: number // Number of registered riders
   chapterName?: string // Chapter name for all-chapters view
   rwgpsId?: string | null // RideWithGPS route ID for route link

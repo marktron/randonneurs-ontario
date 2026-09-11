@@ -138,7 +138,9 @@ export default async function RegisterPage({ params }: PageProps) {
         description={event.description}
         url={`${baseUrl}/register/${slug}`}
         imageUrl={event.imageUrl}
-        status={event.status}
+        // EventJsonLd only models scheduled/cancelled; draft handling for
+        // this page (including not rendering this at all) is a follow-up.
+        status={event.status === 'cancelled' ? 'cancelled' : 'scheduled'}
       />
       {/* Hero Section */}
       {event.imageUrl ? (

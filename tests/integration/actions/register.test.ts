@@ -169,6 +169,70 @@ describe('registerForEvent', () => {
   // require more sophisticated Supabase mocking. These are covered by E2E tests.
 })
 
+// Draft events (events.status = 'draft') can be visible on the public site
+// behind the SHOW_DRAFT_EVENTS flag (see lib/draft-preview.ts), but
+// registration must stay refused regardless of the flag - these pin that the
+// shared `event.status !== 'scheduled'` guard in registerForEvent and
+// completeRegistrationWithRider covers 'draft' the same way it covers
+// 'cancelled' and 'completed'.
+describe('draft event registration is refused', () => {
+  beforeEach(() => {
+    mockGetSupabaseAdmin.mockClear()
+  })
+
+  function mockDraftEventLookup(status = 'draft') {
+    mockGetSupabaseAdmin.mockImplementationOnce(() => ({
+      from: vi.fn(() => ({
+        select: vi.fn(() => ({
+          eq: vi.fn(() => ({
+            single: vi.fn().mockResolvedValue({
+              data: { id: 'draft-event', status },
+              error: null,
+            }),
+          })),
+        })),
+      })),
+    }))
+  }
+
+  it('registerForEvent returns the "not open" error for a draft event', async () => {
+    mockDraftEventLookup()
+
+    const result = await registerForEvent({
+      eventId: 'draft-event',
+      firstName: 'Test',
+      lastName: 'User',
+      email: 'draft-register-test@example.com',
+      shareRegistration: false,
+      phone: '416-555-0000',
+      emergencyContactName: 'Emergency Contact',
+      emergencyContactPhone: '555-1234',
+    })
+
+    expect(result.success).toBe(false)
+    expect(result.error).toBe('Registration is not open for this event')
+  })
+
+  it('completeRegistrationWithRider returns the "not open" error for a draft event', async () => {
+    mockDraftEventLookup()
+
+    const result = await completeRegistrationWithRider({
+      eventId: 'draft-event',
+      selectedRiderId: 'rider-1',
+      firstName: 'Test',
+      lastName: 'User',
+      email: 'draft-complete-test@example.com',
+      shareRegistration: false,
+      phone: '416-555-0000',
+      emergencyContactName: 'Emergency Contact',
+      emergencyContactPhone: '555-1234',
+    })
+
+    expect(result.success).toBe(false)
+    expect(result.error).toBe('Registration is not open for this event')
+  })
+})
+
 describe('registerForPermanent', () => {
   beforeEach(() => {
     // Mock current date to 2025-01-01 for consistent testing
