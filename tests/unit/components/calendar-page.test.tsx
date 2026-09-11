@@ -269,3 +269,57 @@ describe('CalendarPage', () => {
     expect(screen.queryAllByText(/Spring 100/)).toHaveLength(0)
   })
 })
+
+describe('CalendarPage — draft schedule notice', () => {
+  const defaultProps = {
+    chapter: 'Toronto',
+    chapterSlug: 'toronto',
+    description: 'Toronto chapter events',
+    events: sampleEvents,
+  }
+
+  const draftEvent: Event = {
+    slug: 'winter-draft-2027',
+    date: '2027-01-10',
+    name: 'Winter Draft',
+    type: 'Brevet',
+    distance: '200',
+    startLocation: 'TBD',
+    startTime: '08:00',
+    status: 'draft',
+    chapterName: 'Toronto',
+  }
+
+  beforeEach(() => {
+    localStorage.clear()
+  })
+
+  it('does not show the notice when there are no draft events', () => {
+    render(<CalendarPage {...defaultProps} />)
+    expect(screen.queryByText(/schedule is a draft/)).not.toBeInTheDocument()
+  })
+
+  it('shows the draft schedule notice with the earliest draft year, verbatim', () => {
+    render(<CalendarPage {...defaultProps} events={[...sampleEvents, draftEvent]} />)
+    expect(
+      screen.getByText(
+        'The 2027 schedule is a draft. Events and dates may change. Registration opens once the schedule is final.'
+      )
+    ).toBeInTheDocument()
+  })
+
+  it('uses the earliest year among multiple draft events', () => {
+    const earlierDraft: Event = { ...draftEvent, slug: 'earlier-draft', date: '2026-12-01' }
+    render(<CalendarPage {...defaultProps} events={[...sampleEvents, draftEvent, earlierDraft]} />)
+    expect(screen.getByText(/^The 2026 schedule is a draft\./)).toBeInTheDocument()
+  })
+
+  it('shows the notice in grid view too', async () => {
+    const user = userEvent.setup()
+    render(<CalendarPage {...defaultProps} events={[...sampleEvents, draftEvent]} />)
+
+    await user.click(screen.getByRole('radio', { name: 'Grid view' }))
+
+    expect(screen.getByText(/schedule is a draft/)).toBeInTheDocument()
+  })
+})

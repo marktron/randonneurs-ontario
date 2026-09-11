@@ -130,6 +130,7 @@ export function EventCard({
 }) {
   const { dayOfWeek, shortDayOfWeek, month, monthShort, day } = formatDate(event.date)
   const isCancelled = event.status === 'cancelled'
+  const isDraft = event.status === 'draft'
 
   return (
     <article
@@ -179,11 +180,28 @@ export function EventCard({
               {event.name}
             </Link>
           </h3>
-          <span
-            className={`text-sm tabular-nums ${distanceMedalColorClass(event.distance) ?? 'text-muted-foreground'}`}
-          >
-            {event.distance} km
-          </span>
+          {isDraft ? (
+            <Badge
+              variant="outline"
+              className={`text-[10px] tracking-wider font-medium tabular-nums ${
+                distanceMedalDraftClass(event.distance) ??
+                'border-dashed border-border bg-background text-muted-foreground'
+              }`}
+            >
+              {event.distance} km
+            </Badge>
+          ) : (
+            <span
+              className={`text-sm tabular-nums ${distanceMedalColorClass(event.distance) ?? 'text-muted-foreground'}`}
+            >
+              {event.distance} km
+            </span>
+          )}
+          {isDraft && (
+            <span className="ml-1 font-normal uppercase tracking-wider text-[9px] text-muted-foreground">
+              Draft
+            </span>
+          )}
           {event.type === 'Populaire' && (
             <Badge variant="outline" className="text-[10px] tracking-wider font-medium">
               Populaire

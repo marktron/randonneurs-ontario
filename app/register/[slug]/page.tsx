@@ -63,11 +63,17 @@ export async function generateMetadata({ params }: PageProps) {
     : null
 
   const rideName = formatRideName(event.name, event.distance)
+  const isDraftMeta = event.status === 'draft'
+
   return {
-    title: `Register for ${flecheTitle || rideName}`,
+    title: isDraftMeta
+      ? `${flecheTitle || rideName} (draft)`
+      : `Register for ${flecheTitle || rideName}`,
     description: isFlecheMeta
       ? `Register your team for the ${flecheTitle} on ${formatDateShort(event.date)}.`
       : `Register for the ${rideName} ${event.type.toLowerCase()} on ${formatDateShort(event.date)}.`,
+    // Drafts are a preview, not a public listing — keep them out of search results.
+    ...(isDraftMeta ? { robots: { index: false, follow: false } } : {}),
   }
 }
 
@@ -99,10 +105,14 @@ function createGoogleMapsUrl(location: string): string {
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(location)}`
 }
 
-function RegistrationClosed() {
+function RegistrationClosed({
+  message = 'Registration is closed for this event.',
+}: {
+  message?: string
+}) {
   return (
     <div className="rounded border border-border/60 bg-muted/30 p-4 text-sm text-muted-foreground">
-      Registration is closed for this event.
+      {message}
     </div>
   )
 }
@@ -116,6 +126,7 @@ export default async function RegisterPage({ params }: PageProps) {
   }
 
   const isCancelled = event.status === 'cancelled'
+  const isDraft = event.status === 'draft'
   const isFleche = event.type === 'Fleche'
   const flecheDisplayName = isFleche
     ? `${new Date(event.date + 'T00:00:00').getFullYear()} Flèche${event.startLocation ? ` – ${event.startLocation}` : ''}`
@@ -130,18 +141,20 @@ export default async function RegisterPage({ params }: PageProps) {
 
   return (
     <PageShell>
-      <EventJsonLd
-        name={flecheDisplayName || formatRideName(event.name, event.distance)}
-        date={event.date}
-        startTime={event.startTime}
-        location={event.startLocation}
-        description={event.description}
-        url={`${baseUrl}/register/${slug}`}
-        imageUrl={event.imageUrl}
-        // EventJsonLd only models scheduled/cancelled; draft handling for
-        // this page (including not rendering this at all) is a follow-up.
-        status={event.status === 'cancelled' ? 'cancelled' : 'scheduled'}
-      />
+      {/* EventJsonLd only models scheduled/cancelled — drafts are a preview,
+          not a public listing, so skip structured data for them entirely. */}
+      {!isDraft && (
+        <EventJsonLd
+          name={flecheDisplayName || formatRideName(event.name, event.distance)}
+          date={event.date}
+          startTime={event.startTime}
+          location={event.startLocation}
+          description={event.description}
+          url={`${baseUrl}/register/${slug}`}
+          imageUrl={event.imageUrl}
+          status={event.status === 'cancelled' ? 'cancelled' : 'scheduled'}
+        />
+      )}
       {/* Hero Section */}
       {event.imageUrl ? (
         <div className="relative w-full h-[30vh] md:h-[60vh] min-h-[200px] md:min-h-[350px] max-h-[550px] overflow-hidden">
@@ -255,10 +268,22 @@ export default async function RegisterPage({ params }: PageProps) {
             </Alert>
           )}
 
+          {isDraft && (
+            <Alert className="mt-6 border-dashed py-4">
+              <AlertTitle className="text-base font-semibold">This event is a draft</AlertTitle>
+              <AlertDescription>
+                The date and details are proposed and may change. Registration opens once the
+                schedule is final.
+              </AlertDescription>
+            </Alert>
+          )}
+
           {/* Mobile Register CTA */}
           <div className="lg:hidden mt-6">
             {isCancelled ? (
               <RegistrationClosed />
+            ) : isDraft ? (
+              <RegistrationClosed message="Registration is not open yet for this draft event." />
             ) : (
               <RegisterCTA
                 eventId={event.id}
@@ -357,38 +382,46 @@ export default async function RegisterPage({ params }: PageProps) {
               </div>
             ) : null}
 
-            {/* Registered Riders */}
-            <div className="">
-              <div className="flex items-baseline justify-between mb-6">
-                <h2 className="font-serif text-2xl tracking-tight">Registered</h2>
-                <span className="text-sm tabular-nums text-muted-foreground">
-                  {registeredRiders.length} {registeredRiders.length === 1 ? 'rider' : 'riders'}
-                </span>
-              </div>
-              {registeredRiders.length > 0 ? (
-                isFleche ? (
-                  <FlecheRegisteredRiders riders={registeredRiders} />
+            {/* Registered Riders — hidden for drafts, which can't take
+                registrations and would otherwise always show an empty state */}
+            {!isDraft && (
+              <div className="">
+                <div className="flex items-baseline justify-between mb-6">
+                  <h2 className="font-serif text-2xl tracking-tight">Registered</h2>
+                  <span className="text-sm tabular-nums text-muted-foreground">
+                    {registeredRiders.length} {registeredRiders.length === 1 ? 'rider' : 'riders'}
+                  </span>
+                </div>
+                {registeredRiders.length > 0 ? (
+                  isFleche ? (
+                    <FlecheRegisteredRiders riders={registeredRiders} />
+                  ) : (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 sm:gap-x-8 gap-y-1">
+                      {registeredRiders.map((rider, index) => (
+                        <p
+                          key={index}
+                          className="text-sm py-1.5 border-b border-border/50 truncate"
+                        >
+                          {rider.name}
+                        </p>
+                      ))}
+                    </div>
+                  )
                 ) : (
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 sm:gap-x-8 gap-y-1">
-                    {registeredRiders.map((rider, index) => (
-                      <p key={index} className="text-sm py-1.5 border-b border-border/50 truncate">
-                        {rider.name}
-                      </p>
-                    ))}
-                  </div>
-                )
-              ) : (
-                <p className="text-sm text-muted-foreground">
-                  No riders registered yet. Be the first!
-                </p>
-              )}
-            </div>
+                  <p className="text-sm text-muted-foreground">
+                    No riders registered yet. Be the first!
+                  </p>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Right Column - Registration Form (desktop only) */}
           <div className="hidden lg:block lg:w-[400px] lg:shrink-0">
             {isCancelled ? (
               <RegistrationClosed />
+            ) : isDraft ? (
+              <RegistrationClosed message="Registration is not open yet for this draft event." />
             ) : (
               <RegisterCTA
                 eventId={event.id}

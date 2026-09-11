@@ -29,7 +29,10 @@ export async function UpcomingRides() {
   const chapters = await Promise.all(
     chapterSlugs.map(async (slug) => {
       const info = getChapterInfo(slug)
-      const events = await getEventsByChapter(slug)
+      // Drafts must never surface on the public home page regardless of the
+      // SHOW_DRAFT_EVENTS flag — filter them out here rather than in the
+      // data layer, which is what the flag is meant to control.
+      const events = (await getEventsByChapter(slug)).filter((event) => event.status !== 'draft')
       return { slug, name: info?.name ?? slug, events }
     })
   )
