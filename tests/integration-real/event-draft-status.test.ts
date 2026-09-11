@@ -15,7 +15,7 @@ vi.mock('@/lib/auth/get-admin', () => ({
 }))
 vi.mock('@/lib/audit-log', () => ({ logAuditEvent: vi.fn(async () => {}) }))
 
-import { describe, it, expect, beforeAll, afterAll } from 'vitest'
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest'
 import { createClient, SupabaseClient } from '@supabase/supabase-js'
 import { getTestSupabase, checked } from './helpers/supabase'
 import { TORONTO_CHAPTER_ID } from './registration/helpers'
@@ -45,23 +45,43 @@ const IDS = {
   scheduledEvent: '00000000-2222-4000-a000-00000000d002',
   otherSeasonDraft: '00000000-2222-4000-a000-00000000d003',
   nullStatusEvent: '00000000-2222-4000-a000-00000000d004',
+  draftPreviewEvent: '00000000-2222-4000-a000-00000000d005',
 }
 const SLUGS = {
   draft: `inttest-draft-event-200km-${SEASON}-05-02`,
   scheduled: `inttest-scheduled-event-200km-${SEASON}-05-09`,
   otherSeasonDraft: `inttest-other-draft-200km-${SEASON - 1}-05-02`,
   nullStatus: `inttest-null-status-200km-${SEASON}-05-16`,
+  // Distinct from SLUGS.draft so the SHOW_DRAFT_EVENTS on/off cases each hit
+  // a slug they've never fetched before - getEventBySlug is wrapped in
+  // react's cache()/unstable_cache, and while both are mocked pass-through
+  // in this suite's setup (see setup.ts), a distinct slug keeps this test
+  // correct even if that mocking ever changes. Uses SEASON + 1 (not SEASON)
+  // so it's not swept up by the publishSeasonDrafts(SEASON) count below.
+  draftPreview: `inttest-draft-preview-200km-${SEASON + 1}-05-23`,
 }
 
 async function cleanup(): Promise<void> {
   await admin
     .from('events')
     .delete()
-    .in('id', [IDS.draftEvent, IDS.scheduledEvent, IDS.otherSeasonDraft, IDS.nullStatusEvent])
+    .in('id', [
+      IDS.draftEvent,
+      IDS.scheduledEvent,
+      IDS.otherSeasonDraft,
+      IDS.nullStatusEvent,
+      IDS.draftPreviewEvent,
+    ])
   await admin
     .from('events')
     .delete()
-    .in('slug', [SLUGS.draft, SLUGS.scheduled, SLUGS.otherSeasonDraft, SLUGS.nullStatus])
+    .in('slug', [
+      SLUGS.draft,
+      SLUGS.scheduled,
+      SLUGS.otherSeasonDraft,
+      SLUGS.nullStatus,
+      SLUGS.draftPreview,
+    ])
 }
 
 beforeAll(async () => {
@@ -96,6 +116,16 @@ beforeAll(async () => {
         event_type: 'brevet',
         distance_km: 200,
         event_date: `${SEASON - 1}-05-02`,
+        status: 'draft',
+      },
+      {
+        id: IDS.draftPreviewEvent,
+        slug: SLUGS.draftPreview,
+        name: 'Inttest Draft Preview Event',
+        chapter_id: TORONTO_CHAPTER_ID,
+        event_type: 'brevet',
+        distance_km: 200,
+        event_date: `${SEASON + 1}-05-23`,
         status: 'draft',
       },
     ]),
@@ -154,10 +184,51 @@ describe('events_select_public RLS', () => {
 })
 
 describe('getEventBySlug', () => {
+  // Pin the flag off explicitly - a developer's local .env.development.local
+  // (loaded with override: true in setup.ts) may already set
+  // SHOW_DRAFT_EVENTS=true, which would otherwise make this "excludes
+  // drafts" assertion fail depending on the machine it runs on.
+  beforeEach(() => {
+    vi.stubEnv('SHOW_DRAFT_EVENTS', undefined)
+  })
+
+  afterEach(() => {
+    vi.unstubAllEnvs()
+  })
+
   it('returns null for a draft and the event for a scheduled one', async () => {
     expect(await getEventBySlug(SLUGS.draft)).toBeNull()
     const scheduled = await getEventBySlug(SLUGS.scheduled)
     expect(scheduled?.slug).toBe(SLUGS.scheduled)
+  })
+})
+
+describe('getEventBySlug with SHOW_DRAFT_EVENTS', () => {
+  // Same reasoning as above: pin the flag off by default so the "unset"
+  // case is correct regardless of the developer's local env, then let the
+  // "enabled" case explicitly override it to 'true'. isDraftPreviewEnabled()
+  // reads process.env on every call (no memoization of its own), and
+  // cache()/unstable_cache are mocked pass-through in this suite's
+  // setup.ts, so there's no stale caching between the two cases either.
+  beforeEach(() => {
+    vi.stubEnv('SHOW_DRAFT_EVENTS', undefined)
+  })
+
+  afterEach(() => {
+    vi.unstubAllEnvs()
+  })
+
+  it('returns null for a draft when the flag is unset', async () => {
+    expect(await getEventBySlug(SLUGS.draftPreview)).toBeNull()
+  })
+
+  it('returns the draft (status "draft") when the flag is enabled', async () => {
+    vi.stubEnv('SHOW_DRAFT_EVENTS', 'true')
+
+    const event = await getEventBySlug(SLUGS.draftPreview)
+
+    expect(event?.slug).toBe(SLUGS.draftPreview)
+    expect(event?.status).toBe('draft')
   })
 })
 

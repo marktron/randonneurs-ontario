@@ -29,13 +29,13 @@ The [Events](/admin/events) page shows a filterable table of all events. You can
 
 Each row shows the event name, chapter, date, distance, rider count, and status badge:
 
-| Status    | Meaning                                                                                                    |
-| --------- | ---------------------------------------------------------------------------------------------------------- |
-| Draft     | Planned for a future season; hidden from the public site, iCal feed, and Epic Ride Weather until published |
-| Scheduled | Upcoming, not yet happened                                                                                 |
-| Completed | Past the event date, awaiting results                                                                      |
-| Submitted | Results submitted to VP of Brevet Administration                                                           |
-| Cancelled | Won't happen                                                                                               |
+| Status    | Meaning                                                                                                                                                                    |
+| --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Draft     | Planned for a future season; hidden from the public site, iCal feed, and Epic Ride Weather until published (unless the `SHOW_DRAFT_EVENTS` preview flag is on — see below) |
+| Scheduled | Upcoming, not yet happened                                                                                                                                                 |
+| Completed | Past the event date, awaiting results                                                                                                                                      |
+| Submitted | Results submitted to VP of Brevet Administration                                                                                                                           |
+| Cancelled | Won't happen                                                                                                                                                               |
 
 Click any row to open the event detail page.
 
@@ -70,6 +70,20 @@ Create next season's events as drafts (the default when the date is in a future 
 Scheduled is a draft's only status move — the dropdown offers nothing else, and Cancelled and Completed are refused. To discard a draft, delete it.
 
 Publishing cannot be undone from the site — cancel individual events instead. The `NEXT_PUBLIC_CURRENT_SEASON` setting is unrelated: it only changes which season the admin filters, records, and membership pages default to.
+
+### Previewing drafts on the public site
+
+Setting the server-only environment variable `SHOW_DRAFT_EVENTS=true` makes draft events visible on the public site, so members can review a season's schedule before it's finalized. This is a Vercel environment variable, not an admin setting — changing it requires a redeploy to take effect. Because the affected reads' cache keys include the flag's state, that redeploy alone is enough — there's no separate cache-busting step to run.
+
+With the flag on:
+
+- The public calendar (list and grid views, all chapters) shows drafts alongside scheduled events. They're styled distinctly — a dashed, medal-coloured distance badge and a small "Draft" label — and the list view shows a plain "Details" button instead of the red "Register" button.
+- A dashed notice appears above the calendar filters: "The {year} schedule is a draft. Events and dates may change. Registration opens once the schedule is final." The year is the earliest among the page's draft events.
+- A draft's own event page (`/register/[slug]`) shows a "This event is a draft" alert instead of the registration form, and its title and search-engine indexing reflect that it's a preview, not a public listing.
+
+What stays hidden regardless of the flag: the iCal feed, the sitemap, the home page's Upcoming Rides block, and Epic Ride Weather sync. Registration for a draft is refused server-side even with the flag on, so there's no way to actually sign up for one.
+
+Turn the flag off (or leave it unset) once the season is ready to publish for real, at which point drafts should already be flipped to Scheduled via the normal publishing flow above.
 
 ### The event detail page
 

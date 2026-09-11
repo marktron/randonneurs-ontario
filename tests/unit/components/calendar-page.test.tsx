@@ -7,6 +7,7 @@ import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { CalendarPage } from '@/components/calendar-page'
 import type { Event } from '@/components/event-card'
+import { isoDaysFromNow } from '@/tests/utils/test-helpers'
 
 // Mock dynamic import for CalendarSubscribeButton
 vi.mock('@/components/calendar-subscribe-button', () => ({
@@ -267,5 +268,74 @@ describe('CalendarPage', () => {
     // Only the 200km event text should appear
     expect(screen.getAllByText(/Spring 200/).length).toBeGreaterThan(0)
     expect(screen.queryAllByText(/Spring 100/)).toHaveLength(0)
+  })
+})
+
+describe('CalendarPage — draft schedule notice', () => {
+  const defaultProps = {
+    chapter: 'Toronto',
+    chapterSlug: 'toronto',
+    description: 'Toronto chapter events',
+    events: sampleEvents,
+  }
+
+  // Relative to "today" so the fixture never silently expires (see
+  // docs/TESTING.md -> "Avoiding Test Rot").
+  const draftEventDate = isoDaysFromNow(300)
+  const draftEventYear = new Date(draftEventDate + 'T00:00:00').getFullYear()
+
+  const draftEvent: Event = {
+    slug: 'winter-draft',
+    date: draftEventDate,
+    name: 'Winter Draft',
+    type: 'Brevet',
+    distance: '200',
+    startLocation: 'TBD',
+    startTime: '08:00',
+    status: 'draft',
+    chapterName: 'Toronto',
+  }
+
+  beforeEach(() => {
+    localStorage.clear()
+  })
+
+  it('does not show the notice when there are no draft events', () => {
+    render(<CalendarPage {...defaultProps} />)
+    expect(screen.queryByText(/schedule is a draft/)).not.toBeInTheDocument()
+  })
+
+  it('shows the draft schedule notice with the earliest draft year, verbatim', () => {
+    render(<CalendarPage {...defaultProps} events={[...sampleEvents, draftEvent]} />)
+    expect(
+      screen.getByText(
+        `The ${draftEventYear} schedule is a draft. Events and dates may change. Registration opens once the schedule is final.`
+      )
+    ).toBeInTheDocument()
+  })
+
+  it('uses the earliest year among multiple draft events', () => {
+    // 365+ days apart guarantees the two dates fall in different calendar
+    // years regardless of what "today" is when this test runs.
+    const laterDate = isoDaysFromNow(500)
+    const earlierDate = isoDaysFromNow(30)
+    const earlierYear = new Date(earlierDate + 'T00:00:00').getFullYear()
+    const laterDraft: Event = { ...draftEvent, slug: 'later-draft', date: laterDate }
+    const earlierDraft: Event = { ...draftEvent, slug: 'earlier-draft', date: earlierDate }
+
+    render(<CalendarPage {...defaultProps} events={[...sampleEvents, laterDraft, earlierDraft]} />)
+
+    expect(
+      screen.getByText(new RegExp(`^The ${earlierYear} schedule is a draft\\.`))
+    ).toBeInTheDocument()
+  })
+
+  it('shows the notice in grid view too', async () => {
+    const user = userEvent.setup()
+    render(<CalendarPage {...defaultProps} events={[...sampleEvents, draftEvent]} />)
+
+    await user.click(screen.getByRole('radio', { name: 'Grid view' }))
+
+    expect(screen.getByText(/schedule is a draft/)).toBeInTheDocument()
   })
 })

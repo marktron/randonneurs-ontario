@@ -17,6 +17,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 
 // Dynamic import to avoid Radix UI hydration mismatch with DropdownMenu
 const CalendarSubscribeButton = dynamic(
@@ -64,6 +65,19 @@ function saveView(view: CalendarView): void {
   } catch {
     // Ignore storage errors
   }
+}
+
+/**
+ * Earliest calendar year among the page's draft events, or undefined if
+ * there are none. Drives the "schedule is a draft" notice — computed from
+ * every event on the page, not just the currently filtered subset, so the
+ * notice doesn't flicker as the visitor changes the distance filter.
+ */
+function earliestDraftYear(events: Event[]): number | undefined {
+  const years = events
+    .filter((event) => event.status === 'draft')
+    .map((event) => new Date(event.date + 'T00:00:00').getFullYear())
+  return years.length > 0 ? Math.min(...years) : undefined
 }
 
 function filterEvents(events: Event[], filter: DistanceFilter): Event[] {
@@ -119,6 +133,7 @@ export function CalendarPage({
     () => filterEvents(events, distanceFilter),
     [events, distanceFilter]
   )
+  const draftYear = useMemo(() => earliestDraftYear(events), [events])
 
   return (
     <PageShell>
@@ -129,6 +144,14 @@ export function CalendarPage({
         description={description}
       />
       <div className="content-container pt-6 pb-16 md:pt-10 md:pb-20">
+        {draftYear !== undefined && (
+          <Alert className="mb-6 border-dashed bg-muted/30">
+            <AlertDescription>
+              The {draftYear} schedule is a draft. Events and dates may change. Registration opens
+              once the schedule is final.
+            </AlertDescription>
+          </Alert>
+        )}
         <div className="flex flex-col gap-3 mb-8 md:flex-row md:flex-wrap md:items-center md:justify-end">
           <div className="flex items-center justify-between md:contents">
             <ToggleGroup

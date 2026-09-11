@@ -13,7 +13,7 @@ export interface Event {
   distance: string
   startLocation: string
   startTime: string // HH:MM format
-  status: 'scheduled' | 'cancelled' | 'draft' // Drives cancelled/draft rendering; public reads never emit 'draft'
+  status: 'scheduled' | 'cancelled' | 'draft' // Drives cancelled/draft rendering; public reads only emit 'draft' when SHOW_DRAFT_EVENTS is enabled
   registeredCount?: number // Number of registered riders
   chapterName?: string // Chapter name for all-chapters view
   rwgpsId?: string | null // RideWithGPS route ID for route link
@@ -130,6 +130,7 @@ export function EventCard({
 }) {
   const { dayOfWeek, shortDayOfWeek, month, monthShort, day } = formatDate(event.date)
   const isCancelled = event.status === 'cancelled'
+  const isDraft = event.status === 'draft'
 
   return (
     <article
@@ -179,11 +180,28 @@ export function EventCard({
               {event.name}
             </Link>
           </h3>
-          <span
-            className={`text-sm tabular-nums ${distanceMedalColorClass(event.distance) ?? 'text-muted-foreground'}`}
-          >
-            {event.distance} km
-          </span>
+          {isDraft ? (
+            <Badge
+              variant="outline"
+              className={`text-[10px] tracking-wider font-medium tabular-nums ${
+                distanceMedalDraftClass(event.distance) ??
+                'border-dashed border-border bg-background text-muted-foreground'
+              }`}
+            >
+              {event.distance} km
+            </Badge>
+          ) : (
+            <span
+              className={`text-sm tabular-nums ${distanceMedalColorClass(event.distance) ?? 'text-muted-foreground'}`}
+            >
+              {event.distance} km
+            </span>
+          )}
+          {isDraft && (
+            <span className="font-normal uppercase tracking-wider text-[9px] text-muted-foreground">
+              Draft
+            </span>
+          )}
           {event.type === 'Populaire' && (
             <Badge variant="outline" className="text-[10px] tracking-wider font-medium">
               Populaire
@@ -230,10 +248,21 @@ export function EventCard({
               </a>
             </Button>
           )}
-          {!isCancelled && (
-            <Button variant="outline" size="sm" className="text-red-600 hover:text-red-600" asChild>
-              <Link href={`/register/${event.slug}`}>Register</Link>
+          {isDraft ? (
+            <Button variant="outline" size="sm" asChild>
+              <Link href={`/register/${event.slug}`}>Details</Link>
             </Button>
+          ) : (
+            !isCancelled && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-red-600 hover:text-red-600"
+                asChild
+              >
+                <Link href={`/register/${event.slug}`}>Register</Link>
+              </Button>
+            )
           )}
         </div>
       </div>

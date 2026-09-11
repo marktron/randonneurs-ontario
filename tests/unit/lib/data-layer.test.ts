@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 /**
  * Tests for permanent event filtering in the data layer.
@@ -68,6 +68,16 @@ describe('Data Layer - Permanent Event Filtering', () => {
   beforeEach(() => {
     queryCalls.length = 0
     vi.clearAllMocks()
+    // Pin the flag off explicitly - this file only mocks '@/lib/supabase',
+    // not '@/lib/supabase-server', so an ambient SHOW_DRAFT_EVENTS=true
+    // would make publicEventsClient() in lib/data/events.ts reach for the
+    // real (unmocked) getSupabaseAdmin() and break these assertions. See
+    // the same guard in tests/integration/data/events.test.ts.
+    vi.stubEnv('SHOW_DRAFT_EVENTS', undefined)
+  })
+
+  afterEach(() => {
+    vi.unstubAllEnvs()
   })
 
   describe('getEventsByChapter', () => {
@@ -76,12 +86,12 @@ describe('Data Layer - Permanent Event Filtering', () => {
 
       // Find calls after the events table was accessed
       const eventsFromIndex = queryCalls.findIndex(
-        c => c.method === 'from' && c.args[0] === 'events'
+        (c) => c.method === 'from' && c.args[0] === 'events'
       )
       const callsAfterEvents = queryCalls.slice(eventsFromIndex + 1)
 
       // Verify .neq('event_type', 'permanent') was called
-      const neqCall = callsAfterEvents.find(c => c.method === 'neq')
+      const neqCall = callsAfterEvents.find((c) => c.method === 'neq')
       expect(neqCall).toBeDefined()
       expect(neqCall?.args).toEqual(['event_type', 'permanent'])
     })
@@ -90,13 +100,13 @@ describe('Data Layer - Permanent Event Filtering', () => {
       await getEventsByChapter('toronto')
 
       const eventsFromIndex = queryCalls.findIndex(
-        c => c.method === 'from' && c.args[0] === 'events'
+        (c) => c.method === 'from' && c.args[0] === 'events'
       )
       const callsAfterEvents = queryCalls.slice(eventsFromIndex + 1)
 
       // Verify .eq('chapters.slug', ...) was called (join-based filtering)
-      const eqCalls = callsAfterEvents.filter(c => c.method === 'eq')
-      const chapterSlugCall = eqCalls.find(c => c.args[0] === 'chapters.slug')
+      const eqCalls = callsAfterEvents.filter((c) => c.method === 'eq')
+      const chapterSlugCall = eqCalls.find((c) => c.args[0] === 'chapters.slug')
       expect(chapterSlugCall).toBeDefined()
     })
   })
@@ -106,12 +116,12 @@ describe('Data Layer - Permanent Event Filtering', () => {
       await getChapterResults('toronto', 2026)
 
       const eventsFromIndex = queryCalls.findIndex(
-        c => c.method === 'from' && c.args[0] === 'events'
+        (c) => c.method === 'from' && c.args[0] === 'events'
       )
       const callsAfterEvents = queryCalls.slice(eventsFromIndex + 1)
 
       // Verify .neq('event_type', 'permanent') was called
-      const neqCall = callsAfterEvents.find(c => c.method === 'neq')
+      const neqCall = callsAfterEvents.find((c) => c.method === 'neq')
       expect(neqCall).toBeDefined()
       expect(neqCall?.args).toEqual(['event_type', 'permanent'])
     })
@@ -120,19 +130,19 @@ describe('Data Layer - Permanent Event Filtering', () => {
       await getChapterResults('permanent', 2026)
 
       const eventsFromIndex = queryCalls.findIndex(
-        c => c.method === 'from' && c.args[0] === 'events'
+        (c) => c.method === 'from' && c.args[0] === 'events'
       )
       const callsAfterEvents = queryCalls.slice(eventsFromIndex + 1)
 
       // Should query by event_type = 'permanent'
-      const eqCalls = callsAfterEvents.filter(c => c.method === 'eq')
+      const eqCalls = callsAfterEvents.filter((c) => c.method === 'eq')
       const eventTypeCall = eqCalls.find(
-        c => c.args[0] === 'event_type' && c.args[1] === 'permanent'
+        (c) => c.args[0] === 'event_type' && c.args[1] === 'permanent'
       )
       expect(eventTypeCall).toBeDefined()
 
       // Should NOT have neq filter
-      const neqCall = callsAfterEvents.find(c => c.method === 'neq')
+      const neqCall = callsAfterEvents.find((c) => c.method === 'neq')
       expect(neqCall).toBeUndefined()
     })
 
@@ -141,7 +151,7 @@ describe('Data Layer - Permanent Event Filtering', () => {
 
       // Check that chapters table was NOT queried
       const chaptersFromCall = queryCalls.find(
-        c => c.method === 'from' && c.args[0] === 'chapters'
+        (c) => c.method === 'from' && c.args[0] === 'chapters'
       )
       expect(chaptersFromCall).toBeUndefined()
     })
@@ -152,14 +162,14 @@ describe('Data Layer - Permanent Event Filtering', () => {
       await getAvailableYears('permanent')
 
       const eventsFromIndex = queryCalls.findIndex(
-        c => c.method === 'from' && c.args[0] === 'events'
+        (c) => c.method === 'from' && c.args[0] === 'events'
       )
       const callsAfterEvents = queryCalls.slice(eventsFromIndex + 1)
 
       // Should query by event_type = 'permanent'
-      const eqCalls = callsAfterEvents.filter(c => c.method === 'eq')
+      const eqCalls = callsAfterEvents.filter((c) => c.method === 'eq')
       const eventTypeCall = eqCalls.find(
-        c => c.args[0] === 'event_type' && c.args[1] === 'permanent'
+        (c) => c.args[0] === 'event_type' && c.args[1] === 'permanent'
       )
       expect(eventTypeCall).toBeDefined()
     })
@@ -168,7 +178,7 @@ describe('Data Layer - Permanent Event Filtering', () => {
       await getAvailableYears('permanent')
 
       const chaptersFromCall = queryCalls.find(
-        c => c.method === 'from' && c.args[0] === 'chapters'
+        (c) => c.method === 'from' && c.args[0] === 'chapters'
       )
       expect(chaptersFromCall).toBeUndefined()
     })

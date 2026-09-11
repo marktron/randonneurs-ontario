@@ -1,6 +1,12 @@
-import { describe, it, expect } from 'vitest'
-import { eventsForFirstNDates } from '@/components/upcoming-rides'
+/**
+ * @vitest-environment happy-dom
+ */
+
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { render, screen } from '@testing-library/react'
+import { eventsForFirstNDates, UpcomingRides } from '@/components/upcoming-rides'
 import type { Event } from '@/components/event-card'
+import { isoDaysFromNow } from '@/tests/utils/test-helpers'
 
 function makeEvent(date: string, name: string): Event {
   return {
@@ -14,6 +20,16 @@ function makeEvent(date: string, name: string): Event {
     status: 'scheduled',
   }
 }
+
+const mockGetEventsByChapter = vi.fn()
+const mockGetAllChapterSlugs = vi.fn()
+const mockGetChapterInfo = vi.fn()
+
+vi.mock('@/lib/data/events', () => ({
+  getEventsByChapter: (...args: unknown[]) => mockGetEventsByChapter(...args),
+  getAllChapterSlugs: (...args: unknown[]) => mockGetAllChapterSlugs(...args),
+  getChapterInfo: (...args: unknown[]) => mockGetChapterInfo(...args),
+}))
 
 describe('eventsForFirstNDates', () => {
   it('returns events from the first N unique dates', () => {
@@ -59,5 +75,41 @@ describe('eventsForFirstNDates', () => {
     ]
     const result = eventsForFirstNDates(events, 3)
     expect(result).toHaveLength(3)
+  })
+})
+
+describe('UpcomingRides', () => {
+  beforeEach(() => {
+    mockGetEventsByChapter.mockReset()
+    mockGetAllChapterSlugs.mockReset()
+    mockGetChapterInfo.mockReset()
+  })
+
+  it('filters out draft events before rendering', async () => {
+    mockGetAllChapterSlugs.mockReturnValue(['toronto'])
+    mockGetChapterInfo.mockReturnValue({ name: 'Toronto' })
+    mockGetEventsByChapter.mockResolvedValue([
+      { ...makeEvent(isoDaysFromNow(30), 'Draft Ride'), status: 'draft' },
+      makeEvent(isoDaysFromNow(37), 'Real Ride'),
+    ])
+
+    const element = await UpcomingRides()
+    render(element)
+
+    expect(screen.getByText('Real Ride')).toBeInTheDocument()
+    expect(screen.queryByText('Draft Ride')).not.toBeInTheDocument()
+  })
+
+  it('hides a chapter entirely when all its upcoming events are drafts', async () => {
+    mockGetAllChapterSlugs.mockReturnValue(['toronto'])
+    mockGetChapterInfo.mockReturnValue({ name: 'Toronto' })
+    mockGetEventsByChapter.mockResolvedValue([
+      { ...makeEvent(isoDaysFromNow(30), 'Draft Ride'), status: 'draft' },
+    ])
+
+    const element = await UpcomingRides()
+    render(element)
+
+    expect(screen.queryByText('Toronto')).not.toBeInTheDocument()
   })
 })

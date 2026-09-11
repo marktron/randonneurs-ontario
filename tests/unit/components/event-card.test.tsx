@@ -175,6 +175,51 @@ describe('EventCard', () => {
     })
   })
 
+  describe('draft event', () => {
+    const draftEvent: Event = { ...baseEvent, status: 'draft' }
+
+    it('does not apply muted styling to the details column (drafts are real plans)', () => {
+      render(<EventCard event={draftEvent} />)
+      const heading = screen.getByRole('heading', { name: /spring 200/i })
+      const detailsColumn = heading.closest('div.flex.flex-col')
+      expect(detailsColumn?.className).not.toContain('opacity-60')
+    })
+
+    it('shows the distance in the dashed medal-coloured draft chip', () => {
+      render(<EventCard event={draftEvent} />)
+      const distance = screen.getByText(/^200 km$/)
+      expect(distance.className).toContain('border-dashed')
+      expect(distance.className).toContain('border-yellow-600/60')
+      expect(distance.className).toContain('text-yellow-800')
+    })
+
+    it('falls back to a neutral dashed chip for non-medal distances', () => {
+      render(<EventCard event={{ ...draftEvent, distance: '100', type: 'Populaire' }} />)
+      const distance = screen.getByText(/^100 km$/)
+      expect(distance.className).toContain('border-dashed')
+      expect(distance.className).toContain('border-border')
+      expect(distance.className).toContain('bg-background')
+      expect(distance.className).toContain('text-muted-foreground')
+    })
+
+    it('shows an uppercase Draft label beside the distance chip', () => {
+      render(<EventCard event={draftEvent} />)
+      expect(screen.getByText('Draft')).toBeInTheDocument()
+    })
+
+    it('shows a plain "Details" link instead of the red Register action', () => {
+      render(<EventCard event={draftEvent} />)
+      expect(screen.getByRole('link', { name: 'Details' })).toBeInTheDocument()
+      expect(screen.queryByRole('link', { name: /^register$/i })).not.toBeInTheDocument()
+    })
+
+    it('does not use the red Register styling on the Details link', () => {
+      render(<EventCard event={draftEvent} />)
+      const link = screen.getByRole('link', { name: 'Details' })
+      expect(link.className).not.toContain('text-red-600')
+    })
+  })
+
   describe('Route button', () => {
     it('links the Route button to the collection when only rwgpsCollectionId is set', () => {
       render(<EventCard event={{ ...baseEvent, rwgpsId: null, rwgpsCollectionId: '8387874' }} />)
