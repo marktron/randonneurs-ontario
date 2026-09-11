@@ -173,6 +173,19 @@ describe('RegisterPage /register/[slug] — draft event', () => {
     expect(screen.queryByText(/No riders registered yet/)).not.toBeInTheDocument()
   })
 
+  it('skips the riders/teams data fetches entirely for drafts (nothing to show, so no reason to fetch)', async () => {
+    mockGetEventBySlug.mockResolvedValue(draftEvent)
+    mockGetRegisteredRiders.mockClear()
+    mockGetRegisteredRidersWithTeams.mockClear()
+    mockGetFlecheTeams.mockClear()
+
+    await RegisterPage({ params: Promise.resolve({ slug: 'winter-draft' }) })
+
+    expect(mockGetRegisteredRiders).not.toHaveBeenCalled()
+    expect(mockGetRegisteredRidersWithTeams).not.toHaveBeenCalled()
+    expect(mockGetFlecheTeams).not.toHaveBeenCalled()
+  })
+
   it('does not show the cancelled banner for a draft event', async () => {
     mockGetEventBySlug.mockResolvedValue(draftEvent)
 

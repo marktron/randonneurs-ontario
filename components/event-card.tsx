@@ -198,7 +198,7 @@ export function EventCard({
             </span>
           )}
           {isDraft && (
-            <span className="ml-1 font-normal uppercase tracking-wider text-[9px] text-muted-foreground">
+            <span className="font-normal uppercase tracking-wider text-[9px] text-muted-foreground">
               Draft
             </span>
           )}

@@ -181,6 +181,7 @@ import {
   getEventBySlug,
   getRegisteredRiders,
 } from '@/lib/data/events'
+import { unstable_cache } from 'next/cache'
 
 const mockModule = await vi.importMock<{
   __queryBuilder: Record<string, ReturnType<typeof vi.fn>>
@@ -199,6 +200,14 @@ describe('getEventsByChapter', () => {
   beforeEach(() => {
     mockModule.__reset()
     vi.clearAllMocks()
+    // Pin the flag off explicitly - see the "draft preview flag" describe
+    // below for why an ambient SHOW_DRAFT_EVENTS=true would otherwise
+    // break the "filters for scheduled and cancelled events" assertion.
+    vi.stubEnv('SHOW_DRAFT_EVENTS', undefined)
+  })
+
+  afterEach(() => {
+    vi.unstubAllEnvs()
   })
 
   it('returns empty array for invalid chapter slug', async () => {
@@ -342,6 +351,14 @@ describe('getAllUpcomingEvents', () => {
   beforeEach(() => {
     mockModule.__reset()
     vi.clearAllMocks()
+    // Pin the flag off explicitly - see the "draft preview flag" describe
+    // below for why an ambient SHOW_DRAFT_EVENTS=true would otherwise
+    // break the "filters for scheduled and cancelled events" assertion.
+    vi.stubEnv('SHOW_DRAFT_EVENTS', undefined)
+  })
+
+  afterEach(() => {
+    vi.unstubAllEnvs()
   })
 
   it('filters for scheduled and cancelled events', async () => {
@@ -413,6 +430,14 @@ describe('getEventBySlug', () => {
   beforeEach(() => {
     mockModule.__reset()
     vi.clearAllMocks()
+    // Pin the flag off explicitly - see the "draft preview flag" describe
+    // below for why an ambient SHOW_DRAFT_EVENTS=true would otherwise
+    // break the "excludes draft events" assertion below.
+    vi.stubEnv('SHOW_DRAFT_EVENTS', undefined)
+  })
+
+  afterEach(() => {
+    vi.unstubAllEnvs()
   })
 
   it('returns null when event not found', async () => {
@@ -547,6 +572,12 @@ describe('draft preview flag (SHOW_DRAFT_EVENTS)', () => {
   beforeEach(() => {
     mockModule.__reset()
     vi.clearAllMocks()
+    // Pin the flag off explicitly - a developer's shell may already export
+    // SHOW_DRAFT_EVENTS=true, which would otherwise make the "when
+    // disabled (default)" assertions below fail depending on the
+    // environment this suite runs in. The "when enabled" block's own
+    // beforeEach overrides this with 'true'.
+    vi.stubEnv('SHOW_DRAFT_EVENTS', undefined)
   })
 
   afterEach(() => {
@@ -563,6 +594,7 @@ describe('draft preview flag (SHOW_DRAFT_EVENTS)', () => {
         'scheduled',
         'cancelled',
       ])
+      expect(getSupabaseMock).toHaveBeenCalled()
       expect(getSupabaseAdminMock).not.toHaveBeenCalled()
     })
 
@@ -575,18 +607,7 @@ describe('draft preview flag (SHOW_DRAFT_EVENTS)', () => {
         'scheduled',
         'cancelled',
       ])
-      expect(getSupabaseAdminMock).not.toHaveBeenCalled()
-    })
-
-    it('getPermanentEvents keeps the scheduled/cancelled filter and the public client', async () => {
-      mockModule.__mockEventsEmpty()
-
-      await getPermanentEvents()
-
-      expect(mockModule.__queryBuilder.in).toHaveBeenCalledWith('status', [
-        'scheduled',
-        'cancelled',
-      ])
+      expect(getSupabaseMock).toHaveBeenCalled()
       expect(getSupabaseAdminMock).not.toHaveBeenCalled()
     })
 
@@ -596,6 +617,7 @@ describe('draft preview flag (SHOW_DRAFT_EVENTS)', () => {
       await getEventBySlug('some-draft-slug')
 
       expect(mockModule.__queryBuilder.neq).toHaveBeenCalledWith('status', 'draft')
+      expect(getSupabaseMock).toHaveBeenCalled()
       expect(getSupabaseAdminMock).not.toHaveBeenCalled()
     })
   })
@@ -622,19 +644,6 @@ describe('draft preview flag (SHOW_DRAFT_EVENTS)', () => {
       mockModule.__mockEventsEmpty()
 
       await getAllUpcomingEvents()
-
-      expect(mockModule.__queryBuilder.in).toHaveBeenCalledWith('status', [
-        'scheduled',
-        'cancelled',
-        'draft',
-      ])
-      expect(getSupabaseAdminMock).toHaveBeenCalled()
-    })
-
-    it('getPermanentEvents includes drafts and uses the admin client', async () => {
-      mockModule.__mockEventsEmpty()
-
-      await getPermanentEvents()
 
       expect(mockModule.__queryBuilder.in).toHaveBeenCalledWith('status', [
         'scheduled',
@@ -675,5 +684,106 @@ describe('draft preview flag (SHOW_DRAFT_EVENTS)', () => {
       expect(result).not.toBeNull()
       expect(result?.status).toBe('draft')
     })
+
+    it('getPermanentEvents is unaffected: keeps the scheduled/cancelled filter and the public client', async () => {
+      // Permanents are always self-scheduled (never drafts) and
+      // /calendar/permanents has no draft notice, so this read stays on
+      // the plain public client regardless of the flag - see
+      // docs/guide.md -> "Previewing drafts on the public site".
+      mockModule.__mockEventsEmpty()
+
+      await getPermanentEvents()
+
+      expect(mockModule.__queryBuilder.in).toHaveBeenCalledWith('status', [
+        'scheduled',
+        'cancelled',
+      ])
+      expect(getSupabaseMock).toHaveBeenCalled()
+      expect(getSupabaseAdminMock).not.toHaveBeenCalled()
+    })
+  })
+})
+
+describe('unstable_cache keys fold in the draft-preview flag state', () => {
+  // Regression coverage for the Data Cache persisting across deployments:
+  // if these wrappers' cache keys didn't vary with the flag, flipping
+  // SHOW_DRAFT_EVENTS and redeploying could keep serving a stale
+  // pre-flip cache entry indefinitely. unstable_cache is mocked as a
+  // pass-through (`vi.fn((fn) => fn)`) above, so we assert directly on
+  // the mock's call arguments rather than on caching behaviour.
+  beforeEach(() => {
+    mockModule.__reset()
+    vi.clearAllMocks()
+    vi.stubEnv('SHOW_DRAFT_EVENTS', undefined)
+  })
+
+  afterEach(() => {
+    vi.unstubAllEnvs()
+  })
+
+  const lastCacheKeyParts = (): unknown[] => {
+    const calls = vi.mocked(unstable_cache).mock.calls
+    const [, keyParts] = calls[calls.length - 1]
+    return keyParts as unknown[]
+  }
+
+  it('getEventsByChapter keys with no-drafts when the flag is off', async () => {
+    mockModule.__mockEventsEmpty()
+
+    await getEventsByChapter('toronto')
+
+    expect(lastCacheKeyParts()).toContain('no-drafts')
+  })
+
+  it('getEventsByChapter keys with with-drafts when the flag is on', async () => {
+    vi.stubEnv('SHOW_DRAFT_EVENTS', 'true')
+    mockModule.__mockEventsEmpty()
+
+    await getEventsByChapter('toronto')
+
+    expect(lastCacheKeyParts()).toContain('with-drafts')
+  })
+
+  it('getAllUpcomingEvents keys with no-drafts when the flag is off', async () => {
+    mockModule.__mockEventsEmpty()
+
+    await getAllUpcomingEvents()
+
+    expect(lastCacheKeyParts()).toContain('no-drafts')
+  })
+
+  it('getAllUpcomingEvents keys with with-drafts when the flag is on', async () => {
+    vi.stubEnv('SHOW_DRAFT_EVENTS', 'true')
+    mockModule.__mockEventsEmpty()
+
+    await getAllUpcomingEvents()
+
+    expect(lastCacheKeyParts()).toContain('with-drafts')
+  })
+
+  it('getEventBySlug keys with no-drafts when the flag is off', async () => {
+    mockModule.__mockEventNotFound()
+
+    await getEventBySlug('some-slug')
+
+    expect(lastCacheKeyParts()).toContain('no-drafts')
+  })
+
+  it('getEventBySlug keys with with-drafts when the flag is on', async () => {
+    vi.stubEnv('SHOW_DRAFT_EVENTS', 'true')
+    mockModule.__mockEventNotFound()
+
+    await getEventBySlug('some-slug')
+
+    expect(lastCacheKeyParts()).toContain('with-drafts')
+  })
+
+  it('getPermanentEvents is not keyed on the draft flag (not a gated read)', async () => {
+    mockModule.__mockEventsEmpty()
+
+    await getPermanentEvents()
+
+    expect(lastCacheKeyParts()).not.toContain('no-drafts')
+    expect(lastCacheKeyParts()).not.toContain('with-drafts')
   })
 })

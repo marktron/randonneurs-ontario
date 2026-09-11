@@ -131,9 +131,15 @@ export default async function RegisterPage({ params }: PageProps) {
   const flecheDisplayName = isFleche
     ? `${new Date(event.date + 'T00:00:00').getFullYear()} Flèche${event.startLocation ? ` – ${event.startLocation}` : ''}`
     : null
+  // Drafts show neither the riders list nor team info (see the alert
+  // rendered below instead), so skip fetching data nobody will see.
   const [registeredRiders, flecheTeams, collection] = await Promise.all([
-    isFleche ? getRegisteredRidersWithTeams(event.id) : getRegisteredRiders(event.id),
-    isFleche ? getFlecheTeams(event.id) : Promise.resolve([]),
+    isDraft
+      ? Promise.resolve([])
+      : isFleche
+        ? getRegisteredRidersWithTeams(event.id)
+        : getRegisteredRiders(event.id),
+    isDraft ? Promise.resolve([]) : isFleche ? getFlecheTeams(event.id) : Promise.resolve([]),
     event.rwgpsCollectionId ? fetchRwgpsCollection(event.rwgpsCollectionId) : Promise.resolve(null),
   ])
 

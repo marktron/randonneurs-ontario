@@ -73,6 +73,19 @@ function publicEventStatuses(): Array<'scheduled' | 'cancelled' | 'draft'> {
   return isDraftPreviewEnabled() ? ['scheduled', 'cancelled', 'draft'] : ['scheduled', 'cancelled']
 }
 
+/**
+ * `unstable_cache` key part for the draft-preview flag's current state.
+ *
+ * The Data Cache persists across deployments, so the wrappers gated by
+ * `isDraftPreviewEnabled()` (`getEventsByChapter`, `getAllUpcomingEvents`,
+ * `getEventBySlug`) must fold the flag into their cache key — otherwise
+ * flipping `SHOW_DRAFT_EVENTS` and redeploying can keep serving a stale
+ * pre-flip entry indefinitely instead of the flag's current behaviour.
+ */
+function draftCacheKey(): 'with-drafts' | 'no-drafts' {
+  return isDraftPreviewEnabled() ? 'with-drafts' : 'no-drafts'
+}
+
 // ============================================================================
 // EVENT QUERIES
 // ============================================================================
@@ -165,7 +178,7 @@ const getEventsByChapterInner = cache(async (urlSlug: string): Promise<Event[]> 
 export async function getEventsByChapter(urlSlug: string): Promise<Event[]> {
   return unstable_cache(
     async () => getEventsByChapterInner(urlSlug),
-    [`events-by-chapter-${urlSlug}`],
+    [`events-by-chapter-${urlSlug}`, draftCacheKey()],
     {
       tags: ['events', `chapter-${urlSlug}`],
     }
@@ -219,26 +232,36 @@ const getAllUpcomingEventsInner = cache(async (): Promise<Event[]> => {
 })
 
 export async function getAllUpcomingEvents(): Promise<Event[]> {
-  return unstable_cache(async () => getAllUpcomingEventsInner(), ['all-upcoming-events'], {
-    tags: ['events'],
-  })()
+  return unstable_cache(
+    async () => getAllUpcomingEventsInner(),
+    ['all-upcoming-events', draftCacheKey()],
+    {
+      tags: ['events'],
+    }
+  )()
 }
 
 /**
  * Get all upcoming permanent ride events.
  * Permanent rides are self-scheduled year-round events.
  *
+ * Not gated by the draft-preview flag: permanents are always created as
+ * `scheduled` (riders self-schedule them; there's no draft workflow for
+ * this event type), and `/calendar/permanents` has no draft notice, so a
+ * gated read here would be incoherent — see docs/guide.md → "Previewing
+ * drafts on the public site".
+ *
  * @returns Array of permanent events, sorted by date
  */
 const getPermanentEventsInner = cache(async (): Promise<Event[]> => {
   // Fetch upcoming permanent events, ordered by date
   const today = new Date().toISOString().split('T')[0]
-  const { data: events, error } = await publicEventsClient()
+  const { data: events, error } = await getSupabase()
     .from('events')
     .select('*, public_registrations(count), routes(rwgps_id, rwgps_collection_id)')
     .eq('public_registrations.status', 'registered')
     .eq('event_type', 'permanent')
-    .in('status', publicEventStatuses())
+    .in('status', ['scheduled', 'cancelled'])
     .gte('event_date', today)
     .order('event_date', { ascending: true })
     .order('distance_km', { ascending: false })
@@ -579,7 +602,11 @@ const getEventBySlugInner = cache(async (slug: string): Promise<EventDetails | n
 })
 
 export async function getEventBySlug(slug: string): Promise<EventDetails | null> {
-  return unstable_cache(async () => getEventBySlugInner(slug), [`event-by-slug-${slug}`], {
-    tags: ['events', `event-${slug}`],
-  })()
+  return unstable_cache(
+    async () => getEventBySlugInner(slug),
+    [`event-by-slug-${slug}`, draftCacheKey()],
+    {
+      tags: ['events', `event-${slug}`],
+    }
+  )()
 }

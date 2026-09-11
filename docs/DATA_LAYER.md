@@ -393,7 +393,7 @@ All tables have RLS enabled. Key policies:
 - `chapters`, `routes`, `events`, `results`, `awards` - anyone can read
 - `public_riders` view - riders without emails (only those with at least one result)
 - `events` public select is further scoped to `status IS DISTINCT FROM 'draft'` - draft events are invisible to the anon key; admin pages read through the service role.
-- When the server-only `SHOW_DRAFT_EVENTS=true` flag is set (`lib/draft-preview.ts`, `isDraftPreviewEnabled()`), the four public event reads in `lib/data/events.ts` — `getEventsByChapter`, `getAllUpcomingEvents`, `getPermanentEvents`, and `getEventBySlug` — switch to `getSupabaseAdmin()` (service role) and add `'draft'` to their status filter, so drafts become visible on the public site without touching the RLS policy. The flag is off by default; toggling it in Vercel requires a redeploy.
+- When the server-only `SHOW_DRAFT_EVENTS=true` flag is set (`lib/draft-preview.ts`, `isDraftPreviewEnabled()`), three public event reads in `lib/data/events.ts` — `getEventsByChapter`, `getAllUpcomingEvents`, and `getEventBySlug` — switch to `getSupabaseAdmin()` (service role) and add `'draft'` to their status filter, so drafts become visible on the public site without touching the RLS policy. The flag is off by default; toggling it in Vercel requires a redeploy. `getPermanentEvents` is deliberately not gated: permanents are always self-scheduled as `scheduled` (no draft workflow) and `/calendar/permanents` has no draft notice, so it stays on the plain public client with the literal `['scheduled', 'cancelled']` filter regardless of the flag.
 
 ### Protected Data
 

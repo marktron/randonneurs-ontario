@@ -73,7 +73,7 @@ Publishing cannot be undone from the site — cancel individual events instead. 
 
 ### Previewing drafts on the public site
 
-Setting the server-only environment variable `SHOW_DRAFT_EVENTS=true` makes draft events visible on the public site, so members can review a season's schedule before it's finalized. This is a Vercel environment variable, not an admin setting — changing it requires a redeploy to take effect.
+Setting the server-only environment variable `SHOW_DRAFT_EVENTS=true` makes draft events visible on the public site, so members can review a season's schedule before it's finalized. This is a Vercel environment variable, not an admin setting — changing it requires a redeploy to take effect. Because the affected reads' cache keys include the flag's state, that redeploy alone is enough — there's no separate cache-busting step to run.
 
 With the flag on:
 
