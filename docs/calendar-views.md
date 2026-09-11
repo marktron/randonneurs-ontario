@@ -121,7 +121,13 @@ This follows the same localStorage pattern used elsewhere in the app (e.g., `ro-
 
 ## Draft events
 
-`Event.status` may be `'draft'`. Public data reads never emit it (drafts are filtered by status and hidden by RLS), so it only appears in admin. Draft cells keep the medal hue of their distance but never the solid fill: `distanceMedalDraftClass` renders a dashed medal-coloured border over a faint tint with medal-coloured text, plus a `Draft` label. Non-medal drafts (populaires, odd distances) fall back to a neutral dashed border and muted text. On mobile the `(draft)` row's distance badge is a dashed outline in the medal text colour, and the day dot stays muted.
+`Event.status` may be `'draft'`. By default public data reads never emit it (drafts are filtered by status and hidden by RLS), so it only appears in admin. When the server-only `SHOW_DRAFT_EVENTS=true` flag is set (see `lib/draft-preview.ts` and `docs/guide.md` → "Previewing drafts on the public site"), the public reads in `lib/data/events.ts` switch to the service-role client and include `'draft'` in their status filter, so drafts appear on the public calendar too — the flag is off by default and requires a Vercel redeploy to change.
+
+Draft cells keep the medal hue of their distance but never the solid fill: `distanceMedalDraftClass` renders a dashed medal-coloured border over a faint tint with medal-coloured text, plus a `Draft` label. Non-medal drafts (populaires, odd distances) fall back to a neutral dashed border and muted text. On mobile the `(draft)` row's distance badge is a dashed outline in the medal text colour, and the day dot stays muted. This applies in the admin grid and, when the preview flag is on, the public grid.
+
+The public list view (`EventCard`) matches this treatment: the distance badge uses `distanceMedalDraftClass` with a small uppercase "Draft" label beside it, and — unlike cancelled rows — the card is not dimmed, since a draft is a real plan rather than a dead event. Instead of the red "Register" button, draft rows show a plain outline "Details" link to the event page.
+
+When a page has any draft events (public calendar only, and only with the preview flag on), `CalendarPage` renders a dashed-border notice between the hero and the filters, in both list and grid views: "The {year} schedule is a draft. Events and dates may change. Registration opens once the schedule is final." `{year}` is the earliest calendar year among the page's draft events, computed from the full event list so it doesn't change as the distance filter is applied.
 
 ## Key files
 

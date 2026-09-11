@@ -393,6 +393,7 @@ All tables have RLS enabled. Key policies:
 - `chapters`, `routes`, `events`, `results`, `awards` - anyone can read
 - `public_riders` view - riders without emails (only those with at least one result)
 - `events` public select is further scoped to `status IS DISTINCT FROM 'draft'` - draft events are invisible to the anon key; admin pages read through the service role.
+- When the server-only `SHOW_DRAFT_EVENTS=true` flag is set (`lib/draft-preview.ts`, `isDraftPreviewEnabled()`), the four public event reads in `lib/data/events.ts` — `getEventsByChapter`, `getAllUpcomingEvents`, `getPermanentEvents`, and `getEventBySlug` — switch to `getSupabaseAdmin()` (service role) and add `'draft'` to their status filter, so drafts become visible on the public site without touching the RLS policy. The flag is off by default; toggling it in Vercel requires a redeploy.
 
 ### Protected Data
 
@@ -478,7 +479,9 @@ a route edit. For the same reason, `revalidateRoutesTags` always busts the
 shared `routes`/`events` tags even when the route has no `chapter_id` (the
 chapter-scoped `chapter-${urlSlug}` bust is the only part gated on the chapter).
 `getEventBySlug` filters `status <> 'draft'`; publishing busts `event-${slug}`
-so a previously-404 `/register/[slug]` page is regenerated.
+so a previously-404 `/register/[slug]` page is regenerated. (This filter, along
+with the anon client, is skipped when `SHOW_DRAFT_EVENTS=true` — see "Public
+Read Access" above.)
 
 #### Page rendering strategy
 

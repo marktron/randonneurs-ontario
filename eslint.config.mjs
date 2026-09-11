@@ -28,6 +28,8 @@ const eslintConfig = defineConfig([
     // which the root-anchored `.next/**` pattern above doesn't catch.
     "**/.next/**",
     ".claude/worktrees/**",
+    // Supabase CLI runtime artifact (gitignored via supabase/.gitignore), not source.
+    "supabase/.temp/**",
   ]),
 ]);
 
