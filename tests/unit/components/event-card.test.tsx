@@ -207,10 +207,16 @@ describe('EventCard', () => {
       expect(screen.getByText('Draft')).toBeInTheDocument()
     })
 
-    it('still renders a Register link', () => {
+    it('shows a plain "Details" link instead of the red Register action', () => {
       render(<EventCard event={draftEvent} />)
-      const links = screen.getAllByRole('link', { name: /register/i })
-      expect(links.length).toBeGreaterThan(0)
+      expect(screen.getByRole('link', { name: 'Details' })).toBeInTheDocument()
+      expect(screen.queryByRole('link', { name: /^register$/i })).not.toBeInTheDocument()
+    })
+
+    it('does not use the red Register styling on the Details link', () => {
+      render(<EventCard event={draftEvent} />)
+      const link = screen.getByRole('link', { name: 'Details' })
+      expect(link.className).not.toContain('text-red-600')
     })
   })
 

@@ -6,6 +6,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import { eventsForFirstNDates, UpcomingRides } from '@/components/upcoming-rides'
 import type { Event } from '@/components/event-card'
+import { isoDaysFromNow } from '@/tests/utils/test-helpers'
 
 function makeEvent(date: string, name: string): Event {
   return {
@@ -88,8 +89,8 @@ describe('UpcomingRides', () => {
     mockGetAllChapterSlugs.mockReturnValue(['toronto'])
     mockGetChapterInfo.mockReturnValue({ name: 'Toronto' })
     mockGetEventsByChapter.mockResolvedValue([
-      { ...makeEvent('2030-06-15', 'Draft Ride'), status: 'draft' },
-      makeEvent('2030-06-22', 'Real Ride'),
+      { ...makeEvent(isoDaysFromNow(30), 'Draft Ride'), status: 'draft' },
+      makeEvent(isoDaysFromNow(37), 'Real Ride'),
     ])
 
     const element = await UpcomingRides()
@@ -103,7 +104,7 @@ describe('UpcomingRides', () => {
     mockGetAllChapterSlugs.mockReturnValue(['toronto'])
     mockGetChapterInfo.mockReturnValue({ name: 'Toronto' })
     mockGetEventsByChapter.mockResolvedValue([
-      { ...makeEvent('2030-06-15', 'Draft Ride'), status: 'draft' },
+      { ...makeEvent(isoDaysFromNow(30), 'Draft Ride'), status: 'draft' },
     ])
 
     const element = await UpcomingRides()

@@ -7,6 +7,7 @@ import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { CalendarPage } from '@/components/calendar-page'
 import type { Event } from '@/components/event-card'
+import { isoDaysFromNow } from '@/tests/utils/test-helpers'
 
 // Mock dynamic import for CalendarSubscribeButton
 vi.mock('@/components/calendar-subscribe-button', () => ({
@@ -278,9 +279,14 @@ describe('CalendarPage — draft schedule notice', () => {
     events: sampleEvents,
   }
 
+  // Relative to "today" so the fixture never silently expires (see
+  // docs/TESTING.md -> "Avoiding Test Rot").
+  const draftEventDate = isoDaysFromNow(300)
+  const draftEventYear = new Date(draftEventDate + 'T00:00:00').getFullYear()
+
   const draftEvent: Event = {
-    slug: 'winter-draft-2027',
-    date: '2027-01-10',
+    slug: 'winter-draft',
+    date: draftEventDate,
     name: 'Winter Draft',
     type: 'Brevet',
     distance: '200',
@@ -303,15 +309,25 @@ describe('CalendarPage — draft schedule notice', () => {
     render(<CalendarPage {...defaultProps} events={[...sampleEvents, draftEvent]} />)
     expect(
       screen.getByText(
-        'The 2027 schedule is a draft. Events and dates may change. Registration opens once the schedule is final.'
+        `The ${draftEventYear} schedule is a draft. Events and dates may change. Registration opens once the schedule is final.`
       )
     ).toBeInTheDocument()
   })
 
   it('uses the earliest year among multiple draft events', () => {
-    const earlierDraft: Event = { ...draftEvent, slug: 'earlier-draft', date: '2026-12-01' }
-    render(<CalendarPage {...defaultProps} events={[...sampleEvents, draftEvent, earlierDraft]} />)
-    expect(screen.getByText(/^The 2026 schedule is a draft\./)).toBeInTheDocument()
+    // 365+ days apart guarantees the two dates fall in different calendar
+    // years regardless of what "today" is when this test runs.
+    const laterDate = isoDaysFromNow(500)
+    const earlierDate = isoDaysFromNow(30)
+    const earlierYear = new Date(earlierDate + 'T00:00:00').getFullYear()
+    const laterDraft: Event = { ...draftEvent, slug: 'later-draft', date: laterDate }
+    const earlierDraft: Event = { ...draftEvent, slug: 'earlier-draft', date: earlierDate }
+
+    render(<CalendarPage {...defaultProps} events={[...sampleEvents, laterDraft, earlierDraft]} />)
+
+    expect(
+      screen.getByText(new RegExp(`^The ${earlierYear} schedule is a draft\\.`))
+    ).toBeInTheDocument()
   })
 
   it('shows the notice in grid view too', async () => {

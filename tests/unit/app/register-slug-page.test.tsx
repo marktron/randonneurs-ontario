@@ -5,6 +5,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import RegisterPage, * as registerPageModule from '@/app/register/[slug]/page'
+import { isoDaysFromNow } from '@/tests/utils/test-helpers'
 
 const mockGetEventBySlug = vi.fn()
 const mockGetRegisteredRiders = vi.fn().mockResolvedValue([])
@@ -121,7 +122,7 @@ const draftEvent = {
   id: 'evt-2',
   slug: 'winter-draft',
   name: 'Winter Draft',
-  date: '2031-01-10',
+  date: isoDaysFromNow(300),
   startTime: '08:00',
   startLocation: 'TBD',
   distance: 200,
@@ -155,9 +156,10 @@ describe('RegisterPage /register/[slug] — draft event', () => {
       )
     ).toBeInTheDocument()
     expect(screen.queryByTestId('register-cta')).not.toBeInTheDocument()
-    expect(
-      screen.getAllByText('Registration is not open yet for this draft event.').length
-    ).toBeGreaterThan(0)
+    // Both the mobile and desktop CTA sites render the closed message.
+    expect(screen.getAllByText('Registration is not open yet for this draft event.')).toHaveLength(
+      2
+    )
     expect(mockEventJsonLd).not.toHaveBeenCalled()
   })
 

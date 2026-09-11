@@ -248,10 +248,21 @@ export function EventCard({
               </a>
             </Button>
           )}
-          {!isCancelled && (
-            <Button variant="outline" size="sm" className="text-red-600 hover:text-red-600" asChild>
-              <Link href={`/register/${event.slug}`}>Register</Link>
+          {isDraft ? (
+            <Button variant="outline" size="sm" asChild>
+              <Link href={`/register/${event.slug}`}>Details</Link>
             </Button>
+          ) : (
+            !isCancelled && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-red-600 hover:text-red-600"
+                asChild
+              >
+                <Link href={`/register/${event.slug}`}>Register</Link>
+              </Button>
+            )
           )}
         </div>
       </div>

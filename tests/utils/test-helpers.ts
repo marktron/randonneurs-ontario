@@ -14,6 +14,16 @@ interface RiderListItem {
 }
 
 /**
+ * ISO date string (YYYY-MM-DD) `days` from today, in UTC. Use this instead of
+ * a hardcoded date literal in fixtures — a fixed future date silently expires
+ * and turns "upcoming" into "past" as the calendar advances (see
+ * docs/TESTING.md -> "Avoiding Test Rot").
+ */
+export function isoDaysFromNow(days: number): string {
+  return new Date(Date.now() + days * 86_400_000).toISOString().split('T')[0]
+}
+
+/**
  * Create a mock event for testing
  */
 export function createMockEvent(overrides?: Partial<Event>): Event {
