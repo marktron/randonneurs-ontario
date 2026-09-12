@@ -77,7 +77,6 @@ test.describe('Complete Registration Flow', () => {
     const success = page.getByTestId('registration-success')
     const matchDialog = page.locator('[role="dialog"]')
     const errorToast = page.getByTestId('registration-error').or(page.locator('.sonner-toast'))
-    const registerButton = form.getByRole('button', { name: 'Register' }) // Button re-enables on error
 
     // Wait for one of the meaningful outcomes (not the register button re-enabling, which happens on any outcome)
     await Promise.race([
@@ -135,7 +134,7 @@ test.describe('Complete Registration Flow', () => {
     expect(invalidInputs).toBeGreaterThan(0)
   })
 
-  test('registration form saves data to localStorage', async ({ page, context }) => {
+  test('registration form saves data to localStorage', async ({ page }) => {
     await page.goto('/calendar/toronto')
 
     const eventLink = page.locator('a[href^="/register/"]').first()
@@ -173,7 +172,6 @@ test.describe('Complete Registration Flow', () => {
     const success = page.getByTestId('registration-success')
     const matchDialog = page.locator('[role="dialog"]')
     const errorIndicator = page.getByTestId('registration-error').or(page.locator('.sonner-toast'))
-    const registerButton = form.getByRole('button', { name: 'Register' })
 
     // Wait for one of the meaningful outcomes
     await Promise.race([

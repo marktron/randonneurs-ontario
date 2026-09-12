@@ -14,22 +14,6 @@ import {
 } from '@/components/ui/table'
 import { ReportFilters } from '@/components/admin/report-filters'
 
-interface MembershipStats {
-  total_members: number
-  new_members: number
-  returning_members: number
-  prior_year_members: number
-}
-
-interface ParticipationStats {
-  unique_riders: number
-  total_finishes: number
-  total_dnf: number
-  total_dns: number
-  total_otl: number
-  total_km: number
-}
-
 interface EventStatRow {
   distance_bucket: string
   event_count: number

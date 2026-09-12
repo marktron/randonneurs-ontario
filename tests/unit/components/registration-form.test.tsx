@@ -32,11 +32,11 @@ vi.mock('@/components/rider-match-dialog', () => ({
   RiderMatchDialog: ({
     open,
     onSelect,
-    candidates,
+    _candidates,
   }: {
     open: boolean
     onSelect: (id: string | null) => void
-    candidates: unknown[]
+    _candidates: unknown[]
   }) => {
     if (!open) return null
     return (

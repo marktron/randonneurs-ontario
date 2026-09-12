@@ -1,9 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 // Mock supabase before imports
-const mockSingle = vi.fn()
-const mockEq = vi.fn()
-const mockSelect = vi.fn()
 const mockFrom = vi.fn()
 
 vi.mock('@/lib/supabase-server', () => ({
