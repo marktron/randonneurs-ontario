@@ -6,6 +6,7 @@ import { describe, it, expect } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import {
   EventCard,
+  EventList,
   distanceMedalColorClass,
   distanceMedalCellClass,
   distanceMedalDraftClass,
@@ -241,6 +242,47 @@ describe('EventCard', () => {
     })
   })
 
+  describe('registered', () => {
+    it('shows a Registered badge and a Details link instead of Register', () => {
+      render(<EventCard event={baseEvent} registered />)
+      expect(screen.getByText('Registered')).toBeInTheDocument()
+      expect(screen.getByRole('link', { name: 'Details' })).toBeInTheDocument()
+      expect(screen.queryByRole('link', { name: /^register$/i })).not.toBeInTheDocument()
+    })
+
+    it('links Details to the same registration page', () => {
+      render(<EventCard event={baseEvent} registered />)
+      expect(screen.getByRole('link', { name: 'Details' })).toHaveAttribute(
+        'href',
+        '/register/spring-200'
+      )
+    })
+
+    it('does not show the badge or swap the button when not registered', () => {
+      render(<EventCard event={baseEvent} />)
+      expect(screen.queryByText('Registered')).not.toBeInTheDocument()
+      expect(screen.getByRole('link', { name: /^register$/i })).toBeInTheDocument()
+    })
+
+    it('ignores the registered flag on cancelled events', () => {
+      render(<EventCard event={{ ...baseEvent, status: 'cancelled' }} registered />)
+      expect(screen.queryByText('Registered')).not.toBeInTheDocument()
+    })
+
+    it('ignores the registered flag on draft events', () => {
+      render(<EventCard event={{ ...baseEvent, status: 'draft' }} registered />)
+      expect(screen.queryByText('Registered')).not.toBeInTheDocument()
+      // Still shows the plain Details link a draft always gets.
+      expect(screen.getByRole('link', { name: 'Details' })).toBeInTheDocument()
+    })
+
+    it('keeps the Route button unchanged when registered', () => {
+      render(<EventCard event={baseEvent} registered />)
+      const link = screen.getByRole('link', { name: /route/i })
+      expect(link).toHaveAttribute('href', 'https://ridewithgps.com/routes/12345')
+    })
+  })
+
   describe('Route button', () => {
     it('links the Route button to the collection when only rwgpsCollectionId is set', () => {
       render(<EventCard event={{ ...baseEvent, rwgpsId: null, rwgpsCollectionId: '8387874' }} />)
@@ -252,5 +294,26 @@ describe('EventCard', () => {
       render(<EventCard event={{ ...baseEvent, rwgpsId: null, rwgpsCollectionId: null }} />)
       expect(screen.queryByRole('link', { name: 'Route' })).not.toBeInTheDocument()
     })
+  })
+})
+
+describe('EventList', () => {
+  const events: Event[] = [
+    { ...baseEvent, slug: 'spring-200', name: 'Spring 200' },
+    { ...baseEvent, slug: 'spring-300', name: 'Spring 300', distance: '300' },
+  ]
+
+  it('marks only the event whose slug is in registeredSlugs', () => {
+    render(<EventList events={events} registeredSlugs={new Set(['spring-300'])} />)
+    const badges = screen.getAllByText('Registered')
+    expect(badges).toHaveLength(1)
+
+    const heading300 = screen.getByRole('heading', { name: /spring 300/i })
+    expect(heading300.closest('h3')?.parentElement?.textContent).toContain('Registered')
+  })
+
+  it('marks no events when registeredSlugs is omitted', () => {
+    render(<EventList events={events} />)
+    expect(screen.queryByText('Registered')).not.toBeInTheDocument()
   })
 })

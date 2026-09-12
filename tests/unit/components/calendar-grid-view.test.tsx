@@ -481,3 +481,67 @@ describe('multi-day bars', () => {
     expect(screen.getByRole('heading', { name: 'May 2026' })).toBeInTheDocument()
   })
 })
+
+describe('registered marker', () => {
+  it('adds ", registered" to the aria-label and renders an icon for a registered event', () => {
+    const { container } = render(
+      <CalendarGridView
+        events={[sampleEvents[1]]}
+        registeredSlugs={new Set(['spring-200-2026-04-15'])}
+      />
+    )
+    const links = screen.getAllByRole('link', { name: /registered/i })
+    expect(links.length).toBeGreaterThan(0)
+    expect(links[0].getAttribute('aria-label')).toContain('registered')
+    expect(container.querySelector('a svg')).not.toBeNull()
+  })
+
+  it('leaves an unregistered event label and bar untouched', () => {
+    const { container } = render(
+      <CalendarGridView events={[sampleEvents[0]]} registeredSlugs={new Set(['some-other-slug'])} />
+    )
+    const labels = screen.getAllByRole('link').map((l) => l.getAttribute('aria-label'))
+    expect(labels.every((label) => !label?.includes('registered'))).toBe(true)
+    expect(container.querySelector('a svg')).toBeNull()
+  })
+
+  it('does not mark a cancelled event even if its slug is registered', () => {
+    const cancelled: Event = {
+      slug: 'spring-300-cancelled-fixture',
+      date: '2026-04-16',
+      name: 'Spring 300',
+      type: 'Brevet',
+      distance: '300',
+      startLocation: 'Park',
+      startTime: '06:00',
+      status: 'cancelled',
+      chapterName: 'Ottawa',
+    }
+    const { container } = render(
+      <CalendarGridView events={[cancelled]} registeredSlugs={new Set([cancelled.slug])} />
+    )
+    const labels = screen.getAllByRole('link').map((l) => l.getAttribute('aria-label'))
+    expect(labels.every((label) => !label?.includes('registered'))).toBe(true)
+    expect(container.querySelector('a svg')).toBeNull()
+  })
+
+  it('does not mark a draft event even if its slug is registered', () => {
+    const draftEvent: Event = {
+      slug: 'spring-200-draft-fixture',
+      date: '2026-04-15',
+      name: 'Spring 200',
+      type: 'Brevet',
+      distance: '200',
+      startLocation: 'Park',
+      startTime: '07:00',
+      status: 'draft',
+      chapterName: 'Toronto',
+    }
+    const { container } = render(
+      <CalendarGridView events={[draftEvent]} registeredSlugs={new Set([draftEvent.slug])} />
+    )
+    const labels = screen.getAllByRole('link').map((l) => l.getAttribute('aria-label'))
+    expect(labels.every((label) => !label?.includes('registered'))).toBe(true)
+    expect(container.querySelector('a svg')).toBeNull()
+  })
+})

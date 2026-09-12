@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { CheckIcon } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { devData } from '@/lib/dev-data'
@@ -124,14 +125,18 @@ export function EventCard({
   event,
   showDate = true,
   showBorder = true,
+  registered = false,
 }: {
   event: Event
   showDate?: boolean
   showBorder?: boolean
+  /** True when the visitor is registered for this event (upcoming rides only). */
+  registered?: boolean
 }) {
   const { dayOfWeek, shortDayOfWeek, month, monthShort, day } = formatDate(event.date)
   const isCancelled = event.status === 'cancelled'
   const isDraft = event.status === 'draft'
+  const isRegistered = registered && !isCancelled && !isDraft
 
   return (
     <article
@@ -198,6 +203,15 @@ export function EventCard({
               {event.distance} km
             </span>
           )}
+          {isRegistered && (
+            <Badge
+              variant="outline"
+              className="text-[10px] tracking-wider font-medium border-primary/30 text-primary bg-primary/5"
+            >
+              <CheckIcon className="size-3" aria-hidden />
+              Registered
+            </Badge>
+          )}
           {isDraft && (
             <span className="font-normal uppercase tracking-wider text-[9px] text-muted-foreground">
               Draft
@@ -249,7 +263,7 @@ export function EventCard({
               </a>
             </Button>
           )}
-          {isDraft ? (
+          {isDraft || isRegistered ? (
             <Button variant="outline" size="sm" asChild>
               <Link href={`/register/${event.slug}`}>Details</Link>
             </Button>
@@ -271,7 +285,14 @@ export function EventCard({
   )
 }
 
-export function EventList({ events }: { events: Event[] }) {
+export function EventList({
+  events,
+  registeredSlugs,
+}: {
+  events: Event[]
+  /** Slugs of events the visitor is registered for; drives the Registered badge. */
+  registeredSlugs?: Set<string>
+}) {
   // Group events by month
   const eventsByMonth = events.reduce(
     (acc, event) => {
@@ -305,6 +326,7 @@ export function EventList({ events }: { events: Event[] }) {
                   event={event}
                   showDate={showDate}
                   showBorder={showBorder}
+                  registered={registeredSlugs?.has(event.slug)}
                 />
               )
             })}
