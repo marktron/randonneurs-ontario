@@ -53,7 +53,7 @@ These rules exist because each was violated and shipped silently (see `docs/TEST
 - **Real-DB tests must be idempotent and order-independent.** Clean up by _every_ shared natural key, not just `id` (e.g. also by `email` — duplicates break lookups). Reset module-level/in-memory state (rate limiters, caches) between tests. Confirm by running the suite twice.
 - **A test must fail when the behavior it names breaks.** Assert the specific outcome; avoid assertions that pass for incidental reasons (a perpetually-skipped branch, a count that matches by coincidence).
 - **Bulk inserts must give every row the same keys, explicitly.** supabase-js normalizes a mixed-key `.insert([...])` to the union of columns and sends missing keys as NULL, silently bypassing column defaults (raw PostgREST rejects this with PGRST102). A bare `{...}` row next to one that sets `status` lands with `status: NULL`, not the default.
-- **Run local Supabase with the pinned CLI** (`npx supabase ...`, pinned in devDependencies to match CI). Resetting with a newer global CLI (≥2.106.0) drops the service_role bootstrap grants and every real-DB test fails with `42501 permission denied`.
+- **Run local Supabase with the pinned CLI** (`npx supabase ...`, pinned in devDependencies to match the `setup-cli` version in CI). CLI 2.106.0 dropped the service_role bootstrap grants on reset, and every real-DB test failed with `42501 permission denied`; 2.116.0 is verified fixed (versions between were not tested). Bump the devDependency and the CI pin together.
 
 ## Verification Commands
 
