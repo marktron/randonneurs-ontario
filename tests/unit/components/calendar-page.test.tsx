@@ -7,7 +7,16 @@ import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { CalendarPage } from '@/components/calendar-page'
 import type { Event } from '@/components/event-card'
+import type { MyUpcomingRide } from '@/lib/actions/my-rides'
+import type { ActionResult } from '@/types/actions'
 import { isoDaysFromNow } from '@/tests/utils/test-helpers'
+
+// Mock the registered-rides action so the hook never hits Supabase.
+const mockGetMyUpcomingRides = vi.fn<(email: string) => Promise<ActionResult<MyUpcomingRide[]>>>()
+mockGetMyUpcomingRides.mockResolvedValue({ success: true, data: [] })
+vi.mock('@/lib/actions/my-rides', () => ({
+  getMyUpcomingRides: (...args: unknown[]) => mockGetMyUpcomingRides(args[0] as string),
+}))
 
 // Mock dynamic import for CalendarSubscribeButton
 vi.mock('@/components/calendar-subscribe-button', () => ({
@@ -111,6 +120,8 @@ describe('CalendarPage', () => {
 
   beforeEach(() => {
     localStorage.clear()
+    mockGetMyUpcomingRides.mockClear()
+    mockGetMyUpcomingRides.mockResolvedValue({ success: true, data: [] })
   })
 
   it('shows the current season in the hero eyebrow', () => {
@@ -158,6 +169,32 @@ describe('CalendarPage', () => {
     expect(screen.getByText('Spring 200')).toBeInTheDocument()
     expect(screen.getByText('Spring 300')).toBeInTheDocument()
     expect(screen.getByText('Summer 600')).toBeInTheDocument()
+  })
+
+  it('shows the Registered badge in list view for an event the visitor is registered for', async () => {
+    localStorage.setItem('ro-registration', JSON.stringify({ email: 'rider@example.com' }))
+    mockGetMyUpcomingRides.mockResolvedValue({
+      success: true,
+      data: [
+        {
+          slug: 'spring-200-2026-04-20',
+          name: 'Spring 200',
+          date: '2026-04-20',
+          distance: 200,
+          startTime: '07:00',
+          startLocation: 'Park',
+          chapterName: 'Ottawa',
+        },
+      ],
+    })
+
+    render(<CalendarPage {...defaultProps} />)
+
+    await screen.findByText('Registered')
+    const heading = screen.getByRole('heading', { name: /spring 200/i })
+    expect(heading.closest('h3')?.parentElement?.textContent).toContain('Registered')
+    // Only the matching event is marked.
+    expect(screen.getAllByText('Registered')).toHaveLength(1)
   })
 
   it('switches to grid view when grid toggle is clicked', async () => {

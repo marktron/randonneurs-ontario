@@ -9,6 +9,7 @@ import { PageHero } from '@/components/page-hero'
 import { getCurrentSeasonLabel } from '@/lib/season'
 import { EventList, type Event } from '@/components/event-card'
 import { CalendarGridView } from '@/components/calendar-grid-view'
+import { useRegisteredSlugs } from '@/hooks/use-registered-slugs'
 import {
   Select,
   SelectContent,
@@ -116,6 +117,7 @@ export function CalendarPage({
   const router = useRouter()
   const [distanceFilter, setDistanceFilter] = useState<DistanceFilter>('all')
   const [view, setView] = useState<CalendarView>('list')
+  const registeredSlugs = useRegisteredSlugs()
 
   useEffect(() => {
     const saved = getSavedView()
@@ -226,12 +228,13 @@ export function CalendarPage({
           </p>
           {filteredEvents.length > 0 ? (
             view === 'list' ? (
-              <EventList events={filteredEvents} />
+              <EventList events={filteredEvents} registeredSlugs={registeredSlugs} />
             ) : (
               <CalendarGridView
                 events={filteredEvents}
                 printHeading={`Randonneurs Ontario · ${title ?? chapter}`}
                 printOmitChapter={chapterSlug !== 'all'}
+                registeredSlugs={registeredSlugs}
               />
             )
           ) : (

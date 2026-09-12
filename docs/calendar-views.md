@@ -105,6 +105,17 @@ Cancelled events stay visible in the public calendar (both list and grid views) 
 
 iCal subscribers see the cancellation propagate to their personal calendars as `STATUS:CANCELLED` — most calendar apps render this with strikethrough.
 
+## Registered marker
+
+Both public calendar views mark events the visitor is registered for, without requiring sign-in. Identity comes from the email in the same `ro-registration` localStorage record used by `MyRidesSection` and the registration forms (see `lib/registration-storage.ts`) — the `useRegisteredSlugs` hook (`hooks/use-registered-slugs.ts`) reads it on mount and, if present, calls the existing `getMyUpcomingRides(email)` server action unchanged, collecting the returned slugs into a `Set<string>`. No saved email means no lookup and an empty set; a failed or empty lookup also just leaves the set empty. Because `getMyUpcomingRides` only returns **upcoming, still-scheduled** registrations, past rides and events the rider cancelled out of are never marked.
+
+`CalendarPage` owns the hook call and passes the resulting `registeredSlugs` down to both views:
+
+- **List view** (`EventCard`/`EventList`): a registered event shows an outline `Badge` — check icon plus the word "Registered" — right after the distance chip in the title row, and its hover-revealed action swaps from the red "Register" button to a neutral outline "Details" link (both point at `/register/[slug]`; nothing changes about what page they land on).
+- **Grid view** (`CalendarGridView`): a registered event's bar (desktop) and detail row (mobile) get a small check icon inline before the name, and `eventLinkLabel` appends `, registered` to the link's aria-label (after the chapter, before any draft/cancelled state) so the marker isn't sighted-only.
+
+Cancelled and draft events are never marked as registered, even if their slug is technically in the set — a cancelled or draft event isn't something you're actually signed up to ride, so both `EventCard` and the grid's `EventBar`/mobile row gate the marker on `status === 'scheduled'`.
+
 ## View toggle
 
 A toggle group (List/Grid) appears in the toolbar alongside the distance filter and subscribe button. The toggle uses the `ToggleGroup` component from shadcn/ui with `outline` variant.
@@ -195,14 +206,15 @@ print:border-0 print:bg-transparent print:px-0 print:py-0` on the `Alert`,
 
 ## Key files
 
-| File                                                | Purpose                                                  |
-| --------------------------------------------------- | -------------------------------------------------------- |
-| `components/calendar-page.tsx`                      | Main calendar page component with view toggle and filter |
-| `components/calendar-grid-view.tsx`                 | Grid view component                                      |
-| `lib/calendar/event-spans.ts`                       | ACP-limit spans, week segments, and lane packing         |
-| `components/event-card.tsx`                         | List view components (EventCard, EventList)              |
-| `components/admin/event-filters.tsx`                | Admin List/Grid toggle                                   |
-| `lib/admin/map-event-for-grid.ts`                   | Admin row → `Event` adapter                              |
-| `tests/unit/components/calendar-page.test.tsx`      | Tests for view toggle, localStorage, and filtering       |
-| `tests/unit/components/calendar-grid-view.test.tsx` | Tests for grid view rendering                            |
-| `tests/unit/lib/calendar/event-spans.test.ts`       | Tests for span derivation, segments, and lane packing    |
+| File                                                | Purpose                                                     |
+| --------------------------------------------------- | ----------------------------------------------------------- |
+| `components/calendar-page.tsx`                      | Main calendar page component with view toggle and filter    |
+| `components/calendar-grid-view.tsx`                 | Grid view component                                         |
+| `lib/calendar/event-spans.ts`                       | ACP-limit spans, week segments, and lane packing            |
+| `components/event-card.tsx`                         | List view components (EventCard, EventList)                 |
+| `hooks/use-registered-slugs.ts`                     | Reads `ro-registration` email and looks up registered slugs |
+| `components/admin/event-filters.tsx`                | Admin List/Grid toggle                                      |
+| `lib/admin/map-event-for-grid.ts`                   | Admin row → `Event` adapter                                 |
+| `tests/unit/components/calendar-page.test.tsx`      | Tests for view toggle, localStorage, and filtering          |
+| `tests/unit/components/calendar-grid-view.test.tsx` | Tests for grid view rendering                               |
+| `tests/unit/lib/calendar/event-spans.test.ts`       | Tests for span derivation, segments, and lane packing       |

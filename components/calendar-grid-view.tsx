@@ -2,6 +2,7 @@
 
 import { useMemo } from 'react'
 import Link from 'next/link'
+import { CircleCheckIcon } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import {
   distanceMedalCellClass,
@@ -164,9 +165,10 @@ function formatDateLong(date: Date): string {
   })
 }
 
-function eventLinkLabel(event: Event, date: Date, spanDays = 1): string {
+function eventLinkLabel(event: Event, date: Date, spanDays = 1, registered = false): string {
   // Screen readers get the same draft/cancelled cue the chip gives sighted users.
   const state = event.status === 'draft' || event.status === 'cancelled' ? `, ${event.status}` : ''
+  const registeredPart = registered ? ', registered' : ''
   const time = formatTime(event.startTime)
   const timePart = time ? `, ${time}` : ''
   // Multi-day bars announce how long the ride runs and under what limit, so the
@@ -174,7 +176,7 @@ function eventLinkLabel(event: Event, date: Date, spanDays = 1): string {
   const limitLabel = getEventLimitLabel(event)
   const spanPart =
     spanDays > 1 ? `, ${spanDays} days${limitLabel ? ` (${limitLabel} limit)` : ''}` : ''
-  return `${event.name}, ${event.distance} km, ${formatDateLong(date)}${timePart}${spanPart}${event.chapterName ? `, ${event.chapterName}` : ''}${state}`
+  return `${event.name}, ${event.distance} km, ${formatDateLong(date)}${timePart}${spanPart}${event.chapterName ? `, ${event.chapterName}` : ''}${registeredPart}${state}`
 }
 
 interface CalendarGridViewProps {
@@ -187,6 +189,9 @@ interface CalendarGridViewProps {
   /** Hide each chip's chapter suffix in print. Set when the page is already
    *  scoped to one chapter, so paper doesn't repeat it on every ride. */
   printOmitChapter?: boolean
+  /** Slugs of events the visitor is registered for; drives the check icon
+   *  and aria-label suffix on scheduled, non-cancelled bars. */
+  registeredSlugs?: Set<string>
 }
 
 const defaultHrefFor = (event: Event) => `/register/${event.slug}`
@@ -196,6 +201,7 @@ export function CalendarGridView({
   hrefFor = defaultHrefFor,
   printHeading,
   printOmitChapter,
+  registeredSlugs,
 }: CalendarGridViewProps) {
   const grids = useMemo(() => buildMonthGrids(events), [events])
   const todayKey = useMemo(() => toDateKey(new Date()), [])
@@ -292,6 +298,7 @@ export function CalendarGridView({
                         segment={segment}
                         hrefFor={hrefFor}
                         printOmitChapter={printOmitChapter}
+                        registered={registeredSlugs?.has(segment.event.slug) ?? false}
                       />
                     </div>
                   ))}
@@ -372,11 +379,18 @@ export function CalendarGridView({
                       const dayAbbr = date.toLocaleDateString('en-US', { weekday: 'short' })
                       const isCancelled = event.status === 'cancelled'
                       const isDraft = event.status === 'draft'
+                      const isRegistered =
+                        (registeredSlugs?.has(event.slug) ?? false) && !isCancelled && !isDraft
                       return (
                         <Link
                           key={`${toDateKey(date)}-${ei}`}
                           href={hrefFor(event)}
-                          aria-label={eventLinkLabel(event, parseLocalDate(event.date), spanDays)}
+                          aria-label={eventLinkLabel(
+                            event,
+                            parseLocalDate(event.date),
+                            spanDays,
+                            isRegistered
+                          )}
                           className={`flex items-center gap-2 text-sm py-1.5 -mx-1 px-1 rounded ${
                             isCancelled ? 'opacity-60' : 'active:bg-muted/50'
                           }`}
@@ -389,6 +403,12 @@ export function CalendarGridView({
                               <span aria-hidden="true" className="mr-1 text-muted-foreground">
                                 ↵
                               </span>
+                            )}
+                            {isRegistered && (
+                              <CircleCheckIcon
+                                aria-hidden="true"
+                                className="inline-block size-3 mr-1 align-[-2px] shrink-0"
+                              />
                             )}
                             {event.name}
                             {isCancelled && (
@@ -433,13 +453,21 @@ interface EventBarProps {
   segment: EventSegment
   hrefFor: (event: Event) => string
   printOmitChapter?: boolean
+  registered?: boolean
 }
 
 /** One chip/bar in the desktop grid. Multi-day rides keep the same visual
  *  language; only the corners on a continuing side are flattened. */
-function EventBar({ event, segment, hrefFor, printOmitChapter }: EventBarProps) {
+function EventBar({
+  event,
+  segment,
+  hrefFor,
+  printOmitChapter,
+  registered = false,
+}: EventBarProps) {
   const isCancelled = event.status === 'cancelled'
   const isDraft = event.status === 'draft'
+  const isRegistered = registered && !isCancelled && !isDraft
   const medalCell = isCancelled || isDraft ? null : distanceMedalCellClass(event.distance)
   const medalDraft = isDraft ? distanceMedalDraftClass(event.distance) : null
   const { continuesBefore, continuesAfter, spanDays } = segment
@@ -449,7 +477,7 @@ function EventBar({ event, segment, hrefFor, printOmitChapter }: EventBarProps) 
   return (
     <Link
       href={hrefFor(event)}
-      aria-label={eventLinkLabel(event, parseLocalDate(event.date), spanDays)}
+      aria-label={eventLinkLabel(event, parseLocalDate(event.date), spanDays, isRegistered)}
       className="block"
     >
       <div
@@ -472,6 +500,12 @@ function EventBar({ event, segment, hrefFor, printOmitChapter }: EventBarProps) 
             <span aria-hidden="true" className="mr-1">
               ↵
             </span>
+          )}
+          {isRegistered && (
+            <CircleCheckIcon
+              aria-hidden="true"
+              className="inline-block size-3 mr-1 align-[-2px] shrink-0"
+            />
           )}
           {event.distance} km — {event.name}
           {isCancelled && (
