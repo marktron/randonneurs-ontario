@@ -1,5 +1,5 @@
 import { vi } from 'vitest'
-import '@testing-library/jest-dom'
+import '@testing-library/jest-dom/vitest'
 import { configure } from '@testing-library/react'
 
 // The shared CI runner is ~10x slower than a dev machine; testing-library's
@@ -8,15 +8,22 @@ import { configure } from '@testing-library/react'
 // 5000ms vitest testTimeout.
 configure({ asyncUtilTimeout: 3000 })
 
+// Telemetry is an external boundary. Loading the Next.js SDK in a DOM test
+// also loads its Node-only bundler instrumentation, which requires file URLs.
+vi.mock('@sentry/nextjs', () => ({
+  captureException: vi.fn(),
+  captureMessage: vi.fn(),
+}))
+
 // Polyfill missing DOM APIs for happy-dom compatibility with Radix UI
 if (typeof Element !== 'undefined' && !Element.prototype.hasPointerCapture) {
-  Element.prototype.hasPointerCapture = function (pointerId: number): boolean {
+  Element.prototype.hasPointerCapture = function (_pointerId: number): boolean {
     return false
   }
-  Element.prototype.setPointerCapture = function (pointerId: number): void {
+  Element.prototype.setPointerCapture = function (_pointerId: number): void {
     // No-op
   }
-  Element.prototype.releasePointerCapture = function (pointerId: number): void {
+  Element.prototype.releasePointerCapture = function (_pointerId: number): void {
     // No-op
   }
 }

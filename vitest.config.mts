@@ -17,6 +17,11 @@ export default defineConfig({
     // Use node environment for unit/integration tests (no DOM needed for server actions)
     // Component tests can override with // @vitest-environment happy-dom
     environment: 'node',
+    environmentOptions: {
+      happyDOM: {
+        settings: { disableIframePageLoading: true },
+      },
+    },
     // Timeout for each test (ms) - prevents hanging tests
     testTimeout: 5000,
     // Hook timeout
@@ -41,7 +46,7 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      '@': path.resolve(__dirname, './'),
+      '@': path.resolve(import.meta.dirname, './'),
     },
   },
 })
