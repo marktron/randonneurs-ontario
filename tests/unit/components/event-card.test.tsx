@@ -50,22 +50,22 @@ describe('distanceMedalColorClass', () => {
 describe('distanceMedalDraftClass', () => {
   it('returns a dashed medal-coloured border, faint tint and medal text for each medal distance', () => {
     expect(distanceMedalDraftClass('200')).toBe(
-      'border-dashed border-yellow-600/60 bg-yellow-600/10 text-yellow-800 dark:text-yellow-300'
+      'border-dashed border-yellow-600/60 bg-yellow-600/10 text-yellow-800 dark:text-yellow-300 print:bg-transparent'
     )
     expect(distanceMedalDraftClass('300')).toBe(
-      'border-dashed border-lime-600/60 bg-lime-600/10 text-lime-800 dark:text-lime-300'
+      'border-dashed border-lime-600/60 bg-lime-600/10 text-lime-800 dark:text-lime-300 print:bg-transparent'
     )
     expect(distanceMedalDraftClass('400')).toBe(
-      'border-dashed border-purple-600/60 bg-purple-600/10 text-purple-800 dark:text-purple-300'
+      'border-dashed border-purple-600/60 bg-purple-600/10 text-purple-800 dark:text-purple-300 print:bg-transparent'
     )
     expect(distanceMedalDraftClass('600')).toBe(
-      'border-dashed border-orange-600/60 bg-orange-600/10 text-orange-800 dark:text-orange-300'
+      'border-dashed border-orange-600/60 bg-orange-600/10 text-orange-800 dark:text-orange-300 print:bg-transparent'
     )
   })
 
   it('treats any distance of 1000 km or more as the 1000+ tint', () => {
     expect(distanceMedalDraftClass('1000')).toBe(
-      'border-dashed border-neutral-900/60 bg-neutral-900/10 text-neutral-900 dark:border-neutral-100/60 dark:bg-neutral-100/10 dark:text-neutral-100'
+      'border-dashed border-neutral-900/60 bg-neutral-900/10 text-neutral-900 dark:border-neutral-100/60 dark:bg-neutral-100/10 dark:text-neutral-100 print:bg-transparent'
     )
     expect(distanceMedalDraftClass('1200')).toBe(distanceMedalDraftClass('1000'))
   })
@@ -79,21 +79,42 @@ describe('distanceMedalDraftClass', () => {
 
 describe('distanceMedalCellClass', () => {
   it('returns a solid medal background with light text for each medal distance', () => {
-    expect(distanceMedalCellClass('200')).toBe('bg-yellow-600 text-white')
-    expect(distanceMedalCellClass('300')).toBe('bg-lime-600 text-white')
-    expect(distanceMedalCellClass('400')).toBe('bg-purple-600 text-white')
-    expect(distanceMedalCellClass('600')).toBe('bg-orange-600 text-white')
+    expect(distanceMedalCellClass('200')).toBe(
+      'bg-yellow-600 text-white print:bg-transparent print:border-yellow-700 print:text-yellow-800'
+    )
+    expect(distanceMedalCellClass('300')).toBe(
+      'bg-lime-600 text-white print:bg-transparent print:border-lime-700 print:text-lime-800'
+    )
+    expect(distanceMedalCellClass('400')).toBe(
+      'bg-purple-600 text-white print:bg-transparent print:border-purple-700 print:text-purple-800'
+    )
+    expect(distanceMedalCellClass('600')).toBe(
+      'bg-orange-600 text-white print:bg-transparent print:border-orange-700 print:text-orange-800'
+    )
   })
 
   it('treats any distance of 1000 km or more as the 1000+ background', () => {
-    expect(distanceMedalCellClass('1000')).toBe('bg-neutral-900 text-white')
-    expect(distanceMedalCellClass('1200')).toBe('bg-neutral-900 text-white')
+    expect(distanceMedalCellClass('1000')).toBe(
+      'bg-neutral-900 text-white print:bg-transparent print:border-neutral-900 print:text-neutral-900'
+    )
+    expect(distanceMedalCellClass('1200')).toBe(distanceMedalCellClass('1000'))
   })
 
   it('returns null for populaires and non-standard distances', () => {
     expect(distanceMedalCellClass('100')).toBeNull()
     expect(distanceMedalCellClass('500')).toBeNull()
     expect(distanceMedalCellClass('not-a-number')).toBeNull()
+  })
+
+  it('renders as a white chip with a solid medal-coloured border and text in print', () => {
+    // Verified for 200 and 1000+ per the print design: on paper the fill drops
+    // out and the medal colour carries in the border and text instead.
+    expect(distanceMedalCellClass('200')).toContain('print:bg-transparent')
+    expect(distanceMedalCellClass('200')).toContain('print:border-yellow-700')
+    expect(distanceMedalCellClass('200')).toContain('print:text-yellow-800')
+    expect(distanceMedalCellClass('1000')).toContain('print:bg-transparent')
+    expect(distanceMedalCellClass('1000')).toContain('print:border-neutral-900')
+    expect(distanceMedalCellClass('1000')).toContain('print:text-neutral-900')
   })
 })
 

@@ -85,13 +85,13 @@ helpers in `components/event-card.tsx` provide the classes:
   with a solid medal background and rendered with light (white) text. This applies
   to both the desktop cell and the mobile distance badge.
 
-| Distance | Text (list)   | Cell background (grid) |
-| -------- | ------------- | ---------------------- |
-| 200 km   | `yellow-600`  | `bg-yellow-600`        |
-| 300 km   | `lime-600`    | `bg-lime-600`          |
-| 400 km   | `purple-600`  | `bg-purple-600`        |
-| 600 km   | `orange-600`  | `bg-orange-600`        |
-| 1000 km+ | `neutral-900` | `bg-neutral-900`       |
+| Distance | Text (list)   | Cell background (grid) | Print border/text (grid)                  |
+| -------- | ------------- | ---------------------- | ----------------------------------------- |
+| 200 km   | `yellow-600`  | `bg-yellow-600`        | `border-yellow-700` / `text-yellow-800`   |
+| 300 km   | `lime-600`    | `bg-lime-600`          | `border-lime-700` / `text-lime-800`       |
+| 400 km   | `purple-600`  | `bg-purple-600`        | `border-purple-700` / `text-purple-800`   |
+| 600 km   | `orange-600`  | `bg-orange-600`        | `border-orange-700` / `text-orange-800`   |
+| 1000 km+ | `neutral-900` | `bg-neutral-900`       | `border-neutral-900` / `text-neutral-900` |
 
 Populaires (under 200 km) and any non-standard distance keep the default muted
 styling in both views. Cancelled events are never given a medal background — they
@@ -128,6 +128,70 @@ Draft cells keep the medal hue of their distance but never the solid fill: `dist
 The public list view (`EventCard`) matches this treatment: the distance badge uses `distanceMedalDraftClass` with a small uppercase "Draft" label beside it, and — unlike cancelled rows — the card is not dimmed, since a draft is a real plan rather than a dead event. Instead of the red "Register" button, draft rows show a plain outline "Details" link to the event page.
 
 When a page has any draft events (public calendar only, and only with the preview flag on), `CalendarPage` renders a dashed-border notice between the hero and the filters, in both list and grid views: "The {year} schedule is a draft. Events and dates may change. Registration opens once the schedule is final." `{year}` is the earliest calendar year among the page's draft events, computed from the full event list so it doesn't change as the distance filter is applied.
+
+## Printing
+
+Grid view is the print target; list view has no dedicated print styling.
+
+- **Layout.** Print targets the browser's default sheet (portrait letter
+  with the browser's own margins). There is deliberately no `@page size`
+  rule: Safari ignores one, and in Chrome a named landscape page forces the
+  sheet to landscape while the `orientation` media query still reports the
+  dialog's (portrait) choice, so row heights and sheet shape disagree. The
+  grid root carries `.calendar-grid-print` purely as a hook. The content
+  container drops its max-width and padding in print so the grid uses the
+  full sheet.
+- **One month per sheet.** Each month `<section>` forces a page break before
+  it (`print:break-before-page`), except the first, which starts on the
+  current page (`first:print:break-before-auto`). Each week row is
+  `print:break-inside-avoid` so a week never splits across a page break, and
+  the weekday-name header row is `print:break-after-avoid` so it can't be
+  orphaned from the first week.
+- **Chrome hidden.** `Navbar`, `Footer`, and `PageHero` are `print:hidden`.
+  The controls row (view toggle, chapter/distance selects, subscribe button)
+  in `CalendarPage` is also `print:hidden`. The draft-schedule `Alert`, if
+  present, stays visible but drops its box in print — `print:mb-1
+print:border-0 print:bg-transparent print:px-0 print:py-0` on the `Alert`,
+  plus `print:text-xs` on its `AlertDescription` (needed because
+  `AlertDescription`'s own `text-sm` would otherwise win) — so it prints as a
+  single quiet line above the month heading.
+- **Desktop grid forced on.** The mobile compact grid is `print:hidden` and
+  the desktop 7-column grid is `print:block`, so printing from a phone still
+  produces the full desktop layout.
+- **Print heading.** `CalendarGridView` accepts an optional `printHeading`
+  prop; when set, it renders as a small uppercase line above each month's
+  `<h2>`, visible only in print (`hidden print:block`). `CalendarPage` passes
+  `` `Randonneurs Ontario · ${title ?? chapter}` `` (the month heading already
+  carries the year) so a
+  printed page identifies itself without the (now-hidden) page hero.
+- **Outline chips.** On paper, event chips drop their solid medal-coloured
+  fill for a white background with a solid medal-coloured border and text —
+  `distanceMedalCellClass` and `distanceMedalDraftClass` in
+  `components/event-card.tsx` append `print:*` variants for this (see
+  "Distance colour coding" above for the exact classes). Cancelled chips add
+  `print:line-through`; neutral (populaire, cancelled) chips get a
+  `print:border-neutral-400` outline in place of their grey fill. Chip text
+  drops to 10px and wraps instead of truncating in print
+  (`print:whitespace-normal`), since a truncated ride name on paper is
+  useless.
+- **No today marker.** The desktop grid's current-day highlight is reset in
+  print (`print:font-normal print:text-muted-foreground`); a printout is
+  read for weeks, so a fixed "today" would only mislead.
+- **Density.** Week rows shrink to `print:min-h-[3.5rem]`, chip and lane
+  padding tighten, and the month header is compact. A month with several
+  five-lane weeks can still exceed one sheet; when it does, whole weeks move
+  to the next page rather than being clipped or shrunk. Week rows are
+  `print:min-h-[6rem]` so a portrait sheet fills out; if the user picks
+  landscape in the print dialog, `print:landscape:min-h-[3.5rem]` (Tailwind's
+  `landscape:` orientation variant stacked under `print:`) tightens them so a
+  busy month still fits one sheet.
+- **Chapter suffix.** `CalendarGridView` accepts an optional
+  `printOmitChapter` prop; when set, each chip's ` · {chapterName}` suffix is
+  wrapped in a `print:hidden` span (screen display is unchanged).
+  `CalendarPage` passes `printOmitChapter={chapterSlug !== 'all'}`, since a
+  single-chapter printout doesn't need every ride to repeat the chapter it's
+  already scoped to; the all-chapters calendar keeps the suffix so rides stay
+  distinguishable on paper.
 
 ## Key files
 

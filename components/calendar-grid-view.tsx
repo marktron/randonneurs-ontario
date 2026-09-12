@@ -181,33 +181,52 @@ interface CalendarGridViewProps {
   events: Event[]
   /** Builds each event's link. Defaults to the public registration page. */
   hrefFor?: (event: Event) => string
+  /** Print-only label shown above each month's heading, e.g. the club and
+   *  chapter name. Omitted entirely (not just hidden) when not provided. */
+  printHeading?: string
+  /** Hide each chip's chapter suffix in print. Set when the page is already
+   *  scoped to one chapter, so paper doesn't repeat it on every ride. */
+  printOmitChapter?: boolean
 }
 
 const defaultHrefFor = (event: Event) => `/register/${event.slug}`
 
-export function CalendarGridView({ events, hrefFor = defaultHrefFor }: CalendarGridViewProps) {
+export function CalendarGridView({
+  events,
+  hrefFor = defaultHrefFor,
+  printHeading,
+  printOmitChapter,
+}: CalendarGridViewProps) {
   const grids = useMemo(() => buildMonthGrids(events), [events])
   const todayKey = useMemo(() => toDateKey(new Date()), [])
 
   return (
-    <div className="space-y-12 sm:space-y-16">
+    <div className="space-y-12 sm:space-y-16 calendar-grid-print print:space-y-0">
       {grids.map((grid) => (
-        <section key={`${grid.year}-${grid.month}`}>
-          <header className="mb-4">
-            <h2 className="font-serif text-2xl tracking-tight">{grid.label}</h2>
+        <section
+          key={`${grid.year}-${grid.month}`}
+          className="print:break-before-page first:print:break-before-auto"
+        >
+          <header className="mb-4 print:mb-1">
+            {printHeading && (
+              <p className="hidden print:block text-[10px] font-medium tracking-[0.15em] uppercase text-muted-foreground mb-1">
+                {printHeading}
+              </p>
+            )}
+            <h2 className="font-serif text-2xl tracking-tight print:text-3xl">{grid.label}</h2>
           </header>
 
           {/* Desktop grid: one CSS grid per week so multi-day rides can span columns.
               No ARIA grid role: spanning bars can't map onto a 7-cell row model and
               there is no arrow-key navigation, so each bar's link label carries the
               full date instead. */}
-          <div className="hidden sm:block">
-            <div className="grid grid-cols-7 border-b border-border/60">
+          <div className="hidden sm:block print:block">
+            <div className="grid grid-cols-7 border-b border-border/60 print:break-after-avoid">
               {DAYS_OF_WEEK.map((day) => (
                 <div
                   key={day}
                   aria-hidden="true"
-                  className="py-2 text-center text-[11px] font-medium tracking-[0.15em] text-muted-foreground uppercase"
+                  className="py-2 print:py-1 text-center text-[11px] font-medium tracking-[0.15em] text-muted-foreground uppercase"
                 >
                   {day}
                 </div>
@@ -218,7 +237,10 @@ export function CalendarGridView({ events, hrefFor = defaultHrefFor }: CalendarG
               return (
                 <div
                   key={wi}
-                  className="grid grid-cols-7 min-h-[5.5rem] border-b border-border/40"
+                  // Print targets the browser's default portrait sheet, which has
+                  // height to spare. If the user picks landscape in the print
+                  // dialog, rows tighten so a busy month still fits one sheet.
+                  className="grid grid-cols-7 min-h-[5.5rem] border-b border-border/40 print:min-h-[6rem] print:landscape:min-h-[3.5rem] print:break-inside-avoid"
                   style={{
                     // A trailing 1fr row lets the day cells (which span every
                     // row) fill the week's minimum height.
@@ -242,7 +264,10 @@ export function CalendarGridView({ events, hrefFor = defaultHrefFor }: CalendarG
                         {date && (
                           <div
                             className={`px-1.5 pt-1 text-sm leading-tight tabular-nums ${
-                              isToday ? 'font-semibold text-primary' : 'text-muted-foreground'
+                              isToday
+                                ? // Paper doesn't stay current, so the today marker is screen-only.
+                                  'font-semibold text-primary print:font-normal print:text-muted-foreground'
+                                : 'text-muted-foreground'
                             }`}
                           >
                             {date.getDate()}
@@ -260,9 +285,14 @@ export function CalendarGridView({ events, hrefFor = defaultHrefFor }: CalendarG
                         gridColumn: `${segment.colStart + 1} / span ${segment.colSpan}`,
                         gridRow: lane + 2,
                       }}
-                      className="min-w-0 px-1 pb-1"
+                      className="min-w-0 px-1 pb-1 print:pb-0.5"
                     >
-                      <EventBar event={segment.event} segment={segment} hrefFor={hrefFor} />
+                      <EventBar
+                        event={segment.event}
+                        segment={segment}
+                        hrefFor={hrefFor}
+                        printOmitChapter={printOmitChapter}
+                      />
                     </div>
                   ))}
                 </div>
@@ -271,7 +301,7 @@ export function CalendarGridView({ events, hrefFor = defaultHrefFor }: CalendarG
           </div>
 
           {/* Mobile: compact week rows with event dots */}
-          <div className="sm:hidden">
+          <div className="sm:hidden print:hidden">
             <div className="grid grid-cols-7 border-b border-border/60">
               {DAYS_OF_WEEK.map((day) => (
                 <div
@@ -402,11 +432,12 @@ interface EventBarProps {
   event: Event
   segment: EventSegment
   hrefFor: (event: Event) => string
+  printOmitChapter?: boolean
 }
 
 /** One chip/bar in the desktop grid. Multi-day rides keep the same visual
  *  language; only the corners on a continuing side are flattened. */
-function EventBar({ event, segment, hrefFor }: EventBarProps) {
+function EventBar({ event, segment, hrefFor, printOmitChapter }: EventBarProps) {
   const isCancelled = event.status === 'cancelled'
   const isDraft = event.status === 'draft'
   const medalCell = isCancelled || isDraft ? null : distanceMedalCellClass(event.distance)
@@ -422,21 +453,21 @@ function EventBar({ event, segment, hrefFor }: EventBarProps) {
       className="block"
     >
       <div
-        className={`rounded px-1.5 py-1 text-[11px] leading-tight border ${
+        className={`rounded px-1.5 py-1 text-[11px] leading-tight border print:py-0.5 print:text-[10px] ${
           continuesBefore ? 'rounded-l-none' : ''
         } ${continuesAfter ? 'rounded-r-none' : ''} ${
           isCancelled
-            ? 'border-border/40 bg-muted/40 opacity-60'
+            ? 'border-border/40 bg-muted/40 opacity-60 print:bg-transparent print:border-neutral-400 print:line-through'
             : isDraft
               ? medalDraft
                 ? `${medalDraft} hover:opacity-80 transition-opacity`
                 : 'border-dashed border-border bg-background text-muted-foreground hover:bg-muted/50 transition-colors'
               : medalCell
                 ? `border-transparent ${medalCell} hover:opacity-90 transition-opacity`
-                : 'border-border/40 bg-muted/70 hover:bg-muted transition-colors'
+                : 'border-border/40 bg-muted/70 hover:bg-muted transition-colors print:bg-transparent print:border-neutral-400'
         }`}
       >
-        <div className="font-medium truncate">
+        <div className="font-medium truncate print:whitespace-normal">
           {continuesBefore && (
             <span aria-hidden="true" className="mr-1">
               ↵
@@ -451,13 +482,21 @@ function EventBar({ event, segment, hrefFor }: EventBarProps) {
           )}
         </div>
         <div
-          className={`mt-0.5 truncate ${
-            medalCell ? 'text-white/80' : medalDraft ? 'opacity-80' : 'text-muted-foreground'
+          className={`mt-0.5 truncate print:whitespace-normal ${
+            medalCell
+              ? 'text-white/80 print:text-inherit print:opacity-80'
+              : medalDraft
+                ? 'opacity-80'
+                : 'text-muted-foreground'
           }`}
         >
           {time}
           {limitLabel && `${time ? ' · ' : ''}${limitLabel} limit`}
-          {event.chapterName && ` · ${event.chapterName}`}
+          {event.chapterName && (
+            <span className={printOmitChapter ? 'print:hidden' : undefined}>
+              {` · ${event.chapterName}`}
+            </span>
+          )}
         </div>
       </div>
     </Link>

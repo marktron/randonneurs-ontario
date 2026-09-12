@@ -110,6 +110,91 @@ describe('CalendarGridView', () => {
   })
 })
 
+describe('print layout', () => {
+  it('marks the grid root with the print hook class', () => {
+    const { container } = render(<CalendarGridView events={sampleEvents} />)
+    expect(container.querySelector('.calendar-grid-print')).not.toBeNull()
+  })
+
+  it('forces the desktop grid visible and hides the mobile grid in print', () => {
+    const { container } = render(<CalendarGridView events={sampleEvents} />)
+    const desktop = container.querySelector('.hidden.sm\\:block')
+    const mobile = container.querySelector('.sm\\:hidden')
+    expect(desktop?.className).toContain('print:block')
+    expect(mobile?.className).toContain('print:hidden')
+  })
+
+  it('renders the printHeading once per month section when provided', () => {
+    render(
+      <CalendarGridView
+        events={sampleEvents}
+        printHeading="Randonneurs Ontario · Toronto · 2026 season"
+      />
+    )
+
+    // Two months in the fixture (April and May), so the heading appears twice.
+    expect(screen.getAllByText('Randonneurs Ontario · Toronto · 2026 season')).toHaveLength(2)
+  })
+
+  it('omits the printHeading entirely when not provided', () => {
+    const { container } = render(<CalendarGridView events={sampleEvents} />)
+    expect(container.querySelector('header p')).toBeNull()
+  })
+
+  it('prints tall week rows by default and compact rows only on landscape sheets', () => {
+    const { container } = render(<CalendarGridView events={sampleEvents} />)
+    const weekRow = container.querySelector('[class*="print:break-inside-avoid"]')
+    expect(weekRow?.className).toContain('print:min-h-[6rem]')
+    expect(weekRow?.className).toContain('print:landscape:min-h-[3.5rem]')
+    expect(weekRow?.className).not.toContain('portrait')
+  })
+
+  it('gives a 200 km scheduled chip an outline print style', () => {
+    const { container } = render(<CalendarGridView events={[sampleEvents[1]]} />)
+    const chip = container.querySelector('.bg-yellow-600')
+    expect(chip?.className).toContain('print:bg-transparent')
+    expect(chip?.className).toContain('print:border-yellow-700')
+  })
+
+  it('drops the today highlight in print, since paper does not stay current', () => {
+    const now = new Date()
+    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+    const { container } = render(
+      <CalendarGridView events={[{ ...sampleEvents[0], slug: 'today-fixture', date: today }]} />
+    )
+    const desktop = container.querySelector('.sm\\:block')
+    const todayCell = desktop?.querySelector('[aria-current="date"]')
+    expect(todayCell).not.toBeNull()
+    const dayNumber = todayCell?.firstElementChild
+    expect(dayNumber?.className).toContain('text-primary')
+    expect(dayNumber?.className).toContain('print:text-muted-foreground')
+    expect(dayNumber?.className).toContain('print:font-normal')
+  })
+})
+
+describe('printOmitChapter', () => {
+  it('hides the chapter suffix in print when set, but keeps it on screen', () => {
+    const { container } = render(<CalendarGridView events={[sampleEvents[1]]} printOmitChapter />)
+    const chip = container.querySelector('.bg-yellow-600') as HTMLElement
+    const chapterSpan = Array.from(chip.querySelectorAll('span')).find((el) =>
+      el.textContent?.includes('Ottawa')
+    )
+    expect(chapterSpan).toBeTruthy()
+    expect(chapterSpan?.textContent).toContain('Ottawa')
+    expect(chapterSpan?.className).toContain('print:hidden')
+  })
+
+  it('leaves the chapter suffix visible in print when not set', () => {
+    const { container } = render(<CalendarGridView events={[sampleEvents[1]]} />)
+    const chip = container.querySelector('.bg-yellow-600') as HTMLElement
+    const chapterSpan = Array.from(chip.querySelectorAll('span')).find((el) =>
+      el.textContent?.includes('Ottawa')
+    )
+    expect(chapterSpan).toBeTruthy()
+    expect(chapterSpan?.className).not.toContain('print:hidden')
+  })
+})
+
 describe('cancelled events', () => {
   it('renders a navigation link for cancelled events so visitors can read the announcement', () => {
     const events: Event[] = [

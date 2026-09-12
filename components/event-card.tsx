@@ -70,16 +70,17 @@ export function distanceMedalColorClass(distance: string): string | null {
 export function distanceMedalCellClass(distance: string): string | null {
   const km = parseInt(distance, 10)
   if (Number.isNaN(km)) return null
-  if (km >= 1000) return 'bg-neutral-900 text-white'
+  if (km >= 1000)
+    return 'bg-neutral-900 text-white print:bg-transparent print:border-neutral-900 print:text-neutral-900'
   switch (km) {
     case 200:
-      return 'bg-yellow-600 text-white'
+      return 'bg-yellow-600 text-white print:bg-transparent print:border-yellow-700 print:text-yellow-800'
     case 300:
-      return 'bg-lime-600 text-white'
+      return 'bg-lime-600 text-white print:bg-transparent print:border-lime-700 print:text-lime-800'
     case 400:
-      return 'bg-purple-600 text-white'
+      return 'bg-purple-600 text-white print:bg-transparent print:border-purple-700 print:text-purple-800'
     case 600:
-      return 'bg-orange-600 text-white'
+      return 'bg-orange-600 text-white print:bg-transparent print:border-orange-700 print:text-orange-800'
     default:
       return null
   }
@@ -96,16 +97,16 @@ export function distanceMedalDraftClass(distance: string): string | null {
   const km = parseInt(distance, 10)
   if (Number.isNaN(km)) return null
   if (km >= 1000)
-    return 'border-dashed border-neutral-900/60 bg-neutral-900/10 text-neutral-900 dark:border-neutral-100/60 dark:bg-neutral-100/10 dark:text-neutral-100'
+    return 'border-dashed border-neutral-900/60 bg-neutral-900/10 text-neutral-900 dark:border-neutral-100/60 dark:bg-neutral-100/10 dark:text-neutral-100 print:bg-transparent'
   switch (km) {
     case 200:
-      return 'border-dashed border-yellow-600/60 bg-yellow-600/10 text-yellow-800 dark:text-yellow-300'
+      return 'border-dashed border-yellow-600/60 bg-yellow-600/10 text-yellow-800 dark:text-yellow-300 print:bg-transparent'
     case 300:
-      return 'border-dashed border-lime-600/60 bg-lime-600/10 text-lime-800 dark:text-lime-300'
+      return 'border-dashed border-lime-600/60 bg-lime-600/10 text-lime-800 dark:text-lime-300 print:bg-transparent'
     case 400:
-      return 'border-dashed border-purple-600/60 bg-purple-600/10 text-purple-800 dark:text-purple-300'
+      return 'border-dashed border-purple-600/60 bg-purple-600/10 text-purple-800 dark:text-purple-300 print:bg-transparent'
     case 600:
-      return 'border-dashed border-orange-600/60 bg-orange-600/10 text-orange-800 dark:text-orange-300'
+      return 'border-dashed border-orange-600/60 bg-orange-600/10 text-orange-800 dark:text-orange-300 print:bg-transparent'
     default:
       return null
   }

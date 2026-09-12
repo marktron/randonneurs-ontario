@@ -269,6 +269,57 @@ describe('CalendarPage', () => {
     expect(screen.getAllByText(/Spring 200/).length).toBeGreaterThan(0)
     expect(screen.queryAllByText(/Spring 100/)).toHaveLength(0)
   })
+
+  it('hides the view/filter controls row in print', () => {
+    const { container } = render(<CalendarPage {...defaultProps} />)
+    const controlsRow = screen
+      .getByRole('radiogroup', { name: 'Calendar view' })
+      .closest('div.mb-8')
+    expect(controlsRow?.className).toContain('print:hidden')
+    // Sanity: the row we found is the one the test intends to check.
+    expect(container.querySelector('.print\\:hidden.mb-8')).not.toBeNull()
+  })
+
+  it('omits the chapter suffix in print when scoped to a single chapter', async () => {
+    const user = userEvent.setup()
+    const { container } = render(<CalendarPage {...defaultProps} chapterSlug="toronto" />)
+
+    await user.click(screen.getByRole('radio', { name: 'Grid view' }))
+
+    const chip = container.querySelector('.bg-yellow-600') as HTMLElement
+    const chapterSpan = Array.from(chip.querySelectorAll('span')).find((el) =>
+      el.textContent?.includes('Ottawa')
+    )
+    expect(chapterSpan?.className).toContain('print:hidden')
+  })
+
+  it('keeps the chapter suffix visible in print for the all-chapters calendar', async () => {
+    const user = userEvent.setup()
+    const { container } = render(<CalendarPage {...defaultProps} chapterSlug="all" />)
+
+    await user.click(screen.getByRole('radio', { name: 'Grid view' }))
+
+    const chip = container.querySelector('.bg-yellow-600') as HTMLElement
+    const chapterSpan = Array.from(chip.querySelectorAll('span')).find((el) =>
+      el.textContent?.includes('Ottawa')
+    )
+    expect(chapterSpan?.className).not.toContain('print:hidden')
+  })
+
+  it('passes a print heading containing the chapter title to the grid view', async () => {
+    const user = userEvent.setup()
+    const { container } = render(
+      <CalendarPage {...defaultProps} title="Toronto Chapter Ride Calendar" />
+    )
+
+    await user.click(screen.getByRole('radio', { name: 'Grid view' }))
+
+    expect(
+      Array.from(container.querySelectorAll('p')).some((p) =>
+        p.textContent?.includes('Toronto Chapter Ride Calendar')
+      )
+    ).toBe(true)
+  })
 })
 
 describe('CalendarPage — draft schedule notice', () => {
@@ -337,5 +388,12 @@ describe('CalendarPage — draft schedule notice', () => {
     await user.click(screen.getByRole('radio', { name: 'Grid view' }))
 
     expect(screen.getByText(/schedule is a draft/)).toBeInTheDocument()
+  })
+
+  it('shrinks the draft notice text for print', () => {
+    render(<CalendarPage {...defaultProps} events={[...sampleEvents, draftEvent]} />)
+
+    const notice = screen.getByText(/schedule is a draft/)
+    expect(notice.className).toContain('print:text-xs')
   })
 })

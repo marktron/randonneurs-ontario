@@ -26,7 +26,7 @@ export function PageHero({ image, eyebrow, title, description, editorial }: Page
       title.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) % HERO_IMAGES.length
     ]
   return (
-    <div className="relative border-b border-border overflow-hidden">
+    <div className="relative border-b border-border overflow-hidden print:hidden">
       <Image src={resolvedImage} alt="" fill className="object-cover editorial-image" priority />
       <div className="absolute inset-0 bg-gradient-to-t from-neutral-900/70 to-neutral-900/20" />
       <div

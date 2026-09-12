@@ -143,16 +143,16 @@ export function CalendarPage({
         title={title ?? chapter}
         description={description}
       />
-      <div className="content-container pt-6 pb-16 md:pt-10 md:pb-20">
+      <div className="content-container pt-6 pb-16 md:pt-10 md:pb-20 print:max-w-none print:px-0 print:pt-0 print:pb-0">
         {draftYear !== undefined && (
-          <Alert className="mb-6 border-dashed bg-muted/30">
-            <AlertDescription>
+          <Alert className="mb-6 border-dashed bg-muted/30 print:mb-1 print:border-0 print:bg-transparent print:px-0 print:py-0">
+            <AlertDescription className="print:text-xs">
               The {draftYear} schedule is a draft. Events and dates may change. Registration opens
               once the schedule is final.
             </AlertDescription>
           </Alert>
         )}
-        <div className="flex flex-col gap-3 mb-8 md:flex-row md:flex-wrap md:items-center md:justify-end">
+        <div className="flex flex-col gap-3 mb-8 md:flex-row md:flex-wrap md:items-center md:justify-end print:hidden">
           <div className="flex items-center justify-between md:contents">
             <ToggleGroup
               type="single"
@@ -228,7 +228,11 @@ export function CalendarPage({
             view === 'list' ? (
               <EventList events={filteredEvents} />
             ) : (
-              <CalendarGridView events={filteredEvents} />
+              <CalendarGridView
+                events={filteredEvents}
+                printHeading={`Randonneurs Ontario · ${title ?? chapter}`}
+                printOmitChapter={chapterSlug !== 'all'}
+              />
             )
           ) : (
             <div className="text-center py-12 text-muted-foreground">
