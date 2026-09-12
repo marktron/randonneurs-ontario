@@ -10,7 +10,7 @@ export const metadata = {
 const policies = [
   {
     title: 'By-Laws',
-    href: '/policies/RANDONNEURS-ONTARIO-LONG-DISTANCE-CYCLING-ASSOCIATION-INC-Bylaws---20240825.pdf',
+    href: '/policies/RANDONNEURS-ONTARIO-BYLAWS-2025-09-08.pdf',
     description:
       'Club structure, board roles, membership rules, and financial procedures under Ontario\u2019s Not-for-Profit Corporations Act.',
   },
