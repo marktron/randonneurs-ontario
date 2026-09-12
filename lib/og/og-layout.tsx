@@ -23,20 +23,27 @@ async function getDefaultBgDataUri(): Promise<string> {
 }
 
 /**
- * Resolve a /public path (e.g. "/toronto.jpg") to a base64 data URI.
- * Prefers the optimized version in /og-backgrounds/ if it exists,
- * otherwise falls back to the original.
+ * Resolve a /public path (e.g. "/toronto.jpg") to a base64 data URI of its
+ * optimized copy in /public/og-backgrounds/. A .jpg copy is preferred, then a
+ * file with the same name; anything else resolves to undefined so the caller
+ * falls back to the default background.
+ *
+ * Reads are deliberately scoped to the og-backgrounds folder. Reading from the
+ * root of /public makes Turbopack trace the whole folder into every
+ * opengraph-image server bundle.
  */
 export async function resolvePublicImage(publicPath: string): Promise<string | undefined> {
   const filename = publicPath.replace(/^\//, '')
-  const ext = filename.split('.').pop()?.toLowerCase()
-  const mime = ext === 'png' ? 'image/png' : 'image/jpeg'
-  const publicDir = join(process.cwd(), 'public')
+  const stem = filename.replace(/\.[^.]+$/, '')
+  const backgroundsDir = join(process.cwd(), 'public', 'og-backgrounds')
 
-  // Try optimized version first, then fall back to original
-  for (const dir of [join(publicDir, 'og-backgrounds'), publicDir]) {
+  const candidates = [
+    { name: `${stem}.jpg`, mime: 'image/jpeg' },
+    { name: filename, mime: filename.toLowerCase().endsWith('.png') ? 'image/png' : 'image/jpeg' },
+  ]
+  for (const { name, mime } of candidates) {
     try {
-      const buffer = await readFile(join(dir, filename))
+      const buffer = await readFile(join(backgroundsDir, name))
       return `data:${mime};base64,${buffer.toString('base64')}`
     } catch {
       continue
