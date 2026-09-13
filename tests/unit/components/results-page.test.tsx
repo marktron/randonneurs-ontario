@@ -73,17 +73,21 @@ describe('ResultsPage', () => {
     // Some browsers throw `TypeError: failed to initialize DateTimeFormat`
     // (broken ICU data, unrecognized system time zone). The page must not
     // depend on Intl to render a date.
-    const spy = vi
-      .spyOn(Date.prototype, 'toLocaleDateString')
-      .mockImplementation(() => {
-        throw new TypeError('failed to initialize DateTimeFormat')
-      })
+    // Stub both entry points: the Date intrinsic does not go through the
+    // global Intl.DateTimeFormat binding, so stubbing only one would let a
+    // rewrite via the other slip past this test.
+    const fail = () => {
+      throw new TypeError('failed to initialize DateTimeFormat')
+    }
+    const dateSpy = vi.spyOn(Date.prototype, 'toLocaleDateString').mockImplementation(fail)
+    const intlSpy = vi.spyOn(Intl, 'DateTimeFormat').mockImplementation(fail)
 
     try {
       expect(() => render(<ResultsPage {...defaultProps} />)).not.toThrow()
       expect(screen.getByText(/April 15, 2025/)).toBeInTheDocument()
     } finally {
-      spy.mockRestore()
+      dateSpy.mockRestore()
+      intlSpy.mockRestore()
     }
   })
 
