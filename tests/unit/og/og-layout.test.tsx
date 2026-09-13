@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { isValidElement, type ReactElement, type ReactNode } from 'react'
-import { OgLayout } from '@/lib/og/og-layout'
+import { OgLayout, resolvePublicImage } from '@/lib/og/og-layout'
 
 type ImgProps = { children?: ReactNode; src?: string; width?: unknown; height?: unknown }
 
@@ -42,5 +42,26 @@ describe('OgLayout', () => {
     expect(bgImg, 'background <img> should be present').toBeDefined()
     expect(Number.isFinite(Number(bgImg!.props.width))).toBe(true)
     expect(Number.isFinite(Number(bgImg!.props.height))).toBe(true)
+  })
+})
+
+describe('resolvePublicImage', () => {
+  // Backgrounds are read only from public/og-backgrounds. A fallback that read
+  // from the root of public/ made Turbopack trace the whole folder into the
+  // opengraph-image server bundles ("Dynamic filesystem access causes tracing
+  // of the whole project").
+  it('resolves a cover image to its optimized og-backgrounds copy', async () => {
+    const uri = await resolvePublicImage('/toronto.jpg')
+    expect(uri).toMatch(/^data:image\/jpeg;base64,/)
+  })
+
+  it('prefers a .jpg copy when the public path is a .png', async () => {
+    const uri = await resolvePublicImage('/fleche.png')
+    expect(uri).toMatch(/^data:image\/jpeg;base64,/)
+  })
+
+  it('returns undefined for a file that only exists at the public root', async () => {
+    // public/logo.png exists, but there is no og-backgrounds copy.
+    await expect(resolvePublicImage('/logo.png')).resolves.toBeUndefined()
   })
 })

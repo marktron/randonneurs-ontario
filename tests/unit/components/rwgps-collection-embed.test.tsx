@@ -2,11 +2,21 @@
  * @vitest-environment happy-dom
  */
 
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { RwgpsCollectionEmbed } from '@/components/rwgps-collection-embed'
 import type { RwgpsCollection } from '@/lib/rwgps'
+
+// The real RwgpsEmbed renders an <iframe> pointing at ridewithgps.com. Iframe
+// loading is disabled in vitest.config.mts, but happy-dom still logs a
+// NotSupportedError for every attempt. This test only cares which route the
+// collection hands to the embed, so stub it and assert on the route id.
+vi.mock('@/components/rwgps-embed', () => ({
+  RwgpsEmbed: ({ routeId, title }: { routeId: string | number; title?: string }) => (
+    <div data-testid="rwgps-embed" title={title} data-route-id={String(routeId)} />
+  ),
+}))
 
 const collection: RwgpsCollection = {
   name: 'Cottage Country Explorer 2000',
@@ -42,13 +52,13 @@ describe('RwgpsCollectionEmbed', () => {
     const user = userEvent.setup()
     render(<RwgpsCollectionEmbed collection={collection} />)
     expect(screen.getByTitle('Leg 1: CCE 300 - Port Loring')).toHaveAttribute(
-      'src',
-      expect.stringContaining('id=56239318')
+      'data-route-id',
+      '56239318'
     )
     await user.click(screen.getByRole('button', { name: /Leg 2/ }))
     expect(screen.getByTitle('Leg 2: CCE 500 - Lake Simcoe')).toHaveAttribute(
-      'src',
-      expect.stringContaining('id=56239304')
+      'data-route-id',
+      '56239304'
     )
   })
 

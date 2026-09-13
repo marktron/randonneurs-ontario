@@ -116,7 +116,7 @@ vi.mock('@/lib/errors', () => ({
 }))
 
 vi.mock('ics', () => ({
-  createEvents: vi.fn((events, options) => {
+  createEvents: vi.fn((events, _options) => {
     if (events.length === 0) {
       // Empty events still produces valid calendar
       return { error: null, value: 'BEGIN:VCALENDAR\nVERSION:2.0\nEND:VCALENDAR' }

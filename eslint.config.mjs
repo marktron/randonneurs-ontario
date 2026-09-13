@@ -1,8 +1,8 @@
-import { defineConfig, globalIgnores } from "eslint/config";
-import nextVitals from "eslint-config-next/core-web-vitals";
-import nextTs from "eslint-config-next/typescript";
-import jsxA11y from "eslint-plugin-jsx-a11y";
-import prettier from "eslint-config-prettier";
+import { defineConfig, globalIgnores } from 'eslint/config'
+import nextVitals from 'eslint-config-next/core-web-vitals'
+import nextTs from 'eslint-config-next/typescript'
+import jsxA11y from 'eslint-plugin-jsx-a11y'
+import prettier from 'eslint-config-prettier'
 
 const eslintConfig = defineConfig([
   ...nextVitals,
@@ -13,6 +13,17 @@ const eslintConfig = defineConfig([
       ...jsxA11y.configs.recommended.rules,
       'react-hooks/set-state-in-effect': 'off',
       'react/no-unescaped-entities': 'off',
+      // Underscore-prefixed names are the convention for intentionally
+      // unused params (mock signatures, destructured rest siblings).
+      '@typescript-eslint/no-unused-vars': [
+        'warn',
+        {
+          argsIgnorePattern: '^_',
+          varsIgnorePattern: '^_',
+          caughtErrorsIgnorePattern: '^_',
+          destructuredArrayIgnorePattern: '^_',
+        },
+      ],
     },
   },
   // Prettier - must be last to override conflicting rules
@@ -20,17 +31,17 @@ const eslintConfig = defineConfig([
   // Override default ignores of eslint-config-next.
   globalIgnores([
     // Default ignores of eslint-config-next:
-    ".next/**",
-    "out/**",
-    "build/**",
-    "next-env.d.ts",
+    '.next/**',
+    'out/**',
+    'build/**',
+    'next-env.d.ts',
     // Skip nested build output inside git worktrees (e.g. `.claude/worktrees/*/.next/`),
     // which the root-anchored `.next/**` pattern above doesn't catch.
-    "**/.next/**",
-    ".claude/worktrees/**",
+    '**/.next/**',
+    '.claude/worktrees/**',
     // Supabase CLI runtime artifact (gitignored via supabase/.gitignore), not source.
-    "supabase/.temp/**",
+    'supabase/.temp/**',
   ]),
-]);
+])
 
-export default eslintConfig;
+export default eslintConfig

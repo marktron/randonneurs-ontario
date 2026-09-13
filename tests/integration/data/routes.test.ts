@@ -84,9 +84,9 @@ vi.mock('@/lib/chapter-config', () => ({
 }))
 
 vi.mock('@/lib/utils', () => ({
-  formatFinishTime: vi.fn((time: string | null) => time || null),
-  formatStatus: vi.fn((status: string) => null),
-  parseFinishTimeToMinutes: vi.fn((time: string) => 810), // 13:30 = 810 minutes
+  formatFinishTime: vi.fn((_time: string | null) => null),
+  formatStatus: vi.fn((_status: string) => null),
+  parseFinishTimeToMinutes: vi.fn((_time: string) => 810), // 13:30 = 810 minutes
 }))
 
 vi.mock('@/lib/errors', () => ({

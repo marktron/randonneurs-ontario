@@ -37,9 +37,7 @@ import {
   type ChapterInfo,
 } from '@/lib/chapter-config'
 import type {
-  EventWithRegistrationCount,
   EventWithRegistrationCountAndRoute,
-  EventWithRegistrationCountAndChapter,
   EventWithRegistrationCountAndChapterAndRoute,
   EventWithRelations,
   EventSlug,

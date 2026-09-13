@@ -8,8 +8,8 @@ Before you begin, make sure you have the following installed:
 
 | Requirement | Version | How to Check       | Install Link                                     |
 | ----------- | ------- | ------------------ | ------------------------------------------------ |
-| Node.js     | 20+     | `node --version`   | [nodejs.org](https://nodejs.org)                 |
-| npm         | 10+     | `npm --version`    | Comes with Node.js                               |
+| Node.js     | 24.x    | `node --version`   | [nodejs.org](https://nodejs.org)                 |
+| npm         | 11+     | `npm --version`    | Comes with Node.js                               |
 | Docker      | Latest  | `docker --version` | [docker.com](https://www.docker.com/get-started) |
 | Git         | Latest  | `git --version`    | [git-scm.com](https://git-scm.com)               |
 
@@ -25,10 +25,38 @@ cd randonneurs-ontario
 ## Step 2: Install Dependencies
 
 ```bash
+nvm use
 npm install
 ```
 
 This installs all the project dependencies defined in `package.json`.
+
+Use Node 24.x. `.nvmrc` selects Node 24; run `nvm install` if it is not
+installed. The repository's `.npmrc` requires releases to be at least seven
+days old.
+
+After a Playwright version bump, run `npx playwright install chromium webkit`
+so the local browser cache matches the new version.
+
+### Dependency compatibility (reviewed September 12, 2026)
+
+`npm outdated` still reports these newer majors, which are intentionally deferred:
+
+| Package                | Compatible version | Reason                                                                                                                                                                         |
+| ---------------------- | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `eslint`               | 9.x                | `eslint-plugin-react` and `eslint-plugin-jsx-a11y` do not support ESLint 10 in their peer ranges.                                                                              |
+| `typescript`           | 6.x                | `typescript-eslint` requires TypeScript below 6.1.                                                                                                                             |
+| `@vitejs/plugin-react` | 5.2.x              | Installing 6.1.1 fails peer resolution: its optional Babel integration selects a Babel 8 transform plugin alongside the existing Babel 7 tooling. Version 5.2 supports Vite 8. |
+| `@types/node`          | 24.x               | Keep declarations aligned with the Node 24 runtime instead of exposing Node 26 APIs.                                                                                           |
+
+Recheck these peer requirements before upgrading; do not use `--force` or
+`--legacy-peer-deps` to bypass them. The upgrade includes the
+[DayPicker v10 class-name migration](https://daypicker.dev/upgrading) and the
+[Vitest 5 matcher integration changes](https://vitest.dev/guide/migration/).
+
+`npm audit` also reports a moderate advisory through ExcelJS's `uuid` dependency.
+ExcelJS 4.4.0 is already its latest release; npm's proposed fix downgrades ExcelJS
+to 3.4.0, so it is not applied as part of this upgrade.
 
 ## Step 3: Set Up Environment Variables
 
