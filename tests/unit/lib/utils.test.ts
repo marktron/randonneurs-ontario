@@ -466,28 +466,48 @@ describe('formatWeekdayMonthDay', () => {
 
 describe('Intl-free date helpers vs toLocaleDateString oracle', () => {
   it('matches toLocaleDateString output for every date from 2000-01-01 through 2030-12-31', () => {
+    // Node ships full ICU, so Intl is a trustworthy oracle here. Build each
+    // formatter once: constructing one per date per shape is what pushed this
+    // test past vitest's 5s timeout on CI.
+    const fmt = (options: Intl.DateTimeFormatOptions) => new Intl.DateTimeFormat('en-US', options)
+    const oracles: Array<[string, (d: Date, s: string) => string, Intl.DateTimeFormat]> = [
+      [
+        'formatLongDate',
+        (_, s) => formatLongDate(s),
+        fmt({ month: 'long', day: 'numeric', year: 'numeric' }),
+      ],
+      ['formatMonthYear', (d) => formatMonthYear(d), fmt({ month: 'long', year: 'numeric' })],
+      [
+        'formatWeekdayMonthDay',
+        (d) => formatWeekdayMonthDay(d),
+        fmt({ weekday: 'long', month: 'long', day: 'numeric' }),
+      ],
+      ['monthName short', (d) => monthName(d, 'short'), fmt({ month: 'short' })],
+      ['monthName long', (d) => monthName(d, 'long'), fmt({ month: 'long' })],
+      ['weekdayName short', (d) => weekdayName(d, 'short'), fmt({ weekday: 'short' })],
+      ['weekdayName long', (d) => weekdayName(d, 'long'), fmt({ weekday: 'long' })],
+    ]
+
     const start = new Date(2000, 0, 1)
     const end = new Date(2030, 11, 31)
+    const mismatches: string[] = []
+    let count = 0
 
     for (let d = new Date(start); d.getTime() <= end.getTime(); d.setDate(d.getDate() + 1)) {
+      count++
       const year = d.getFullYear()
       const month = String(d.getMonth() + 1).padStart(2, '0')
       const day = String(d.getDate()).padStart(2, '0')
       const dateString = `${year}-${month}-${day}`
 
-      expect(formatLongDate(dateString)).toBe(
-        d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
-      )
-      expect(formatMonthYear(d)).toBe(
-        d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
-      )
-      expect(formatWeekdayMonthDay(d)).toBe(
-        d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
-      )
-      expect(monthName(d, 'short')).toBe(d.toLocaleDateString('en-US', { month: 'short' }))
-      expect(monthName(d, 'long')).toBe(d.toLocaleDateString('en-US', { month: 'long' }))
-      expect(weekdayName(d, 'short')).toBe(d.toLocaleDateString('en-US', { weekday: 'short' }))
-      expect(weekdayName(d, 'long')).toBe(d.toLocaleDateString('en-US', { weekday: 'long' }))
+      for (const [name, ours, oracle] of oracles) {
+        const expected = oracle.format(d)
+        const actual = ours(d, dateString)
+        if (actual !== expected) mismatches.push(`${name} ${dateString}: ${actual} !== ${expected}`)
+      }
     }
+
+    expect(count).toBe(11323)
+    expect(mismatches).toEqual([])
   })
 })
