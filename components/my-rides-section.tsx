@@ -4,12 +4,13 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { getMyUpcomingRides, type MyUpcomingRide } from '@/lib/actions/my-rides'
 import { getSavedRegistrationData } from '@/lib/registration-storage'
+import { monthName } from '@/lib/utils'
 
 const MAX_COLLAPSED = 3
 
 function formatDate(dateString: string): { month: string; day: string } {
   const date = new Date(dateString + 'T00:00:00')
-  const month = date.toLocaleDateString('en-US', { month: 'short' }).toUpperCase()
+  const month = monthName(date, 'short').toUpperCase()
   const day = date.getDate().toString()
   return { month, day }
 }

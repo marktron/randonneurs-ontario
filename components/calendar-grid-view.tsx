@@ -19,7 +19,7 @@ import {
   toDateKey,
   type EventSegment,
 } from '@/lib/calendar/event-spans'
-import { parseLocalDate } from '@/lib/utils'
+import { parseLocalDate, weekdayName, formatMonthYear, formatWeekdayMonthDay } from '@/lib/utils'
 
 const DAYS_OF_WEEK = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
@@ -128,10 +128,7 @@ function buildMonthGrids(events: Event[]): MonthGrid[] {
       return { days, lanes: buildWeekLanes(days, monthEvents), listed }
     })
 
-    const label = firstDay.toLocaleDateString('en-US', {
-      month: 'long',
-      year: 'numeric',
-    })
+    const label = formatMonthYear(firstDay)
 
     return { label, year, month, weeks, eventsByDay }
   })
@@ -157,14 +154,6 @@ function formatTime(time: string): string {
   return `${hour12}:${minutes}${ampm}`
 }
 
-function formatDateLong(date: Date): string {
-  return date.toLocaleDateString('en-US', {
-    weekday: 'long',
-    month: 'long',
-    day: 'numeric',
-  })
-}
-
 function eventLinkLabel(event: Event, date: Date, spanDays = 1, registered = false): string {
   // Screen readers get the same draft/cancelled cue the chip gives sighted users.
   const state = event.status === 'draft' || event.status === 'cancelled' ? `, ${event.status}` : ''
@@ -176,7 +165,7 @@ function eventLinkLabel(event: Event, date: Date, spanDays = 1, registered = fal
   const limitLabel = getEventLimitLabel(event)
   const spanPart =
     spanDays > 1 ? `, ${spanDays} days${limitLabel ? ` (${limitLabel} limit)` : ''}` : ''
-  return `${event.name}, ${event.distance} km, ${formatDateLong(date)}${timePart}${spanPart}${event.chapterName ? `, ${event.chapterName}` : ''}${registeredPart}${state}`
+  return `${event.name}, ${event.distance} km, ${formatWeekdayMonthDay(date)}${timePart}${spanPart}${event.chapterName ? `, ${event.chapterName}` : ''}${registeredPart}${state}`
 }
 
 interface CalendarGridViewProps {
@@ -376,7 +365,7 @@ export function CalendarGridView({
                     {week.listed.map(({ event, date }, ei) => {
                       const spanDays = getEventSpanDays(event)
                       const continuedIn = toDateKey(date) !== event.date
-                      const dayAbbr = date.toLocaleDateString('en-US', { weekday: 'short' })
+                      const dayAbbr = weekdayName(date, 'short')
                       const isCancelled = event.status === 'cancelled'
                       const isDraft = event.status === 'draft'
                       const isRegistered =

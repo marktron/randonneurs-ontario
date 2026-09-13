@@ -8,6 +8,11 @@ import {
   parseFinishTimeToMinutes,
   buildParticipantMailtoUrl,
   buildRiderInfoText,
+  monthName,
+  weekdayName,
+  formatLongDate,
+  formatMonthYear,
+  formatWeekdayMonthDay,
 } from '@/lib/utils'
 
 describe('createSlug', () => {
@@ -398,5 +403,111 @@ describe('buildRiderInfoText', () => {
     const iceIdx = text.indexOf('Emergency Contact:')
     expect(emailIdx).toBeLessThan(phoneIdx)
     expect(phoneIdx).toBeLessThan(iceIdx)
+  })
+})
+
+describe('monthName', () => {
+  it('returns the long month name by default', () => {
+    expect(monthName(new Date(2025, 0, 1))).toBe('January')
+    expect(monthName(new Date(2025, 8, 1))).toBe('September')
+  })
+
+  it('returns the short month name when requested', () => {
+    expect(monthName(new Date(2025, 0, 1), 'short')).toBe('Jan')
+    expect(monthName(new Date(2025, 8, 1), 'short')).toBe('Sep')
+  })
+})
+
+describe('weekdayName', () => {
+  it('returns the long weekday name by default', () => {
+    // 2025-06-15 is a Sunday
+    expect(weekdayName(new Date(2025, 5, 15))).toBe('Sunday')
+    // 2025-06-17 is a Tuesday
+    expect(weekdayName(new Date(2025, 5, 17))).toBe('Tuesday')
+  })
+
+  it('returns the short weekday name when requested', () => {
+    expect(weekdayName(new Date(2025, 5, 15), 'short')).toBe('Sun')
+    expect(weekdayName(new Date(2025, 5, 17), 'short')).toBe('Tue')
+  })
+})
+
+describe('formatLongDate', () => {
+  it('formats a YYYY-MM-DD string as "Month D, YYYY"', () => {
+    expect(formatLongDate('2025-04-15')).toBe('April 15, 2025')
+    expect(formatLongDate('2026-01-01')).toBe('January 1, 2026')
+    expect(formatLongDate('2025-12-31')).toBe('December 31, 2025')
+  })
+
+  it('falls back to the raw string for a malformed date', () => {
+    expect(formatLongDate('not-a-date')).toBe('not-a-date')
+    expect(formatLongDate('')).toBe('')
+  })
+
+  it('falls back to the raw string for an out-of-range month', () => {
+    expect(formatLongDate('2025-13-01')).toBe('2025-13-01')
+    expect(formatLongDate('2025-00-01')).toBe('2025-00-01')
+  })
+})
+
+describe('formatMonthYear', () => {
+  it('formats a Date as "Month YYYY"', () => {
+    expect(formatMonthYear(new Date(2025, 3, 15))).toBe('April 2025')
+    expect(formatMonthYear(new Date(2026, 0, 1))).toBe('January 2026')
+  })
+})
+
+describe('formatWeekdayMonthDay', () => {
+  it('formats a Date as "Weekday, Month D"', () => {
+    // 2025-04-15 is a Tuesday
+    expect(formatWeekdayMonthDay(new Date(2025, 3, 15))).toBe('Tuesday, April 15')
+  })
+})
+
+describe('Intl-free date helpers vs toLocaleDateString oracle', () => {
+  it('matches toLocaleDateString output for every date from 2000-01-01 through 2030-12-31', () => {
+    // Node ships full ICU, so Intl is a trustworthy oracle here. Build each
+    // formatter once: constructing one per date per shape is what pushed this
+    // test past vitest's 5s timeout on CI.
+    const fmt = (options: Intl.DateTimeFormatOptions) => new Intl.DateTimeFormat('en-US', options)
+    const oracles: Array<[string, (d: Date, s: string) => string, Intl.DateTimeFormat]> = [
+      [
+        'formatLongDate',
+        (_, s) => formatLongDate(s),
+        fmt({ month: 'long', day: 'numeric', year: 'numeric' }),
+      ],
+      ['formatMonthYear', (d) => formatMonthYear(d), fmt({ month: 'long', year: 'numeric' })],
+      [
+        'formatWeekdayMonthDay',
+        (d) => formatWeekdayMonthDay(d),
+        fmt({ weekday: 'long', month: 'long', day: 'numeric' }),
+      ],
+      ['monthName short', (d) => monthName(d, 'short'), fmt({ month: 'short' })],
+      ['monthName long', (d) => monthName(d, 'long'), fmt({ month: 'long' })],
+      ['weekdayName short', (d) => weekdayName(d, 'short'), fmt({ weekday: 'short' })],
+      ['weekdayName long', (d) => weekdayName(d, 'long'), fmt({ weekday: 'long' })],
+    ]
+
+    const start = new Date(2000, 0, 1)
+    const end = new Date(2030, 11, 31)
+    const mismatches: string[] = []
+    let count = 0
+
+    for (let d = new Date(start); d.getTime() <= end.getTime(); d.setDate(d.getDate() + 1)) {
+      count++
+      const year = d.getFullYear()
+      const month = String(d.getMonth() + 1).padStart(2, '0')
+      const day = String(d.getDate()).padStart(2, '0')
+      const dateString = `${year}-${month}-${day}`
+
+      for (const [name, ours, oracle] of oracles) {
+        const expected = oracle.format(d)
+        const actual = ours(d, dateString)
+        if (actual !== expected) mismatches.push(`${name} ${dateString}: ${actual} !== ${expected}`)
+      }
+    }
+
+    expect(count).toBe(11323)
+    expect(mismatches).toEqual([])
   })
 })

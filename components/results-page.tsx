@@ -6,6 +6,7 @@ import { PageShell } from '@/components/page-shell'
 import { PageHero } from '@/components/page-hero'
 import { devData } from '@/lib/dev-data'
 import { type EventResult } from '@/lib/data/results'
+import { formatLongDate } from '@/lib/utils'
 import { AwardBadge } from '@/components/award-badge'
 import {
   DropdownMenu,
@@ -24,14 +25,6 @@ export interface ResultsPageProps {
   coverImage?: string
   events: EventResult[]
   availableYears: number[]
-}
-
-function formatFullDate(dateString: string): string {
-  const date = new Date(dateString + 'T00:00:00')
-  const month = date.toLocaleDateString('en-US', { month: 'long' })
-  const day = date.getDate()
-  const year = date.getFullYear()
-  return `${month} ${day}, ${year}`
 }
 
 export function ResultsPage({
@@ -211,7 +204,7 @@ export function ResultsPage({
                       )}
                     </h2>
                     <p className="text-sm text-muted-foreground mt-1">
-                      {formatFullDate(event.date)}
+                      {formatLongDate(event.date)}
                       {isFleche
                         ? ` · ${event.teams!.length} ${event.teams!.length === 1 ? 'team' : 'teams'} · ${participants.length} ${participants.length === 1 ? 'rider' : 'riders'}`
                         : ` · ${event.distance} km · ${participants.length} ${participants.length === 1 ? 'rider' : 'riders'}`}

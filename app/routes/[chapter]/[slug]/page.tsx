@@ -4,6 +4,7 @@ import { PageShell } from '@/components/page-shell'
 import { PageHero } from '@/components/page-hero'
 import { getRouteBySlug, getRouteResults, getChapterInfo } from '@/lib/data/routes'
 import { buildRwgpsCollectionUrl } from '@/lib/rwgps'
+import { formatLongDate } from '@/lib/utils'
 import { AwardBadge } from '@/components/award-badge'
 import { BreadcrumbJsonLd } from '@/components/structured-data'
 
@@ -23,14 +24,6 @@ export async function generateMetadata({ params }: PageProps) {
     title: `${route.name} - Route History`,
     description: `Historical results for the ${route.name} route from Randonneurs Ontario.`,
   }
-}
-
-function formatFullDate(dateString: string): string {
-  const date = new Date(dateString + 'T00:00:00')
-  const month = date.toLocaleDateString('en-US', { month: 'long' })
-  const day = date.getDate()
-  const year = date.getFullYear()
-  return `${month} ${day}, ${year}`
 }
 
 export default async function RouteDetailPage({ params }: PageProps) {
@@ -171,7 +164,7 @@ export default async function RouteDetailPage({ params }: PageProps) {
                 {/* Event Header */}
                 <header className="mb-6">
                   <h2 className="font-serif text-2xl md:text-3xl tracking-tight">
-                    {formatFullDate(event.date)}
+                    {formatLongDate(event.date)}
                   </h2>
                   <p className="text-sm text-muted-foreground mt-1">
                     {event.riders.length} {event.riders.length === 1 ? 'rider' : 'riders'}

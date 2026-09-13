@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { getEventsByChapter, getAllChapterSlugs, getChapterInfo } from '@/lib/data/events'
 import type { Event } from '@/components/event-card'
+import { monthName } from '@/lib/utils'
 
 /**
  * Return all events whose dates fall within the first `n` unique dates.
@@ -19,7 +20,7 @@ export function eventsForFirstNDates(events: Event[], n: number): Event[] {
 
 function formatDate(dateString: string): { month: string; day: string } {
   const date = new Date(dateString + 'T00:00:00')
-  const month = date.toLocaleDateString('en-US', { month: 'short' }).toUpperCase()
+  const month = monthName(date, 'short').toUpperCase()
   const day = date.getDate().toString()
   return { month, day }
 }
