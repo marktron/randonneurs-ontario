@@ -138,7 +138,12 @@ Draft cells keep the medal hue of their distance but never the solid fill: `dist
 
 The public list view (`EventCard`) matches this treatment: the distance badge uses `distanceMedalDraftClass` with a small uppercase "Draft" label beside it, and — unlike cancelled rows — the card is not dimmed, since a draft is a real plan rather than a dead event. Instead of the red "Register" button, draft rows show a plain outline "Details" link to the event page.
 
-When a page has any draft events (public calendar only, and only with the preview flag on), `CalendarPage` renders a dashed-border notice between the hero and the filters, in both list and grid views: "The {year} schedule is a draft. Events and dates may change. Registration opens once the schedule is final." `{year}` is the earliest calendar year among the page's draft events, computed from the full event list so it doesn't change as the distance filter is applied.
+When a page has any draft events (public calendar only, and only with the preview flag on), `CalendarPage` renders a dashed-border notice between the hero and the filters, in both list and grid views. The notice wording depends on the years represented:
+
+- **All drafts in one calendar year**: "The {year} schedule is a draft. Events and dates may change. Registration opens once the schedule is final."
+- **Drafts spanning multiple calendar years** (typical on the All Chapters view): "Some events on this calendar are drafts. Events and dates may change. Registration opens once the schedule is final."
+
+The calendar year is determined from each event's `date` (calendar year in ISO format), computed from the full event list so it doesn't change as the distance filter is applied. Note that `events.season` is always the calendar year — a November or December event counts toward that same calendar year everywhere on the site.
 
 ## Printing
 

@@ -402,19 +402,48 @@ describe('CalendarPage — draft schedule notice', () => {
     ).toBeInTheDocument()
   })
 
-  it('uses the earliest year among multiple draft events', () => {
+  it('uses year-free wording when drafts span more than one calendar year', () => {
     // 365+ days apart guarantees the two dates fall in different calendar
     // years regardless of what "today" is when this test runs.
     const laterDate = isoDaysFromNow(500)
     const earlierDate = isoDaysFromNow(30)
-    const earlierYear = new Date(earlierDate + 'T00:00:00').getFullYear()
     const laterDraft: Event = { ...draftEvent, slug: 'later-draft', date: laterDate }
     const earlierDraft: Event = { ...draftEvent, slug: 'earlier-draft', date: earlierDate }
 
     render(<CalendarPage {...defaultProps} events={[...sampleEvents, laterDraft, earlierDraft]} />)
 
     expect(
-      screen.getByText(new RegExp(`^The ${earlierYear} schedule is a draft\\.`))
+      screen.getByText(
+        'Some events on this calendar are drafts. Events and dates may change. Registration opens once the schedule is final.'
+      )
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/^The \d{4} schedule is a draft/)).not.toBeInTheDocument()
+  })
+
+  it('names the year when all drafts fall in one calendar year, even across two chapters', () => {
+    // Both on same date, different chapters
+    const sameDateDraft1: Event = {
+      ...draftEvent,
+      slug: 'draft-toronto',
+      chapterName: 'Toronto',
+      date: isoDaysFromNow(300),
+    }
+    const sameDateDraft2: Event = {
+      ...draftEvent,
+      slug: 'draft-huron',
+      chapterName: 'Huron',
+      date: isoDaysFromNow(300),
+    }
+    const year = new Date(sameDateDraft1.date + 'T00:00:00').getFullYear()
+
+    render(
+      <CalendarPage {...defaultProps} events={[...sampleEvents, sameDateDraft1, sameDateDraft2]} />
+    )
+
+    expect(
+      screen.getByText(
+        `The ${year} schedule is a draft. Events and dates may change. Registration opens once the schedule is final.`
+      )
     ).toBeInTheDocument()
   })
 

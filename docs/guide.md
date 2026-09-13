@@ -78,7 +78,7 @@ Setting the server-only environment variable `SHOW_DRAFT_EVENTS=true` makes draf
 With the flag on:
 
 - The public calendar (list and grid views, all chapters) shows drafts alongside scheduled events. They're styled distinctly — a dashed, medal-coloured distance badge and a small "Draft" label — and the list view shows a plain "Details" button instead of the red "Register" button.
-- A dashed notice appears above the calendar filters: "The {year} schedule is a draft. Events and dates may change. Registration opens once the schedule is final." The year is the earliest among the page's draft events.
+- A dashed notice appears above the calendar filters. When all drafts fall in one calendar year, it reads: "The {year} schedule is a draft. Events and dates may change. Registration opens once the schedule is final." When drafts span multiple calendar years (typically on the All Chapters view), it reads: "Some events on this calendar are drafts. Events and dates may change. Registration opens once the schedule is final."
 - A draft's own event page (`/register/[slug]`) shows a "This event is a draft" alert instead of the registration form, and its title and search-engine indexing reflect that it's a preview, not a public listing.
 
 What stays hidden regardless of the flag: the iCal feed, the sitemap, the home page's Upcoming Rides block, and Epic Ride Weather sync. Registration for a draft is refused server-side even with the flag on, so there's no way to actually sign up for one.

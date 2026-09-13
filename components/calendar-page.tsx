@@ -69,16 +69,23 @@ function saveView(view: CalendarView): void {
 }
 
 /**
- * Earliest calendar year among the page's draft events, or undefined if
- * there are none. Drives the "schedule is a draft" notice — computed from
- * every event on the page, not just the currently filtered subset, so the
- * notice doesn't flicker as the visitor changes the distance filter.
+ * Distinct calendar years among the page's draft events, sorted ascending,
+ * or empty array if there are none. Drives the "schedule is a draft" notice:
+ * - No drafts: no notice
+ * - One year: "The [year] schedule is a draft..."
+ * - Multiple years: "Some events on this calendar are drafts..."
+ *
+ * Computed from every event on the page, not just the currently filtered
+ * subset, so the notice doesn't flicker as the visitor changes the distance
+ * filter.
  */
-function earliestDraftYear(events: Event[]): number | undefined {
-  const years = events
-    .filter((event) => event.status === 'draft')
-    .map((event) => new Date(event.date + 'T00:00:00').getFullYear())
-  return years.length > 0 ? Math.min(...years) : undefined
+function draftYears(events: Event[]): number[] {
+  const years = new Set(
+    events
+      .filter((event) => event.status === 'draft')
+      .map((event) => new Date(event.date + 'T00:00:00').getFullYear())
+  )
+  return Array.from(years).sort((a, b) => a - b)
 }
 
 function filterEvents(events: Event[], filter: DistanceFilter): Event[] {
@@ -135,7 +142,7 @@ export function CalendarPage({
     () => filterEvents(events, distanceFilter),
     [events, distanceFilter]
   )
-  const draftYear = useMemo(() => earliestDraftYear(events), [events])
+  const draftYearsArray = useMemo(() => draftYears(events), [events])
 
   return (
     <PageShell>
@@ -146,11 +153,12 @@ export function CalendarPage({
         description={description}
       />
       <div className="content-container pt-6 pb-16 md:pt-10 md:pb-20 print:max-w-none print:px-0 print:pt-0 print:pb-0">
-        {draftYear !== undefined && (
+        {draftYearsArray.length > 0 && (
           <Alert className="mb-6 border-dashed bg-muted/30 print:mb-1 print:border-0 print:bg-transparent print:px-0 print:py-0">
             <AlertDescription className="print:text-xs">
-              The {draftYear} schedule is a draft. Events and dates may change. Registration opens
-              once the schedule is final.
+              {draftYearsArray.length === 1
+                ? `The ${draftYearsArray[0]} schedule is a draft. Events and dates may change. Registration opens once the schedule is final.`
+                : 'Some events on this calendar are drafts. Events and dates may change. Registration opens once the schedule is final.'}
             </AlertDescription>
           </Alert>
         )}
