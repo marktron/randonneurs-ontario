@@ -62,4 +62,36 @@ describe('ResultsPage', () => {
 
     expect(screen.getByTestId('page-hero')).toHaveTextContent('Ottawa Chapter 2023 Results')
   })
+
+  it('renders the event date in long form', () => {
+    render(<ResultsPage {...defaultProps} />)
+
+    expect(screen.getByText(/April 15, 2025/)).toBeInTheDocument()
+  })
+
+  it('still renders event dates when the browser cannot build a DateTimeFormat', () => {
+    // Some browsers throw `TypeError: failed to initialize DateTimeFormat`
+    // (broken ICU data, unrecognized system time zone). The page must not
+    // depend on Intl to render a date.
+    const spy = vi
+      .spyOn(Date.prototype, 'toLocaleDateString')
+      .mockImplementation(() => {
+        throw new TypeError('failed to initialize DateTimeFormat')
+      })
+
+    try {
+      expect(() => render(<ResultsPage {...defaultProps} />)).not.toThrow()
+      expect(screen.getByText(/April 15, 2025/)).toBeInTheDocument()
+    } finally {
+      spy.mockRestore()
+    }
+  })
+
+  it('falls back to the raw string for a malformed date', () => {
+    const events: EventResult[] = [{ ...sampleEvents[0], date: 'not-a-date' }]
+
+    render(<ResultsPage {...defaultProps} events={events} />)
+
+    expect(screen.getByText(/not-a-date/)).toBeInTheDocument()
+  })
 })

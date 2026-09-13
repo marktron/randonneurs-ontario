@@ -26,12 +26,38 @@ export interface ResultsPageProps {
   availableYears: number[]
 }
 
+const MONTH_NAMES = [
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
+]
+
+/**
+ * Format a YYYY-MM-DD date string as "April 15, 2025".
+ *
+ * Deliberately avoids Intl/toLocaleDateString: some browsers cannot construct a
+ * DateTimeFormat (missing ICU data, an unrecognized system time zone), which
+ * throws `TypeError: failed to initialize DateTimeFormat` and takes down the
+ * whole results page. A malformed or missing date falls back to the raw string.
+ */
 function formatFullDate(dateString: string): string {
-  const date = new Date(dateString + 'T00:00:00')
-  const month = date.toLocaleDateString('en-US', { month: 'long' })
-  const day = date.getDate()
-  const year = date.getFullYear()
-  return `${month} ${day}, ${year}`
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(dateString ?? '')
+  if (!match) return dateString ?? ''
+
+  const [, year, month, day] = match
+  const monthName = MONTH_NAMES[Number(month) - 1]
+  if (!monthName) return dateString
+
+  return `${monthName} ${Number(day)}, ${year}`
 }
 
 export function ResultsPage({
