@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { devData } from '@/lib/dev-data'
 import { buildRwgpsCollectionUrl } from '@/lib/rwgps'
+import { monthName, weekdayName, formatMonthYear } from '@/lib/utils'
 
 export interface Event {
   id?: string // Event UUID for debugging
@@ -30,10 +31,10 @@ function formatDate(dateString: string): {
   year: string
 } {
   const date = new Date(dateString + 'T00:00:00')
-  const dayOfWeek = date.toLocaleDateString('en-US', { weekday: 'long' })
-  const shortDayOfWeek = date.toLocaleDateString('en-US', { weekday: 'short' })
-  const month = date.toLocaleDateString('en-US', { month: 'short' }).toUpperCase()
-  const monthShort = date.toLocaleDateString('en-US', { month: 'short' })
+  const dayOfWeek = weekdayName(date, 'long')
+  const shortDayOfWeek = weekdayName(date, 'short')
+  const month = monthName(date, 'short').toUpperCase()
+  const monthShort = monthName(date, 'short')
   const day = date.getDate().toString()
   const year = date.getFullYear().toString()
   return { dayOfWeek, shortDayOfWeek, month, monthShort, day, year }
@@ -297,7 +298,7 @@ export function EventList({
   const eventsByMonth = events.reduce(
     (acc, event) => {
       const date = new Date(event.date + 'T00:00:00')
-      const monthKey = date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+      const monthKey = formatMonthYear(date)
       if (!acc[monthKey]) {
         acc[monthKey] = []
       }

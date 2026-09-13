@@ -6,6 +6,7 @@ import { PageShell } from '@/components/page-shell'
 import { PageHero } from '@/components/page-hero'
 import { devData } from '@/lib/dev-data'
 import { type EventResult } from '@/lib/data/results'
+import { formatLongDate } from '@/lib/utils'
 import { AwardBadge } from '@/components/award-badge'
 import {
   DropdownMenu,
@@ -24,40 +25,6 @@ export interface ResultsPageProps {
   coverImage?: string
   events: EventResult[]
   availableYears: number[]
-}
-
-const MONTH_NAMES = [
-  'January',
-  'February',
-  'March',
-  'April',
-  'May',
-  'June',
-  'July',
-  'August',
-  'September',
-  'October',
-  'November',
-  'December',
-]
-
-/**
- * Format a YYYY-MM-DD date string as "April 15, 2025".
- *
- * Deliberately avoids Intl/toLocaleDateString: some browsers cannot construct a
- * DateTimeFormat (missing ICU data, an unrecognized system time zone), which
- * throws `TypeError: failed to initialize DateTimeFormat` and takes down the
- * whole results page. A malformed or missing date falls back to the raw string.
- */
-function formatFullDate(dateString: string): string {
-  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(dateString ?? '')
-  if (!match) return dateString ?? ''
-
-  const [, year, month, day] = match
-  const monthName = MONTH_NAMES[Number(month) - 1]
-  if (!monthName) return dateString
-
-  return `${monthName} ${Number(day)}, ${year}`
 }
 
 export function ResultsPage({
@@ -237,7 +204,7 @@ export function ResultsPage({
                       )}
                     </h2>
                     <p className="text-sm text-muted-foreground mt-1">
-                      {formatFullDate(event.date)}
+                      {formatLongDate(event.date)}
                       {isFleche
                         ? ` · ${event.teams!.length} ${event.teams!.length === 1 ? 'team' : 'teams'} · ${participants.length} ${participants.length === 1 ? 'rider' : 'riders'}`
                         : ` · ${event.distance} km · ${participants.length} ${participants.length === 1 ? 'rider' : 'riders'}`}

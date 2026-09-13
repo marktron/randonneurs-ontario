@@ -46,6 +46,98 @@ export function parseLocalDate(dateStr: string): Date {
 }
 
 /**
+ * Month and weekday name tables and the formatters built on them below are
+ * deliberately Intl-free: some browsers (older Safari/WebKit in particular)
+ * cannot construct an `Intl.DateTimeFormat` (missing ICU data, an
+ * unrecognized system time zone), and any `Date.prototype.toLocaleDateString`
+ * call constructs one under the hood. That throws
+ * `TypeError: failed to initialize DateTimeFormat`, which can take down an
+ * entire page. These tables and helpers reproduce the same English output
+ * (`toLocaleDateString('en-US', ...)`) without touching Intl. Use them for
+ * any client-rendered date formatting instead of `toLocaleDateString`.
+ */
+export const MONTH_NAMES_LONG = [
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
+] as const
+
+export const MONTH_NAMES_SHORT = [
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
+] as const
+
+export const WEEKDAY_NAMES_LONG = [
+  'Sunday',
+  'Monday',
+  'Tuesday',
+  'Wednesday',
+  'Thursday',
+  'Friday',
+  'Saturday',
+] as const
+
+export const WEEKDAY_NAMES_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const
+
+/** Intl-free equivalent of `date.toLocaleDateString('en-US', { month: style })`. */
+export function monthName(date: Date, style: 'long' | 'short' = 'long'): string {
+  return style === 'short' ? MONTH_NAMES_SHORT[date.getMonth()] : MONTH_NAMES_LONG[date.getMonth()]
+}
+
+/** Intl-free equivalent of `date.toLocaleDateString('en-US', { weekday: style })`. */
+export function weekdayName(date: Date, style: 'long' | 'short' = 'long'): string {
+  return style === 'short' ? WEEKDAY_NAMES_SHORT[date.getDay()] : WEEKDAY_NAMES_LONG[date.getDay()]
+}
+
+/**
+ * Format a YYYY-MM-DD date string as "April 15, 2025" without constructing a
+ * Date or touching Intl. A malformed or out-of-range date falls back to the
+ * raw string.
+ */
+export function formatLongDate(dateString: string): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(dateString)
+  if (!match) return dateString
+
+  const [, year, month, day] = match
+  const name = MONTH_NAMES_LONG[Number(month) - 1]
+  if (!name) return dateString
+
+  return `${name} ${Number(day)}, ${year}`
+}
+
+/** Format a Date as "April 2025", Intl-free equivalent of `{ month: 'long', year: 'numeric' }`. */
+export function formatMonthYear(date: Date): string {
+  return `${monthName(date)} ${date.getFullYear()}`
+}
+
+/**
+ * Format a Date as "Tuesday, April 15", Intl-free equivalent of
+ * `{ weekday: 'long', month: 'long', day: 'numeric' }`.
+ */
+export function formatWeekdayMonthDay(date: Date): string {
+  return `${weekdayName(date)}, ${monthName(date)} ${date.getDate()}`
+}
+
+/**
  * Format a PostgreSQL interval finish time to HH:MM (stripping seconds).
  * Handles formats like "10:30:00", "105:30:00", or "4 days 09:30:00".
  */
