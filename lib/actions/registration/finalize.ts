@@ -48,6 +48,9 @@ export async function createRegistrationRecord(
     rider_id: riderId,
     status,
     share_registration: shareRegistration,
+    // Check-in sharing on the digital card follows the public-list choice
+    // by default; the rider can change it from the card itself.
+    share_checkins: shareRegistration,
     notes: notes || null,
     team_name: teamName || null,
     is_team_captain: isTeamCaptain || false,
@@ -81,6 +84,7 @@ export async function createRegistrationRecord(
       .update({
         status,
         share_registration: shareRegistration,
+        share_checkins: shareRegistration,
         notes: notes || null,
         team_name: teamName || null,
         is_team_captain: isTeamCaptain || false,

@@ -497,6 +497,7 @@ export type Database = {
           pre_ride_start_time: string | null
           registered_at: string | null
           rider_id: string
+          share_checkins: boolean
           share_registration: boolean | null
           status: string | null
           team_name: string | null
@@ -513,6 +514,7 @@ export type Database = {
           pre_ride_start_time?: string | null
           registered_at?: string | null
           rider_id: string
+          share_checkins?: boolean
           share_registration?: boolean | null
           status?: string | null
           team_name?: string | null
@@ -529,6 +531,7 @@ export type Database = {
           pre_ride_start_time?: string | null
           registered_at?: string | null
           rider_id?: string
+          share_checkins?: boolean
           share_registration?: boolean | null
           status?: string | null
           team_name?: string | null
