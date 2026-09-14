@@ -621,12 +621,12 @@ Rules:
 - **Organizers always see everything.** The admin grid and evidence dialog
   read `control_checkins` directly; the preference only governs what other
   _riders_ see.
-- **Default follows the public-list choice.** A rider who unticked "Appear
-  on the registered riders list" at registration (`share_registration`
-  false or unset) has said they don't want other riders to see them signed
-  up; `createRegistrationRecord` seeds `share_checkins` from that answer,
-  and the migration backfilled existing rows the same way. They can turn
-  sharing on from the card. Everyone else starts on.
+- **Everyone starts on**, including riders who unticked "Appear on the
+  registered riders list" at registration. That list is world-visible;
+  this view is reachable only by riders on the same event through their
+  own card link, so the two choices are independent. The column default
+  covers new and backfilled rows alike, and `createRegistrationRecord`
+  leaves it to the default.
 - **Hidden riders never appear** (docs/hidden-riders.md), whatever their
   registration says, and their card shows no switch
   (`rider.canShareCheckins === false`).

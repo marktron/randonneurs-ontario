@@ -225,13 +225,15 @@ describe('digital brevet card check-in sharing (real DB)', () => {
 
     // Every row sets status and share_checkins explicitly (bulk-insert key
     // union, see above). The viewer's row relies on the column default so
-    // the default itself is under test — inserted separately.
+    // the default itself is under test — inserted separately. It also opts
+    // out of the public registered-riders list, which must not affect it.
     await checked(
       supabase.from('registrations').insert({
         id: IDS.regViewer,
         event_id: IDS.event,
         rider_id: IDS.riderViewer,
         status: 'registered',
+        share_registration: false,
       }),
       'insert viewer registration'
     )
@@ -333,7 +335,7 @@ describe('digital brevet card check-in sharing (real DB)', () => {
     await cleanup(supabase)
   })
 
-  it('defaults a new registration to sharing', async () => {
+  it('defaults a new registration to sharing, even one off the public riders list', async () => {
     const card = await getBrevetCardByToken(viewerToken)
 
     expect(card).not.toBeNull()
