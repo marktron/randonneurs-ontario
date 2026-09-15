@@ -1,4 +1,5 @@
 import { getSupabaseAdmin } from '@/lib/supabase-server'
+import { logError } from '@/lib/errors'
 import { isEmailConfigured } from '@/lib/email/ses'
 import { sendCardReminderEmail } from '@/lib/email/send-card-reminder-email'
 import type { EventForCardReminder } from '@/lib/email/send-card-reminder-email'
@@ -68,9 +69,12 @@ export async function sendCardReminders(now: Date = new Date()): Promise<CardRem
   // `{ sent: false }` with no error when SES is unconfigured, and the claim is
   // stamped before the send, so sweeping without SES would mark every
   // in-window rider as reminded and lose the email — unrecoverable without SQL.
+  //
+  // Setup failures throw rather than report: the caller (the cron route) logs
+  // them to Sentry and answers 500, which turns the hourly Actions job red. A
+  // run that could never have sent anything must not read as a quiet no-op.
   if (!isEmailConfigured()) {
-    result.errors.push('AWS SES not configured; skipping card reminder sweep')
-    return result
+    throw new Error('AWS SES not configured; skipping card reminder sweep')
   }
 
   // Coarse prune only — a pre-ride start can precede the event date, and the
@@ -88,8 +92,7 @@ export async function sendCardReminders(now: Date = new Date()): Promise<CardRem
     .gte('events.event_date', earliestEventDate)
 
   if (error) {
-    result.errors.push(`Failed to fetch card reminder candidates: ${error.message}`)
-    return result
+    throw new Error(`Failed to fetch card reminder candidates: ${error.message}`)
   }
 
   const registrations = (data || []) as unknown as CardReminderRegistrationRow[]
@@ -105,8 +108,7 @@ export async function sendCardReminders(now: Date = new Date()): Promise<CardRem
     .in('event_id', eventIds)
 
   if (controlsError) {
-    result.errors.push(`Failed to fetch event controls: ${controlsError.message}`)
-    return result
+    throw new Error(`Failed to fetch event controls: ${controlsError.message}`)
   }
 
   const eventsWithControls = new Set(
@@ -155,6 +157,13 @@ export async function sendCardReminders(now: Date = new Date()): Promise<CardRem
         .maybeSingle()
 
       if (claimError) {
+        // Per-row failures keep the sweep at HTTP 200 — one bad row shouldn't
+        // hide the riders that were emailed — so Sentry is the only place this
+        // gets noticed.
+        logError(claimError, {
+          operation: 'card-reminders.claim',
+          context: { registrationId: reg.id, eventId: reg.event_id },
+        })
         result.errors.push(
           `Failed to claim card reminder for registration ${reg.id}: ${claimError.message}`
         )
@@ -185,11 +194,20 @@ export async function sendCardReminders(now: Date = new Date()): Promise<CardRem
         // The claim is already stamped, so this reminder is gone for good —
         // record it even when the sender reports no error, or the cron response
         // would show a run that checked riders, sent nothing, and flagged nothing.
-        result.errors.push(
-          `Failed to send card reminder to ${riderName} for ${event.name}: ${sendError ?? 'email not sent'}`
-        )
+        const message = `Failed to send card reminder to ${riderName} for ${event.name}: ${
+          sendError ?? 'email not sent'
+        }`
+        logError(new Error(message), {
+          operation: 'card-reminders.send',
+          context: { registrationId: reg.id, eventId: reg.event_id },
+        })
+        result.errors.push(message)
       }
     } catch (err) {
+      logError(err, {
+        operation: 'card-reminders.row',
+        context: { registrationId: reg.id, eventId: reg.event_id },
+      })
       const riderName = reg.riders
         ? `${reg.riders.first_name} ${reg.riders.last_name}`
         : `registration ${reg.id}`

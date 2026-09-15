@@ -1,13 +1,19 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-const { mockSupabaseAdmin, mockSendCardReminderEmail, mockIsEmailConfigured } = vi.hoisted(() => ({
-  mockSupabaseAdmin: vi.fn(),
-  mockSendCardReminderEmail: vi.fn(),
-  mockIsEmailConfigured: vi.fn(() => true),
-}))
+const { mockSupabaseAdmin, mockSendCardReminderEmail, mockIsEmailConfigured, mockLogError } =
+  vi.hoisted(() => ({
+    mockSupabaseAdmin: vi.fn(),
+    mockSendCardReminderEmail: vi.fn(),
+    mockIsEmailConfigured: vi.fn(() => true),
+    mockLogError: vi.fn(),
+  }))
 
 vi.mock('@/lib/supabase-server', () => ({
   getSupabaseAdmin: mockSupabaseAdmin,
+}))
+
+vi.mock('@/lib/errors', () => ({
+  logError: mockLogError,
 }))
 
 vi.mock('@/lib/email/ses', () => ({
@@ -166,14 +172,23 @@ function makeRegistration(overrides: Record<string, unknown> = {}) {
   }
 }
 
+/**
+ * Installs the double without running the sweep, for the cases that assert a
+ * rejection and then inspect what the sweep did (or didn't) touch first.
+ */
+function installSupabase(options: SupabaseOptions) {
+  const supabase = buildSupabase(options)
+  mockSupabaseAdmin.mockReturnValue(supabase.client)
+  return supabase
+}
+
 /** Runs the sweep against one registration and returns the result plus the double. */
 async function sweepOne(registration: Record<string, unknown>, options: SupabaseOptions = {}) {
-  const supabase = buildSupabase({
+  const supabase = installSupabase({
     registrations: [registration],
     controlEventIds: ['event-1'],
     ...options,
   })
-  mockSupabaseAdmin.mockReturnValue(supabase.client)
   const result = await sendCardReminders(NOW)
   return { result, supabase }
 }
@@ -186,26 +201,24 @@ describe('sendCardReminders', () => {
   })
 
   describe('email configuration', () => {
-    it('aborts before claiming anything when SES is not configured', async () => {
+    it('throws before claiming or querying anything when SES is not configured', async () => {
       // The claim is stamped before the send, so running the sweep without SES
       // would mark every in-window rider as reminded and lose the email —
-      // unrecoverable without SQL.
+      // unrecoverable without SQL. Throwing rather than reporting is what makes
+      // the cron route return 500 and the Actions job go red.
       mockIsEmailConfigured.mockReturnValue(false)
+      const supabase = installSupabase({
+        registrations: [makeRegistration()],
+        controlEventIds: ['event-1'],
+      })
 
-      const { result, supabase } = await sweepOne(makeRegistration())
+      await expect(sendCardReminders(NOW)).rejects.toThrow(
+        'AWS SES not configured; skipping card reminder sweep'
+      )
 
-      expect(result.sent).toBe(0)
       expect(supabase.updates).toHaveLength(0)
-      expect(mockSendCardReminderEmail).not.toHaveBeenCalled()
-      expect(result.errors).toEqual([expect.stringContaining('SES not configured')])
-    })
-
-    it('does not even query for candidates when SES is not configured', async () => {
-      mockIsEmailConfigured.mockReturnValue(false)
-
-      const { supabase } = await sweepOne(makeRegistration())
-
       expect(supabase.selects).toHaveLength(0)
+      expect(mockSendCardReminderEmail).not.toHaveBeenCalled()
     })
   })
 
@@ -238,26 +251,28 @@ describe('sendCardReminders', () => {
       ])
     })
 
-    it('returns the query error without sending anything', async () => {
-      mockSupabaseAdmin.mockReturnValue(
-        buildSupabase({ registrationsError: { message: 'boom' } }).client
+    it('throws the query error without sending anything', async () => {
+      const supabase = installSupabase({ registrationsError: { message: 'boom' } })
+
+      await expect(sendCardReminders(NOW)).rejects.toThrow(
+        'Failed to fetch card reminder candidates: boom'
       )
 
-      const result = await sendCardReminders(NOW)
-
-      expect(result.sent).toBe(0)
-      expect(result.checked).toBe(0)
-      expect(result.errors).toEqual([expect.stringContaining('boom')])
+      expect(supabase.updates).toHaveLength(0)
       expect(mockSendCardReminderEmail).not.toHaveBeenCalled()
     })
 
-    it('returns the controls query error without sending anything', async () => {
-      const { result, supabase } = await sweepOne(makeRegistration(), {
+    it('throws the controls query error without claiming anything', async () => {
+      const supabase = installSupabase({
+        registrations: [makeRegistration()],
+        controlEventIds: ['event-1'],
         controlsError: { message: 'controls down' },
       })
 
-      expect(result.sent).toBe(0)
-      expect(result.errors).toEqual([expect.stringContaining('controls down')])
+      await expect(sendCardReminders(NOW)).rejects.toThrow(
+        'Failed to fetch event controls: controls down'
+      )
+
       expect(supabase.updates).toHaveLength(0)
       expect(mockSendCardReminderEmail).not.toHaveBeenCalled()
     })
@@ -472,6 +487,17 @@ describe('sendCardReminders', () => {
       expect(result.errors).toEqual([expect.stringContaining('claim failed')])
       expect(mockSendCardReminderEmail).not.toHaveBeenCalled()
     })
+
+    it('reports a claim error to Sentry so a stuck sweep is not silent', async () => {
+      await sweepOne(makeRegistration(), {
+        claims: { 'reg-1': { data: null, error: { message: 'claim failed' } } },
+      })
+
+      expect(mockLogError).toHaveBeenCalledWith(expect.anything(), {
+        operation: 'card-reminders.claim',
+        context: { registrationId: 'reg-1', eventId: 'event-1' },
+      })
+    })
   })
 
   describe('send failures', () => {
@@ -500,6 +526,17 @@ describe('sendCardReminders', () => {
       expect(result.errors[0]).toContain('Test Rider')
     })
 
+    it('reports a burned claim to Sentry, error string or not', async () => {
+      mockSendCardReminderEmail.mockResolvedValue({ sent: false })
+
+      await sweepOne(makeRegistration())
+
+      expect(mockLogError).toHaveBeenCalledWith(expect.anything(), {
+        operation: 'card-reminders.send',
+        context: { registrationId: 'reg-1', eventId: 'event-1' },
+      })
+    })
+
     it('keeps sweeping when one row throws', async () => {
       // A malformed row must not starve every rider behind it for the whole
       // 12 h window — the sweep only gets one chance per row.
@@ -524,6 +561,17 @@ describe('sendCardReminders', () => {
       expect(result.errors[0]).toContain('template blew up')
       expect(result.errors[0]).toContain('Test Rider')
       expect(result.errors[0]).toContain('Test Brevet')
+    })
+
+    it('reports a thrown row to Sentry with the registration and event', async () => {
+      mockSendCardReminderEmail.mockRejectedValueOnce(new Error('template blew up'))
+
+      await sweepOne(makeRegistration({ events: startAt(2 * HOUR) }))
+
+      expect(mockLogError).toHaveBeenCalledWith(expect.anything(), {
+        operation: 'card-reminders.row',
+        context: { registrationId: 'reg-1', eventId: 'event-1' },
+      })
     })
   })
 

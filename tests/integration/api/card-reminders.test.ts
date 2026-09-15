@@ -106,4 +106,23 @@ describe('card-reminders cron endpoint', () => {
     expect(json.error).toBe('Internal server error')
     expect(mockLogError).toHaveBeenCalledWith(expect.any(Error), { operation: 'card-reminders' })
   })
+
+  it('returns 500 and reports the unconfigured-SES abort so the Actions job goes red', async () => {
+    // The sweep throws instead of reporting this in `errors`: a run that can't
+    // send anything must not look like a successful no-op.
+    mockSendCardReminders.mockRejectedValue(
+      new Error('AWS SES not configured; skipping card reminder sweep')
+    )
+
+    const request = new Request('http://localhost/api/cron/card-reminders', {
+      headers: { authorization: `Bearer ${CRON_SECRET}` },
+    })
+    const response = await GET(request)
+
+    expect(response.status).toBe(500)
+    expect(mockLogError).toHaveBeenCalledWith(
+      expect.objectContaining({ message: 'AWS SES not configured; skipping card reminder sweep' }),
+      { operation: 'card-reminders' }
+    )
+  })
 })
