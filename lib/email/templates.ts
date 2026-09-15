@@ -334,8 +334,8 @@ export function buildCardReminderEmail(data: CardReminderEmailData): {
   // tells a rider nothing.
   const timeClause = data.eventTime === 'TBD' ? '' : `at ${data.eventTime} `
   const locationClause = data.eventLocation === 'TBD' ? '' : ` from ${data.eventLocation}`
-  const startsSentenceText = `The ${rideName} starts ${timeClause}on ${data.eventDate}${locationClause}.`
-  const startsSentenceHtml = `The <strong>${safe.rideName}</strong> starts ${
+  const startsSentenceText = `${rideName} starts ${timeClause}on ${data.eventDate}${locationClause}.`
+  const startsSentenceHtml = `<strong>${safe.rideName}</strong> starts ${
     data.eventTime === 'TBD' ? '' : `at ${safe.eventTime} `
   }on ${safe.eventDate}${data.eventLocation === 'TBD' ? '' : ` from ${safe.eventLocation}`}.`
 
@@ -351,7 +351,7 @@ export function buildCardReminderEmail(data: CardReminderEmailData): {
   const text = `
 Hi ${data.riderName},
 
-${startsSentenceText} You asked for a digital brevet card, so open it on your phone before the start and bookmark it.
+${startsSentenceText} You asked for a digital brevet card, so open it on your phone before the start and bookmark it. Remember to check in at starting control before your ride starts.
 
 Open your brevet card:
 ${data.cardUrl}
@@ -379,7 +379,7 @@ https://www.randonneursontario.ca
 <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
   <p>Hi ${safe.riderName},</p>
 
-  <p>${startsSentenceHtml} You asked for a digital brevet card, so open it on your phone before the start and bookmark it.</p>
+  <p>${startsSentenceHtml} You asked for a digital brevet card, so open it on your phone before the start and bookmark it. Remember to check in at starting control before your ride starts.</p>
 
   <div style="background-color: #F0FAE5; border: 1px solid #A3D373; border-radius: 8px; padding: 16px; margin: 16px 0;">
     <p style="text-align: center;">
