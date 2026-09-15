@@ -25,6 +25,11 @@ const contacts = [
     email: 'director1@randonneursontario.ca',
   },
   {
+    role: 'Member-at-large, Huron',
+    name: 'John Cummings',
+    email: 'director3@randonneursontario.ca',
+  },
+  {
     role: 'Member-at-large, Ottawa',
     name: 'Bojana Kolbah',
     email: 'director2@randonneursontario.ca',
@@ -32,7 +37,7 @@ const contacts = [
   {
     role: 'Member-at-large, Toronto',
     name: 'David Cole',
-    email: 'director4@randonneursontario.ca',
+    email: 'david.cole@randonneursontario.ca',
   },
   {
     role: 'Member-at-large, Toronto',
@@ -41,10 +46,10 @@ const contacts = [
   },
   {
     role: 'Member-at-large, Toronto',
-    name: 'Bob Macleod',
-    email: 'director3@randonneursontario.ca',
+    name: 'Chad Szymanski',
+    email: 'director4@randonneursontario.ca',
   },
-  { role: 'Social Media', name: 'Marc Deshaies', email: 'editor@randonneursontario.ca' },
+  { role: 'Social Media', name: 'Brenda Wiechers-Maxwell', email: 'editor@randonneursontario.ca' },
   {
     role: 'Director of Communications',
     name: 'Vytas Janusauskas',
