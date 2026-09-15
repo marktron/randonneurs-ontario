@@ -204,6 +204,20 @@ export function formatControlTime(date: Date): string {
 }
 
 /**
+ * The Toronto calendar date of an instant as `YYYY-MM-DD` — the form
+ * `events.event_date` and the other DATE columns are stored in, so it is
+ * directly comparable in a query filter.
+ */
+export function torontoDateString(date: Date): string {
+  return date.toLocaleDateString('en-CA', {
+    timeZone: TORONTO_TZ,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  })
+}
+
+/**
  * Format a date for card display (e.g., "Apr 18 2026") in Toronto timezone
  */
 export function formatCardDate(date: Date): string {

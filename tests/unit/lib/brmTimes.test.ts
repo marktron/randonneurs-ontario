@@ -6,6 +6,7 @@ import {
   formatHM,
   formatControlTime,
   formatCardDate,
+  torontoDateString,
   createTorontoDate,
 } from '@/lib/brmTimes'
 
@@ -399,5 +400,20 @@ describe('formatCardDate', () => {
     const result = formatCardDate(date)
 
     expect(result).toBe('Jan 05 2025')
+  })
+})
+
+describe('torontoDateString', () => {
+  it('formats a date as YYYY-MM-DD in Toronto time', () => {
+    expect(torontoDateString(createTorontoDate(2026, 5, 6, 7, 0))).toBe('2026-06-06')
+  })
+
+  it('zero-pads single-digit months and days', () => {
+    expect(torontoDateString(createTorontoDate(2026, 0, 5, 12, 0))).toBe('2026-01-05')
+  })
+
+  it('reports the Toronto calendar day, not the UTC one', () => {
+    // 03:00 UTC on June 6 is still 23:00 on June 5 in Toronto (EDT, UTC-4).
+    expect(torontoDateString(new Date(Date.UTC(2026, 5, 6, 3, 0)))).toBe('2026-06-05')
   })
 })
