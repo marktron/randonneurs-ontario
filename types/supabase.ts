@@ -488,6 +488,7 @@ export type Database = {
         Row: {
           brevet_card_type: string
           cancelled_at: string | null
+          card_reminder_sent_at: string | null
           event_id: string
           id: string
           is_team_captain: boolean | null
@@ -505,6 +506,7 @@ export type Database = {
         Insert: {
           brevet_card_type?: string
           cancelled_at?: string | null
+          card_reminder_sent_at?: string | null
           event_id: string
           id?: string
           is_team_captain?: boolean | null
@@ -522,6 +524,7 @@ export type Database = {
         Update: {
           brevet_card_type?: string
           cancelled_at?: string | null
+          card_reminder_sent_at?: string | null
           event_id?: string
           id?: string
           is_team_captain?: boolean | null
