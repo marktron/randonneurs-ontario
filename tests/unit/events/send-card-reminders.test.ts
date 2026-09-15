@@ -456,6 +456,19 @@ describe('sendCardReminders', () => {
       expect(result.errors[0]).toContain('Test Brevet')
       expect(supabase.updates).toHaveLength(1)
     })
+
+    it('records a silent non-send so a burned claim is never invisible', async () => {
+      // What `sendEventFlowEmail` returns when SES isn't configured: no error,
+      // but the claim is already stamped, so the reminder is gone for good.
+      mockSendCardReminderEmail.mockResolvedValue({ sent: false })
+
+      const { result, supabase } = await sweepOne(makeRegistration())
+
+      expect(result.sent).toBe(0)
+      expect(supabase.updates).toHaveLength(1)
+      expect(result.errors).toHaveLength(1)
+      expect(result.errors[0]).toContain('Test Rider')
+    })
   })
 
   describe('multiple candidates', () => {

@@ -162,10 +162,13 @@ export async function sendCardReminders(now: Date = new Date()): Promise<CardRem
     if (sent) {
       result.sent++
       console.log(`Sent digital card reminder for ${event.name} (registration ${reg.id})`)
-    }
-    if (sendError) {
+    } else {
+      // The claim is already stamped, so this reminder is gone for good —
+      // record it even when the sender reports no error (which is what
+      // happens when SES isn't configured), or the cron response would show
+      // a run that checked riders, sent nothing, and flagged nothing.
       result.errors.push(
-        `Failed to send card reminder to ${riderName} for ${event.name}: ${sendError}`
+        `Failed to send card reminder to ${riderName} for ${event.name}: ${sendError ?? 'email not sent'}`
       )
     }
   }
