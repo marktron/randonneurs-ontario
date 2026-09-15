@@ -16,8 +16,14 @@ interface TableState {
   singleResponse?: { data: unknown; error: unknown }
   /** Response for `.maybeSingle()` on a select chain. */
   maybeSingleResponse?: { data: unknown; error: unknown }
-  /** Response when the builder itself is awaited (list queries). */
-  listResponse?: { data: unknown; error: unknown }
+  /**
+   * Response when the builder itself is awaited (list queries). A function
+   * receives the call so a table queried twice in one action (e.g.
+   * control_checkins for the rider's own rows and for the roster) can
+   * answer each differently.
+   */
+  listResponse?:
+    { data: unknown; error: unknown } | ((call: FromCall) => { data: unknown; error: unknown })
   /** Response for `.single()` after `.insert()`. */
   insertResponse?: { data: unknown; error: unknown }
   /** Response for `.maybeSingle()` after `.update()`. */
@@ -94,7 +100,11 @@ const mockFrom = vi.fn((table: string) => {
     ) => {
       const response = deleted
         ? (state.deleteResponse ?? { data: null, error: null })
-        : (state.listResponse ?? { data: [], error: null })
+        : updated
+          ? (state.updateResponse ?? { data: null, error: null })
+          : typeof state.listResponse === 'function'
+            ? state.listResponse(call)
+            : (state.listResponse ?? { data: [], error: null })
       return Promise.resolve(response).then(resolve, reject)
     },
   }
@@ -120,7 +130,13 @@ vi.mock('@/lib/events/finish-result', () => ({
   revertFinishIfFinalControl: mockRevertFinish,
 }))
 
-import { checkInAtControl, getBrevetCardByToken, undoCheckin } from '@/lib/actions/brevet-card'
+import {
+  checkInAtControl,
+  getBrevetCardByToken,
+  getCheckinRoster,
+  setCheckinSharing,
+  undoCheckin,
+} from '@/lib/actions/brevet-card'
 import { RIDER_UNDO_WINDOW_MS } from '@/lib/brevet-card'
 
 const TOKEN = 'test-token'
@@ -1576,5 +1592,287 @@ describe('undoCheckin', () => {
 
     expect(result.success).toBe(false)
     expect(result.error).toMatch(/not found/i)
+  })
+})
+
+// ============================================================================
+// Other riders' check-ins (roster) and the sharing preference
+// ============================================================================
+
+/** Is this from() call the roster query (filtered by event) rather than the rider's own rows? */
+function isRosterCall(call: FromCall): boolean {
+  return call.eqArgs.some(([column]) => column === 'event_controls.event_id')
+}
+
+function rosterRow(over: {
+  registrationId: string
+  controlId?: string
+  minutesAgo: number
+  firstName: string
+  lastName?: string
+  status?: string | null
+  shareCheckins?: boolean | null
+  hidden?: boolean | null
+}) {
+  return {
+    control_id: over.controlId ?? 'ctrl-1',
+    registration_id: over.registrationId,
+    checked_in_at: new Date(Date.now() - over.minutesAgo * 60 * 1000).toISOString(),
+    registrations: {
+      status: over.status === undefined ? 'registered' : over.status,
+      share_checkins: over.shareCheckins === undefined ? true : over.shareCheckins,
+      riders: {
+        first_name: over.firstName,
+        last_name: over.lastName ?? 'Rider',
+        hidden: over.hidden ?? false,
+      },
+    },
+  }
+}
+
+describe('getBrevetCardByToken roster', () => {
+  function seedCard(rosterRows: unknown[], own: unknown[] = []) {
+    tables.registrations = { singleResponse: { data: makeRegistration(), error: null } }
+    tables.event_controls = {
+      listResponse: {
+        data: [{ ...makeControlRow(), position: 1, notes: null }],
+        error: null,
+      },
+    }
+    tables.control_checkins = {
+      listResponse: (call) =>
+        isRosterCall(call) ? { data: rosterRows, error: null } : { data: own, error: null },
+    }
+  }
+
+  it("lists other riders' shared check-ins in order of arrival, never the viewer's own", async () => {
+    seedCard([
+      rosterRow({ registrationId: 'reg-3', minutesAgo: 10, firstName: 'Alan', lastName: 'Turing' }),
+      rosterRow({
+        registrationId: 'reg-1',
+        minutesAgo: 30,
+        firstName: 'Ada',
+        lastName: 'Lovelace',
+      }),
+      rosterRow({
+        registrationId: 'reg-2',
+        minutesAgo: 20,
+        firstName: 'Grace',
+        lastName: 'Hopper',
+      }),
+    ])
+
+    const card = await getBrevetCardByToken(TOKEN)
+
+    expect(card!.roster.map((entry) => entry.riderName)).toEqual(['Grace Hopper', 'Alan Turing'])
+    expect(card!.roster.every((entry) => entry.controlId === 'ctrl-1')).toBe(true)
+  })
+
+  it('asks the database for registered, sharing, non-hidden riders on this event only', async () => {
+    seedCard([])
+
+    await getBrevetCardByToken(TOKEN)
+
+    const rosterCall = fromCalls.find((c) => c.table === 'control_checkins' && isRosterCall(c))
+    expect(rosterCall).toBeDefined()
+    expect(rosterCall!.eqArgs).toEqual(
+      expect.arrayContaining([
+        ['event_controls.event_id', 'evt-1'],
+        ['registrations.status', 'registered'],
+        ['registrations.share_checkins', true],
+        ['registrations.riders.hidden', false],
+      ])
+    )
+  })
+
+  it('still drops rows the sharing rules exclude, even if the query returned them', async () => {
+    seedCard([
+      rosterRow({
+        registrationId: 'reg-2',
+        minutesAgo: 5,
+        firstName: 'Opted',
+        shareCheckins: false,
+      }),
+      rosterRow({ registrationId: 'reg-3', minutesAgo: 5, firstName: 'Hidden', hidden: true }),
+      rosterRow({ registrationId: 'reg-4', minutesAgo: 5, firstName: 'Gone', status: 'cancelled' }),
+      rosterRow({
+        registrationId: 'reg-5',
+        minutesAgo: 5,
+        firstName: 'Unset',
+        shareCheckins: null,
+      }),
+      // A row without the embedded registration (older mock shape) has no
+      // one to attribute it to.
+      { control_id: 'ctrl-1', registration_id: 'reg-6', checked_in_at: new Date().toISOString() },
+      rosterRow({ registrationId: 'reg-7', minutesAgo: 5, firstName: 'Shown' }),
+    ])
+
+    const card = await getBrevetCardByToken(TOKEN)
+
+    expect(card!.roster.map((entry) => entry.riderName)).toEqual(['Shown Rider'])
+  })
+
+  it('drops roster rows for controls that are no longer on the event', async () => {
+    seedCard([
+      rosterRow({ registrationId: 'reg-2', minutesAgo: 5, firstName: 'Kept' }),
+      rosterRow({
+        registrationId: 'reg-3',
+        minutesAgo: 5,
+        firstName: 'Orphan',
+        controlId: 'ctrl-gone',
+      }),
+    ])
+
+    const card = await getBrevetCardByToken(TOKEN)
+
+    expect(card!.roster.map((entry) => entry.riderName)).toEqual(['Kept Rider'])
+  })
+
+  it('renders the card without other riders when the roster query fails', async () => {
+    tables.registrations = { singleResponse: { data: makeRegistration(), error: null } }
+    tables.event_controls = {
+      listResponse: { data: [{ ...makeControlRow(), position: 1, notes: null }], error: null },
+    }
+    tables.control_checkins = {
+      listResponse: (call) =>
+        isRosterCall(call)
+          ? { data: null, error: { message: 'boom', code: '57014' } }
+          : { data: [], error: null },
+    }
+
+    const card = await getBrevetCardByToken(TOKEN)
+
+    expect(card).not.toBeNull()
+    expect(card!.roster).toEqual([])
+    expect(card!.controls).toHaveLength(1)
+  })
+
+  it('reports the sharing preference and whether the rider may share at all', async () => {
+    seedCard([])
+    const card = await getBrevetCardByToken(TOKEN)
+    expect(card!.registration.shareCheckins).toBe(true)
+    expect(card!.rider.canShareCheckins).toBe(true)
+
+    const reg = makeRegistration() as ReturnType<typeof makeRegistration> & {
+      share_checkins?: boolean
+      riders: { hidden?: boolean }
+    }
+    reg.share_checkins = false
+    reg.riders.hidden = true
+    tables.registrations = { singleResponse: { data: reg, error: null } }
+    const optedOut = await getBrevetCardByToken(TOKEN)
+    expect(optedOut!.registration.shareCheckins).toBe(false)
+    expect(optedOut!.rider.canShareCheckins).toBe(false)
+  })
+})
+
+describe('getCheckinRoster', () => {
+  it("returns the other riders' shared check-ins for the token's event", async () => {
+    tables.registrations = {
+      singleResponse: { data: { id: 'reg-1', events: { id: 'evt-1' } }, error: null },
+    }
+    tables.control_checkins = {
+      listResponse: {
+        data: [
+          rosterRow({
+            registrationId: 'reg-1',
+            minutesAgo: 9,
+            firstName: 'Ada',
+            lastName: 'Lovelace',
+          }),
+          rosterRow({
+            registrationId: 'reg-2',
+            minutesAgo: 3,
+            firstName: 'Grace',
+            lastName: 'Hopper',
+          }),
+        ],
+        error: null,
+      },
+    }
+
+    const result = await getCheckinRoster(TOKEN)
+
+    expect(result.success).toBe(true)
+    expect(result.data!.map((entry) => entry.riderName)).toEqual(['Grace Hopper'])
+    const rosterCall = fromCalls.find((c) => c.table === 'control_checkins')
+    expect(rosterCall!.eqArgs).toEqual(
+      expect.arrayContaining([
+        ['event_controls.event_id', 'evt-1'],
+        ['registrations.share_checkins', true],
+      ])
+    )
+  })
+
+  it('rejects an unknown token without touching check-ins', async () => {
+    tables.registrations = { singleResponse: { data: null, error: { code: 'PGRST116' } } }
+
+    const result = await getCheckinRoster('nope')
+
+    expect(result.success).toBe(false)
+    expect(fromCalls.some((c) => c.table === 'control_checkins')).toBe(false)
+  })
+
+  it('is rate limited per token', async () => {
+    mockIsRateLimited.mockReturnValue(true)
+
+    const result = await getCheckinRoster(TOKEN)
+
+    expect(result.success).toBe(false)
+    expect(result.error).toMatch(/too many/i)
+    expect(fromCalls).toHaveLength(0)
+  })
+})
+
+describe('setCheckinSharing', () => {
+  it('writes the preference to the registration found by token', async () => {
+    tables.registrations = {
+      singleResponse: { data: { id: 'reg-1' }, error: null },
+      updateResponse: { data: null, error: null },
+    }
+
+    const result = await setCheckinSharing(TOKEN, { share: false })
+
+    expect(result.success).toBe(true)
+    const update = fromCalls.find((c) => c.table === 'registrations' && c.ops.includes('update'))
+    expect(update).toBeDefined()
+    expect(update!.updatePayload).toEqual({ share_checkins: false })
+    expect(update!.eqArgs).toEqual([['id', 'reg-1']])
+  })
+
+  it('rejects anything but a boolean', async () => {
+    const result = await setCheckinSharing(TOKEN, { share: 'yes' as unknown as boolean })
+
+    expect(result.success).toBe(false)
+    expect(fromCalls).toHaveLength(0)
+  })
+
+  it('rejects an unknown token', async () => {
+    tables.registrations = { singleResponse: { data: null, error: { code: 'PGRST116' } } }
+
+    const result = await setCheckinSharing('nope', { share: true })
+
+    expect(result.success).toBe(false)
+    expect(fromCalls.some((c) => c.ops.includes('update'))).toBe(false)
+  })
+
+  it('reports a failed write', async () => {
+    tables.registrations = {
+      singleResponse: { data: { id: 'reg-1' }, error: null },
+      updateResponse: { data: null, error: { message: 'boom', code: '57014' } },
+    }
+
+    const result = await setCheckinSharing(TOKEN, { share: true })
+
+    expect(result.success).toBe(false)
+  })
+
+  it('is rate limited per token', async () => {
+    mockIsRateLimited.mockReturnValue(true)
+
+    const result = await setCheckinSharing(TOKEN, { share: true })
+
+    expect(result.success).toBe(false)
+    expect(fromCalls).toHaveLength(0)
   })
 })

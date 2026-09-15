@@ -10,16 +10,25 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import userEvent from '@testing-library/user-event'
 import { BrevetCard } from '@/components/brevet-card-view'
 import type { BrevetCardData } from '@/lib/actions/brevet-card'
-import { checkInAtControl, undoCheckin } from '@/lib/actions/brevet-card'
+import {
+  checkInAtControl,
+  getCheckinRoster,
+  setCheckinSharing,
+  undoCheckin,
+} from '@/lib/actions/brevet-card'
 import { formatControlTime } from '@/lib/brmTimes'
 
 vi.mock('@/lib/actions/brevet-card', () => ({
   checkInAtControl: vi.fn(),
+  getCheckinRoster: vi.fn(),
+  setCheckinSharing: vi.fn(),
   undoCheckin: vi.fn(),
 }))
 
 const mockCheckIn = vi.mocked(checkInAtControl)
 const mockUndo = vi.mocked(undoCheckin)
+const mockRoster = vi.mocked(getCheckinRoster)
+const mockSetSharing = vi.mocked(setCheckinSharing)
 
 const NO_FLAGS = { outOfRadius: false, noGps: false, early: false, late: false, lateSync: false }
 
@@ -135,7 +144,7 @@ function makeData(): BrevetCardData {
   // Started an hour ago so the check-in window is open.
   const startsAt = new Date(Date.now() - 60 * 60 * 1000)
   return {
-    registration: { id: 'reg-1', status: 'registered', isPreRide: false },
+    registration: { id: 'reg-1', status: 'registered', isPreRide: false, shareCheckins: true },
     event: {
       id: 'evt-1',
       slug: 'test-200',
@@ -150,7 +159,7 @@ function makeData(): BrevetCardData {
       organizer: { name: null, phone: null, email: null },
       rwgpsId: null,
     },
-    rider: { firstName: 'Ada', lastName: 'Lovelace' },
+    rider: { firstName: 'Ada', lastName: 'Lovelace', canShareCheckins: true },
     controls: [
       {
         id: 'ctrl-1',
@@ -167,6 +176,7 @@ function makeData(): BrevetCardData {
       },
     ],
     checkins: [],
+    roster: [],
   }
 }
 
@@ -253,6 +263,10 @@ beforeEach(() => {
   // undoCheckin is fire-and-forget in the pending path (.catch on the result),
   // so it must resolve a promise even when a test doesn't assert on it.
   mockUndo.mockResolvedValue({ success: true } as Awaited<ReturnType<typeof undoCheckin>>)
+  // Opening a roster refreshes it; a refused refresh keeps the initial list,
+  // so unrelated tests don't have to seed a response.
+  mockRoster.mockResolvedValue({ success: false, error: 'offline' })
+  mockSetSharing.mockResolvedValue({ success: true })
   // happy-dom leaves isSecureContext undefined; real browsers always set it.
   Object.defineProperty(window, 'isSecureContext', { value: true, configurable: true })
   // Default: Permissions API absent (like older Safari) so unrelated tests
@@ -2102,5 +2116,211 @@ describe('BrevetCard leg-control windows', () => {
   it('still renders the open/close times line for single-route controls', () => {
     render(<BrevetCard token={TOKEN} initialData={makeData()} />)
     expect(screen.getAllByText(/–/).length).toBeGreaterThan(0)
+  })
+})
+
+describe('BrevetCard other riders at each control', () => {
+  const tapAt = (minutesAgo: number) => new Date(Date.now() - minutesAgo * 60 * 1000).toISOString()
+
+  function makeRosterData(): BrevetCardData {
+    const data = makeData()
+    data.roster = [
+      { controlId: 'ctrl-1', riderName: 'Grace Hopper', checkedInAt: tapAt(40) },
+      { controlId: 'ctrl-1', riderName: 'Alan Turing', checkedInAt: tapAt(25) },
+    ]
+    return data
+  }
+
+  it('shows nothing about other riders at a control nobody else has reached', () => {
+    render(<BrevetCard token={TOKEN} initialData={makeData()} />)
+
+    expect(screen.queryByText(/other riders? checked in/i)).not.toBeInTheDocument()
+  })
+
+  it('counts the other riders under the control and lists them only on demand', async () => {
+    const user = userEvent.setup()
+    const data = makeRosterData()
+    render(<BrevetCard token={TOKEN} initialData={data} />)
+
+    const trigger = screen.getByRole('button', { name: /2 other riders checked in/i })
+    expect(trigger).toHaveAttribute('aria-expanded', 'false')
+    expect(screen.queryByText('Grace Hopper')).not.toBeInTheDocument()
+
+    await user.click(trigger)
+
+    expect(trigger).toHaveAttribute('aria-expanded', 'true')
+    const list = document.getElementById(trigger.getAttribute('aria-controls')!)!
+    const names = within(list)
+      .getAllByRole('listitem')
+      .map((li) => li.textContent)
+    // Order of arrival, with each rider's tap time beside the name.
+    expect(names).toEqual([
+      `Grace Hopper${formatControlTime(new Date(data.roster[0].checkedInAt))}`,
+      `Alan Turing${formatControlTime(new Date(data.roster[1].checkedInAt))}`,
+    ])
+
+    await user.click(trigger)
+    expect(trigger).toHaveAttribute('aria-expanded', 'false')
+    expect(screen.queryByText('Grace Hopper')).not.toBeInTheDocument()
+  })
+
+  it('uses singular copy for one other rider', () => {
+    const data = makeData()
+    data.roster = [{ controlId: 'ctrl-1', riderName: 'Grace Hopper', checkedInAt: tapAt(5) }]
+    render(<BrevetCard token={TOKEN} initialData={data} />)
+
+    expect(screen.getByRole('button', { name: /1 other rider checked in/i })).toBeInTheDocument()
+  })
+
+  it('refreshes the list from the server when it is opened', async () => {
+    const user = userEvent.setup()
+    mockRoster.mockResolvedValue({
+      success: true,
+      data: [
+        { controlId: 'ctrl-1', riderName: 'Grace Hopper', checkedInAt: tapAt(40) },
+        { controlId: 'ctrl-1', riderName: 'Alan Turing', checkedInAt: tapAt(25) },
+        { controlId: 'ctrl-1', riderName: 'Edsger Dijkstra', checkedInAt: tapAt(2) },
+      ],
+    })
+    render(<BrevetCard token={TOKEN} initialData={makeRosterData()} />)
+
+    await user.click(screen.getByRole('button', { name: /2 other riders checked in/i }))
+
+    expect(mockRoster).toHaveBeenCalledWith(TOKEN)
+    await waitFor(() => {
+      expect(screen.getByText('Edsger Dijkstra')).toBeInTheDocument()
+    })
+    expect(screen.getByRole('button', { name: /3 other riders checked in/i })).toBeInTheDocument()
+  })
+
+  it('keeps the last known list when the refresh fails (offline)', async () => {
+    const user = userEvent.setup()
+    mockRoster.mockRejectedValue(new Error('network down'))
+    render(<BrevetCard token={TOKEN} initialData={makeRosterData()} />)
+
+    await user.click(screen.getByRole('button', { name: /2 other riders checked in/i }))
+
+    await waitFor(() => expect(mockRoster).toHaveBeenCalled())
+    expect(screen.getByText('Grace Hopper')).toBeInTheDocument()
+    expect(screen.getByText('Alan Turing')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /2 other riders checked in/i })).toBeInTheDocument()
+  })
+
+  it('keeps the stamp inside the row when the list unfolds beneath it', async () => {
+    const user = userEvent.setup()
+    const data = makeRosterData()
+    data.checkins = [
+      {
+        controlId: 'ctrl-1',
+        checkedInAt: tapAt(10),
+        receivedAt: tapAt(10),
+        method: 'gps',
+        distanceToControlM: 5,
+        flags: NO_FLAGS,
+      },
+    ]
+    render(<BrevetCard token={TOKEN} initialData={data} />)
+
+    const trigger = screen.getByRole('button', { name: /2 other riders checked in/i })
+    await user.click(trigger)
+
+    const stamp = screen.getByTestId('control-stamp')
+    const row = stamp.parentElement!
+    // The stamp is positioned against the row box, and the roster sits
+    // after that box rather than inside it — so it can't shift the stamp.
+    expect(row).toHaveClass('relative')
+    expect(row.contains(trigger)).toBe(false)
+    expect(row.parentElement!.contains(trigger)).toBe(true)
+  })
+
+  it('hydrates without a mismatch when other riders are present', async () => {
+    const data = makeRosterData()
+    const html = renderToString(<BrevetCard token={TOKEN} initialData={data} />)
+    const container = document.createElement('div')
+    container.innerHTML = html
+    document.body.appendChild(container)
+
+    const recoverableErrors: unknown[] = []
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    let root: ReturnType<typeof hydrateRoot> | undefined
+    try {
+      await act(async () => {
+        root = hydrateRoot(container, <BrevetCard token={TOKEN} initialData={data} />, {
+          onRecoverableError: (error) => recoverableErrors.push(error),
+        })
+      })
+      expect(recoverableErrors).toEqual([])
+      expect(
+        consoleSpy.mock.calls.filter((call) =>
+          /hydrat|did not match|didn't match/i.test(String(call[0]))
+        )
+      ).toEqual([])
+      expect(within(container).getByText(/2 other riders checked in/i)).toBeInTheDocument()
+    } finally {
+      consoleSpy.mockRestore()
+      await act(async () => root?.unmount())
+      container.remove()
+    }
+  })
+})
+
+describe('BrevetCard check-in sharing toggle', () => {
+  it('is on by default and saves a change through the server action', async () => {
+    const user = userEvent.setup()
+    render(<BrevetCard token={TOKEN} initialData={makeData()} />)
+
+    const toggle = screen.getByRole('switch', { name: /share my check-ins with other riders/i })
+    expect(toggle).toHaveAttribute('aria-checked', 'true')
+
+    await user.click(toggle)
+
+    expect(mockSetSharing).toHaveBeenCalledWith(TOKEN, { share: false })
+    await waitFor(() => expect(toggle).toHaveAttribute('aria-checked', 'false'))
+    expect(toggle).not.toBeDisabled()
+  })
+
+  it('reflects a rider who has already opted out', () => {
+    const data = makeData()
+    data.registration.shareCheckins = false
+    render(<BrevetCard token={TOKEN} initialData={data} />)
+
+    expect(screen.getByRole('switch', { name: /share my check-ins/i })).toHaveAttribute(
+      'aria-checked',
+      'false'
+    )
+  })
+
+  it('reverts the switch and explains when the server refuses', async () => {
+    const user = userEvent.setup()
+    mockSetSharing.mockResolvedValue({ success: false, error: 'Too many attempts.' })
+    render(<BrevetCard token={TOKEN} initialData={makeData()} />)
+
+    const toggle = screen.getByRole('switch', { name: /share my check-ins/i })
+    await user.click(toggle)
+
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Too many attempts.'))
+    expect(toggle).toHaveAttribute('aria-checked', 'true')
+  })
+
+  it('reverts the switch when the request fails outright', async () => {
+    const user = userEvent.setup()
+    mockSetSharing.mockRejectedValue(new Error('network down'))
+    render(<BrevetCard token={TOKEN} initialData={makeData()} />)
+
+    const toggle = screen.getByRole('switch', { name: /share my check-ins/i })
+    await user.click(toggle)
+
+    await waitFor(() =>
+      expect(screen.getByRole('alert')).toHaveTextContent(/check your connection/i)
+    )
+    expect(toggle).toHaveAttribute('aria-checked', 'true')
+  })
+
+  it('offers no toggle to a hidden rider, who is never shown to others', () => {
+    const data = makeData()
+    data.rider.canShareCheckins = false
+    render(<BrevetCard token={TOKEN} initialData={data} />)
+
+    expect(screen.queryByRole('switch')).not.toBeInTheDocument()
   })
 })

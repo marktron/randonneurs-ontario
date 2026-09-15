@@ -48,6 +48,15 @@ const CHECKIN_WINDOW_MS = 15 * 60 * 1000
 // Device clocks can drift; a tap "from the future" beyond this is rejected.
 const MAX_CLOCK_SKEW_MS = 5 * 60 * 1000
 
+// Roster refreshes happen when a rider opens a "who's checked in" list —
+// a handful per control over a day, never a stream.
+const ROSTER_MAX_ATTEMPTS = 120
+const ROSTER_WINDOW_MS = 15 * 60 * 1000
+
+// Sharing preference flips are rare; anything more than this is a script.
+const SHARING_MAX_ATTEMPTS = 20
+const SHARING_WINDOW_MS = 15 * 60 * 1000
+
 // ============================================================================
 // Shared: derive whether a control is the event's final control
 // ============================================================================
@@ -117,12 +126,26 @@ export interface CardCheckin {
   flags: CheckinFlags
 }
 
+/**
+ * Another rider's check-in at a control, as shown on a rider's own card
+ * under "N other riders checked in" (docs/digital-brevet-card.md §7b).
+ * Only riders who share their check-ins appear; the viewer's own check-ins
+ * are never included.
+ */
+export interface CheckinRosterEntry {
+  controlId: string
+  riderName: string
+  checkedInAt: string
+}
+
 export interface BrevetCardData {
   registration: {
     id: string
     status: string | null
     /** True when this registration has an approved pre-ride start. */
     isPreRide: boolean
+    /** Whether this rider's check-ins are visible to other riders on the event. */
+    shareCheckins: boolean
   }
   event: {
     id: string
@@ -147,15 +170,23 @@ export interface BrevetCardData {
   rider: {
     firstName: string
     lastName: string
+    /**
+     * False for riders flagged hidden (docs/hidden-riders.md): they are
+     * never shown to other riders, so the card offers no sharing toggle.
+     */
+    canShareCheckins: boolean
   }
   controls: CardControl[]
   checkins: CardCheckin[]
+  /** Other riders' shared check-ins on this event, earliest first. */
+  roster: CheckinRosterEntry[]
 }
 
 interface RegistrationWithEvent {
   id: string
   status: string | null
   rider_id: string
+  share_checkins: boolean | null
   pre_ride_date: string | null
   pre_ride_start_time: string | null
   events: {
@@ -173,7 +204,109 @@ interface RegistrationWithEvent {
     chapters: { name: string; slug: string } | null
     routes: { rwgps_id: string | null } | null
   }
-  riders: { first_name: string; last_name: string; email: string | null }
+  riders: { first_name: string; last_name: string; email: string | null; hidden?: boolean | null }
+}
+
+// ============================================================================
+// Read: other riders' shared check-ins (the per-control roster)
+// ============================================================================
+
+interface RosterRow {
+  control_id: string
+  registration_id: string
+  checked_in_at: string
+  registrations?: {
+    status: string | null
+    share_checkins: boolean | null
+    riders: { first_name: string; last_name: string; hidden: boolean | null } | null
+  } | null
+}
+
+const ROSTER_SELECT = `
+  control_id, registration_id, checked_in_at,
+  event_controls!inner (event_id),
+  registrations!inner (status, share_checkins, riders!inner (first_name, last_name, hidden))
+`
+
+/**
+ * Every shared check-in on the event except the viewer's own, earliest tap
+ * first. Sharing is enforced twice: the query filters on the embedded
+ * registration/rider (share_checkins, registered status, not hidden), and
+ * `toRosterEntries` re-checks each row, so a row can only appear when both
+ * agree. Organizer visibility is unaffected — the admin grid reads the
+ * table directly.
+ */
+function queryRoster(supabase: ReturnType<typeof getSupabaseAdmin>, eventId: string) {
+  return supabase
+    .from('control_checkins')
+    .select(ROSTER_SELECT)
+    .eq('event_controls.event_id', eventId)
+    .eq('registrations.status', 'registered')
+    .eq('registrations.share_checkins', true)
+    .eq('registrations.riders.hidden', false)
+    .order('checked_in_at', { ascending: true })
+}
+
+function toRosterEntries(rows: unknown, viewerRegistrationId: string): CheckinRosterEntry[] {
+  const entries: CheckinRosterEntry[] = []
+  for (const row of (rows || []) as RosterRow[]) {
+    if (row.registration_id === viewerRegistrationId) continue
+    const registration = row.registrations
+    const rider = registration?.riders
+    if (!registration || !rider) continue
+    if (registration.status !== 'registered') continue
+    if (registration.share_checkins !== true) continue
+    if (rider.hidden === true) continue
+    entries.push({
+      controlId: row.control_id,
+      riderName: `${rider.first_name} ${rider.last_name}`.trim(),
+      checkedInAt: row.checked_in_at,
+    })
+  }
+  // The query orders by tap time, but a mock or a future query change
+  // shouldn't be able to scramble the "order of arrival" the card shows.
+  entries.sort((a, b) => a.checkedInAt.localeCompare(b.checkedInAt))
+  return entries
+}
+
+/**
+ * Fresh copy of the roster for a rider's card, fetched when they open a
+ * control's "who's checked in" list so the names are current rather than
+ * from page load. Failures leave the card showing its last known list.
+ */
+export async function getCheckinRoster(token: string): Promise<ActionResult<CheckinRosterEntry[]>> {
+  try {
+    if (!token) {
+      return { success: false, error: 'Invalid card link' }
+    }
+    if (isRateLimited('checkin-roster', token, ROSTER_MAX_ATTEMPTS, ROSTER_WINDOW_MS)) {
+      return { success: false, error: 'Too many attempts. Please wait a few minutes.' }
+    }
+
+    const supabase = getSupabaseAdmin()
+    const { data: registration, error: fetchError } = await supabase
+      .from('registrations')
+      .select('id, events!inner (id)')
+      .eq('management_token', token)
+      .single()
+
+    if (fetchError || !registration) {
+      return { success: false, error: 'Registration not found' }
+    }
+    const reg = registration as unknown as { id: string; events: { id: string } }
+
+    const { data: rows, error } = await queryRoster(supabase, reg.events.id)
+    if (error) {
+      return handleSupabaseError(
+        error,
+        { operation: 'getCheckinRoster', context: { eventId: reg.events.id } },
+        'Failed to load check-ins'
+      )
+    }
+    return createActionResult(toRosterEntries(rows, reg.id))
+  } catch (error) {
+    return handleActionError(error, { operation: 'getCheckinRoster' }, 'Failed to load check-ins')
+  }
 }
 
 // ============================================================================
@@ -195,14 +328,14 @@ export async function getBrevetCardByToken(token: string): Promise<BrevetCardDat
     .from('registrations')
     .select(
       `
-      id, status, rider_id, pre_ride_date, pre_ride_start_time,
+      id, status, rider_id, share_checkins, pre_ride_date, pre_ride_start_time,
       events!inner (
         id, slug, name, status, event_type, event_date, start_time, distance_km,
         organizer_name, organizer_phone, organizer_email,
         routes (rwgps_id),
         chapters (name, slug)
       ),
-      riders!inner (first_name, last_name, email)
+      riders!inner (first_name, last_name, email, hidden)
     `
     )
     .eq('management_token', token)
@@ -216,21 +349,23 @@ export async function getBrevetCardByToken(token: string): Promise<BrevetCardDat
   const reg = registration as unknown as RegistrationWithEvent
   const event = reg.events
 
-  // Both queries depend only on the registration row — run them together.
-  const [{ data: controlRows, error: controlsError }, { data: checkinRows, error: checkinsError }] =
-    await Promise.all([
-      supabase
-        .from('event_controls')
-        .select(
-          'id, position, name, distance_km, lat, lng, radius_m, notes, leg_rwgps_id, leg_name'
-        )
-        .eq('event_id', event.id)
-        .order('position', { ascending: true }),
-      supabase
-        .from('control_checkins')
-        .select('control_id, checked_in_at, received_at, method, distance_to_control_m')
-        .eq('registration_id', reg.id),
-    ])
+  // All three queries depend only on the registration row — run them together.
+  const [
+    { data: controlRows, error: controlsError },
+    { data: checkinRows, error: checkinsError },
+    { data: rosterRows, error: rosterError },
+  ] = await Promise.all([
+    supabase
+      .from('event_controls')
+      .select('id, position, name, distance_km, lat, lng, radius_m, notes, leg_rwgps_id, leg_name')
+      .eq('event_id', event.id)
+      .order('position', { ascending: true }),
+    supabase
+      .from('control_checkins')
+      .select('control_id, checked_in_at, received_at, method, distance_to_control_m')
+      .eq('registration_id', reg.id),
+    queryRoster(supabase, event.id),
+  ])
 
   // Fail loud on transient DB errors: returning null here would 404 the
   // page and rendering without check-ins would silently show an empty card.
@@ -247,6 +382,15 @@ export async function getBrevetCardByToken(token: string): Promise<BrevetCardDat
       context: { registrationId: reg.id },
     })
     throw new Error('Failed to load brevet card check-ins')
+  }
+  // The roster is social context, not the rider's record: a failure here
+  // must not take the card (and the rider's ability to check in) down with
+  // it. Log it and render the card without other riders.
+  if (rosterError) {
+    logError(rosterError, {
+      operation: 'getBrevetCardByToken.roster',
+      context: { eventId: event.id },
+    })
   }
 
   const controls = (controlRows || []) as {
@@ -293,6 +437,7 @@ export async function getBrevetCardByToken(token: string): Promise<BrevetCardDat
       id: reg.id,
       status: reg.status,
       isPreRide: reg.pre_ride_date != null,
+      shareCheckins: reg.share_checkins !== false,
     },
     event: {
       id: event.id,
@@ -315,6 +460,7 @@ export async function getBrevetCardByToken(token: string): Promise<BrevetCardDat
     rider: {
       firstName: reg.riders.first_name,
       lastName: reg.riders.last_name,
+      canShareCheckins: reg.riders.hidden !== true,
     },
     controls: controls.map((control, i) => {
       const window = computeControlWindow(eventStart, windowDistances[i], event.distance_km)
@@ -356,6 +502,75 @@ export async function getBrevetCardByToken(token: string): Promise<BrevetCardDat
         },
       ]
     }),
+    roster: rosterError
+      ? []
+      : toRosterEntries(rosterRows, reg.id).filter((entry) => controlById.has(entry.controlId)),
+  }
+}
+
+// ============================================================================
+// Write: check-in sharing preference (rider self-service)
+// ============================================================================
+
+export interface SetCheckinSharingInput {
+  share: boolean
+}
+
+/**
+ * Turn the rider's check-in sharing on or off. Unlike check-ins this is
+ * allowed at any point in the event's life — a privacy choice shouldn't be
+ * frozen with the results — and it never touches the check-ins themselves,
+ * which organizers keep seeing either way.
+ */
+export async function setCheckinSharing(
+  token: string,
+  input: SetCheckinSharingInput
+): Promise<ActionResult> {
+  try {
+    if (!token) {
+      return { success: false, error: 'Invalid card link' }
+    }
+    if (typeof input?.share !== 'boolean') {
+      return { success: false, error: 'Invalid sharing preference' }
+    }
+    if (isRateLimited('card-sharing', token, SHARING_MAX_ATTEMPTS, SHARING_WINDOW_MS)) {
+      return { success: false, error: 'Too many attempts. Please wait a few minutes.' }
+    }
+
+    const supabase = getSupabaseAdmin()
+    const { data: registration, error: fetchError } = await supabase
+      .from('registrations')
+      .select('id')
+      .eq('management_token', token)
+      .single()
+
+    // Expected "not found" for an invalid token — not logged to Sentry.
+    if (fetchError || !registration) {
+      return { success: false, error: 'Registration not found' }
+    }
+    const reg = registration as { id: string }
+
+    const { error: updateError } = await supabase
+      .from('registrations')
+      .update({ share_checkins: input.share })
+      .eq('id', reg.id)
+
+    if (updateError) {
+      return handleSupabaseError(
+        updateError,
+        { operation: 'setCheckinSharing', context: { registrationId: reg.id } },
+        'Failed to save your sharing preference'
+      )
+    }
+
+    revalidatePath(`/card/${token}`)
+    return createActionResult()
+  } catch (error) {
+    return handleActionError(
+      error,
+      { operation: 'setCheckinSharing' },
+      'Failed to save your sharing preference'
+    )
   }
 }
 

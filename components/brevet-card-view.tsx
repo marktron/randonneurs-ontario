@@ -12,6 +12,8 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
+import { Label } from '@/components/ui/label'
+import { Switch } from '@/components/ui/switch'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -24,11 +26,14 @@ import {
 } from '@/components/ui/alert-dialog'
 import {
   checkInAtControl,
+  getCheckinRoster,
+  setCheckinSharing,
   undoCheckin,
   type BrevetCardData,
   type CardCheckin,
   type CardControl,
   type CheckinInput,
+  type CheckinRosterEntry,
 } from '@/lib/actions/brevet-card'
 import { formatControlTime } from '@/lib/brmTimes'
 import { haversineMeters } from '@/lib/geo'
@@ -50,7 +55,17 @@ import type {
   LocationFailureReason,
   LocationFailureStage,
 } from '@/lib/location-diagnostics'
-import { CheckCircle2, CloudOff, Loader2, Mail, Map as MapIcon, MapPin, Phone } from 'lucide-react'
+import {
+  CheckCircle2,
+  ChevronDown,
+  CloudOff,
+  Loader2,
+  Mail,
+  Map as MapIcon,
+  MapPin,
+  Phone,
+  Users,
+} from 'lucide-react'
 import { BoldLabelText } from '@/components/bold-label-text'
 import { REGULATIONS_TEXT, EVENT_INFO_TEXT } from '@/types/control-card'
 import { cn } from '@/lib/utils'
@@ -280,6 +295,20 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
   // render, and the repo's react-hooks/refs rule forbids render-time ref
   // reads.
   const [sessionCheckins, setSessionCheckins] = useState<Set<string>>(new Set())
+
+  // Other riders' shared check-ins (§7b). Seeded from the server load;
+  // refreshed each time a rider opens a control's list, so what they read
+  // is current without the page polling all day.
+  const [roster, setRoster] = useState<CheckinRosterEntry[]>(initialData.roster)
+  const [openRosterControls, setOpenRosterControls] = useState<Set<string>>(new Set())
+  const [rosterRefreshing, setRosterRefreshing] = useState(false)
+  const rosterRequest = useRef(0)
+
+  // The rider's own sharing preference — flipped optimistically, reverted
+  // if the server refuses.
+  const [shareCheckins, setShareCheckins] = useState(initialData.registration.shareCheckins)
+  const [sharingPending, setSharingPending] = useState(false)
+  const [sharingError, setSharingError] = useState<string | null>(null)
 
   // SSR-safe: `navigator` does not exist during renderToString, and the
   // blocked dialog never renders on the server anyway.
@@ -882,6 +911,68 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
     })
   }, [wrongControl, controls, enqueueOrConfirmEarly])
 
+  const rosterByControl = useMemo(() => {
+    const map = new Map<string, CheckinRosterEntry[]>()
+    for (const entry of roster) {
+      const list = map.get(entry.controlId) || []
+      list.push(entry)
+      map.set(entry.controlId, list)
+    }
+    return map
+  }, [roster])
+
+  const refreshRoster = useCallback(async () => {
+    const requestId = ++rosterRequest.current
+    setRosterRefreshing(true)
+    try {
+      const result = await getCheckinRoster(token)
+      // A newer request supersedes this one; and a failure (offline, rate
+      // limited) keeps the last list the rider saw rather than blanking it.
+      if (requestId === rosterRequest.current && result.success && result.data) {
+        setRoster(result.data)
+      }
+    } catch {
+      // Network failure — keep the last known roster.
+    } finally {
+      if (requestId === rosterRequest.current) setRosterRefreshing(false)
+    }
+  }, [token])
+
+  const toggleRoster = useCallback(
+    (controlId: string) => {
+      const opening = !openRosterControls.has(controlId)
+      setOpenRosterControls((prev) => {
+        const next = new Set(prev)
+        if (next.has(controlId)) next.delete(controlId)
+        else next.add(controlId)
+        return next
+      })
+      if (opening) void refreshRoster()
+    },
+    [openRosterControls, refreshRoster]
+  )
+
+  const handleShareChange = useCallback(
+    async (share: boolean) => {
+      setSharingError(null)
+      setShareCheckins(share)
+      setSharingPending(true)
+      try {
+        const result = await setCheckinSharing(token, { share })
+        if (!result.success) {
+          setShareCheckins(!share)
+          setSharingError(result.error || 'Failed to save your sharing preference')
+        }
+      } catch {
+        setShareCheckins(!share)
+        setSharingError("Couldn't save that — check your connection and try again.")
+      } finally {
+        setSharingPending(false)
+      }
+    },
+    [token]
+  )
+
   const queuedControlIds = useMemo(() => new Set(outbox.map((e) => e.controlId)), [outbox])
 
   // Once a GPS check-in exists, location demonstrably works — stop nudging.
@@ -1071,6 +1162,9 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
           const sinceLastKm =
             prev !== null ? Math.round((control.distanceKm - prev.distanceKm) * 10) / 10 : null
           const showSinceLast = sinceLastKm !== null && sinceLastKm >= 0
+          const others = rosterByControl.get(control.id) || []
+          const rosterOpen = openRosterControls.has(control.id)
+          const rosterListId = `roster-${control.id}`
 
           return (
             <Fragment key={control.id}>
@@ -1079,179 +1173,232 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
                   {legHeading}
                 </li>
               )}
-              <li
-                className={cn(
-                  'relative p-4 flex items-start justify-between gap-4',
-                  stamped && 'min-h-36'
-                )}
-              >
-                <div className="min-w-0">
-                  <p className="font-medium">{control.name}</p>
-                  {/* Each distance on its own line under the name (inline
+              <li>
+                {/* The row proper is its own positioned box so the stamp
+                    stays put when the roster below it unfolds. */}
+                <div
+                  className={cn(
+                    'relative p-4 flex items-start justify-between gap-4',
+                    stamped && 'min-h-36'
+                  )}
+                >
+                  <div className="min-w-0">
+                    <p className="font-medium">{control.name}</p>
+                    {/* Each distance on its own line under the name (inline
                       after a long name they indented or ran under the Check
                       in button on phones); values never wrap. Collection
                       legs say "this route" to contrast with the "this event"
                       line below; single-route events just say "total". */}
-                  {showSinceLast && (
-                    <p className="whitespace-nowrap text-sm text-muted-foreground tabular-nums">
-                      {sinceLastKm} km from last
-                    </p>
-                  )}
-                  <p className="whitespace-nowrap text-sm text-muted-foreground tabular-nums">
-                    {control.distanceKm} km
-                    {showSinceLast ? (control.legName !== null ? ' this route' : ' total') : ''}
-                  </p>
-                  {control.overallDistanceKm != null && (
-                    <p className="whitespace-nowrap text-sm text-muted-foreground tabular-nums">
-                      {control.overallDistanceKm} km this event
-                    </p>
-                  )}
-                  {control.opensAt !== null && control.closesAt !== null && (
-                    <p className="text-sm text-muted-foreground tabular-nums">
-                      {formatControlTime(new Date(control.opensAt))} –{' '}
-                      {formatControlTime(new Date(control.closesAt))}
-                    </p>
-                  )}
-                  {control.notes && (
-                    <p className="text-sm text-muted-foreground mt-1">{control.notes}</p>
-                  )}
-                  {checkin?.flags.outOfRadius && (
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Recorded outside the control radius — the organizer will review it.
-                    </p>
-                  )}
-                  {checkin?.flags.noGps && (
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Recorded without GPS — the organizer will review it.
-                    </p>
-                  )}
-                  {retryGpsNotice?.controlId === control.id && (
-                    <p className="text-xs text-muted-foreground mt-1" aria-live="polite">
-                      {retryGpsNotice.message}
-                    </p>
-                  )}
-                  {gpsUpgradeQueued && (
-                    <p className="text-xs text-muted-foreground mt-1" aria-live="polite">
-                      GPS fix saved — waiting to sync.
-                    </p>
-                  )}
-                  {isLocating && (
-                    <p className="text-xs text-muted-foreground mt-1" aria-live="polite">
-                      {locationProgressStage === 'quick'
-                        ? 'Checking for a recent location…'
-                        : 'Waiting for precise GPS — this can take up to 45 seconds, especially indoors.'}
-                    </p>
-                  )}
-                </div>
-
-                <div className="shrink-0 text-right">
-                  {checkin ? (
-                    <p className="relative z-10 inline-flex items-baseline gap-1.5 text-sm font-medium tabular-nums">
-                      <CheckCircle2 className="h-4 w-4 self-center text-green-600" />
-                      {formatControlTime(new Date(checkin.checkedInAt))}
-                      {freshRiderCheckin && (
-                        <>
-                          {checkin.method === 'manual' && (
-                            <>
-                              <span
-                                aria-hidden="true"
-                                className="font-normal text-muted-foreground/50"
-                              >
-                                ·
-                              </span>
-                              <button
-                                type="button"
-                                className="-my-2 py-2 font-normal text-muted-foreground underline decoration-muted-foreground/40 underline-offset-2 hover:text-foreground disabled:opacity-50"
-                                disabled={
-                                  locationBusy ||
-                                  gpsUpgradeQueued ||
-                                  undoingControlId === control.id
-                                }
-                                onClick={() =>
-                                  handleRetryGps(control, checkin.checkedInAt, checkin.receivedAt)
-                                }
-                              >
-                                {isLocating
-                                  ? 'Retrying GPS…'
-                                  : gpsUpgradeQueued
-                                    ? 'GPS queued'
-                                    : 'Retry GPS'}
-                              </button>
-                            </>
-                          )}
-                          <span aria-hidden="true" className="font-normal text-muted-foreground/50">
-                            ·
-                          </span>
-                          <button
-                            type="button"
-                            className="-my-2 py-2 font-normal text-muted-foreground underline decoration-muted-foreground/40 underline-offset-2 hover:text-foreground disabled:opacity-50"
-                            disabled={isLocating || undoingControlId === control.id}
-                            onClick={() => handleUndo(control)}
-                          >
-                            {undoingControlId === control.id ? 'Undoing…' : 'Undo'}
-                          </button>
-                        </>
-                      )}
-                    </p>
-                  ) : queued ? (
-                    <p className="relative z-10 inline-flex items-baseline gap-1.5 text-sm text-muted-foreground">
-                      <CloudOff className="h-4 w-4 self-center" />
-                      Waiting to sync
-                      <span aria-hidden="true" className="text-muted-foreground/50">
-                        ·
-                      </span>
-                      <button
-                        type="button"
-                        className="-my-2 py-2 underline decoration-muted-foreground/40 underline-offset-2 hover:text-foreground"
-                        onClick={() => handleUndo(control)}
-                      >
-                        Undo
-                      </button>
-                    </p>
-                  ) : (
-                    <Button
-                      size="lg"
-                      variant={isNext ? 'default' : 'outline'}
-                      className="h-12"
-                      disabled={locationBusy || beforeWindow}
-                      onClick={() => handleCheckIn(control)}
-                    >
-                      {isLocating ? (
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      ) : (
-                        <MapPin className="h-4 w-4 mr-2" />
-                      )}
-                      {isLocating
-                        ? locationProgressStage === 'quick'
-                          ? 'Checking location…'
-                          : 'Waiting for GPS…'
-                        : 'Check in'}
-                    </Button>
-                  )}
-                </div>
-
-                {stamped && (
-                  <span
-                    data-testid="control-stamp"
-                    aria-hidden="true"
-                    className={cn(
-                      'pointer-events-none select-none absolute right-4 top-9 bottom-0 flex items-center mix-blend-multiply dark:mix-blend-screen',
-                      sessionCheckins.has(control.id) &&
-                        'animate-stamp-down motion-reduce:animate-none'
+                    {showSinceLast && (
+                      <p className="whitespace-nowrap text-sm text-muted-foreground tabular-nums">
+                        {sinceLastKm} km from last
+                      </p>
                     )}
-                  >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src="/stamp-green.svg"
-                      alt=""
-                      width={128}
-                      height={88}
-                      className="w-32 max-w-none"
-                      style={{
-                        transform: `translate(${stampOffset(control.id).dx}px, ${stampOffset(control.id).dy}px) rotate(${stampRotation(control.id)}deg)`,
-                      }}
-                    />
-                  </span>
+                    <p className="whitespace-nowrap text-sm text-muted-foreground tabular-nums">
+                      {control.distanceKm} km
+                      {showSinceLast ? (control.legName !== null ? ' this route' : ' total') : ''}
+                    </p>
+                    {control.overallDistanceKm != null && (
+                      <p className="whitespace-nowrap text-sm text-muted-foreground tabular-nums">
+                        {control.overallDistanceKm} km this event
+                      </p>
+                    )}
+                    {control.opensAt !== null && control.closesAt !== null && (
+                      <p className="text-sm text-muted-foreground tabular-nums">
+                        {formatControlTime(new Date(control.opensAt))} –{' '}
+                        {formatControlTime(new Date(control.closesAt))}
+                      </p>
+                    )}
+                    {control.notes && (
+                      <p className="text-sm text-muted-foreground mt-1">{control.notes}</p>
+                    )}
+                    {checkin?.flags.outOfRadius && (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Recorded outside the control radius — the organizer will review it.
+                      </p>
+                    )}
+                    {checkin?.flags.noGps && (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Recorded without GPS — the organizer will review it.
+                      </p>
+                    )}
+                    {retryGpsNotice?.controlId === control.id && (
+                      <p className="text-xs text-muted-foreground mt-1" aria-live="polite">
+                        {retryGpsNotice.message}
+                      </p>
+                    )}
+                    {gpsUpgradeQueued && (
+                      <p className="text-xs text-muted-foreground mt-1" aria-live="polite">
+                        GPS fix saved — waiting to sync.
+                      </p>
+                    )}
+                    {isLocating && (
+                      <p className="text-xs text-muted-foreground mt-1" aria-live="polite">
+                        {locationProgressStage === 'quick'
+                          ? 'Checking for a recent location…'
+                          : 'Waiting for precise GPS — this can take up to 45 seconds, especially indoors.'}
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="shrink-0 text-right">
+                    {checkin ? (
+                      <p className="relative z-10 inline-flex items-baseline gap-1.5 text-sm font-medium tabular-nums">
+                        <CheckCircle2 className="h-4 w-4 self-center text-green-600" />
+                        {formatControlTime(new Date(checkin.checkedInAt))}
+                        {freshRiderCheckin && (
+                          <>
+                            {checkin.method === 'manual' && (
+                              <>
+                                <span
+                                  aria-hidden="true"
+                                  className="font-normal text-muted-foreground/50"
+                                >
+                                  ·
+                                </span>
+                                <button
+                                  type="button"
+                                  className="-my-2 py-2 font-normal text-muted-foreground underline decoration-muted-foreground/40 underline-offset-2 hover:text-foreground disabled:opacity-50"
+                                  disabled={
+                                    locationBusy ||
+                                    gpsUpgradeQueued ||
+                                    undoingControlId === control.id
+                                  }
+                                  onClick={() =>
+                                    handleRetryGps(control, checkin.checkedInAt, checkin.receivedAt)
+                                  }
+                                >
+                                  {isLocating
+                                    ? 'Retrying GPS…'
+                                    : gpsUpgradeQueued
+                                      ? 'GPS queued'
+                                      : 'Retry GPS'}
+                                </button>
+                              </>
+                            )}
+                            <span
+                              aria-hidden="true"
+                              className="font-normal text-muted-foreground/50"
+                            >
+                              ·
+                            </span>
+                            <button
+                              type="button"
+                              className="-my-2 py-2 font-normal text-muted-foreground underline decoration-muted-foreground/40 underline-offset-2 hover:text-foreground disabled:opacity-50"
+                              disabled={isLocating || undoingControlId === control.id}
+                              onClick={() => handleUndo(control)}
+                            >
+                              {undoingControlId === control.id ? 'Undoing…' : 'Undo'}
+                            </button>
+                          </>
+                        )}
+                      </p>
+                    ) : queued ? (
+                      <p className="relative z-10 inline-flex items-baseline gap-1.5 text-sm text-muted-foreground">
+                        <CloudOff className="h-4 w-4 self-center" />
+                        Waiting to sync
+                        <span aria-hidden="true" className="text-muted-foreground/50">
+                          ·
+                        </span>
+                        <button
+                          type="button"
+                          className="-my-2 py-2 underline decoration-muted-foreground/40 underline-offset-2 hover:text-foreground"
+                          onClick={() => handleUndo(control)}
+                        >
+                          Undo
+                        </button>
+                      </p>
+                    ) : (
+                      <Button
+                        size="lg"
+                        variant={isNext ? 'default' : 'outline'}
+                        className="h-12"
+                        disabled={locationBusy || beforeWindow}
+                        onClick={() => handleCheckIn(control)}
+                      >
+                        {isLocating ? (
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        ) : (
+                          <MapPin className="h-4 w-4 mr-2" />
+                        )}
+                        {isLocating
+                          ? locationProgressStage === 'quick'
+                            ? 'Checking location…'
+                            : 'Waiting for GPS…'
+                          : 'Check in'}
+                      </Button>
+                    )}
+                  </div>
+
+                  {stamped && (
+                    <span
+                      data-testid="control-stamp"
+                      aria-hidden="true"
+                      className={cn(
+                        'pointer-events-none select-none absolute right-4 top-9 bottom-0 flex items-center mix-blend-multiply dark:mix-blend-screen',
+                        sessionCheckins.has(control.id) &&
+                          'animate-stamp-down motion-reduce:animate-none'
+                      )}
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src="/stamp-green.svg"
+                        alt=""
+                        width={128}
+                        height={88}
+                        className="w-32 max-w-none"
+                        style={{
+                          transform: `translate(${stampOffset(control.id).dx}px, ${stampOffset(control.id).dy}px) rotate(${stampRotation(control.id)}deg)`,
+                        }}
+                      />
+                    </span>
+                  )}
+                </div>
+
+                {others.length > 0 && (
+                  <div className="px-4 pb-3 -mt-2">
+                    <button
+                      type="button"
+                      aria-expanded={rosterOpen}
+                      aria-controls={rosterListId}
+                      className="-my-2 inline-flex items-center gap-1.5 py-2 text-xs text-muted-foreground transition-colors hover:text-foreground"
+                      onClick={() => toggleRoster(control.id)}
+                    >
+                      <Users className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                      <span className="tabular-nums">
+                        {others.length} other {others.length === 1 ? 'rider' : 'riders'} checked in
+                      </span>
+                      {rosterOpen && rosterRefreshing ? (
+                        <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" aria-hidden="true" />
+                      ) : (
+                        <ChevronDown
+                          className={cn(
+                            'h-3.5 w-3.5 shrink-0 transition-transform',
+                            rosterOpen && 'rotate-180'
+                          )}
+                          aria-hidden="true"
+                        />
+                      )}
+                    </button>
+                    {rosterOpen && (
+                      <ul
+                        id={rosterListId}
+                        className="mt-2 grid grid-cols-1 gap-x-8 gap-y-1 text-sm sm:grid-cols-2"
+                      >
+                        {others.map((entry, i) => (
+                          <li
+                            key={`${entry.riderName}-${entry.checkedInAt}-${i}`}
+                            className="flex items-baseline justify-between gap-3"
+                          >
+                            <span className="min-w-0 truncate">{entry.riderName}</span>
+                            <span className="shrink-0 tabular-nums text-muted-foreground">
+                              {formatControlTime(new Date(entry.checkedInAt))}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
                 )}
               </li>
             </Fragment>
@@ -1268,6 +1415,32 @@ export function BrevetCard({ token, initialData }: BrevetCardProps) {
           <Button asChild className="h-12">
             <Link href={`/registration/manage/${token}`}>Submit your result</Link>
           </Button>
+        </div>
+      )}
+
+      {rider.canShareCheckins && (
+        <div className="border rounded-md p-4 flex items-start justify-between gap-4">
+          <div className="min-w-0 space-y-1">
+            <Label htmlFor="share-checkins" className="text-sm font-medium leading-snug">
+              Share my check-ins with other riders
+            </Label>
+            <p className="text-xs text-muted-foreground">
+              Riders on this event can see when you checked in at each control. Organizers always
+              can.
+            </p>
+            {sharingError && (
+              <p className="text-xs text-destructive" role="alert">
+                {sharingError}
+              </p>
+            )}
+          </div>
+          <Switch
+            id="share-checkins"
+            className="mt-0.5"
+            checked={shareCheckins}
+            disabled={sharingPending}
+            onCheckedChange={(checked) => void handleShareChange(checked === true)}
+          />
         </div>
       )}
 
