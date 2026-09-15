@@ -10,6 +10,15 @@ import type { RegistrationUpdate } from '@/types/queries'
 /** How long before a rider's start the reminder goes out. */
 export const CARD_REMINDER_LEAD_MS = 12 * 60 * 60 * 1000
 
+/**
+ * Most candidates one run will look at. This is safe because a row that is not
+ * swept this hour is still an unsent candidate next hour: nothing is dropped,
+ * it just waits for the next sweep. Without a cap, one badly seeded season
+ * could hand the cron an unbounded result set and a request that never
+ * finishes inside `maxDuration`.
+ */
+export const CARD_REMINDER_BATCH_LIMIT = 500
+
 const CANDIDATE_SELECT =
   'id, event_id, management_token, registered_at, pre_ride_date, pre_ride_start_time, ' +
   'riders(id, first_name, last_name, email), ' +
@@ -90,6 +99,12 @@ export async function sendCardReminders(now: Date = new Date()): Promise<CardRem
     .eq('events.status', 'scheduled')
     .in('events.event_type', [...DIGITAL_CARD_EVENT_TYPES])
     .gte('events.event_date', earliestEventDate)
+    // Parent columns only: PostgREST can't order the parent rows by an
+    // embedded column, so `events.event_date` is not an option here. Oldest
+    // registration first gives the cap a stable, fair cut.
+    .order('registered_at', { ascending: true })
+    .order('id', { ascending: true })
+    .limit(CARD_REMINDER_BATCH_LIMIT)
 
   if (error) {
     throw new Error(`Failed to fetch card reminder candidates: ${error.message}`)

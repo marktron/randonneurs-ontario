@@ -24,7 +24,11 @@ vi.mock('@/lib/email/send-card-reminder-email', () => ({
   sendCardReminderEmail: mockSendCardReminderEmail,
 }))
 
-import { sendCardReminders, CARD_REMINDER_LEAD_MS } from '@/lib/events/send-card-reminders'
+import {
+  sendCardReminders,
+  CARD_REMINDER_LEAD_MS,
+  CARD_REMINDER_BATCH_LIMIT,
+} from '@/lib/events/send-card-reminders'
 import { createTorontoDate, torontoDateString, TORONTO_TZ } from '@/lib/brmTimes'
 
 const MINUTE = 60 * 1000
@@ -91,7 +95,7 @@ function buildSupabase(options: SupabaseOptions) {
 
   function makeChain(filters: Filter[], resolve: () => { data: unknown; error: unknown }) {
     const chain: Record<string, unknown> = {}
-    for (const method of ['eq', 'is', 'in', 'gte', 'select']) {
+    for (const method of ['eq', 'is', 'in', 'gte', 'order', 'limit', 'select']) {
       chain[method] = vi.fn((...args: unknown[]) => {
         filters.push([method, ...args])
         return chain
@@ -249,6 +253,21 @@ describe('sendCardReminders', () => {
         'events.event_date',
         torontoDateString(new Date(NOW.getTime() - DAY)),
       ])
+    })
+
+    it('orders oldest registration first and caps the batch', async () => {
+      // `events.event_date` is an embedded column, which PostgREST can't order
+      // by at the parent level, so the order is on parent columns. The cap is
+      // safe because a row left unswept this hour is still an unsent candidate
+      // next hour.
+      const { supabase } = await sweepOne(makeRegistration())
+      const query = supabase.selects.find((s) => s.table === 'registrations')!
+
+      expect(CARD_REMINDER_BATCH_LIMIT).toBe(500)
+      expect(query.filters).toContainEqual(['order', 'registered_at', { ascending: true }])
+      expect(query.filters).toContainEqual(['order', 'id', { ascending: true }])
+      expect(query.filters).toContainEqual(['limit', CARD_REMINDER_BATCH_LIMIT])
+      expect(query.filters).not.toContainEqual(['order', 'events.event_date', { ascending: true }])
     })
 
     it('throws the query error without sending anything', async () => {

@@ -14,7 +14,7 @@ vi.mock('@/lib/errors', () => ({
 }))
 
 // Import the route handler after mocking
-import { GET } from '@/app/api/cron/card-reminders/route'
+import { GET, maxDuration } from '@/app/api/cron/card-reminders/route'
 
 describe('card-reminders cron endpoint', () => {
   const CRON_SECRET = 'test-cron-secret'
@@ -22,6 +22,10 @@ describe('card-reminders cron endpoint', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.stubEnv('CRON_SECRET', CRON_SECRET)
+  })
+
+  it('bounds the function duration so a long sweep is cut off rather than left hanging', () => {
+    expect(maxDuration).toBe(60)
   })
 
   it('returns 500 when CRON_SECRET is not configured', async () => {

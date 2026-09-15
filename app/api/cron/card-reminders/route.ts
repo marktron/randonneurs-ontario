@@ -12,6 +12,14 @@ import { logError } from '@/lib/errors'
  * It requires the CRON_SECRET environment variable for authentication.
  */
 
+/**
+ * The sweep sends one email per in-window rider, so a busy hour costs real
+ * time. Bound it: an overrun fails loudly (and logs) rather than hanging on
+ * the platform default, and the batch cap in the sweep keeps one run's work
+ * inside this budget.
+ */
+export const maxDuration = 60
+
 export async function GET(request: Request) {
   // Verify cron secret for authentication
   const authError = authorizeCronRequest(request, 'card-reminders')
