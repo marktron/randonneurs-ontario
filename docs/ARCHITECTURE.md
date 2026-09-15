@@ -352,6 +352,26 @@ GitHub Actions (hourly) → /api/cron/complete-events → Update event status �
 
 **Timezone handling:** All event times are interpreted as Toronto time (`America/Toronto`), with proper EST/EDT handling via `createTorontoDate()` in `lib/brmTimes.ts`.
 
+### Digital Card Reminders
+
+Riders who chose a digital brevet card get a reminder email as their start approaches:
+
+```
+GitHub Actions (hourly) → /api/cron/card-reminders → Sweep in-window registrations → Claim + send reminder emails
+```
+
+**Workflow:** `.github/workflows/card-reminders.yml`
+
+**How it works:**
+
+1. GitHub Actions triggers every hour (`15 * * * *`)
+2. Calls the `/api/cron/card-reminders` endpoint with `CRON_SECRET` for auth
+3. The endpoint (`lib/events/send-card-reminders.ts`) finds registrations with `brevet_card_type = 'digital'` on scheduled, card-eligible events whose rider start (event start, or an approved pre-ride start) falls 11-12 hours out
+4. Late signups, events with no controls saved, and registrations missing an email or token are skipped
+5. Each row is claimed by stamping `registrations.card_reminder_sent_at` while it's still `NULL`, then the reminder is sent with a link to the rider's card
+
+**Required GitHub Secrets:** the same `CRON_SECRET` and `SITE_URL` as Event Auto-Completion above. Both cron endpoints share their bearer-token check via `authorizeCronRequest()` in `lib/cron-auth.ts`.
+
 ## On-Demand Cache Revalidation
 
 The site provides a `POST /api/revalidate` endpoint for manually busting cached data when it goes stale outside of normal server actions (e.g., direct Supabase edits, after a deploy).

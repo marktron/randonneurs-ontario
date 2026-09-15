@@ -824,8 +824,21 @@ made here — the dialog links to the Digital Cards grid, which owns editing.
   or not the organizer has saved controls yet. Most riders register before
   controls are configured, and the card page explains itself when digital
   check-in isn't set up. (The link was hidden behind a kill switch from July
-  to August 2026 while the feature was polished; enabled 2026-08-29.) No new
-  emails in Phase 1.
+  to August 2026 while the feature was polished; enabled 2026-08-29.)
+- A reminder email goes only to riders who chose the digital card
+  (`brevet_card_type = 'digital'`). An hourly cron sweep
+  (`lib/events/send-card-reminders.ts`, called from
+  `app/api/cron/card-reminders/route.ts` via
+  `.github/workflows/card-reminders.yml`) lands it 11-12 hours before the
+  rider's resolved start — the event's start for most riders, but a pre-ride
+  rider's approved pre-ride start instead. It's skipped for: a rider who
+  registered after the reminder window opened (they already have the card
+  link in their confirmation email), an event with no `event_controls` saved
+  yet, a registration with no rider email or management token, and any event
+  that isn't `scheduled` or isn't a card-eligible type. Each row is claimed by
+  stamping `registrations.card_reminder_sent_at` while it's still `NULL`
+  before sending, so overlapping cron runs can't double-email a rider and a
+  send that fails after the claim is a missed email, not a duplicate.
 - The registration-manage page shows the card section only once controls
   actually exist (`hasDigitalCard`).
 
