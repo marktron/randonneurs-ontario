@@ -830,8 +830,8 @@ made here — the dialog links to the Digital Cards grid, which owns editing.
   (`lib/events/send-card-reminders.ts`, called from
   `app/api/cron/card-reminders/route.ts` via
   `.github/workflows/card-reminders.yml`) lands it 11-12 hours before the
-  rider's resolved start — the event's start for most riders, but a pre-ride
-  rider's approved pre-ride start instead. It's skipped for: a rider who
+  rider's resolved start: the event's start for most riders, or the approved
+  pre-ride start for a pre-ride rider. It's skipped for: a rider who
   registered after the reminder window opened (they already have the card
   link in their confirmation email), an event with no `event_controls` saved
   yet, a registration with no rider email or management token, and any event

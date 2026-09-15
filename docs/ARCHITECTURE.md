@@ -366,7 +366,7 @@ GitHub Actions (hourly) → /api/cron/card-reminders → Sweep in-window registr
 
 1. GitHub Actions triggers every hour (`15 * * * *`)
 2. Calls the `/api/cron/card-reminders` endpoint with `CRON_SECRET` for auth
-3. The endpoint (`lib/events/send-card-reminders.ts`) finds registrations with `brevet_card_type = 'digital'` on scheduled, card-eligible events whose rider start (event start, or an approved pre-ride start) falls 11-12 hours out
+3. The endpoint calls `sendCardReminders()` in `lib/events/send-card-reminders.ts`, which finds registrations with `brevet_card_type = 'digital'` on scheduled, card-eligible events whose rider start (event start, or an approved pre-ride start) falls 11-12 hours out
 4. Late signups, events with no controls saved, and registrations missing an email or token are skipped
 5. Each row is claimed by stamping `registrations.card_reminder_sent_at` while it's still `NULL`, then the reminder is sent with a link to the rider's card
 
