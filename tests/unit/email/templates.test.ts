@@ -222,7 +222,7 @@ describe('card reminder email', () => {
   it('names the start time, date and location when all three are known', () => {
     const email = buildCardReminderEmail(baseCardReminder)
     expect(email.text).toContain(
-      'The Gentle Start 120km starts at 7:00 AM on Saturday, June 6, 2026 from Toronto.'
+      'Gentle Start 120km starts at 7:00 AM on Saturday, June 6, 2026 from Toronto.'
     )
     expect(email.html).toContain('starts at 7:00 AM on Saturday, June 6, 2026 from Toronto.')
   })
