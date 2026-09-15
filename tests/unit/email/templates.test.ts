@@ -4,9 +4,11 @@ import {
   buildResultSubmissionRequestEmail,
   buildCancellationConfirmationEmail,
   buildRideCompleteEmail,
+  buildCardReminderEmail,
   type RegistrationEmailData,
   type ResultSubmissionEmailData,
   type CancellationEmailData,
+  type CardReminderEmailData,
 } from '@/lib/email/templates'
 
 const baseRegistration: RegistrationEmailData = {
@@ -176,5 +178,50 @@ describe('ride complete email', () => {
     const email = buildRideCompleteEmail({ ...baseRideComplete, finishTime: '' })
     expect(email.text).not.toContain('Recorded time')
     expect(email.html).not.toContain('Recorded time')
+  })
+})
+
+describe('card reminder email', () => {
+  const baseCardReminder: CardReminderEmailData = {
+    riderName: 'Jane Rider',
+    eventName: 'Gentle Start',
+    eventDistance: 120,
+    eventDate: 'Saturday, June 6, 2026',
+    eventTime: '7:00 AM',
+    eventLocation: 'Toronto',
+    chapterName: 'Toronto',
+    cardUrl: 'https://example.com/card/token-123',
+  }
+
+  it('subject uses the formatted ride name', () => {
+    const email = buildCardReminderEmail(baseCardReminder)
+    expect(email.subject).toBe('Your digital brevet card: Gentle Start 120km')
+  })
+
+  it('text and html both contain the card url', () => {
+    const email = buildCardReminderEmail(baseCardReminder)
+    expect(email.text).toContain(baseCardReminder.cardUrl)
+    expect(email.html).toContain(baseCardReminder.cardUrl)
+  })
+
+  it('html contains the open-card button and the learn-more link', () => {
+    const email = buildCardReminderEmail(baseCardReminder)
+    expect(email.html).toContain('Open your brevet card')
+    expect(email.html).toMatch(/href="[^"]*\/digital-control-cards"[^>]*>Learn more</)
+  })
+
+  it('escapes a rider name containing a script tag in html but leaves it raw in text', () => {
+    const email = buildCardReminderEmail({
+      ...baseCardReminder,
+      riderName: '<script>alert(1)</script>',
+    })
+    expect(email.html).not.toContain('<script>alert(1)</script>')
+    expect(email.text).toContain('<script>alert(1)</script>')
+  })
+
+  it('renders without crashing when eventTime is TBD', () => {
+    const email = buildCardReminderEmail({ ...baseCardReminder, eventTime: 'TBD' })
+    expect(email.text).toContain('TBD')
+    expect(email.html).toContain('TBD')
   })
 })

@@ -284,6 +284,112 @@ ${
   return { subject, text, html }
 }
 
+// ============================================================================
+// Digital Brevet Card Reminder Email
+// ============================================================================
+
+export interface CardReminderEmailData {
+  riderName: string
+  eventName: string
+  eventDistance: number
+  /** Already formatted, e.g. "Saturday, June 6, 2026" */
+  eventDate: string
+  /** Already formatted, e.g. "7:00 AM" or "TBD" */
+  eventTime: string
+  eventLocation: string
+  chapterName: string
+  /** Absolute URL to /card/<token> */
+  cardUrl: string
+}
+
+/**
+ * Sent roughly 12 hours before a rider's start to riders who chose a
+ * digital brevet card at registration.
+ */
+export function buildCardReminderEmail(data: CardReminderEmailData): {
+  subject: string
+  text: string
+  html: string
+} {
+  const rideName = formatRideName(data.eventName, data.eventDistance)
+  const subject = `Your digital brevet card: ${rideName}`
+
+  // Escape user-supplied values for safe HTML interpolation
+  const safe = {
+    riderName: escapeHtml(data.riderName),
+    rideName: escapeHtml(rideName),
+    eventDate: escapeHtml(data.eventDate),
+    eventTime: escapeHtml(data.eventTime),
+    eventLocation: escapeHtml(data.eventLocation),
+    chapterName: escapeHtml(data.chapterName),
+    cardUrl: escapeHtml(data.cardUrl),
+  }
+
+  const text = `
+Hi ${data.riderName},
+
+The ${rideName} starts at ${data.eventTime} on ${data.eventDate} from ${data.eventLocation}. You asked for a digital brevet card, so open it on your phone before the start and bookmark it.
+
+Open your brevet card:
+${data.cardUrl}
+
+Learn more about digital control cards: ${SITE_URL}/digital-control-cards
+
+A few tips:
+- Charge your phone.
+- Allow location access when the card asks.
+- Check in at every control, including the start and finish.
+
+Reply to this email if you have questions.
+
+${data.chapterName} Chapter
+Randonneurs Ontario
+https://www.randonneursontario.ca
+  `.trim()
+
+  const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+  <p>Hi ${safe.riderName},</p>
+
+  <p>The <strong>${safe.rideName}</strong> starts at ${safe.eventTime} on ${safe.eventDate} from ${safe.eventLocation}. You asked for a digital brevet card, so open it on your phone before the start and bookmark it.</p>
+
+  <div style="background-color: #F0FAE5; border: 1px solid #A3D373; border-radius: 8px; padding: 16px; margin: 16px 0;">
+    <p style="text-align: center;">
+      <a href="${safe.cardUrl}" style="display: inline-block; background-color: #4d7c0f; color: white; padding: 8px 16px; text-decoration: none; border-radius: 6px; font-weight: 600;">Open your brevet card</a>
+    </p>
+    <p style="text-align: center; font-size: 14px; margin: 0;">
+      <a href="${SITE_URL}/digital-control-cards" style="color: #4d7c0f;">Learn more</a> about how digital control cards work.
+    </p>
+  </div>
+
+  <p>A few tips:</p>
+  <ul style="padding-left: 20px; margin: 0 0 24px 0;">
+    <li>Charge your phone.</li>
+    <li>Allow location access when the card asks.</li>
+    <li>Check in at every control, including the start and finish.</li>
+  </ul>
+
+  <hr style="border: none; border-top: 1px solid #eee; margin: 32px 0;">
+
+  <p>${safe.chapterName} Chapter. Reply to this email if you have questions.</p>
+
+  <p>
+    <strong>Randonneurs Ontario</strong><br>
+    <a href="https://randonneursontario.ca" style="color: #0066cc;">randonneursontario.ca</a>
+  </p>
+</body>
+</html>
+  `.trim()
+
+  return { subject, text, html }
+}
+
 export interface ResultSubmissionEmailData {
   riderName: string
   riderEmail: string
