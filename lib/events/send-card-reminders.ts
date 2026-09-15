@@ -85,7 +85,10 @@ export interface CardReminderSweepResult {
     notInWindow: number
     lateSignup: number
     noControls: number
+    /** Rider row has no email address. */
     noEmail: number
+    /** Registration has no `management_token`, so no card link can be built. */
+    noToken: number
     alreadyClaimed: number
   }
   errors: string[]
@@ -104,7 +107,14 @@ export async function sendCardReminders(now: Date = new Date()): Promise<CardRem
   const result: CardReminderSweepResult = {
     checked: 0,
     sent: 0,
-    skipped: { notInWindow: 0, lateSignup: 0, noControls: 0, noEmail: 0, alreadyClaimed: 0 },
+    skipped: {
+      notInWindow: 0,
+      lateSignup: 0,
+      noControls: 0,
+      noEmail: 0,
+      noToken: 0,
+      alreadyClaimed: 0,
+    },
     errors: [],
   }
 
@@ -178,8 +188,14 @@ export async function sendCardReminders(now: Date = new Date()): Promise<CardRem
       }
 
       const rider = reg.riders
-      if (!rider?.email || !reg.management_token) {
+      if (!rider?.email) {
         result.skipped.noEmail++
+        continue
+      }
+      // Counted apart from `noEmail`: a missing token means the card link can't
+      // be built at all, which points at the registration rather than the rider.
+      if (!reg.management_token) {
+        result.skipped.noToken++
         continue
       }
 

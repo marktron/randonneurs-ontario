@@ -834,8 +834,9 @@ made here — the dialog links to the Digital Cards grid, which owns editing.
   pre-ride start for a pre-ride rider. It's skipped for: a rider who
   registered after the reminder window opened (they already have the card
   link in their confirmation email), an event with no `event_controls` saved
-  yet, a registration with no rider email or management token, and any event
-  that isn't `scheduled` or isn't a card-eligible type. Each row is claimed by
+  yet, a rider with no email address (`noEmail`), a registration with no
+  management token and so no card link (`noToken`), and any event that isn't
+  `scheduled` or isn't a card-eligible type. Each row is claimed by
   stamping `registrations.card_reminder_sent_at` while it's still `NULL`
   before sending, so overlapping cron runs can't double-email a rider and a
   send that fails after the claim is a missed email, not a duplicate.

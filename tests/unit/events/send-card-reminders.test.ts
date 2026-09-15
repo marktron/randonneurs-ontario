@@ -309,6 +309,7 @@ describe('sendCardReminders', () => {
           lateSignup: 0,
           noControls: 0,
           noEmail: 0,
+          noToken: 0,
           alreadyClaimed: 0,
         },
         errors: [],
@@ -463,13 +464,18 @@ describe('sendCardReminders', () => {
 
       expect(result.sent).toBe(0)
       expect(result.skipped.noEmail).toBe(1)
+      expect(result.skipped.noToken).toBe(0)
       expect(supabase.updates).toHaveLength(0)
     })
 
-    it('skips a registration with no management token', async () => {
+    it('counts a missing management token separately from a missing email', async () => {
+      // Two different problems: a rider with no email address, and a
+      // registration whose card link can't be built. Reporting both as
+      // `noEmail` sent whoever read the cron response after the wrong thing.
       const { result, supabase } = await sweepOne(makeRegistration({ management_token: null }))
 
-      expect(result.skipped.noEmail).toBe(1)
+      expect(result.skipped.noToken).toBe(1)
+      expect(result.skipped.noEmail).toBe(0)
       expect(supabase.updates).toHaveLength(0)
     })
   })

@@ -58,7 +58,14 @@ describe('card-reminders cron endpoint', () => {
     mockSendCardReminders.mockResolvedValue({
       checked: 3,
       sent: 2,
-      skipped: { notInWindow: 0, lateSignup: 0, noControls: 0, noEmail: 1, alreadyClaimed: 0 },
+      skipped: {
+        notInWindow: 0,
+        lateSignup: 0,
+        noControls: 0,
+        noEmail: 1,
+        noToken: 0,
+        alreadyClaimed: 0,
+      },
       errors: [],
     })
 
@@ -73,7 +80,14 @@ describe('card-reminders cron endpoint', () => {
       success: true,
       checked: 3,
       sent: 2,
-      skipped: { notInWindow: 0, lateSignup: 0, noControls: 0, noEmail: 1, alreadyClaimed: 0 },
+      skipped: {
+        notInWindow: 0,
+        lateSignup: 0,
+        noControls: 0,
+        noEmail: 1,
+        noToken: 0,
+        alreadyClaimed: 0,
+      },
       errors: undefined,
     })
     expect(mockSendCardReminders).toHaveBeenCalledTimes(1)
@@ -83,7 +97,14 @@ describe('card-reminders cron endpoint', () => {
     mockSendCardReminders.mockResolvedValue({
       checked: 1,
       sent: 0,
-      skipped: { notInWindow: 0, lateSignup: 0, noControls: 0, noEmail: 0, alreadyClaimed: 0 },
+      skipped: {
+        notInWindow: 0,
+        lateSignup: 0,
+        noControls: 0,
+        noEmail: 0,
+        noToken: 0,
+        alreadyClaimed: 0,
+      },
       errors: ['Failed to send card reminder to Jane Doe for Test Brevet: boom'],
     })
 

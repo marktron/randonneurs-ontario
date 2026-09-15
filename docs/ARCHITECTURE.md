@@ -367,7 +367,7 @@ GitHub Actions (hourly) → /api/cron/card-reminders → Sweep in-window registr
 1. GitHub Actions triggers every hour (`15 * * * *`)
 2. Calls the `/api/cron/card-reminders` endpoint with `CRON_SECRET` for auth
 3. The endpoint calls `sendCardReminders()` in `lib/events/send-card-reminders.ts`, which finds registrations with `brevet_card_type = 'digital'` on scheduled, card-eligible events whose rider start (event start, or an approved pre-ride start) falls 11-12 hours out
-4. Late signups, events with no controls saved, and registrations missing an email or token are skipped
+4. Late signups, events with no controls saved, riders with no email (`noEmail`), and registrations with no management token (`noToken`) are skipped, each counted separately in the response
 5. Each row is claimed by stamping `registrations.card_reminder_sent_at` while it's still `NULL`, then the reminder is sent with a link to the rider's card
 6. One run sweeps at most `CARD_REMINDER_BATCH_LIMIT` (500) candidates, oldest registration first, inside the route's 60-second `maxDuration`. A row left over is still an unsent candidate on the next hourly run
 7. Setup failures (SES unconfigured, a failed candidate or controls query) throw: the endpoint reports them to Sentry and answers 500, which fails the Actions job. Per-row failures also go to Sentry but leave the run at 200 with the details in `errors`, so one bad row doesn't hide the riders who were emailed
