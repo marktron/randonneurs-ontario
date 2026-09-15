@@ -294,10 +294,15 @@ export interface CardReminderEmailData {
   eventDistance: number
   /** Already formatted, e.g. "Saturday, June 6, 2026" */
   eventDate: string
-  /** Already formatted, e.g. "7:00 AM" or "TBD" */
+  /** Already formatted, e.g. "7:00 AM", or "TBD" when the start time is unset */
   eventTime: string
+  /** "TBD" when the event has no start location */
   eventLocation: string
-  chapterName: string
+  /**
+   * Null for an event with no chapter. The chapter VP is on reply-to only when
+   * there is a chapter, so the sign-off changes with it.
+   */
+  chapterName: string | null
   /** Absolute URL to /card/<token> */
   cardUrl: string
 }
@@ -321,14 +326,32 @@ export function buildCardReminderEmail(data: CardReminderEmailData): {
     eventDate: escapeHtml(data.eventDate),
     eventTime: escapeHtml(data.eventTime),
     eventLocation: escapeHtml(data.eventLocation),
-    chapterName: escapeHtml(data.chapterName),
     cardUrl: escapeHtml(data.cardUrl),
   }
+
+  // "TBD" is the sender's stand-in for a column that isn't set, so the clause
+  // it would fill is dropped instead of printed: "starts at TBD ... from TBD"
+  // tells a rider nothing.
+  const timeClause = data.eventTime === 'TBD' ? '' : `at ${data.eventTime} `
+  const locationClause = data.eventLocation === 'TBD' ? '' : ` from ${data.eventLocation}`
+  const startsSentenceText = `The ${rideName} starts ${timeClause}on ${data.eventDate}${locationClause}.`
+  const startsSentenceHtml = `The <strong>${safe.rideName}</strong> starts ${
+    data.eventTime === 'TBD' ? '' : `at ${safe.eventTime} `
+  }on ${safe.eventDate}${data.eventLocation === 'TBD' ? '' : ` from ${safe.eventLocation}`}.`
+
+  // With a chapter, its VP is on reply-to, so the sign-off matches the other
+  // chapter emails. Without one, nobody is listening on reply.
+  const signOff = data.chapterName
+    ? `The ${data.chapterName} Chapter VP is included in this email. Just hit reply if you have any questions.`
+    : 'Questions? Contact your ride organizer.'
+  const signOffHtml = data.chapterName
+    ? `The ${escapeHtml(data.chapterName)} Chapter VP is included in this email. Just hit reply if you have any questions.`
+    : 'Questions? Contact your ride organizer.'
 
   const text = `
 Hi ${data.riderName},
 
-The ${rideName} starts at ${data.eventTime} on ${data.eventDate} from ${data.eventLocation}. You asked for a digital brevet card, so open it on your phone before the start and bookmark it.
+${startsSentenceText} You asked for a digital brevet card, so open it on your phone before the start and bookmark it.
 
 Open your brevet card:
 ${data.cardUrl}
@@ -340,9 +363,8 @@ A few tips:
 - Allow location access when the card asks.
 - Check in at every control, including the start and finish.
 
-Reply to this email if you have questions.
+${signOff}
 
-${data.chapterName} Chapter
 Randonneurs Ontario
 https://www.randonneursontario.ca
   `.trim()
@@ -357,7 +379,7 @@ https://www.randonneursontario.ca
 <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
   <p>Hi ${safe.riderName},</p>
 
-  <p>The <strong>${safe.rideName}</strong> starts at ${safe.eventTime} on ${safe.eventDate} from ${safe.eventLocation}. You asked for a digital brevet card, so open it on your phone before the start and bookmark it.</p>
+  <p>${startsSentenceHtml} You asked for a digital brevet card, so open it on your phone before the start and bookmark it.</p>
 
   <div style="background-color: #F0FAE5; border: 1px solid #A3D373; border-radius: 8px; padding: 16px; margin: 16px 0;">
     <p style="text-align: center;">
@@ -377,7 +399,7 @@ https://www.randonneursontario.ca
 
   <hr style="border: none; border-top: 1px solid #eee; margin: 32px 0;">
 
-  <p>${safe.chapterName} Chapter. Reply to this email if you have questions.</p>
+  <p>${signOffHtml}</p>
 
   <p>
     <strong>Randonneurs Ontario</strong><br>

@@ -110,7 +110,8 @@ describe('sendCardReminderEmail', () => {
     })
 
     const { text } = mockSendEmail.mock.calls[0][0]
-    expect(text).toContain('starts at TBD on Saturday, June 6, 2026 from TBD')
+    expect(text).toContain('starts on Saturday, June 6, 2026.')
+    expect(text).not.toContain('TBD')
     expect(text).not.toContain('12:00 AM')
   })
 
@@ -151,8 +152,13 @@ describe('sendCardReminderEmail', () => {
     expect(mockSendEmail).toHaveBeenCalledWith(
       expect.objectContaining({ replyTo: undefined, subject: expect.any(String) })
     )
-    const { text } = mockSendEmail.mock.calls[0][0]
+    const { text, html } = mockSendEmail.mock.calls[0][0]
     expect(text).toContain('Randonneurs Ontario')
+    // No chapter means no VP on reply-to, so the sign-off must not invite a
+    // reply or invent a "Randonneurs Ontario Chapter".
+    expect(text).toContain('Questions? Contact your ride organizer.')
+    expect(text).not.toContain('Chapter')
+    expect(html).not.toContain('Chapter')
   })
 
   it('reports { sent: false } without sending when SES is not configured', async () => {

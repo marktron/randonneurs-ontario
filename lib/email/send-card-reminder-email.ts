@@ -66,7 +66,9 @@ export async function sendCardReminderEmail(params: {
     eventDate: formatTorontoDate(riderStart),
     eventTime: params.startTimeKnown ? formatTorontoTime(riderStart) : 'TBD',
     eventLocation: event.start_location ?? 'TBD',
-    chapterName: event.chapters?.name || 'Randonneurs Ontario',
+    // Null, not a stand-in name: without a chapter there is no VP on reply-to,
+    // and "Randonneurs Ontario Chapter" is not a thing.
+    chapterName: event.chapters?.name ?? null,
     cardUrl: buildDigitalCardUrl(params.managementToken),
   })
 

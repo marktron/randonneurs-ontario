@@ -219,9 +219,67 @@ describe('card reminder email', () => {
     expect(email.text).toContain('<script>alert(1)</script>')
   })
 
-  it('renders without crashing when eventTime is TBD', () => {
+  it('names the start time, date and location when all three are known', () => {
+    const email = buildCardReminderEmail(baseCardReminder)
+    expect(email.text).toContain(
+      'The Gentle Start 120km starts at 7:00 AM on Saturday, June 6, 2026 from Toronto.'
+    )
+    expect(email.html).toContain('starts at 7:00 AM on Saturday, June 6, 2026 from Toronto.')
+  })
+
+  it('drops the time clause rather than saying "at TBD"', () => {
     const email = buildCardReminderEmail({ ...baseCardReminder, eventTime: 'TBD' })
-    expect(email.text).toContain('TBD')
-    expect(email.html).toContain('TBD')
+
+    expect(email.text).toContain('starts on Saturday, June 6, 2026 from Toronto.')
+    expect(email.text).not.toContain('at TBD')
+    expect(email.html).toContain('starts on Saturday, June 6, 2026 from Toronto.')
+    expect(email.html).not.toContain('at TBD')
+  })
+
+  it('drops the location clause rather than saying "from TBD"', () => {
+    const email = buildCardReminderEmail({
+      ...baseCardReminder,
+      eventTime: 'TBD',
+      eventLocation: 'TBD',
+    })
+
+    expect(email.text).toContain('starts on Saturday, June 6, 2026.')
+    expect(email.text).not.toContain('TBD')
+    expect(email.html).toContain('starts on Saturday, June 6, 2026.')
+    expect(email.html).not.toContain('TBD')
+  })
+
+  it('keeps the time when only the location is unknown', () => {
+    const email = buildCardReminderEmail({ ...baseCardReminder, eventLocation: 'TBD' })
+
+    expect(email.text).toContain('starts at 7:00 AM on Saturday, June 6, 2026.')
+    expect(email.text).not.toContain('from TBD')
+  })
+
+  it('signs off the way the other chapter emails do', () => {
+    const email = buildCardReminderEmail(baseCardReminder)
+
+    expect(email.text).toContain(
+      'The Toronto Chapter VP is included in this email. Just hit reply if you have any questions.'
+    )
+    expect(email.html).toContain(
+      'The Toronto Chapter VP is included in this email. Just hit reply if you have any questions.'
+    )
+    expect(email.text).not.toContain('Toronto Chapter\n')
+  })
+
+  it('does not promise a reply when the event has no chapter', () => {
+    // With no chapter there is no VP on reply-to, so "hit reply" would send the
+    // rider to an unmonitored mailbox.
+    const email = buildCardReminderEmail({ ...baseCardReminder, chapterName: null })
+
+    expect(email.text).toContain('Questions? Contact your ride organizer.')
+    expect(email.html).toContain('Questions? Contact your ride organizer.')
+    expect(email.text).not.toContain('hit reply')
+    expect(email.text).not.toContain('Chapter')
+    expect(email.html).not.toContain('Chapter')
+    // The Randonneurs Ontario footer still closes the email.
+    expect(email.text).toContain('Randonneurs Ontario')
+    expect(email.html).toContain('Randonneurs Ontario')
   })
 })
