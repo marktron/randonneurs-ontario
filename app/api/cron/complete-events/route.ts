@@ -3,6 +3,7 @@ import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { closeHours, createTorontoDate } from '@/lib/brmTimes'
 import { getAcpTimeLimitMinutes } from '@/lib/events/finish-time'
 import { createPendingResultsAndSendEmails } from '@/lib/events/complete-event'
+import { authorizeCronRequest } from '@/lib/cron-auth'
 import { logError } from '@/lib/errors'
 import type { EventForCronCompletion, EventUpdate } from '@/types/queries'
 
@@ -41,18 +42,9 @@ function calculateClosingTime(event: EventForCronCompletion): Date {
 
 export async function GET(request: Request) {
   // Verify cron secret for authentication
-  const authHeader = request.headers.get('authorization')
-  const cronSecret = process.env.CRON_SECRET
-
-  if (!cronSecret) {
-    logError(new Error('CRON_SECRET environment variable not configured'), {
-      operation: 'complete-events.auth',
-    })
-    return NextResponse.json({ error: 'Server configuration error' }, { status: 500 })
-  }
-
-  if (authHeader !== `Bearer ${cronSecret}`) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const authError = authorizeCronRequest(request, 'complete-events')
+  if (authError) {
+    return authError
   }
 
   try {
