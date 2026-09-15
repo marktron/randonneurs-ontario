@@ -1,12 +1,17 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-const { mockSupabaseAdmin, mockSendCardReminderEmail } = vi.hoisted(() => ({
+const { mockSupabaseAdmin, mockSendCardReminderEmail, mockIsEmailConfigured } = vi.hoisted(() => ({
   mockSupabaseAdmin: vi.fn(),
   mockSendCardReminderEmail: vi.fn(),
+  mockIsEmailConfigured: vi.fn(() => true),
 }))
 
 vi.mock('@/lib/supabase-server', () => ({
   getSupabaseAdmin: mockSupabaseAdmin,
+}))
+
+vi.mock('@/lib/email/ses', () => ({
+  isEmailConfigured: mockIsEmailConfigured,
 }))
 
 vi.mock('@/lib/email/send-card-reminder-email', () => ({
@@ -177,6 +182,31 @@ describe('sendCardReminders', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockSendCardReminderEmail.mockResolvedValue({ sent: true })
+    mockIsEmailConfigured.mockReturnValue(true)
+  })
+
+  describe('email configuration', () => {
+    it('aborts before claiming anything when SES is not configured', async () => {
+      // The claim is stamped before the send, so running the sweep without SES
+      // would mark every in-window rider as reminded and lose the email —
+      // unrecoverable without SQL.
+      mockIsEmailConfigured.mockReturnValue(false)
+
+      const { result, supabase } = await sweepOne(makeRegistration())
+
+      expect(result.sent).toBe(0)
+      expect(supabase.updates).toHaveLength(0)
+      expect(mockSendCardReminderEmail).not.toHaveBeenCalled()
+      expect(result.errors).toEqual([expect.stringContaining('SES not configured')])
+    })
+
+    it('does not even query for candidates when SES is not configured', async () => {
+      mockIsEmailConfigured.mockReturnValue(false)
+
+      const { supabase } = await sweepOne(makeRegistration())
+
+      expect(supabase.selects).toHaveLength(0)
+    })
   })
 
   describe('candidate query', () => {
@@ -468,6 +498,70 @@ describe('sendCardReminders', () => {
       expect(supabase.updates).toHaveLength(1)
       expect(result.errors).toHaveLength(1)
       expect(result.errors[0]).toContain('Test Rider')
+    })
+
+    it('keeps sweeping when one row throws', async () => {
+      // A malformed row must not starve every rider behind it for the whole
+      // 12 h window — the sweep only gets one chance per row.
+      mockSendCardReminderEmail
+        .mockRejectedValueOnce(new Error('template blew up'))
+        .mockResolvedValueOnce({ sent: true })
+
+      const supabase = buildSupabase({
+        registrations: [
+          makeRegistration({ id: 'reg-1', events: startAt(2 * HOUR) }),
+          makeRegistration({ id: 'reg-2', events: startAt(3 * HOUR) }),
+        ],
+        controlEventIds: ['event-1'],
+      })
+      mockSupabaseAdmin.mockReturnValue(supabase.client)
+
+      const result = await sendCardReminders(NOW)
+
+      expect(result.checked).toBe(2)
+      expect(result.sent).toBe(1)
+      expect(result.errors).toHaveLength(1)
+      expect(result.errors[0]).toContain('template blew up')
+      expect(result.errors[0]).toContain('Test Rider')
+      expect(result.errors[0]).toContain('Test Brevet')
+    })
+  })
+
+  describe('start time known to the sender', () => {
+    it('tells the sender the start time is known when the event has one', async () => {
+      await sweepOne(makeRegistration())
+
+      expect(mockSendCardReminderEmail).toHaveBeenCalledWith(
+        expect.objectContaining({ startTimeKnown: true })
+      )
+    })
+
+    it('tells the sender the start time is unknown when the event has none', async () => {
+      await sweepOne(makeRegistration({ events: { start_time: null } }))
+
+      expect(mockSendCardReminderEmail).toHaveBeenCalledWith(
+        expect.objectContaining({ startTimeKnown: false })
+      )
+    })
+
+    it('treats a midnight pre-ride start as known even when the event has no time', async () => {
+      // Midnight is a legitimate pre-ride start; it must not render as "TBD".
+      const midnight = new Date(NOW.getTime() + 5 * HOUR)
+      const preRideDate = torontoDateString(midnight)
+
+      const { result } = await sweepOne(
+        makeRegistration({
+          events: { ...startAt(9 * DAY), start_time: null },
+          pre_ride_date: preRideDate,
+          pre_ride_start_time: '00:00',
+        })
+      )
+
+      // NOW is 19:00, so midnight tonight is 5 h out — inside the window.
+      expect(result.sent).toBe(1)
+      expect(mockSendCardReminderEmail).toHaveBeenCalledWith(
+        expect.objectContaining({ startTimeKnown: true })
+      )
     })
   })
 

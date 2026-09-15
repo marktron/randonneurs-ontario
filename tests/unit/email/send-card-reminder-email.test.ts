@@ -41,6 +41,7 @@ function send(overrides: Partial<Parameters<typeof sendCardReminderEmail>[0]> = 
     riderEmail: 'rider@test.com',
     managementToken: 'tok-abc123',
     riderStart: RIDER_START,
+    startTimeKnown: true,
     ...overrides,
   })
 }
@@ -105,6 +106,7 @@ describe('sendCardReminderEmail', () => {
     await send({
       event: { ...event, start_time: null, start_location: null },
       riderStart: createTorontoDate(2026, 5, 6, 0, 0),
+      startTimeKnown: false,
     })
 
     const { text } = mockSendEmail.mock.calls[0][0]
@@ -118,10 +120,27 @@ describe('sendCardReminderEmail', () => {
     await send({
       event: { ...event, start_time: null },
       riderStart: createTorontoDate(2026, 5, 3, 6, 15),
+      startTimeKnown: true,
     })
 
     const { text } = mockSendEmail.mock.calls[0][0]
     expect(text).toContain('6:15 AM')
+  })
+
+  it('shows a midnight start as 12:00 AM when the caller says the time is known', async () => {
+    // A pre-ride can legitimately start at midnight; only the caller knows
+    // whether 00:00 is a real start time or the absence of one.
+    mockSendEmail.mockResolvedValueOnce(undefined)
+
+    await send({
+      event: { ...event, start_time: null },
+      riderStart: createTorontoDate(2026, 5, 6, 0, 0),
+      startTimeKnown: true,
+    })
+
+    const { text } = mockSendEmail.mock.calls[0][0]
+    expect(text).toContain('12:00 AM')
+    expect(text).not.toContain('starts at TBD')
   })
 
   it('omits reply-to when the chapter has no VP address', async () => {

@@ -1,7 +1,6 @@
 import { buildCardReminderEmail } from '@/lib/email/templates'
 import { sendEventFlowEmail } from '@/lib/email/send-result-flow-email'
 import { buildDigitalCardUrl } from '@/lib/actions/registration/helpers'
-import { computeEventStart } from '@/lib/brevet-card'
 import { TORONTO_TZ } from '@/lib/brmTimes'
 
 export interface EventForCardReminder {
@@ -49,24 +48,23 @@ export async function sendCardReminderEmail(params: {
   managementToken: string
   /** The rider's resolved start (event start or approved pre-ride start). */
   riderStart: Date
+  /**
+   * Whether `riderStart` carries a real clock time. `computeEventStart` falls
+   * back to midnight when no start time is set, and midnight is also a
+   * legitimate pre-ride start, so only the caller can tell the two apart:
+   * the registration has a start time when either the event's `start_time` or
+   * the registration's `pre_ride_start_time` is set.
+   */
+  startTimeKnown: boolean
 }): Promise<{ sent: boolean; error?: string }> {
   const { event, riderStart } = params
-
-  // `computeEventStart` falls back to midnight when `start_time` is null, so
-  // formatting that start blind would announce a misleading "12:00 AM". A
-  // pre-ride always carries its own time (the DB CHECK forces pre_ride_date
-  // and pre_ride_start_time together), so only a rider start still sitting on
-  // the event's midnight default is genuinely unknown.
-  const startTimeUnknown =
-    event.start_time === null &&
-    riderStart.getTime() === computeEventStart(event.event_date, null).getTime()
 
   const { subject, text, html } = buildCardReminderEmail({
     riderName: params.riderName,
     eventName: event.name,
     eventDistance: event.distance_km,
     eventDate: formatTorontoDate(riderStart),
-    eventTime: startTimeUnknown ? 'TBD' : formatTorontoTime(riderStart),
+    eventTime: params.startTimeKnown ? formatTorontoTime(riderStart) : 'TBD',
     eventLocation: event.start_location ?? 'TBD',
     chapterName: event.chapters?.name || 'Randonneurs Ontario',
     cardUrl: buildDigitalCardUrl(params.managementToken),

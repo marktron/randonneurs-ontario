@@ -1,4 +1,5 @@
 import { getSupabaseAdmin } from '@/lib/supabase-server'
+import { isEmailConfigured } from '@/lib/email/ses'
 import { sendCardReminderEmail } from '@/lib/email/send-card-reminder-email'
 import type { EventForCardReminder } from '@/lib/email/send-card-reminder-email'
 import { DIGITAL_CARD_EVENT_TYPES, resolveRiderStart } from '@/lib/brevet-card'
@@ -63,6 +64,15 @@ export async function sendCardReminders(now: Date = new Date()): Promise<CardRem
     errors: [],
   }
 
+  // Checked before anything is claimed. `sendEventFlowEmail` reports
+  // `{ sent: false }` with no error when SES is unconfigured, and the claim is
+  // stamped before the send, so sweeping without SES would mark every
+  // in-window rider as reminded and lose the email — unrecoverable without SQL.
+  if (!isEmailConfigured()) {
+    result.errors.push('AWS SES not configured; skipping card reminder sweep')
+    return result
+  }
+
   // Coarse prune only — a pre-ride start can precede the event date, and the
   // real window check happens per registration below.
   const earliestEventDate = torontoDateString(new Date(now.getTime() - 24 * 60 * 60 * 1000))
@@ -105,70 +115,88 @@ export async function sendCardReminders(now: Date = new Date()): Promise<CardRem
 
   for (const reg of registrations) {
     const event = reg.events
-    const riderStart = resolveRiderStart(event, reg)
-    const sendAt = new Date(riderStart.getTime() - CARD_REMINDER_LEAD_MS)
 
-    if (now < sendAt || now >= riderStart) {
-      result.skipped.notInWindow++
-      continue
-    }
+    // One malformed row must not starve every rider behind it: the sweep gets
+    // a single chance per row before its window closes, so a throw is recorded
+    // against that rider and the loop carries on.
+    try {
+      const riderStart = resolveRiderStart(event, reg)
+      const sendAt = new Date(riderStart.getTime() - CARD_REMINDER_LEAD_MS)
 
-    // Someone who signed up inside the reminder window already has the card
-    // link in their fresh confirmation email; a reminder minutes later is noise.
-    if (reg.registered_at !== null && new Date(reg.registered_at) >= sendAt) {
-      result.skipped.lateSignup++
-      continue
-    }
+      if (now < sendAt || now >= riderStart) {
+        result.skipped.notInWindow++
+        continue
+      }
 
-    if (!eventsWithControls.has(reg.event_id)) {
-      result.skipped.noControls++
-      continue
-    }
+      // Someone who signed up inside the reminder window already has the card
+      // link in their fresh confirmation email; a reminder minutes later is noise.
+      if (reg.registered_at !== null && new Date(reg.registered_at) >= sendAt) {
+        result.skipped.lateSignup++
+        continue
+      }
 
-    const rider = reg.riders
-    if (!rider?.email || !reg.management_token) {
-      result.skipped.noEmail++
-      continue
-    }
+      if (!eventsWithControls.has(reg.event_id)) {
+        result.skipped.noControls++
+        continue
+      }
 
-    const { data: claimed, error: claimError } = await supabase
-      .from('registrations')
-      .update({ card_reminder_sent_at: now.toISOString() } as RegistrationUpdate)
-      .eq('id', reg.id)
-      .is('card_reminder_sent_at', null)
-      .select('id')
-      .maybeSingle()
+      const rider = reg.riders
+      if (!rider?.email || !reg.management_token) {
+        result.skipped.noEmail++
+        continue
+      }
 
-    if (claimError) {
+      const { data: claimed, error: claimError } = await supabase
+        .from('registrations')
+        .update({ card_reminder_sent_at: now.toISOString() } as RegistrationUpdate)
+        .eq('id', reg.id)
+        .is('card_reminder_sent_at', null)
+        .select('id')
+        .maybeSingle()
+
+      if (claimError) {
+        result.errors.push(
+          `Failed to claim card reminder for registration ${reg.id}: ${claimError.message}`
+        )
+        continue
+      }
+      if (!claimed) {
+        result.skipped.alreadyClaimed++
+        continue
+      }
+
+      const riderName = `${rider.first_name} ${rider.last_name}`
+      const { sent, error: sendError } = await sendCardReminderEmail({
+        event,
+        riderName,
+        riderEmail: rider.email,
+        managementToken: reg.management_token,
+        riderStart,
+        // Midnight is both `computeEventStart`'s no-start-time fallback and a
+        // legitimate pre-ride start, so the sender is told which it is from the
+        // columns rather than left to infer it from the instant.
+        startTimeKnown: event.start_time !== null || reg.pre_ride_start_time !== null,
+      })
+
+      if (sent) {
+        result.sent++
+        console.log(`Sent digital card reminder for ${event.name} (registration ${reg.id})`)
+      } else {
+        // The claim is already stamped, so this reminder is gone for good —
+        // record it even when the sender reports no error, or the cron response
+        // would show a run that checked riders, sent nothing, and flagged nothing.
+        result.errors.push(
+          `Failed to send card reminder to ${riderName} for ${event.name}: ${sendError ?? 'email not sent'}`
+        )
+      }
+    } catch (err) {
+      const riderName = reg.riders
+        ? `${reg.riders.first_name} ${reg.riders.last_name}`
+        : `registration ${reg.id}`
       result.errors.push(
-        `Failed to claim card reminder for registration ${reg.id}: ${claimError.message}`
-      )
-      continue
-    }
-    if (!claimed) {
-      result.skipped.alreadyClaimed++
-      continue
-    }
-
-    const riderName = `${rider.first_name} ${rider.last_name}`
-    const { sent, error: sendError } = await sendCardReminderEmail({
-      event,
-      riderName,
-      riderEmail: rider.email,
-      managementToken: reg.management_token,
-      riderStart,
-    })
-
-    if (sent) {
-      result.sent++
-      console.log(`Sent digital card reminder for ${event.name} (registration ${reg.id})`)
-    } else {
-      // The claim is already stamped, so this reminder is gone for good —
-      // record it even when the sender reports no error (which is what
-      // happens when SES isn't configured), or the cron response would show
-      // a run that checked riders, sent nothing, and flagged nothing.
-      result.errors.push(
-        `Failed to send card reminder to ${riderName} for ${event.name}: ${sendError ?? 'email not sent'}`
+        `Failed to send card reminder to ${riderName} for ${event.name}: ${
+          err instanceof Error ? err.message : 'Unknown error'
+        }`
       )
     }
   }
