@@ -1,3 +1,4 @@
+import type { SupabaseClient } from '@supabase/supabase-js'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { logError } from '@/lib/errors'
 import { isEmailConfigured } from '@/lib/email/ses'
@@ -6,6 +7,7 @@ import type { EventForCardReminder } from '@/lib/email/send-card-reminder-email'
 import { DIGITAL_CARD_EVENT_TYPES, resolveRiderStart } from '@/lib/brevet-card'
 import { torontoDateString } from '@/lib/brmTimes'
 import type { RegistrationUpdate } from '@/types/queries'
+import type { Database } from '@/types/supabase'
 
 /** How long before a rider's start the reminder goes out. */
 export const CARD_REMINDER_LEAD_MS = 12 * 60 * 60 * 1000
@@ -24,7 +26,7 @@ const CANDIDATE_SELECT =
   'riders(id, first_name, last_name, email), ' +
   'events!inner(id, name, event_date, start_time, distance_km, event_type, status, start_location, chapters(name, slug))'
 
-interface CardReminderRegistrationRow {
+export interface CardReminderCandidateRow {
   id: string
   event_id: string
   management_token: string | null
@@ -40,6 +42,38 @@ interface CardReminderRegistrationRow {
   riders: { id: string; first_name: string; last_name: string; email: string | null } | null
   /** Non-null: `events!inner` drops the registration when the event doesn't match. */
   events: EventForCardReminder
+}
+
+/**
+ * The sweep's candidate query, exported so the real-DB suite can run the exact
+ * select the cron runs: a wrong embed or a mis-spelled embedded filter passes
+ * the mock suite and only shows up against real PostgREST.
+ *
+ * `earliestEventDate` is a coarse Toronto date prune — a pre-ride start can
+ * precede the event date, so the real window check happens per row in
+ * `sendCardReminders`.
+ */
+export function fetchCardReminderCandidates(
+  supabase: SupabaseClient<Database>,
+  earliestEventDate: string
+) {
+  return (
+    supabase
+      .from('registrations')
+      .select(CANDIDATE_SELECT)
+      .eq('status', 'registered')
+      .eq('brevet_card_type', 'digital')
+      .is('card_reminder_sent_at', null)
+      .eq('events.status', 'scheduled')
+      .in('events.event_type', [...DIGITAL_CARD_EVENT_TYPES])
+      .gte('events.event_date', earliestEventDate)
+      // Parent columns only: PostgREST can't order the parent rows by an
+      // embedded column, so `events.event_date` is not an option here. Oldest
+      // registration first gives the cap a stable, fair cut.
+      .order('registered_at', { ascending: true })
+      .order('id', { ascending: true })
+      .limit(CARD_REMINDER_BATCH_LIMIT)
+  )
 }
 
 export interface CardReminderSweepResult {
@@ -90,27 +124,13 @@ export async function sendCardReminders(now: Date = new Date()): Promise<CardRem
   // real window check happens per registration below.
   const earliestEventDate = torontoDateString(new Date(now.getTime() - 24 * 60 * 60 * 1000))
 
-  const { data, error } = await supabase
-    .from('registrations')
-    .select(CANDIDATE_SELECT)
-    .eq('status', 'registered')
-    .eq('brevet_card_type', 'digital')
-    .is('card_reminder_sent_at', null)
-    .eq('events.status', 'scheduled')
-    .in('events.event_type', [...DIGITAL_CARD_EVENT_TYPES])
-    .gte('events.event_date', earliestEventDate)
-    // Parent columns only: PostgREST can't order the parent rows by an
-    // embedded column, so `events.event_date` is not an option here. Oldest
-    // registration first gives the cap a stable, fair cut.
-    .order('registered_at', { ascending: true })
-    .order('id', { ascending: true })
-    .limit(CARD_REMINDER_BATCH_LIMIT)
+  const { data, error } = await fetchCardReminderCandidates(supabase, earliestEventDate)
 
   if (error) {
     throw new Error(`Failed to fetch card reminder candidates: ${error.message}`)
   }
 
-  const registrations = (data || []) as unknown as CardReminderRegistrationRow[]
+  const registrations = (data || []) as unknown as CardReminderCandidateRow[]
   result.checked = registrations.length
   if (registrations.length === 0) return result
 
