@@ -26,7 +26,7 @@ const contacts = [
   },
   {
     role: 'Member-at-large, Huron',
-    name: 'John Cummings',
+    name: 'John Cumming',
     email: 'director3@randonneursontario.ca',
   },
   {
