@@ -1,0 +1,34 @@
+name: Card Reminders Cron
+
+permissions:
+  contents: read
+
+on:
+  schedule:
+    - cron: '15 * * * *' # Every hour at minute 15
+  workflow_dispatch: # Allow manual trigger for testing
+
+concurrency:
+  group: card-reminders
+  cancel-in-progress: false # Let the running job finish; queue the next one
+
+jobs:
+  card-reminders:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger card-reminders endpoint
+        run: |
+          response=$(curl -s -w "\n%{http_code}" -X GET \
+            "${{ secrets.SITE_URL }}/api/cron/card-reminders" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}")
+
+          http_code=$(echo "$response" | tail -n1)
+          body=$(echo "$response" | sed '$d')
+
+          echo "Response: $body"
+          echo "HTTP Status: $http_code"
+
+          if [ "$http_code" != "200" ]; then
+            echo "Error: Received HTTP $http_code"
+            exit 1
+          fi
