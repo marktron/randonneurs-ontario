@@ -182,7 +182,7 @@ export function CalendarPage({
               </ToggleGroupItem>
             </ToggleGroup>
             <div className="md:order-last">
-              <CalendarSubscribeButton chapter={chapterSlug} />
+              <CalendarSubscribeButton chapter={chapterSlug} size="sm" />
             </div>
           </div>
           <div className="flex items-center gap-3 md:contents">
