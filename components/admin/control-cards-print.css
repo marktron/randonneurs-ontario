@@ -228,9 +228,14 @@ body:has(.control-cards-print) {
   line-height: 1.4;
 }
 
+/* The rotated rider name (.rider-name-vertical) is absolutely positioned
+   over this column's right edge: it starts 0.25in from the edge and is
+   ~0.22in wide at 12pt. Reserve that strip so the route name wraps and the
+   Rider line clears it, even for long surnames that run down the column. */
 .front-right {
   display: flex;
   flex-direction: column;
+  padding-right: 0.55in;
 }
 
 .logo-section {
