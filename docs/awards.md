@@ -434,3 +434,61 @@ outside a server action (the backfill migration included) needs a manual
 **Known limitation.** The trigger fires on `results` changes only; editing an
 event's `event_type`, `chapter_id`, or `event_date` does not re-reconcile results
 pointing at it (matches the other auto-assigned awards).
+
+### Ontario Rover
+
+Ontario Rover is assigned automatically by a database trigger for windows that
+close in the **current season**. It differs from the other auto-assigned awards
+in that it **accumulates across seasons**.
+
+**Rule.** Finish **1200 km of permanents**, over any period, with **at least two
+of those permanents being 300 km or more**. Only `status = 'finished'` results
+on `event_type = 'permanent'` events count; distance is `results.distance_km`.
+Earned an unlimited number of times.
+
+"Over any period" is implemented as **greedy windows**, which is how the award
+was given by hand (verified against every hand-assigned row on
+2026-09-21): replay the rider's permanents in date order, accumulating km and
+the count of 300+ rides. The moment both thresholds are met the award is earned,
+dated to the season of the ride that closed the window, and a **fresh window
+starts from the next ride**. Nothing carries over, so 2400 km whose only two
+300s fall in the first window is one Rover, not two. Under the alternative
+"global" reading (total km over 1200, capped by 300+ rides over two) Peter Grant
+would hold two, but he was given one.
+
+**Mechanics.** `trg_results_ontario_rover` (in
+`supabase/migrations/20260921140000_auto_assign_ontario_rover.sql`) fires on
+every INSERT, DELETE, and status/event_id/distance_km/rider_id/season UPDATE on
+`results`, for every results row (a brevet change is a cheap no-op). It calls
+`reconcile_ontario_rover_for_rider(rider_id)`, which replays the rider's **full**
+permanent history, counts the windows that close in the live calendar year, and
+adds or removes **auto-assigned** `rider_awards` rows (`auto_assigned = true`)
+in that season to match. Windows that closed in earlier seasons are replayed
+(they decide where the current window starts) but **never written**.
+
+**Historical edits matter.** Because the replay spans all history, correcting or
+deleting a 2019 permanent can legitimately move where a 2026 window closes. The
+trigger handles this since it fires on any of the rider's results.
+
+**Manual rows.** Same contract as Super Randonneur: auto rows never touch manual
+rows (`auto_assigned = false`), and the two are additive. Do not hand-assign a
+current-season Rover that the trigger can compute, or the rider ends up with two.
+Historical (prior-season) rows are hand-curated; if the replay shows a missing
+one, `scripts/preview-ontario-rover.ts` prints a ready-to-review INSERT for it.
+
+**Deploying mid-season.** The companion migration
+(`supabase/migrations/20260921140100_ontario_rover_current_season_backfill.sql`)
+reconciles every rider holding a current-season finished permanent. A window can
+only close in the current season on a current-season ride, so that covers
+everyone who could be owed one. Run `scripts/preview-ontario-rover.ts`
+(read-only) against production **before** deploying to confirm the expected
+recipients and spot any manual current-season row that would double up.
+
+**Cache invalidation.** Same as Super Randonneur: `revalidateResultsTags()` busts
+the `awards`, `records` and `riders` tags on every results change, and any write
+outside a server action (the backfill migration included) needs a manual
+`POST /api/revalidate` with `{"tags":["awards","records","riders"]}`.
+
+**Known limitation.** The trigger fires on `results` changes only; editing an
+event's `event_type` or `event_date` does not re-reconcile results pointing at it
+(matches the other auto-assigned awards).
