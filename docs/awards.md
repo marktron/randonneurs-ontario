@@ -88,7 +88,7 @@ Both use `unstable_cache` with 24-hour TTL and `awards` cache tags.
 
 ### Database Function
 
-**`get_award_recipients_with_distance(slug)`** — Returns recipients with their total season distance. Uses `results.distance_km` (not `events.distance_km`) for correct flèche handling. Like `get_award_recipients`, it handles both season-scoped and result-scoped awards via `UNION ALL`.
+**`get_award_recipients_with_distance(slug)`** — Returns recipients with their total season distance. Like `get_award_recipients`, it handles both season-scoped and result-scoped awards via `UNION ALL`. The distance comes from `ontario_season_distance_km(rider_id, season)`, the same helper the O-5000 trigger uses, so the number shown always equals the qualifying total: `results.distance_km` (not `events.distance_km`, for correct flèche handling) summed over finished results, excluding non-flèche events under the `other` chapter (in practice, Paris-Brest-Paris).
 
 ## Components
 
@@ -380,3 +380,57 @@ outside a server action (the backfill migration included) needs a manual
 **Known limitation.** The trigger fires on `results` changes only; editing an
 event's `event_type`, `chapter_id`, or `event_date` does not re-reconcile results
 pointing at it (matches First Brevet and Super Randonneur).
+
+### O-5000
+
+O-5000 is assigned automatically by a database trigger for the **current season
+only**. Closed seasons are frozen and hand-curated.
+
+**Rule.** At least **5000 km** of finished results in a single season on events
+ridden in Ontario. Brevets, populaires, permanents, and flèches all count.
+Distance is the per-rider `results.distance_km` (so flèche team distances are
+used as ridden), summed over `status = 'finished'` results. "In Ontario" is
+expressed through the chapter: every chapter counts, including the inactive
+Niagara chapter and the Permanent chapter, **except** non-flèche events under the
+`other` chapter. In practice `other` holds only the annual club Flèche (counts)
+and Paris-Brest-Paris (does not). The award is earned **at most once per
+season**; the "can be earned multiple times" wording on `/awards` refers to
+separate years.
+
+**Mechanics.** `trg_results_o_5000` (in
+`supabase/migrations/20260921130000_auto_assign_o_5000.sql`) fires on every
+INSERT, DELETE, and status/event_id/distance_km/rider_id/season UPDATE on
+`results`. It calls `reconcile_o_5000_for_rider_season(rider_id, season)`, which
+no-ops unless `season` is the live calendar year, computes the season total via
+`ontario_season_distance_km(rider_id, season)`, and adds or removes the single
+**auto-assigned** `rider_awards` row (`auto_assigned = true`) to match.
+
+**Shared distance helper.** `ontario_season_distance_km` is also what
+`get_award_recipients_with_distance` uses for the distance column on `/awards`
+(changed in `20260921130100_award_distance_excludes_other_chapter.sql`), so the
+displayed total and the qualifying total can never disagree.
+
+**Manual rows.** Same contract as Super Randonneur: auto rows never touch manual
+rows (`auto_assigned = false`), and the two are additive. Do not hand-assign a
+current-season O-5000 that the trigger can compute, or the rider ends up with two.
+
+**Status changes / deletions / reassignment / distance edits.** Flipping a
+result to `dnf`, deleting it, correcting its `distance_km`, or moving it to
+another rider re-runs the reconciler for every affected rider.
+
+**Deploying mid-season.** The companion migration
+(`supabase/migrations/20260921130200_o_5000_current_season_backfill.sql`)
+reconciles every rider holding a current-season finished result, granting the
+award to those already past 5000 km. It is season-gated, so history is
+untouched. Run `scripts/preview-o-5000.ts` (read-only) against production
+**before** deploying to confirm the expected recipients and spot any manual
+current-season row that would double up.
+
+**Cache invalidation.** Same as Super Randonneur: `revalidateResultsTags()` busts
+the `awards`, `records` and `riders` tags on every results change, and any write
+outside a server action (the backfill migration included) needs a manual
+`POST /api/revalidate` with `{"tags":["awards","records","riders"]}`.
+
+**Known limitation.** The trigger fires on `results` changes only; editing an
+event's `event_type`, `chapter_id`, or `event_date` does not re-reconcile results
+pointing at it (matches the other auto-assigned awards).
