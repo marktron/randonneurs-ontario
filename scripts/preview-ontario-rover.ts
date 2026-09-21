@@ -21,6 +21,7 @@
 // Usage:
 //   npx tsx scripts/preview-ontario-rover.ts
 //   npx tsx scripts/preview-ontario-rover.ts --env-file=.env.production.local
+//   npx tsx scripts/preview-ontario-rover.ts --rider=chad-szymanski   (ride-by-ride trace)
 import './load-env'
 import { createClient } from '@supabase/supabase-js'
 
@@ -35,6 +36,10 @@ const supabase = createClient(url, key, {
 })
 
 const CURRENT_SEASON = new Date().getFullYear()
+const RIDER_ARG = process.argv
+  .slice(2)
+  .find((a) => a.startsWith('--rider='))
+  ?.split('=')[1]
 const KM_TARGET = 1200
 const LONG_KM = 300
 const LONG_NEEDED = 2
@@ -142,6 +147,41 @@ async function main() {
     riders.set(r.rider_id, entry)
   }
   for (const e of riders.values()) e.rides.sort((a, b) => a.date.localeCompare(b.date))
+
+  if (RIDER_ARG) {
+    const { data: rr } = await supabase
+      .from('riders')
+      .select('id')
+      .eq('slug', RIDER_ARG)
+      .maybeSingle()
+    const rider = rr ? riders.get((rr as { id: string }).id) : undefined
+    if (!rider) {
+      console.log(`\nno finished permanents found for rider slug "${RIDER_ARG}"`)
+      return
+    }
+    const ex = existingByRider.get((rr as { id: string }).id) ?? []
+    console.log(`\n=== ride-by-ride trace: ${rider.name} ===`)
+    console.log(
+      `existing Rover rows: ${ex.length ? ex.map((x) => `${x.season}${x.auto ? ' (auto)' : ''}`).join(', ') : 'none'}\n`
+    )
+    let km = 0
+    let long = 0
+    let n = 0
+    for (const r of rider.rides) {
+      km += r.km
+      if (r.km >= LONG_KM) long += 1
+      const closes = km >= KM_TARGET && long >= LONG_NEEDED
+      console.log(
+        `  ${r.date}  ${String(r.km).padStart(4)} km  ${r.name.padEnd(36)} window: ${String(km).padStart(4)} km, ${long}x300+${closes ? `  <== ROVER #${++n} (${r.season})` : ''}`
+      )
+      if (closes) {
+        km = 0
+        long = 0
+      }
+    }
+    console.log(`\n  open window: ${km} km, ${long}x300+`)
+    return
+  }
 
   // Riders with an existing award but no permanent results at all (data gaps).
   const ghosts = [...existingByRider.keys()].filter((id) => !riders.has(id))
