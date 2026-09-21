@@ -332,3 +332,51 @@ migration, a psql session) bypasses this entirely and needs a manual
 **Known limitation.** The trigger fires on `results` changes only; editing an
 event's `event_type` or `event_date` does not re-reconcile results pointing at it
 (matches First Brevet).
+
+### Ontario Explorer
+
+Ontario Explorer is assigned automatically by a database trigger for the
+**current season only**. Closed seasons are frozen and hand-curated.
+
+**Rule.** A qualifying ride is a **finished `brevet`** result of **200 km or
+more**. The rider needs at least one qualifying ride in **each of the four active
+chapters** (Toronto, Huron, Ottawa, Simcoe) in a single season. Brevets filed
+under Niagara, Other, or Permanent count for nothing. Populaires, flèches, and
+permanents never count. The award is earned **at most once per season**; the
+"can be earned multiple times" wording on `/awards` refers to separate years.
+The 200 km floor exists so an event mistyped as a brevet cannot cover a chapter
+(see GitHub issue #134 for the admin-form guard).
+
+**Mechanics.** `trg_results_ontario_explorer` (in
+`supabase/migrations/20260921120000_auto_assign_ontario_explorer.sql`) fires on
+every INSERT, DELETE, and status/event_id/distance_km/rider_id/season UPDATE on
+`results`. It calls `reconcile_ontario_explorer_for_rider_season(rider_id, season)`,
+which no-ops unless `season` is the live calendar year, then adds or removes the
+single **auto-assigned** `rider_awards` row (`auto_assigned = true`) so it matches
+whether the rider currently covers all four chapters.
+
+**Manual rows.** Same contract as Super Randonneur: auto rows never touch manual
+rows (`auto_assigned = false`), and the two are additive. Do not hand-assign a
+current-season Ontario Explorer that the trigger can compute, or the rider ends
+up with two.
+
+**Status changes / deletions / reassignment.** Flipping a qualifying result to
+`dnf`, deleting it, or moving it to another rider re-runs the reconciler for
+every affected rider and adds or removes the award accordingly.
+
+**Deploying mid-season.** The companion migration
+(`supabase/migrations/20260921120100_ontario_explorer_current_season_backfill.sql`)
+reconciles every rider holding a current-season finished brevet, granting the
+award to those who already covered all four chapters. It is season-gated, so
+history is untouched. Run `scripts/preview-ontario-explorer.ts` (read-only)
+against production **before** deploying to confirm the expected recipients and
+spot any manual current-season row that would double up.
+
+**Cache invalidation.** Same as Super Randonneur: `revalidateResultsTags()` busts
+the `awards`, `records` and `riders` tags on every results change, and any write
+outside a server action (the backfill migration included) needs a manual
+`POST /api/revalidate` with `{"tags":["awards","records","riders"]}`.
+
+**Known limitation.** The trigger fires on `results` changes only; editing an
+event's `event_type`, `chapter_id`, or `event_date` does not re-reconcile results
+pointing at it (matches First Brevet and Super Randonneur).
