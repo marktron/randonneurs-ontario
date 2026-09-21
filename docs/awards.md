@@ -475,6 +475,8 @@ rows (`auto_assigned = false`), and the two are additive. Do not hand-assign a
 current-season Rover that the trigger can compute, or the rider ends up with two.
 Historical (prior-season) rows are hand-curated; if the replay shows a missing
 one, `scripts/preview-ontario-rover.ts` prints a ready-to-review INSERT for it.
+The club only started awarding Ontario Rover in **2025**, so the script ignores
+windows that closed before then even though the replay walks through them.
 
 **Deploying mid-season.** The companion migration
 (`supabase/migrations/20260921140100_ontario_rover_current_season_backfill.sql`)

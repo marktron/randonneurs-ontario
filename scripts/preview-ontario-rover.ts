@@ -38,6 +38,9 @@ const CURRENT_SEASON = new Date().getFullYear()
 const KM_TARGET = 1200
 const LONG_KM = 300
 const LONG_NEEDED = 2
+// The club only started awarding Ontario Rover in 2025; earlier windows are
+// replayed (they position later windows) but were never awarded and never will be.
+const FIRST_AWARDED_SEASON = 2025
 
 type ResultRow = {
   rider_id: string
@@ -188,11 +191,15 @@ async function main() {
     `\n  riders considered: ${considered}; greedy matches existing: ${agreeGreedy}; global matches existing: ${agreeGlobal}`
   )
 
-  console.log('\n=== historical windows (prior seasons) with no matching row ===')
+  console.log(
+    `\n=== historical windows (${FIRST_AWARDED_SEASON}-${CURRENT_SEASON - 1}) with no matching row ===`
+  )
   console.log('(review, then paste into psql if these should be restored; never run blindly)\n')
   const missingSql: string[] = []
   for (const [id, rider] of riders) {
-    const greedy = greedyWindows(rider.rides).filter((g) => g.season < CURRENT_SEASON)
+    const greedy = greedyWindows(rider.rides).filter(
+      (g) => g.season >= FIRST_AWARDED_SEASON && g.season < CURRENT_SEASON
+    )
     const ex = existingByRider.get(id) ?? []
     const bySeason = new Map<number, number>()
     for (const g of greedy) bySeason.set(g.season, (bySeason.get(g.season) ?? 0) + 1)
