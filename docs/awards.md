@@ -210,6 +210,15 @@ for now (decided 2026-09-22): up to four of the twelve monthly rides may be
 off-club, so the site can never see a complete run. The ACP awards (Randonneur 5000 and 10000) are granted by ACP and are never
 computed here.
 
+**Open seasons.** Every auto-assigned award reconciles only **open** seasons and
+leaves everything older frozen and hand-curated. `is_open_season(season, today)`
+(in `supabase/migrations/20260921115900_is_open_season.sql`) is the single
+definition: the current calendar year is always open, and the previous year
+stays open **through January 31** so a late-December ride entered in early
+January still earns its award. Every season-gated reconciler below, including
+the earlier Super Randonneur and Devil Week ones, calls it. Where the sections
+below say "current season", read "open season".
+
 ### First Brevet
 
 First Brevet is assigned automatically by a database trigger. There is no admin

@@ -17,14 +17,15 @@
 --
 -- Auto-assigned rows are marked auto_assigned = true and reconciled by a trigger
 -- on `results`, like Super Randonneur, Ontario Explorer and O-5000. Manual rows
--- (auto_assigned = false) are never touched. Only windows that close in the
--- live calendar season are written; windows that closed in earlier seasons are
+-- (auto_assigned = false) are never touched. Only windows that close in an
+-- open season (see is_open_season: the current year, plus the previous year
+-- through January 31) are written; windows that closed in earlier seasons are
 -- replayed (they determine where the current window starts) but never written,
 -- so history stays frozen and hand-curated. The current season's
 -- already-submitted results are picked up once by the sibling migration
 -- 20260921140100_ontario_rover_current_season_backfill.sql.
 
--- 1. Reconcile the auto Ontario Rover rows for one rider in the current season.
+-- 1. Reconcile the auto Ontario Rover rows for one rider in every open season.
 --    Replays the rider's permanent history from 2025 on, so it must be called
 --    on any change to any of their permanent results, including prior-season
 --    ones. Idempotent.
@@ -35,11 +36,14 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 DECLARE
-  v_season   INT := EXTRACT(YEAR FROM CURRENT_DATE)::int;
+  v_year     INT := EXTRACT(YEAR FROM CURRENT_DATE)::int;
+  v_season   INT;
   v_award_id UUID;
   v_km       INT := 0;
   v_long     INT := 0;
-  v_target   INT := 0;
+  v_closed_this INT := 0;   -- windows closed in v_year
+  v_closed_prev INT := 0;   -- windows closed in v_year - 1
+  v_target   INT;
   v_current  INT;
   v_delta    INT;
   rec        RECORD;
@@ -70,39 +74,47 @@ BEGIN
     END IF;
 
     IF v_km >= 1200 AND v_long >= 2 THEN
-      IF rec.season = v_season THEN
-        v_target := v_target + 1;
+      IF rec.season = v_year THEN
+        v_closed_this := v_closed_this + 1;
+      ELSIF rec.season = v_year - 1 THEN
+        v_closed_prev := v_closed_prev + 1;
       END IF;
       v_km   := 0;
       v_long := 0;
     END IF;
   END LOOP;
 
-  SELECT COUNT(*) INTO v_current
-  FROM rider_awards
-  WHERE rider_id      = p_rider_id
-    AND award_id      = v_award_id
-    AND season        = v_season
-    AND auto_assigned = true;
+  -- Reconcile each open season (the previous year only through January 31).
+  FOREACH v_season IN ARRAY ARRAY[v_year - 1, v_year] LOOP
+    CONTINUE WHEN NOT is_open_season(v_season);
+    v_target := CASE WHEN v_season = v_year THEN v_closed_this ELSE v_closed_prev END;
 
-  v_delta := v_target - v_current;
+    SELECT COUNT(*) INTO v_current
+    FROM rider_awards
+    WHERE rider_id      = p_rider_id
+      AND award_id      = v_award_id
+      AND season        = v_season
+      AND auto_assigned = true;
 
-  IF v_delta > 0 THEN
-    INSERT INTO rider_awards (rider_id, award_id, season, auto_assigned, note)
-    SELECT p_rider_id, v_award_id, v_season, true, 'Auto-assigned from on-site results'
-    FROM generate_series(1, v_delta);
-  ELSIF v_delta < 0 THEN
-    DELETE FROM rider_awards
-    WHERE id IN (
-      SELECT id FROM rider_awards
-      WHERE rider_id      = p_rider_id
-        AND award_id      = v_award_id
-        AND season        = v_season
-        AND auto_assigned = true
-      ORDER BY created_at DESC, id DESC
-      LIMIT (-v_delta)
-    );
-  END IF;
+    v_delta := v_target - v_current;
+
+    IF v_delta > 0 THEN
+      INSERT INTO rider_awards (rider_id, award_id, season, auto_assigned, note)
+      SELECT p_rider_id, v_award_id, v_season, true, 'Auto-assigned from on-site results'
+      FROM generate_series(1, v_delta);
+    ELSIF v_delta < 0 THEN
+      DELETE FROM rider_awards
+      WHERE id IN (
+        SELECT id FROM rider_awards
+        WHERE rider_id      = p_rider_id
+          AND award_id      = v_award_id
+          AND season        = v_season
+          AND auto_assigned = true
+        ORDER BY created_at DESC, id DESC
+        LIMIT (-v_delta)
+      );
+    END IF;
+  END LOOP;
 END;
 $$;
 

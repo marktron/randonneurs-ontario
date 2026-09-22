@@ -12,7 +12,7 @@
 -- This migration tags the existing PBP events the same way. New editions of
 -- either event must be created with the tag, exactly as Devil Week requires.
 --
--- Reconciliation is per result and current season only: a finished result on a
+-- Reconciliation is per result and open seasons only (see is_open_season): a finished result on a
 -- tagged event gets the row, and a result on a tagged event that is no longer
 -- finished loses it. Rows on untagged events (hand-assigned, off-collection)
 -- are never touched, so a manual badge survives. Prior seasons are frozen.
@@ -53,7 +53,7 @@ BEGIN
   IF NOT FOUND
      OR v_collection IS NULL
      OR v_collection NOT IN ('paris-brest-paris', 'granite-anvil')
-     OR v_season IS DISTINCT FROM EXTRACT(YEAR FROM CURRENT_DATE)::int THEN
+     OR NOT is_open_season(v_season) THEN
     RETURN;
   END IF;
 

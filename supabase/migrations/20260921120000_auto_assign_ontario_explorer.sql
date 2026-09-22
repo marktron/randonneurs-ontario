@@ -11,8 +11,9 @@
 -- Auto-assigned rows are marked auto_assigned = true and reconciled by a trigger
 -- on `results`, exactly like Super Randonneur
 -- (20260820120000_auto_assign_super_randonneur.sql). Manual rows
--- (auto_assigned = false) are never touched. Only the live calendar season is
--- reconciled; closed seasons are frozen and never backfilled. The current
+-- (auto_assigned = false) are never touched. Only open seasons (see
+-- is_open_season: the current year, plus the previous year through January 31)
+-- are reconciled; closed seasons are frozen and never backfilled. The current
 -- season's already-submitted results are picked up once by the sibling
 -- migration 20260921120100_ontario_explorer_current_season_backfill.sql.
 
@@ -31,9 +32,8 @@ DECLARE
   v_target   INT;
   v_current  INT;
 BEGIN
-  -- Current calendar season only; everything else is frozen.
-  IF p_rider_id IS NULL
-     OR p_season IS DISTINCT FROM EXTRACT(YEAR FROM CURRENT_DATE)::int THEN
+  -- Open seasons only (see is_open_season); everything else is frozen.
+  IF p_rider_id IS NULL OR NOT is_open_season(p_season) THEN
     RETURN;
   END IF;
 
