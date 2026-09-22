@@ -495,3 +495,36 @@ outside a server action (the backfill migration included) needs a manual
 **Known limitation.** The trigger fires on `results` changes only; editing an
 event's `event_type` or `event_date` does not re-reconcile results pointing at it
 (matches the other auto-assigned awards).
+
+### Paris-Brest-Paris and Granite Anvil
+
+Both event-completion badges are assigned automatically by a database trigger
+for the **current season only**. They are result-scoped: finishing the event
+earns the badge on that result.
+
+**Rule.** Events are identified by `events.collection`, never by name:
+
+- `paris-brest-paris`: any finished result earns Paris-Brest-Paris.
+- `granite-anvil`: a finished result earns Granite Anvil when the event is
+  **1200 km or longer**. The 1000 km edition shares the tag but has never
+  earned the award, and the 200 km companion ride is untagged.
+
+**Mechanics.** `trg_results_event_completion_awards` (in
+`supabase/migrations/20260921150000_auto_assign_event_completion_awards.sql`)
+fires on every INSERT and status/event_id/season UPDATE on `results` and calls
+`reconcile_event_completion_awards_for_result(result_id)`. It no-ops unless the
+result is in the live calendar year and its event carries one of the two tags,
+then adds the `result_awards` row when the result is `finished` (and long enough,
+for Granite Anvil) or removes it otherwise. Deleting a result drops the row via
+the FK cascade. The same migration tags the historical PBP events and runs a
+current-season reconcile that is a no-op in years when neither event is held.
+
+**Manual rows.** `result_awards` has no `auto_assigned` flag. The reconciler only
+ever removes a badge from a result on a **tagged** event, so a badge assigned by
+hand to a result on an untagged event survives every reconcile.
+
+**Tagging new editions.** When creating the next PBP or Granite Anvil event, set
+`events.collection` to `paris-brest-paris` or `granite-anvil` (the admin event
+form has no field for this yet; set it directly). Without the tag nothing is
+awarded, and adding the tag later does not re-reconcile existing results, since
+the trigger fires on `results` changes only.
