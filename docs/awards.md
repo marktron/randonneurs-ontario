@@ -202,6 +202,14 @@ To assign an existing award to a rider:
 
 ## Automatically Assigned Awards
 
+Not every award can be computed from results. **Ontario Rouleur** stays
+application-based by design: its "Audax-style ride" slot means a ride done as a
+group throughout, which the results data cannot show, so the club historian
+validates applications by hand (decided 2026-09-22). **O-12** is only partly
+computable, since up to four of the twelve monthly rides may be off-club. The
+ACP awards (Randonneur 5000 and 10000) are granted by ACP and are never
+computed here.
+
 ### First Brevet
 
 First Brevet is assigned automatically by a database trigger. There is no admin
