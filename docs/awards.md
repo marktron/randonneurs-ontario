@@ -205,9 +205,9 @@ To assign an existing award to a rider:
 Not every award can be computed from results. **Ontario Rouleur** stays
 application-based by design: its "Audax-style ride" slot means a ride done as a
 group throughout, which the results data cannot show, so the club historian
-validates applications by hand (decided 2026-09-22). **O-12** is only partly
-computable, since up to four of the twelve monthly rides may be off-club. The
-ACP awards (Randonneur 5000 and 10000) are granted by ACP and are never
+validates applications by hand (decided 2026-09-22). **O-12** also stays manual
+for now (decided 2026-09-22): up to four of the twelve monthly rides may be
+off-club, so the site can never see a complete run. The ACP awards (Randonneur 5000 and 10000) are granted by ACP and are never
 computed here.
 
 ### First Brevet
