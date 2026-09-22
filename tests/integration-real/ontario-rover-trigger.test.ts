@@ -197,6 +197,16 @@ describe('Ontario Rover auto-assignment trigger', () => {
     expect(await autoCount(IDS.rider, PRIOR_SEASON)).toBe(0)
   })
 
+  it('ignores permanents ridden before the award existed (2025)', async () => {
+    await seedRider(IDS.rider, SLUGS.rider)
+    // Absolute cutoff by design: the award was created in 2025, so 2024 rides
+    // can never count, no matter what the current season is.
+    await seedMany(IDS.rider, [300, 300, 400], 2024)
+    await seedResult(IDS.rider, 200, CURRENT_SEASON)
+    expect(await autoCount(IDS.rider, CURRENT_SEASON)).toBe(0)
+    expect(await autoCount(IDS.rider, 2024)).toBe(0)
+  })
+
   it('never writes a window that closed in a prior (frozen) season', async () => {
     await seedRider(IDS.rider, SLUGS.rider)
     await seedMany(IDS.rider, [300, 300, 600], PRIOR_SEASON)

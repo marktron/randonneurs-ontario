@@ -2,7 +2,8 @@
 //
 // Rule (award text): accumulate 1200 km of permanents, over any period, with at
 // least two of those permanents being 300 km or more. Can be earned multiple
-// times. Only finished `permanent` results count.
+// times. Only finished `permanent` results count, and only from the 2025
+// season onward: the award was created in 2025 and earlier rides never count.
 //
 // Because "over any period" spans seasons, this script evaluates two candidate
 // readings against the hand-assigned history so the reconciler rule can be
@@ -43,8 +44,8 @@ const RIDER_ARG = process.argv
 const KM_TARGET = 1200
 const LONG_KM = 300
 const LONG_NEEDED = 2
-// The club only started awarding Ontario Rover in 2025; earlier windows are
-// replayed (they position later windows) but were never awarded and never will be.
+// The award was created in 2025. Permanents before that season are ignored
+// entirely (they neither earn nor position windows).
 const FIRST_AWARDED_SEASON = 2025
 
 type ResultRow = {
@@ -121,11 +122,12 @@ async function main() {
       'rider_id, distance_km, season, events!inner(name, event_date, event_type), riders!inner(first_name, last_name, hidden)'
     )
     .eq('status', 'finished')
+    .gte('season', FIRST_AWARDED_SEASON)
     .eq('events.event_type', 'permanent')
     .order('event_date', { referencedTable: 'events' })
   if (rErr) throw new Error(`load results: ${rErr.message}`)
   const rows = (results ?? []) as unknown as ResultRow[]
-  console.log(`finished permanent results (all time): ${rows.length}`)
+  console.log(`finished permanent results from ${FIRST_AWARDED_SEASON} on: ${rows.length}`)
   const nullDist = rows.filter((r) => r.distance_km == null).length
   console.log(`  with NULL distance_km: ${nullDist}`)
   const seasonMismatch = rows.filter((r) => Number(r.events.event_date.slice(0, 4)) !== r.season)

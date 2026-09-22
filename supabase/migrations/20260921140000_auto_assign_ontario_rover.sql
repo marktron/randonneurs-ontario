@@ -3,7 +3,9 @@
 -- Ontario Rover is season-scoped (rider_awards) but accumulates across seasons:
 -- a rider earns it by finishing 1200 km of permanents, over any period, with at
 -- least two of those permanents being 300 km or more. It can be earned an
--- unlimited number of times.
+-- unlimited number of times. The award was created in 2025 and only permanents
+-- ridden from the 2025 season onward count toward it; earlier permanents are
+-- ignored entirely.
 --
 -- "Over any period" is implemented as greedy windows, which is how the award
 -- was given by hand: walk the rider's finished `permanent` results in date
@@ -23,9 +25,9 @@
 -- 20260921140100_ontario_rover_current_season_backfill.sql.
 
 -- 1. Reconcile the auto Ontario Rover rows for one rider in the current season.
---    Replays the rider's whole permanent history, so it must be called on any
---    change to any of their permanent results, including historical ones.
---    Idempotent.
+--    Replays the rider's permanent history from 2025 on, so it must be called
+--    on any change to any of their permanent results, including prior-season
+--    ones. Idempotent.
 CREATE OR REPLACE FUNCTION reconcile_ontario_rover_for_rider(p_rider_id UUID)
 RETURNS VOID
 LANGUAGE plpgsql
@@ -58,6 +60,7 @@ BEGIN
     JOIN events  e ON e.id = r.event_id
     WHERE r.rider_id   = p_rider_id
       AND r.status     = 'finished'
+      AND r.season     >= 2025          -- award created in 2025; earlier rides never count
       AND e.event_type = 'permanent'
     ORDER BY e.event_date, r.id
   LOOP
