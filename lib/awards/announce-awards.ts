@@ -20,6 +20,12 @@
  * Hidden riders (`riders.hidden`) never appear in Slack. Their rows are still
  * fetched and stamped, silently; filtering them in the query would leave them
  * at the head of every batch forever.
+ *
+ * Result-scoped awards (`result_awards`) additionally require their slug to
+ * be in `ANNOUNCED_RESULT_AWARD_SLUGS`. Season-scoped awards (`rider_awards`)
+ * are unaffected and always announce. Rows for an unlisted result-award slug
+ * are fetched and stamped silently, exactly like hidden riders, so they never
+ * filter out of the query itself.
  */
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
@@ -36,6 +42,18 @@ export const ANNOUNCE_BATCH_LIMIT = 200
 
 /** Slack truncates very long messages; stay well under its limits. */
 export const SLACK_MESSAGE_MAX_CHARS = 3000
+
+/**
+ * Result-award slugs that post to Slack. Decided 2026-09-23: of the
+ * result-scoped awards, only O-12 announces; First Brevet, Completed Devil
+ * Week, Paris-Brest-Paris, Granite Anvil and any future result-scoped award
+ * stay off the channel. Season-scoped awards are unaffected. Keep this an
+ * allowlist, not a query filter: unlisted rows still get fetched and stamped
+ * (see the module header), so `announced_at IS NULL` keeps meaning "pending",
+ * the partial index stays small, and adding a slug here later doesn't dump its
+ * historical backlog into Slack.
+ */
+export const ANNOUNCED_RESULT_AWARD_SLUGS = new Set(['o-12'])
 
 const HEADER = ':trophy: New awards'
 
@@ -139,8 +157,17 @@ export interface AnnounceResult {
   fetched: number
   /** Rows that appeared in Slack. */
   announced: number
-  /** Rows for hidden riders, stamped without posting. */
+  /**
+   * Rows for hidden riders, stamped without posting. Precedence: a hidden
+   * rider's row counts here even if it's also an unlisted result award — a
+   * row is either hiddenSkipped or unlistedSkipped, never both.
+   */
   hiddenSkipped: number
+  /**
+   * Result-award rows outside `ANNOUNCED_RESULT_AWARD_SLUGS`, stamped without
+   * posting. Excludes hidden riders' rows (those count as hiddenSkipped).
+   */
+  unlistedSkipped: number
   /** Slack messages posted. */
   posted: number
 }
@@ -161,6 +188,18 @@ function escapeMrkdwn(text: string): string {
 
 function riderName(rider: EmbeddedRider): string {
   return `${rider.first_name} ${rider.last_name}`.trim()
+}
+
+/**
+ * Whether an award should be posted to Slack. Hidden riders are checked
+ * first: a hidden rider's row is never announceable, regardless of scope or
+ * slug, so it never counts as an unlisted skip. Result awards additionally
+ * require an allowlisted slug; season awards always pass.
+ */
+export function isAnnounceable(item: AwardAnnouncement): boolean {
+  if (item.hidden) return false
+  if (item.kind === 'result' && !ANNOUNCED_RESULT_AWARD_SLUGS.has(item.awardSlug)) return false
+  return true
 }
 
 export function normalizeRiderAward(row: UnannouncedRiderAwardRow): AwardAnnouncement {
@@ -209,7 +248,9 @@ function headingFor(item: AwardAnnouncement): string {
 /**
  * Turns announcements into Slack message texts. Pure.
  *
- * Hidden riders are dropped. Groups are keyed by heading (award title, plus the
+ * Items that aren't announceable are dropped (see `isAnnounceable`): hidden
+ * riders, and result awards whose slug isn't in `ANNOUNCED_RESULT_AWARD_SLUGS`.
+ * Groups are keyed by heading (award title, plus the
  * season for season awards) and keep first-seen order. Messages are packed up
  * to SLACK_MESSAGE_MAX_CHARS, breaking only between groups; a group too big to
  * fit in one message on its own is split between bullets and its heading is
@@ -218,7 +259,7 @@ function headingFor(item: AwardAnnouncement): string {
 export function buildAwardsMessages(items: AwardAnnouncement[]): string[] {
   const groups = new Map<string, string[]>()
   for (const item of items) {
-    if (item.hidden) continue
+    if (!isAnnounceable(item)) continue
     const heading = headingFor(item)
     const bullets = groups.get(heading) ?? []
     bullets.push(bulletFor(item))
@@ -348,6 +389,7 @@ export async function announceNewAwards(): Promise<AnnounceResult> {
     fetched: 0,
     announced: 0,
     hiddenSkipped: 0,
+    unlistedSkipped: 0,
     posted: 0,
   }
 
@@ -378,7 +420,8 @@ export async function announceNewAwards(): Promise<AnnounceResult> {
   if (items.length === 0) return result
 
   result.hiddenSkipped = items.filter((item) => item.hidden).length
-  result.announced = items.length - result.hiddenSkipped
+  result.unlistedSkipped = items.filter((item) => !item.hidden && !isAnnounceable(item)).length
+  result.announced = items.length - result.hiddenSkipped - result.unlistedSkipped
 
   const messages = buildAwardsMessages(items)
   for (const text of messages) {

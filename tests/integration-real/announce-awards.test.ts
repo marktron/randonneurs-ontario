@@ -59,18 +59,30 @@ async function cleanup(): Promise<void> {
 
 let srAwardId: string
 let firstBrevetAwardId: string
+// O-12 has award_type = 'result' in the local DB (confirmed via
+// `select id, slug, award_type from awards where slug = 'o-12'`) even though
+// it's listed under "season" scope in docs/awards.md's Available Awards
+// table -- it lives in result_awards, not rider_awards, and there's no
+// auto-assign trigger for it yet, so this suite seeds a row by hand.
+let o12AwardId: string
 
 beforeEach(async () => {
   await cleanup()
 
   const awards = await checked(
-    supabase.from('awards').select('id, slug').in('slug', ['super-randonneur', 'first-brevet']),
+    supabase
+      .from('awards')
+      .select('id, slug')
+      .in('slug', ['super-randonneur', 'first-brevet', 'o-12']),
     'load award ids'
   )
   const bySlug = new Map((awards as { id: string; slug: string }[]).map((a) => [a.slug, a.id]))
   srAwardId = bySlug.get('super-randonneur')!
   firstBrevetAwardId = bySlug.get('first-brevet')!
-  if (!srAwardId || !firstBrevetAwardId) throw new Error('award rows missing; seed your DB')
+  o12AwardId = bySlug.get('o-12')!
+  if (!srAwardId || !firstBrevetAwardId || !o12AwardId) {
+    throw new Error('award rows missing; seed your DB')
+  }
 
   await checked(
     supabase.from('riders').insert([
@@ -133,6 +145,13 @@ beforeEach(async () => {
       { rider_id: IDS.hiddenRider, award_id: srAwardId, season: SEASON, auto_assigned: false },
     ]),
     'seed manual SR rows'
+  )
+  // O-12 result award for the visible rider only: it's the one result-scoped
+  // award on the allowlist (ANNOUNCED_RESULT_AWARD_SLUGS), so it should post
+  // while the trigger-written First Brevet rows above stay silent.
+  await checked(
+    supabase.from('result_awards').insert({ result_id: IDS.visibleResult, award_id: o12AwardId }),
+    'seed O-12 result award'
   )
 })
 
@@ -254,7 +273,11 @@ describe('award announcements outbox (real DB)', () => {
     expect(text).toContain(`${VISIBLE_NAME.first_name} ${VISIBLE_NAME.last_name}`)
     expect(text).toContain(`/riders/${SLUGS.visible}|`)
     expect(text).toContain(`*Super Randonneur ${SEASON}*`)
-    expect(text).toContain('*First Brevet*')
+    // First Brevet is result-scoped and not on ANNOUNCED_RESULT_AWARD_SLUGS:
+    // the trigger-written rows for both riders are stamped but never posted.
+    expect(text).not.toContain('*First Brevet*')
+    // O-12 is the one allowlisted result award, so it does post.
+    expect(text).toContain('*O-12*')
     expect(text).toContain(EVENT_NAME)
     expect(text).not.toContain(HIDDEN_NAME.last_name)
     expect(text).not.toContain(SLUGS.hidden)
@@ -274,7 +297,9 @@ describe('award announcements outbox (real DB)', () => {
         .in('result_id', [IDS.visibleResult, IDS.hiddenResult]),
       'read stamped result_awards'
     )
-    expect(resultRows?.length ?? 0).toBeGreaterThanOrEqual(2)
+    // Two trigger-written First Brevet rows (visible + hidden) plus the
+    // manually seeded O-12 row: all three get stamped, posted or not.
+    expect(resultRows).toHaveLength(3)
     for (const row of resultRows as { announced_at: string | null }[]) {
       expect(row.announced_at).not.toBeNull()
     }

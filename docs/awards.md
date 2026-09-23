@@ -551,9 +551,12 @@ the trigger fires on `results` changes only.
 
 ## Slack announcements
 
-Every stored award, manual or automatic, season- or result-scoped, is posted
-once to a Slack channel through an Incoming Webhook. Course Record is computed
-rather than stored, so it is never announced.
+Every season-scoped award (`rider_awards`), manual or automatic, is posted
+once to a Slack channel through an Incoming Webhook. Result-scoped awards
+(`result_awards`) only post when their slug is in the
+`ANNOUNCED_RESULT_AWARD_SLUGS` allowlist in `lib/awards/announce-awards.ts` —
+today just `o-12`. Course Record is computed rather than stored, so it is
+never announced.
 
 **Outbox column.** Awards are written by triggers and by admin server actions,
 so the app doesn't see most writes. Instead, `rider_awards.announced_at` and
@@ -570,7 +573,9 @@ on `announced_at IS NULL`.
    `SLACK_AWARDS_WEBHOOK_URL` is unset (dev, preview).
 2. Fetches up to `ANNOUNCE_BATCH_LIMIT` (200) unannounced rows from each table.
    Anything past the cap waits for the next hour.
-3. Posts a digest grouped by award. Season awards get the season in the heading
+3. Drops rows for hidden riders and for result awards outside
+   `ANNOUNCED_RESULT_AWARD_SLUGS` (see below), then posts a digest of what's
+   left, grouped by award. Season awards get the season in the heading
    (`*Super Randonneur 2026*`); result awards use the bare title and add the
    event name and date to each rider's line. Each rider links to their public
    profile. Long digests are split into several messages of up to about 3000
@@ -581,6 +586,20 @@ on `announced_at IS NULL`.
 **Hidden riders.** Rows for riders with `riders.hidden = true` are fetched and
 stamped but never posted. They are not filtered out in the query, because
 unstamped rows would sit at the head of every batch forever.
+
+**Unlisted result awards.** Decided 2026-09-23: only result awards whose slug
+is in `ANNOUNCED_RESULT_AWARD_SLUGS` post, currently just O-12 (`o-12`). First
+Brevet, Completed Devil Week, Paris-Brest-Paris, Granite Anvil, and any future
+result-scoped award stay off the channel. Season-scoped awards all announce.
+Rows for an unlisted slug are fetched and stamped exactly
+like hidden riders' rows, silently, rather than filtered out of the query.
+That keeps `announced_at IS NULL` meaning "pending" and keeps the partial
+index small, and it means adding a slug to the allowlist later doesn't dump
+its entire historical backlog into Slack — only rows written after the change
+are ever unstamped. Season-scoped awards are unaffected; the `isAnnounceable()`
+helper in `lib/awards/announce-awards.ts` is the single place this rule is
+applied, checked before hidden riders (so a hidden rider's unlisted-award row
+counts only as hidden in `AnnounceResult`, never double-counted).
 
 **Retry behaviour.** The sweep posts first and stamps second. If Slack rejects a
 post, nothing is stamped, the route answers 500, the Actions job fails, and the

@@ -54,6 +54,8 @@ import {
   buildAwardsMessages,
   postSlackMessage,
   isSlackAwardsConfigured,
+  isAnnounceable,
+  ANNOUNCED_RESULT_AWARD_SLUGS,
   type AwardAnnouncement,
 } from '@/lib/awards/announce-awards'
 import { SITE_URL } from '@/lib/site-url'
@@ -91,12 +93,13 @@ function riderAwardRow(
 function resultAwardRow(
   resultId: string,
   awardId: string,
-  rider: { id: string; slug: string; first_name: string; last_name: string; hidden: boolean }
+  rider: { id: string; slug: string; first_name: string; last_name: string; hidden: boolean },
+  award: { slug: string; title: string } = { slug: 'first-brevet', title: 'First Brevet' }
 ) {
   return {
     result_id: resultId,
     award_id: awardId,
-    awards: { slug: 'first-brevet', title: 'First Brevet' },
+    awards: award,
     results: {
       id: resultId,
       season: 2026,
@@ -140,14 +143,14 @@ describe('buildAwardsMessages', () => {
     const [msg] = buildAwardsMessages([
       item({
         kind: 'result',
-        awardSlug: 'first-brevet',
-        awardTitle: 'First Brevet',
+        awardSlug: 'o-12',
+        awardTitle: 'O-12',
         eventLabel: 'Niagara 200 (Jun 15, 2026)',
         stamp: { table: 'result_awards', resultId: 'res1', awardId: 'aw1' },
       }),
     ])
-    expect(msg).toContain('*First Brevet*\n')
-    expect(msg).not.toContain('*First Brevet 2026*')
+    expect(msg).toContain('*O-12*\n')
+    expect(msg).not.toContain('*O-12 2026*')
     expect(msg).toContain(`• <${SITE_URL}/riders/jane-doe|Jane Doe> — Niagara 200 (Jun 15, 2026)`)
   })
 
@@ -155,6 +158,7 @@ describe('buildAwardsMessages', () => {
     const [msg] = buildAwardsMessages([
       item({
         kind: 'result',
+        awardSlug: 'o-12',
         riderName: 'A&B <C>',
         awardTitle: 'R&R',
         eventLabel: 'Hills & <Dales> (Jun 1, 2026)',
@@ -172,6 +176,37 @@ describe('buildAwardsMessages', () => {
       item({ riderId: 'r2', riderName: 'Secret Ghost', riderSlug: 'ghost', hidden: true }),
     ])
     expect(msg).not.toContain('Ghost')
+  })
+
+  it('drops an unlisted result award but keeps an o-12 result award and a season award', () => {
+    const [msg] = buildAwardsMessages([
+      item(), // season award (Super Randonneur), always announceable
+      item({
+        kind: 'result',
+        riderId: 'r2',
+        riderName: 'First Timer',
+        riderSlug: 'first-timer',
+        awardSlug: 'first-brevet',
+        awardTitle: 'First Brevet',
+        eventLabel: 'Niagara 200 (Jun 15, 2026)',
+        stamp: { table: 'result_awards', resultId: 'res1', awardId: 'aw-fb' },
+      }),
+      item({
+        kind: 'result',
+        riderId: 'r3',
+        riderName: 'O Twelve',
+        riderSlug: 'o-twelve',
+        awardSlug: 'o-12',
+        awardTitle: 'O-12',
+        eventLabel: 'Niagara 200 (Jun 15, 2026)',
+        stamp: { table: 'result_awards', resultId: 'res2', awardId: 'aw-o12' },
+      }),
+    ])
+    expect(msg).toContain('*Super Randonneur 2026*')
+    expect(msg).toContain('*O-12*')
+    expect(msg).toContain('O Twelve')
+    expect(msg).not.toContain('First Timer')
+    expect(msg).not.toContain('First Brevet')
   })
 
   it('splits between award groups when the text exceeds the limit', () => {
@@ -222,6 +257,27 @@ describe('buildAwardsMessages', () => {
     for (let i = 0; i < 80; i++) {
       expect(all.match(new RegExp(`Rider With Long Name ${i}>`, 'g'))).toHaveLength(1)
     }
+  })
+})
+
+describe('isAnnounceable', () => {
+  it('is false for a hidden rider regardless of kind or slug', () => {
+    expect(isAnnounceable(item({ hidden: true }))).toBe(false)
+    expect(isAnnounceable(item({ hidden: true, kind: 'result', awardSlug: 'o-12' }))).toBe(false)
+  })
+
+  it('is true for season awards when not hidden', () => {
+    expect(isAnnounceable(item({ kind: 'season' }))).toBe(true)
+  })
+
+  it('is false for result awards whose slug is not allowlisted', () => {
+    expect(isAnnounceable(item({ kind: 'result', awardSlug: 'first-brevet' }))).toBe(false)
+    expect(isAnnounceable(item({ kind: 'result', awardSlug: 'paris-brest-paris' }))).toBe(false)
+  })
+
+  it('is true for result awards whose slug is allowlisted', () => {
+    expect(ANNOUNCED_RESULT_AWARD_SLUGS.has('o-12')).toBe(true)
+    expect(isAnnounceable(item({ kind: 'result', awardSlug: 'o-12' }))).toBe(true)
   })
 })
 
@@ -295,6 +351,7 @@ describe('announceNewAwards', () => {
       fetched: 0,
       announced: 0,
       hiddenSkipped: 0,
+      unlistedSkipped: 0,
       posted: 0,
     })
     expect(mockFrom).not.toHaveBeenCalled()
@@ -321,8 +378,12 @@ describe('announceNewAwards', () => {
   })
 
   it('posts visible riders only, then stamps both tables', async () => {
+    const O12 = { slug: 'o-12', title: 'O-12' }
     db.riderRows = [riderAwardRow('ra1', JANE), riderAwardRow('ra-ghost', GHOST)]
-    db.resultRows = [resultAwardRow('res1', 'aw-fb', JANE), resultAwardRow('res2', 'aw-fb', GHOST)]
+    db.resultRows = [
+      resultAwardRow('res1', 'aw-o12', JANE, O12),
+      resultAwardRow('res2', 'aw-o12', GHOST, O12),
+    ]
 
     const result = await announceNewAwards()
 
@@ -330,7 +391,7 @@ describe('announceNewAwards', () => {
     const text = postedText()
     expect(text).toContain('Jane Doe')
     expect(text).toContain('*Super Randonneur 2026*')
-    expect(text).toContain('*First Brevet*')
+    expect(text).toContain('*O-12*')
     expect(text).toContain('Niagara 200 (Jun 15, 2026)')
     expect(text).not.toContain('Ghost')
     expect(result).toEqual({
@@ -338,6 +399,7 @@ describe('announceNewAwards', () => {
       fetched: 4,
       announced: 2,
       hiddenSkipped: 2,
+      unlistedSkipped: 0,
       posted: 1,
     })
 
@@ -346,8 +408,33 @@ describe('announceNewAwards', () => {
     expect(riderUpdate.filters).toContainEqual(['in', 'id', ['ra1', 'ra-ghost']])
     expect(riderUpdate.filters).toContainEqual(['is', 'announced_at', null])
     const resultUpdate = u.find((c) => c.table === 'result_awards')!
-    expect(resultUpdate.filters).toContainEqual(['eq', 'award_id', 'aw-fb'])
+    expect(resultUpdate.filters).toContainEqual(['eq', 'award_id', 'aw-o12'])
     expect(resultUpdate.filters).toContainEqual(['in', 'result_id', ['res1', 'res2']])
+  })
+
+  it('stamps an unlisted result award without posting it, and counts it separately from hidden', async () => {
+    db.riderRows = [riderAwardRow('ra1', JANE)]
+    db.resultRows = [resultAwardRow('res1', 'aw-fb', JANE)] // default award: first-brevet, unlisted
+
+    const result = await announceNewAwards()
+
+    expect(global.fetch).toHaveBeenCalledTimes(1)
+    const text = postedText()
+    expect(text).toContain('*Super Randonneur 2026*')
+    expect(text).not.toContain('*First Brevet*')
+    expect(text).not.toContain('Niagara 200')
+    expect(result).toEqual({
+      configured: true,
+      fetched: 2,
+      announced: 1,
+      hiddenSkipped: 0,
+      unlistedSkipped: 1,
+      posted: 1,
+    })
+
+    const resultUpdate = updates().find((c) => c.table === 'result_awards')!
+    expect(resultUpdate.filters).toContainEqual(['eq', 'award_id', 'aw-fb'])
+    expect(resultUpdate.filters).toContainEqual(['in', 'result_id', ['res1']])
   })
 
   it('leaves rows unstamped and rethrows when Slack fails', async () => {

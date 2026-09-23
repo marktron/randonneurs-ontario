@@ -389,7 +389,7 @@ GitHub Actions (hourly) → /api/cron/announce-awards → Fetch unannounced awar
 1. GitHub Actions triggers every hour (`30 * * * *`)
 2. Calls the `/api/cron/announce-awards` endpoint with `CRON_SECRET` for auth
 3. The endpoint calls `announceNewAwards()` in `lib/awards/announce-awards.ts`, which reads `rider_awards` and `result_awards` rows whose `announced_at` is `NULL` (at most 200 per table per run)
-4. Visible riders are posted as one digest grouped by award; hidden riders are skipped
+4. Posted as one digest grouped by award: hidden riders are skipped, and result-scoped awards (`result_awards`) only post when their slug is in `ANNOUNCED_RESULT_AWARD_SLUGS` (currently just O-12) — season-scoped awards (`rider_awards`) always post
 5. Every fetched row is then stamped with `announced_at`. A Slack failure leaves the rows unstamped and answers 500, so the job fails and the next run retries
 6. When `SLACK_AWARDS_WEBHOOK_URL` is unset the endpoint answers 200 with `configured: false` and does nothing
 
