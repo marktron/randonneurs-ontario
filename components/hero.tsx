@@ -13,16 +13,7 @@ type HeroProps = {
 }
 
 export function Hero({ images }: HeroProps) {
-  // Pick a random starting slide on each load so the carousel doesn't always
-  // open on the same image. A lazy initializer keeps this out of the rendered
-  // markup (the DOM slide order is unchanged), so there's no hydration
-  // mismatch. Embla always mounts on slide 0 — matching what the server
-  // already rendered, so it's visible (and eligible as the LCP element)
-  // without waiting on JS — and then crossfades to this random slide once
-  // ready, reusing the same Fade-plugin transition as autoplay.
-  const [startIndex] = useState(() =>
-    images.length > 0 ? Math.floor(Math.random() * images.length) : 0
-  )
+  // The carousel always starts on slide 0 (server-rendered, eligible as LCP) and autoplay advances from there.
   const [selectedIndex, setSelectedIndex] = useState(0)
 
   const [emblaRef, emblaApi] = useEmblaCarousel(
@@ -45,15 +36,10 @@ export function Hero({ images }: HeroProps) {
     const onSelect = () => setSelectedIndex(emblaApi.selectedScrollSnap())
     onSelect()
     emblaApi.on('select', onSelect)
-    // Crossfade from the server-rendered first slide to the randomized start
-    // slide, rather than snapping to it instantly.
-    if (startIndex !== 0) {
-      emblaApi.scrollTo(startIndex)
-    }
     return () => {
       emblaApi.off('select', onSelect)
     }
-  }, [emblaApi, startIndex])
+  }, [emblaApi])
 
   return (
     <section className="relative">
