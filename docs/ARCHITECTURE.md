@@ -372,7 +372,32 @@ GitHub Actions (hourly) → /api/cron/card-reminders → Sweep in-window registr
 6. One run sweeps at most `CARD_REMINDER_BATCH_LIMIT` (500) candidates, oldest registration first, inside the route's 60-second `maxDuration`. A row left over is still an unsent candidate on the next hourly run
 7. Setup failures (SES unconfigured, a failed candidate or controls query) throw: the endpoint reports them to Sentry and answers 500, which fails the Actions job. Per-row failures also go to Sentry but leave the run at 200 with the details in `errors`, so one bad row doesn't hide the riders who were emailed
 
-**Required GitHub Secrets:** the same `CRON_SECRET` and `SITE_URL` as Event Auto-Completion above. Both cron endpoints share their bearer-token check via `authorizeCronRequest()` in `lib/cron-auth.ts`.
+**Required GitHub Secrets:** the same `CRON_SECRET` and `SITE_URL` as Event Auto-Completion above. All cron endpoints share their bearer-token check via `authorizeCronRequest()` in `lib/cron-auth.ts`.
+
+### Award Announcements
+
+Newly assigned awards are posted to a Slack channel as an hourly digest:
+
+```
+GitHub Actions (hourly) → /api/cron/announce-awards → Fetch unannounced award rows → Post to Slack → Stamp announced_at
+```
+
+**Workflow:** `.github/workflows/announce-awards.yml`
+
+**How it works:**
+
+1. GitHub Actions triggers every hour (`30 * * * *`)
+2. Calls the `/api/cron/announce-awards` endpoint with `CRON_SECRET` for auth
+3. The endpoint calls `announceNewAwards()` in `lib/awards/announce-awards.ts`, which reads `rider_awards` and `result_awards` rows whose `announced_at` is `NULL` (at most 200 per table per run)
+4. Visible riders are posted as one digest grouped by award; hidden riders are skipped
+5. Every fetched row is then stamped with `announced_at`. A Slack failure leaves the rows unstamped and answers 500, so the job fails and the next run retries
+6. When `SLACK_AWARDS_WEBHOOK_URL` is unset the endpoint answers 200 with `configured: false` and does nothing
+
+See [Awards: Slack announcements](awards.md#slack-announcements) for grouping, hidden riders, and double-announce edge cases.
+
+**Required GitHub Secrets:** the same `CRON_SECRET` and `SITE_URL` as above.
+
+**Vercel environment variable:** `SLACK_AWARDS_WEBHOOK_URL`, the channel's Incoming Webhook URL, set for **Production only** so previews never post.
 
 ## On-Demand Cache Revalidation
 

@@ -1,0 +1,34 @@
+name: Award Announcements Cron
+
+permissions:
+  contents: read
+
+on:
+  schedule:
+    - cron: '30 * * * *' # Every hour at minute 30
+  workflow_dispatch: # Allow manual trigger for testing
+
+concurrency:
+  group: announce-awards
+  cancel-in-progress: false # Let the running job finish; queue the next one
+
+jobs:
+  announce-awards:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger announce-awards endpoint
+        run: |
+          response=$(curl -s -w "\n%{http_code}" -X GET \
+            "${{ secrets.SITE_URL }}/api/cron/announce-awards" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}")
+
+          http_code=$(echo "$response" | tail -n1)
+          body=$(echo "$response" | sed '$d')
+
+          echo "Response: $body"
+          echo "HTTP Status: $http_code"
+
+          if [ "$http_code" != "200" ]; then
+            echo "Error: Received HTTP $http_code"
+            exit 1
+          fi
