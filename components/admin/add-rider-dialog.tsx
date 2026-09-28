@@ -15,10 +15,11 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { searchRiders, createRider, type RiderSearchResult } from '@/lib/actions/riders'
-import { createResult, addRegistration } from '@/lib/actions/results'
+import { createResult, addRegistration, type AdminMembershipStatus } from '@/lib/actions/results'
 import { SelectedRiderCard } from './selected-rider-card'
 import { toast } from 'sonner'
 import { Loader2, Plus, Search, UserPlus } from 'lucide-react'
+import { getCurrentSeason } from '@/lib/season'
 
 interface AddRiderDialogProps {
   open: boolean
@@ -34,6 +35,31 @@ interface AddRiderDialogProps {
    * keeps client state, so a revived registration would otherwise stay hidden.
    */
   onRiderAdded?: (riderId: string) => void
+}
+
+/**
+ * `addRegistration`/`adminRestoreRegistration` now resolve membership status
+ * server-side instead of blindly setting 'registered' (see
+ * lib/actions/results.ts `resolveAdminRegistrationStatus`). When the admin
+ * add lands on 'incomplete: membership', surface that here rather than a
+ * plain success toast — the rider won't show up on start lists/cards until
+ * the "Missing membership" badge is re-checked.
+ */
+export function membershipWarningMessage(
+  riderName: string,
+  membershipStatus: AdminMembershipStatus
+): string | null {
+  const season = getCurrentSeason()
+  switch (membershipStatus) {
+    case 'none':
+      return `Added ${riderName}. No ${season} membership found. They won't appear on start lists or cards until membership is re-checked.`
+    case 'trial-used':
+      return `Added ${riderName}. Trial membership already used. They won't appear on start lists or cards until membership is re-checked.`
+    case 'check-failed':
+      return `Added ${riderName}. Couldn't verify membership (CCN unavailable). They won't appear on start lists or cards until membership is re-checked.`
+    case 'valid':
+      return null
+  }
 }
 
 export function AddRiderDialog({
@@ -123,7 +149,16 @@ export function AddRiderDialog({
           })
 
       if (res.success) {
-        toast.success(`Added ${selectedRider.first_name} ${selectedRider.last_name}`)
+        const riderName = `${selectedRider.first_name} ${selectedRider.last_name}`
+        const membershipStatus = isScheduled
+          ? (res as { data?: { membershipStatus?: AdminMembershipStatus } }).data?.membershipStatus
+          : undefined
+        const warning = membershipStatus && membershipWarningMessage(riderName, membershipStatus)
+        if (warning) {
+          toast.warning(warning)
+        } else {
+          toast.success(`Added ${riderName}`)
+        }
         onRiderAdded?.(selectedRider.id)
         router.refresh()
         onOpenChange(false)
@@ -164,7 +199,17 @@ export function AddRiderDialog({
           })
 
       if (addRes.success) {
-        toast.success(`Added ${firstName} ${lastName}`)
+        const riderName = `${firstName} ${lastName}`
+        const membershipStatus = isScheduled
+          ? (addRes as { data?: { membershipStatus?: AdminMembershipStatus } }).data
+              ?.membershipStatus
+          : undefined
+        const warning = membershipStatus && membershipWarningMessage(riderName, membershipStatus)
+        if (warning) {
+          toast.warning(warning)
+        } else {
+          toast.success(`Added ${riderName}`)
+        }
         onRiderAdded?.(createRes.riderId)
         router.refresh()
         onOpenChange(false)

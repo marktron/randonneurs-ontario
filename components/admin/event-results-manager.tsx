@@ -69,7 +69,9 @@ import {
   adminRestoreRegistration,
   revalidateMembership,
   type ResultStatus,
+  type AdminMembershipStatus,
 } from '@/lib/actions/results'
+import { membershipWarningMessage } from './add-rider-dialog'
 import { cn, formatFinishTime, buildParticipantMailtoUrl, buildRiderInfoText } from '@/lib/utils'
 import { isDigitalCardEventType } from '@/lib/brevet-card'
 import { SubmitResultsButton } from './submit-results-button'
@@ -896,7 +898,13 @@ export function EventResultsManager({
       setRestoringId(null)
       if (res.success) {
         setLocalCancelled((prev) => prev.filter((c) => c.id !== registrationId))
-        toast.success(`Registration restored for ${riderName}`)
+        const membershipStatus: AdminMembershipStatus | undefined = res.data?.membershipStatus
+        const warning = membershipStatus && membershipWarningMessage(riderName, membershipStatus)
+        if (warning) {
+          toast.warning(warning)
+        } else {
+          toast.success(`Registration restored for ${riderName}`)
+        }
         managerRouter.refresh()
       } else {
         toast.error(res.error || 'Failed to restore registration')

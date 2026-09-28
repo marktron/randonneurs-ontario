@@ -76,6 +76,19 @@ On /admin/events/[id], include registrations with status `incomplete: membership
 
 On /admin/riders, show the current membership state in a column, no badging. If they are missing a membership, show nothing.
 
+### Admin-added registrations
+
+Admins can add a rider directly on `/admin/events/[id]` (the "Add Rider" dialog, `addRegistration` in `lib/actions/results.ts`) or restore a cancelled registration (`adminRestoreRegistration`). Neither entry point collects a name/email from a form, so nothing has checked membership before the row is written. Both now run the same membership check the rider-facing flow uses instead of writing `status: 'registered'` unconditionally.
+
+A private helper, `resolveAdminRegistrationStatus(riderId, eventId)`, loads the rider's name and the event's chapter, then calls `getMembershipForRider` the same way `revalidateMembership` does:
+
+- Membership found (and not a Trial Member who already used their trial): status `registered`, membership outcome `valid`.
+- No membership on file: status `incomplete: membership`, outcome `none`.
+- Trial Member whose trial is already used: status `incomplete: membership`, outcome `trial-used`.
+- The CCN lookup throws: status `incomplete: membership`, outcome `check-failed` (logged via `logError`; the admin is never blocked from adding the rider).
+
+The admin action always succeeds: adding or restoring a rider never fails because of membership. Only the resulting status differs, and the existing `incomplete: membership` exclusions (start lists, card printing, check-in) apply exactly as they do for the rider-facing flow. The audit log description gets a suffix (e.g. "— membership missing") whenever the outcome isn't `valid`, and the admin UI (`components/admin/add-rider-dialog.tsx`, `components/admin/event-results-manager.tsx`) shows a warning toast instead of a plain success toast in that case, naming the current season and pointing at the "Missing membership" badge (`revalidateMembership`) for a later re-check.
+
 ### Trial Member
 
 Trial Member status works differently from the other membership types. Riders can participate in only one event with Trial Member status before they need to purchase a full membership.

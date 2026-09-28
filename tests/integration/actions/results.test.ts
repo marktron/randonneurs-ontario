@@ -492,9 +492,17 @@ describe('addRegistration', () => {
   // re-adding them has to update that row — inserting would hit the constraint
   // and the organizer would be told they are "already registered".
   it.each(['cancelled', 'incomplete: membership'])(
-    'revives an existing %s registration instead of inserting',
+    'revives an existing %s registration as registered when membership is found',
     async (status) => {
       mockModule.__mockExistingResult({ id: 'reg-1', status, management_token: 'tok' })
+      // resolveAdminRegistrationStatus: rider lookup, then event lookup.
+      mockModule.__mockResultFound({ first_name: 'Rider', last_name: 'One' })
+      mockModule.__mockResultFound({ chapter_id: 'ch-1' })
+      vi.mocked(getMembershipForRider).mockResolvedValueOnce({
+        found: true,
+        membershipId: 1,
+        type: 'Individual Membership',
+      })
       mockModule.__mockUpdateSuccess()
 
       const result = await addRegistration({
@@ -503,6 +511,7 @@ describe('addRegistration', () => {
       })
 
       expect(result.success).toBe(true)
+      expect(result.data?.membershipStatus).toBe('valid')
 
       const insertCalls = mockModule.__calls.filter(
         (c) => c.table === 'registrations' && c.method === 'insert'
@@ -519,6 +528,35 @@ describe('addRegistration', () => {
       })
     }
   )
+
+  it('revives an existing incomplete: membership registration and keeps it incomplete when membership is still missing', async () => {
+    mockModule.__mockExistingResult({
+      id: 'reg-1',
+      status: 'incomplete: membership',
+      management_token: 'tok',
+    })
+    mockModule.__mockResultFound({ first_name: 'Rider', last_name: 'One' })
+    mockModule.__mockResultFound({ chapter_id: 'ch-1' })
+    vi.mocked(getMembershipForRider).mockResolvedValueOnce({ found: false })
+    mockModule.__mockUpdateSuccess()
+
+    const result = await addRegistration({
+      eventId: 'event-1',
+      riderId: 'rider-1',
+    })
+
+    expect(result.success).toBe(true)
+    expect(result.data?.membershipStatus).toBe('none')
+
+    const updateCalls = mockModule.__calls.filter(
+      (c) => c.table === 'registrations' && c.method === 'update'
+    )
+    expect(updateCalls).toHaveLength(1)
+    expect(updateCalls[0].args?.[0]).toMatchObject({
+      status: 'incomplete: membership',
+      cancelled_at: null,
+    })
+  })
 
   it('creates registration successfully when no duplicate', async () => {
     mockModule.__mockNoExistingResult()
@@ -559,6 +597,14 @@ describe('addRegistration', () => {
   // never shows up in the "Registered" list until the hourly revalidate.
   it('busts the registration and event caches so the public event page updates', async () => {
     mockModule.__mockNoExistingResult()
+    // resolveAdminRegistrationStatus: rider lookup, then event (chapter_id) lookup.
+    mockModule.__mockResultFound({ first_name: 'Ada', last_name: 'Lovelace' })
+    mockModule.__mockResultFound({ chapter_id: 'ch-1' })
+    vi.mocked(getMembershipForRider).mockResolvedValueOnce({
+      found: true,
+      membershipId: 1,
+      type: 'Individual Membership',
+    })
     mockModule.__mockInsertSuccess()
     // Post-insert lookups: event first, then rider (for the audit log).
     mockModule.__mockResultFound({ name: 'Spring 200', slug: 'spring-200' })

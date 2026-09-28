@@ -4,7 +4,7 @@ import { revalidatePath, revalidateTag } from 'next/cache'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { requireAdmin } from '@/lib/auth/get-admin'
 import { logAuditEvent } from '@/lib/audit-log'
-import { handleSupabaseError, createActionResult } from '@/lib/errors'
+import { handleSupabaseError, createActionResult, logError } from '@/lib/errors'
 import { revalidateResultsTags } from '@/lib/revalidate-results'
 import type { ActionResult } from '@/types/actions'
 import { getMembershipForRider, isTrialUsed } from '@/lib/memberships/service'
@@ -101,11 +101,87 @@ export interface AddRegistrationData {
   riderId: string
 }
 
+export type AdminMembershipStatus = 'valid' | 'none' | 'trial-used' | 'check-failed'
+
 /** Statuses an existing registration row can be revived from. */
 const REVIVABLE_REGISTRATION_STATUSES = ['cancelled', 'incomplete: membership']
 
 /**
- * Flip an existing registration row back to 'registered'.
+ * Resolve what status an admin-written registration row should get.
+ *
+ * Admin "Add rider" and "Restore" bypass the rider-facing form, so nothing
+ * has checked membership yet. This mirrors `finalizeRegistration`
+ * (lib/actions/registration/finalize.ts): no membership on file, or a Trial
+ * Member who already used their trial, both land on
+ * 'incomplete: membership' rather than 'registered' — otherwise the rider
+ * would silently appear on start lists/cards without a valid membership. A
+ * CCN failure also degrades to incomplete so a bad API call never blocks the
+ * admin from adding the rider; the "Missing membership" badge lets them
+ * re-check later via `revalidateMembership`.
+ */
+async function resolveAdminRegistrationStatus(
+  riderId: string,
+  eventId: string
+): Promise<{
+  status: 'registered' | 'incomplete: membership'
+  membershipStatus: AdminMembershipStatus
+}> {
+  const [{ data: riderData }, { data: eventData }] = await Promise.all([
+    getSupabaseAdmin().from('riders').select('first_name, last_name').eq('id', riderId).single(),
+    getSupabaseAdmin().from('events').select('chapter_id').eq('id', eventId).single(),
+  ])
+  const rider = riderData as { first_name: string; last_name: string } | null
+  const event = eventData as { chapter_id: string | null } | null
+
+  if (!rider) {
+    logError(new Error('Rider not found for admin registration status check'), {
+      operation: 'resolveAdminRegistrationStatus',
+      context: { riderId, eventId },
+    })
+    return { status: 'incomplete: membership', membershipStatus: 'check-failed' }
+  }
+
+  try {
+    const membership = await getMembershipForRider(
+      riderId,
+      rider.first_name,
+      rider.last_name,
+      event?.chapter_id ?? undefined
+    )
+
+    if (!membership.found) {
+      return { status: 'incomplete: membership', membershipStatus: 'none' }
+    }
+
+    if (membership.type === 'Trial Member' && (await isTrialUsed(riderId))) {
+      return { status: 'incomplete: membership', membershipStatus: 'trial-used' }
+    }
+
+    return { status: 'registered', membershipStatus: 'valid' }
+  } catch (error) {
+    logError(error, {
+      operation: 'resolveAdminRegistrationStatus',
+      context: { riderId, eventId },
+    })
+    return { status: 'incomplete: membership', membershipStatus: 'check-failed' }
+  }
+}
+
+function membershipAuditSuffix(membershipStatus: AdminMembershipStatus): string {
+  switch (membershipStatus) {
+    case 'none':
+      return ' — membership missing'
+    case 'trial-used':
+      return ' — trial already used'
+    case 'check-failed':
+      return ' — membership check failed'
+    case 'valid':
+      return ''
+  }
+}
+
+/**
+ * Flip an existing registration row back to a resolved status.
  *
  * `registrations` has a UNIQUE (event_id, rider_id), so a rider who cancelled
  * already owns the row for that event — re-adding them means updating it, not
@@ -119,25 +195,29 @@ const REVIVABLE_REGISTRATION_STATUSES = ['cancelled', 'incomplete: membership']
 async function reviveRegistrationRow(
   registrationId: string,
   managementToken: string | null,
+  status: 'registered' | 'incomplete: membership',
   operation: string,
   failureMessage: string
-): Promise<ActionResult | null> {
+): Promise<ActionResult<never> | null> {
   const { error } = await getSupabaseAdmin()
     .from('registrations')
     .update({
-      status: 'registered',
+      status,
       cancelled_at: null,
       ...(managementToken ? {} : { management_token: crypto.randomUUID() }),
     })
     .eq('id', registrationId)
 
   if (error) {
-    return handleSupabaseError(error, { operation }, failureMessage)
+    // Never carries a `data` payload — safe to widen to any caller's success type.
+    return handleSupabaseError(error, { operation }, failureMessage) as ActionResult<never>
   }
   return null
 }
 
-export async function addRegistration(data: AddRegistrationData): Promise<ActionResult> {
+export async function addRegistration(
+  data: AddRegistrationData
+): Promise<ActionResult<{ membershipStatus: AdminMembershipStatus }>> {
   const admin = await requireAdmin()
 
   const { eventId, riderId } = data
@@ -164,10 +244,15 @@ export async function addRegistration(data: AddRegistrationData): Promise<Action
     existingReg && REVIVABLE_REGISTRATION_STATUSES.includes(existingReg.status ?? '')
   )
 
+  let membershipStatus: AdminMembershipStatus = 'valid'
+
   if (existingReg && revived) {
+    const resolved = await resolveAdminRegistrationStatus(riderId, eventId)
+    membershipStatus = resolved.membershipStatus
     const failure = await reviveRegistrationRow(
       existingReg.id,
       existingReg.management_token,
+      resolved.status,
       'addRegistration.revive',
       'Failed to add registration'
     )
@@ -175,10 +260,13 @@ export async function addRegistration(data: AddRegistrationData): Promise<Action
   } else if (existingReg) {
     return { success: false, error: 'This rider is already registered for this event' }
   } else {
+    const resolved = await resolveAdminRegistrationStatus(riderId, eventId)
+    membershipStatus = resolved.membershipStatus
+
     const insertData: RegistrationInsert = {
       event_id: eventId,
       rider_id: riderId,
-      status: 'registered',
+      status: resolved.status,
     }
 
     const { error } = await getSupabaseAdmin().from('registrations').insert(insertData)
@@ -221,12 +309,14 @@ export async function addRegistration(data: AddRegistrationData): Promise<Action
     action: revived ? 'update' : 'create',
     entityType: 'result',
     entityId: eventId,
-    description: revived
-      ? `Restored registration for ${eventName}: ${riderName}`
-      : `Added registration for ${eventName}: ${riderName}`,
+    description:
+      (revived
+        ? `Restored registration for ${eventName}: ${riderName}`
+        : `Added registration for ${eventName}: ${riderName}`) +
+      membershipAuditSuffix(membershipStatus),
   })
 
-  return createActionResult()
+  return createActionResult({ membershipStatus })
 }
 
 export async function updateResult(
@@ -399,13 +489,15 @@ export async function adminCancelRegistration(registrationId: string): Promise<A
  * already registered. This is the organizer-side counterpart to
  * `adminCancelRegistration`.
  */
-export async function adminRestoreRegistration(registrationId: string): Promise<ActionResult> {
+export async function adminRestoreRegistration(
+  registrationId: string
+): Promise<ActionResult<{ membershipStatus: AdminMembershipStatus }>> {
   const admin = await requireAdmin()
 
   const { data: registration, error: fetchError } = await getSupabaseAdmin()
     .from('registrations')
     .select(
-      'id, status, event_id, management_token, riders (first_name, last_name), events (name, slug)'
+      'id, status, event_id, rider_id, management_token, riders (first_name, last_name), events (name, slug)'
     )
     .eq('id', registrationId)
     .single()
@@ -422,6 +514,7 @@ export async function adminRestoreRegistration(registrationId: string): Promise<
     id: string
     status: string | null
     event_id: string
+    rider_id: string
     management_token: string | null
     riders: { first_name: string; last_name: string } | null
     events: { name: string; slug: string } | null
@@ -431,9 +524,12 @@ export async function adminRestoreRegistration(registrationId: string): Promise<
     return { success: false, error: 'This registration is not cancelled' }
   }
 
+  const resolved = await resolveAdminRegistrationStatus(reg.rider_id, reg.event_id)
+
   const failure = await reviveRegistrationRow(
     reg.id,
     reg.management_token,
+    resolved.status,
     'adminRestoreRegistration',
     'Failed to restore registration'
   )
@@ -458,10 +554,12 @@ export async function adminRestoreRegistration(registrationId: string): Promise<
     action: 'update',
     entityType: 'registration',
     entityId: registrationId,
-    description: `Restored registration for ${eventName}: ${riderName}`,
+    description:
+      `Restored registration for ${eventName}: ${riderName}` +
+      membershipAuditSuffix(resolved.membershipStatus),
   })
 
-  return createActionResult()
+  return createActionResult({ membershipStatus: resolved.membershipStatus })
 }
 
 export async function deleteResult(resultId: string): Promise<ActionResult> {
