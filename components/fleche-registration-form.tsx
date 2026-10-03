@@ -179,6 +179,7 @@ export function FlecheRegistrationForm({
                 type="text"
                 placeholder="Enter your team name"
                 required
+                maxLength={100}
                 disabled={isPending}
                 value={newTeamName}
                 onChange={(e) => setNewTeamName(e.target.value)}

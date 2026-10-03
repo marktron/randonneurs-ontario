@@ -299,6 +299,7 @@ export function PermanentRegistrationForm({ routes }: PermanentRegistrationFormP
               type="text"
               placeholder="e.g., Tim Hortons, 123 Main St, Toronto"
               value={startLocation}
+              maxLength={200}
               onChange={(e) => setStartLocation(e.target.value)}
               disabled={isPending}
               autoComplete="off"

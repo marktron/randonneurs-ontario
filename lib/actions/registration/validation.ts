@@ -5,9 +5,24 @@
  * routeId/eventDate/startTime), then defers the common contact/email/phone
  * checks here. Error messages and check order match the original inline
  * validation exactly so client-facing behavior is unchanged.
+ *
+ * Also owns the per-email registration rate limit, which every entry point
+ * applies right after the contact fields validate, and the length caps for the
+ * entry-point-specific free-text fields (team name, start location).
  */
 import { validateEmail, normalizePhone } from '@/lib/utils/validation'
+import { isRateLimited } from '@/lib/rate-limit'
 import { suggestEmailCorrection } from '@/lib/utils/email-typo'
+
+const REGISTRATION_RATE_LIMIT_STORE = 'registration'
+const REGISTRATION_RATE_LIMIT_MAX_ATTEMPTS = 10
+const REGISTRATION_RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000
+
+const MAX_TEAM_NAME_LENGTH = 100
+const MAX_START_LOCATION_LENGTH = 200
+
+export const REGISTRATION_RATE_LIMIT_ERROR =
+  'Too many registration attempts. Please try again later.'
 
 export interface ContactValidationInput {
   firstName: string
@@ -123,4 +138,35 @@ export function validateContactFields(input: ContactValidationInput): ContactVal
       normalizedEmergencyPhone: emergencyPhoneResult.formatted,
     },
   }
+}
+
+/**
+ * Per-email rate limit shared by every registration entry point: 10 attempts
+ * per 15 minutes. Returns true when the attempt should be refused. Each call
+ * counts as an attempt, so call it exactly once per submission, immediately
+ * after validateContactFields succeeds (the typo guard must run first).
+ */
+export function isRegistrationRateLimited(normalizedEmail: string): boolean {
+  return isRateLimited(
+    REGISTRATION_RATE_LIMIT_STORE,
+    normalizedEmail,
+    REGISTRATION_RATE_LIMIT_MAX_ATTEMPTS,
+    REGISTRATION_RATE_LIMIT_WINDOW_MS
+  )
+}
+
+/** Returns an error message when the team name is over the length cap, else null. */
+export function validateTeamNameLength(trimmedTeamName: string | undefined): string | null {
+  return trimmedTeamName && trimmedTeamName.length > MAX_TEAM_NAME_LENGTH
+    ? 'Team name is too long'
+    : null
+}
+
+/** Returns an error message when the start location is over the length cap, else null. */
+export function validateStartLocationLength(
+  trimmedStartLocation: string | undefined
+): string | null {
+  return trimmedStartLocation && trimmedStartLocation.length > MAX_START_LOCATION_LENGTH
+    ? 'Start location is too long'
+    : null
 }

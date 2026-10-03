@@ -36,7 +36,6 @@ import { revalidatePath, revalidateTag } from 'next/cache'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { formatEventType } from '@/lib/utils'
 import { fuzzyNameScore } from '@/lib/utils/fuzzy-match'
-import { isRateLimited } from '@/lib/rate-limit'
 import { createTorontoDate } from '@/lib/brmTimes'
 import { isRealChapterDbSlug } from '@/lib/chapter-config'
 import { handleActionError, handleSupabaseError, logError } from '@/lib/errors'
@@ -56,7 +55,13 @@ import {
   formatEventTime,
   buildRouteUrl,
 } from './registration/helpers'
-import { validateContactFields } from './registration/validation'
+import {
+  validateContactFields,
+  isRegistrationRateLimited,
+  REGISTRATION_RATE_LIMIT_ERROR,
+  validateTeamNameLength,
+  validateStartLocationLength,
+} from './registration/validation'
 import {
   insertNewRider,
   findOrCreateRider,
@@ -190,9 +195,14 @@ export async function registerForEvent(data: RegistrationData): Promise<Registra
   } = validation.value
   const trimmedTeamName = teamName?.trim() || undefined
 
+  const teamNameError = validateTeamNameLength(trimmedTeamName)
+  if (teamNameError) {
+    return { success: false, error: teamNameError }
+  }
+
   // Rate limit: 10 registration attempts per email per 15 minutes
-  if (isRateLimited('registration', normalizedEmail, 10, 15 * 60 * 1000)) {
-    return { success: false, error: 'Too many registration attempts. Please try again later.' }
+  if (isRegistrationRateLimited(normalizedEmail)) {
+    return { success: false, error: REGISTRATION_RATE_LIMIT_ERROR }
   }
 
   // Block duplicate team names with a helpful message
@@ -352,9 +362,14 @@ export async function registerForPermanent(
     normalizedEmergencyPhone,
   } = validation.value
 
+  const startLocationError = validateStartLocationLength(startLocation?.trim())
+  if (startLocationError) {
+    return { success: false, error: startLocationError }
+  }
+
   // Rate limit: 10 registration attempts per email per 15 minutes
-  if (isRateLimited('registration', normalizedEmail, 10, 15 * 60 * 1000)) {
-    return { success: false, error: 'Too many registration attempts. Please try again later.' }
+  if (isRegistrationRateLimited(normalizedEmail)) {
+    return { success: false, error: REGISTRATION_RATE_LIMIT_ERROR }
   }
 
   // Validate registration deadline: 8 p.m. Eastern the day before the ride
@@ -592,6 +607,17 @@ export async function completeRegistrationWithRider(
   } = validation.value
   const parsedGender = gender === 'M' || gender === 'F' || gender === 'X' ? gender : null
   const trimmedTeamName = teamName?.trim() || undefined
+
+  const teamNameError = validateTeamNameLength(trimmedTeamName)
+  if (teamNameError) {
+    return { success: false, error: teamNameError }
+  }
+
+  // Rate limit: shared with the other entry points so this path can't be used
+  // to get around the per-email cap.
+  if (isRegistrationRateLimited(normalizedEmail)) {
+    return { success: false, error: REGISTRATION_RATE_LIMIT_ERROR }
+  }
 
   // All DB work is wrapped so any helper throw (insertNewRider,
   // createRegistrationRecord) becomes a clean ActionResult with Sentry logging,
