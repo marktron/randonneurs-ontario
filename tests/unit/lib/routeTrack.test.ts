@@ -6,6 +6,8 @@ import {
   canonicalStart,
   snapToTrack,
   checkStoredStart,
+  offeredControlPlaces,
+  type RouteControl,
   type TrackPoint,
 } from '@/lib/routeTrack'
 
@@ -157,5 +159,66 @@ describe('checkStoredStart', () => {
     const p = pointAtKm(track, 5)
     expect(checkStoredStart(track, { offsetKm: 20, lat: p.lat, lng: p.lng })).toBe('beyond_route')
     expect(checkStoredStart(track, { offsetKm: 31.5, lat: p.lat, lng: p.lng })).toBe('beyond_route')
+  })
+})
+
+describe('offeredControlPlaces', () => {
+  // 20 km out-and-back: step i sits at lat 44 + i * 0.001, passed at
+  // km i * 0.1112 going out and km (180 - i) * 0.1112 coming back.
+  const track = buildRouteTrack(outAndBack(90), 20.016)!
+  const at = (name: string, km: number, step: number): RouteControl => ({
+    name,
+    km,
+    lat: 44 + step * 0.001,
+    lng: -79,
+  })
+
+  it('leaves out controls at the posted start and finish', () => {
+    const places = offeredControlPlaces(track, [
+      at('Start', 0, 0),
+      at('Start again', 0.04, 0),
+      at('Turnaround', 10, 90),
+      at('Finish', 19.95, 0),
+      at('Finish', 20, 0),
+    ])
+    expect(places.map((p) => p.name)).toEqual(['Turnaround'])
+    expect(places[0].passes.map((s) => s.offsetKm)).toEqual([10])
+  })
+
+  it('groups the passes of one control at one place, with each canonical distance', () => {
+    const places = offeredControlPlaces(track, [at('Cafe', 3.3, 30), at('Cafe', 16.7, 30)])
+    expect(places).toHaveLength(1)
+    expect(places[0]).toMatchObject({ name: 'Cafe', lat: 44.03, lng: -79 })
+    expect(places[0].passes.map((s) => s.offsetKm)).toEqual([3.3, 16.7])
+    // Coordinates come from the track, as for any other canonical start.
+    expect(places[0].passes[0]).toEqual(canonicalStart(track, 3.3))
+  })
+
+  it('keeps differently named controls at one place apart', () => {
+    const places = offeredControlPlaces(track, [at('Cafe', 3.3, 30), at('Bakery', 3.4, 30.5)])
+    expect(places.map((p) => p.name)).toEqual(['Cafe', 'Bakery'])
+  })
+
+  it('keeps same-named controls more than 150 m apart separate', () => {
+    const places = offeredControlPlaces(track, [at('Tim Hortons', 2, 18), at('Tim Hortons', 8, 72)])
+    expect(places).toHaveLength(2)
+  })
+
+  it('lists places in route order of their first pass', () => {
+    const places = offeredControlPlaces(track, [
+      at('Turnaround', 10, 90),
+      at('Cafe', 16.7, 30),
+      at('Bakery', 5.6, 50),
+      at('Cafe', 3.3, 30),
+    ])
+    expect(places.map((p) => [p.name, p.passes.map((s) => s.offsetKm)])).toEqual([
+      ['Cafe', [3.3, 16.7]],
+      ['Bakery', [5.6]],
+      ['Turnaround', [10]],
+    ])
+  })
+
+  it('returns nothing for a route without controls', () => {
+    expect(offeredControlPlaces(track, [])).toEqual([])
   })
 })

@@ -34,7 +34,7 @@ import {
   type ExistingPermanentRide,
 } from '@/lib/actions/permanent-start'
 import type { ActiveRoute } from '@/lib/data/routes'
-import type { RouteTrack } from '@/lib/routeTrack'
+import type { RouteControl, RouteTrack } from '@/lib/routeTrack'
 import { RouteStartPicker } from '@/components/route-start-picker'
 import { formatClock } from '@/lib/permanent-start'
 import { HoneypotField } from '@/components/honeypot-field'
@@ -91,6 +91,8 @@ export function PermanentRegistrationForm({ routes }: PermanentRegistrationFormP
   const [datePickerOpen, setDatePickerOpen] = useState(false)
   const [startTime, setStartTime] = useState<string>('08:00')
   const [startLocation, setStartLocation] = useState<string>('')
+  // True while the place name is a control's name the rider has not edited.
+  const [startLocationSuggested, setStartLocationSuggested] = useState(false)
   const [startOffsetKm, setStartOffsetKm] = useState<number | null>(null)
   const [alternateStartOpen, setAlternateStartOpen] = useState(false)
   const [direction, setDirection] = useState<'as_posted' | 'reversed'>('as_posted')
@@ -119,9 +121,11 @@ export function PermanentRegistrationForm({ routes }: PermanentRegistrationFormP
 
   // Each lookup result is stored with the inputs it answers, so a result for
   // an earlier route, date or direction is never shown for the current ones.
-  const [trackFor, setTrackFor] = useState<{ routeId: string; track: RouteTrack | null } | null>(
-    null
-  )
+  const [trackFor, setTrackFor] = useState<{
+    routeId: string
+    track: RouteTrack | null
+    controls: RouteControl[]
+  } | null>(null)
   const [rideFor, setRideFor] = useState<{
     key: string
     ride: ExistingPermanentRide | null
@@ -134,15 +138,21 @@ export function PermanentRegistrationForm({ routes }: PermanentRegistrationFormP
     getPermanentRouteTrack(routeId)
       .then((result) => {
         if (cancelled) return
-        const track = result.available && result.track.isLoop ? result.track : null
-        setTrackFor({ routeId, track })
+        const loop = result.available && result.track.isLoop
+        setTrackFor({
+          routeId,
+          track: loop ? result.track : null,
+          controls: loop ? (result.controls ?? []) : [],
+        })
       })
       .catch(() => {})
     return () => {
       cancelled = true
     }
   }, [routeId])
-  const track = trackFor?.routeId === routeId ? trackFor.track : null
+  const current = trackFor?.routeId === routeId ? trackFor : null
+  const track = current?.track ?? null
+  const routeControls = current?.controls
 
   // One ride per route, date and direction: if it exists, its first
   // registrant set the start and later riders join on the same terms.
@@ -180,6 +190,15 @@ export function PermanentRegistrationForm({ routes }: PermanentRegistrationFormP
     setAlternateStartOpen(false)
     setStartOffsetKm(null)
     setStartLocation('')
+    setStartLocationSuggested(false)
+  }
+
+  // Starting at a control suggests its name, but never replaces a name the
+  // rider typed.
+  function suggestStartLocation(name: string) {
+    if (startLocation.trim() !== '' && !startLocationSuggested) return
+    setStartLocation(name)
+    setStartLocationSuggested(true)
   }
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -421,6 +440,8 @@ export function PermanentRegistrationForm({ routes }: PermanentRegistrationFormP
                     track={track}
                     valueKm={startOffsetKm}
                     onChange={setStartOffsetKm}
+                    controls={routeControls}
+                    onPickControl={suggestStartLocation}
                     disabled={isPending}
                   />
                   {startOffsetKm != null && (
@@ -436,7 +457,10 @@ export function PermanentRegistrationForm({ routes }: PermanentRegistrationFormP
                           placeholder="e.g., Tim Hortons, 123 Main St, Uxbridge"
                           value={startLocation}
                           maxLength={200}
-                          onChange={(e) => setStartLocation(e.target.value)}
+                          onChange={(e) => {
+                            setStartLocation(e.target.value)
+                            setStartLocationSuggested(false)
+                          }}
                           disabled={isPending}
                           autoComplete="off"
                         />

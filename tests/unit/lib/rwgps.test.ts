@@ -10,7 +10,7 @@ import {
   fetchRwgpsControlsWithCoords,
   fetchRwgpsRoute,
   fetchRwgpsRouteForImport,
-  fetchRwgpsTrack,
+  fetchRwgpsRouteMap,
   parseRwgpsRouteRef,
 } from '@/lib/rwgps'
 
@@ -1041,8 +1041,8 @@ describe('route import and track fetchers', () => {
     })
   })
 
-  describe('fetchRwgpsTrack', () => {
-    it('returns the track for a route with no controls', async () => {
+  describe('fetchRwgpsRouteMap', () => {
+    it('returns the track for a route with no controls, and no controls', async () => {
       stubRouteResponse({
         route: {
           distance: 1000,
@@ -1052,9 +1052,56 @@ describe('route import and track fetchers', () => {
           ],
         },
       })
-      const result = await fetchRwgpsTrack('123')
+      const result = await fetchRwgpsRouteMap('123')
       expect(result.totalKm).toBe(1)
       expect(result.points).toHaveLength(2)
+      expect(result.controls).toEqual([])
+    })
+
+    it('returns the controls the import parser finds, as name, km and coordinates', async () => {
+      stubRouteResponse({
+        route: {
+          distance: 204540,
+          course_points: [
+            { n: 'CTL - Cafe', d: 97700, t: 'Control', x: -79.2, y: 44.2 },
+            { n: 'Not a control', d: 50000, t: 'Left', x: -79.1, y: 44.1 },
+          ],
+          points_of_interest: [
+            {
+              type: 'control',
+              name: 'Control Bakery',
+              lat: 44.3,
+              lng: -79.3,
+              distances: [30000, 150000],
+              description: 'Ask for a stamp',
+            },
+          ],
+          track_points: [
+            { x: -79, y: 44, d: 0 },
+            { x: -79, y: 44, d: 204540 },
+          ],
+        },
+      })
+      const result = await fetchRwgpsRouteMap('123')
+      expect(result.controls).toEqual([
+        { name: 'Bakery', km: 30, lat: 44.3, lng: -79.3 },
+        { name: 'Cafe', km: 97.7, lat: 44.2, lng: -79.2 },
+        { name: 'Bakery', km: 150, lat: 44.3, lng: -79.3 },
+      ])
+    })
+
+    it('skips controls without coordinates', async () => {
+      stubRouteResponse({
+        route: {
+          distance: 1000,
+          // No usable track points, so the course point cannot be placed.
+          course_points: [{ n: 'Control: Cafe', d: 500, t: 'Control' }],
+          track_points: [],
+        },
+      })
+      const result = await fetchRwgpsRouteMap('123')
+      expect(result.controls).toEqual([])
+      expect(result.points).toEqual([])
     })
   })
 

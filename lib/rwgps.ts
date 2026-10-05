@@ -1,5 +1,5 @@
 import { haversineMeters } from '@/lib/geo'
-import type { TrackPoint } from '@/lib/routeTrack'
+import type { RouteControl, TrackPoint } from '@/lib/routeTrack'
 
 export interface ParsedControl {
   name: string
@@ -477,13 +477,21 @@ function trackOf(route: RwgpsRoute): { totalKm: number; points: TrackPoint[] } {
 }
 
 /**
- * A route's GPS track and length, for the permanent start picker. Unlike the
- * control fetchers this does not require the route to have controls.
+ * A route's GPS track, length and controls, for the permanent start picker.
+ * Controls come from the same parser as the event control import; ones with
+ * no coordinates are left out. Unlike the control fetchers this does not
+ * require the route to have controls: a route without any has `controls: []`.
  */
-export async function fetchRwgpsTrack(
+export async function fetchRwgpsRouteMap(
   rwgpsId: string
-): Promise<{ totalKm: number; points: TrackPoint[] }> {
-  return trackOf(await fetchRouteJson(rwgpsId))
+): Promise<{ totalKm: number; points: TrackPoint[]; controls: RouteControl[] }> {
+  const route = await fetchRouteJson(rwgpsId)
+  const controls: RouteControl[] = []
+  for (const c of extractControlsWithCoords(route)) {
+    if (c.lat == null || c.lng == null) continue
+    controls.push({ name: c.name, km: Number(c.distance), lat: c.lat, lng: c.lng })
+  }
+  return { ...trackOf(route), controls }
 }
 
 /**

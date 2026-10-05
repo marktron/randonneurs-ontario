@@ -241,7 +241,8 @@ export async function registerForPermanent(
 Read-only lookups for the permanent registration form (Server Actions, not rate limited).
 
 ```typescript
-// The route's track for the start picker, or { available: false }
+// The route's track and controls for the start picker, or { available: false }.
+// Each control is only { name, km, lat, lng }; a route without controls has [].
 export async function getPermanentRouteTrack(routeId: string): Promise<PermanentRouteTrackResult>
 
 // The ride already registered for a route, date and direction, or null. Also null
@@ -256,8 +257,14 @@ export async function getExistingPermanentRide(
 ### lib/data/route-track.ts
 
 ```typescript
-// Cached RWGPS track for a route (24 hours, tag `routes`). Null when it cannot be
-// loaded; failures are not cached.
+// Cached RWGPS track and controls for a route (24 hours, tag `routes`, cache key
+// `route-map`). Both come from one v1 response (`fetchRwgpsRouteMap` in
+// lib/rwgps.ts); controls use the same parser as the event control import, and
+// ones without coordinates are dropped. A route with no controls still loads,
+// with `controls: []`. Null when the track cannot be loaded; failures are not cached.
+export async function loadRouteMap(rwgpsId: string): Promise<RouteMap | null>
+
+// The track alone, from loadRouteMap (used by registerForPermanent).
 export async function loadRouteTrack(rwgpsId: string): Promise<RouteTrack | null>
 ```
 

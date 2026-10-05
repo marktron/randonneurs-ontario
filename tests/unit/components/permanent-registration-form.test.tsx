@@ -29,25 +29,52 @@ vi.mock('@/components/route-start-picker', () => ({
   RouteStartPicker: ({
     valueKm,
     onChange,
+    onPickControl,
+    controls,
     disabled,
   }: {
     valueKm: number | null
     onChange: (km: number | null) => void
+    onPickControl?: (name: string) => void
+    controls?: { name: string }[]
     disabled?: boolean
   }) => (
     <div data-testid="route-start-picker" data-disabled={disabled ? 'true' : 'false'}>
       <span data-testid="picker-value">{valueKm ?? 'none'}</span>
+      <span data-testid="picker-controls">{(controls ?? []).map((c) => c.name).join('|')}</span>
       <button type="button" onClick={() => onChange(42.3)}>
         Drop pin
       </button>
       <button type="button" onClick={() => onChange(null)}>
         Clear pin
       </button>
+      <button
+        type="button"
+        onClick={() => {
+          onChange(30)
+          onPickControl?.('Cafe')
+        }}
+      >
+        Pick control
+      </button>
+      <button
+        type="button"
+        onClick={() => {
+          onChange(120.5)
+          onPickControl?.('Georgetown')
+        }}
+      >
+        Pick other control
+      </button>
     </div>
   ),
 }))
 
 const loopTrack = { points: [], totalKm: 204.5, isLoop: true }
+const routeControls = [
+  { name: 'Cafe', km: 30, lat: 44.1, lng: -79.1 },
+  { name: 'Georgetown', km: 120.5, lat: 43.6, lng: -79.9 },
+]
 
 // Mock router
 const mockRefresh = vi.fn()
@@ -306,6 +333,93 @@ describe('PermanentRegistrationForm', () => {
       expect(screen.queryByLabelText(/name of your start location/i)).not.toBeInTheDocument()
       await user.click(screen.getByRole('button', { name: 'Drop pin' }))
       expect(screen.getByLabelText(/name of your start location/i)).toHaveValue('')
+    })
+  })
+
+  describe('starting at a control', () => {
+    async function openPicker(user: User) {
+      mockGetPermanentRouteTrack.mockResolvedValue({
+        available: true,
+        track: loopTrack,
+        controls: routeControls,
+      })
+      render(<PermanentRegistrationForm routes={mockRoutes} />)
+      await selectRoute(user, mockRoutes[0])
+      await user.click(await screen.findByRole('button', { name: /start somewhere else/i }))
+    }
+
+    it("passes the route's controls to the picker", async () => {
+      const user = userEvent.setup()
+      await openPicker(user)
+      expect(screen.getByTestId('picker-controls')).toHaveTextContent('Cafe|Georgetown')
+    })
+
+    it("submits the control's exact offset and suggests its name", async () => {
+      const user = userEvent.setup()
+      await openPicker(user)
+      await user.click(screen.getByRole('button', { name: 'Pick control' }))
+      expect(screen.getByText('Starts 30.0 km into the posted route')).toBeInTheDocument()
+      const name = screen.getByLabelText(/name of your start location/i)
+      expect(name).toHaveValue('Cafe')
+      expect(name).toBeEnabled()
+      await selectDate(user)
+      await fillRiderFieldsAndSubmit(user)
+      await waitFor(() =>
+        expect(mockRegisterForPermanent).toHaveBeenCalledWith(
+          expect.objectContaining({ startOffsetKm: 30, startLocation: 'Cafe' })
+        )
+      )
+    })
+
+    it('never overwrites a name the rider typed', async () => {
+      const user = userEvent.setup()
+      await openPicker(user)
+      await user.click(screen.getByRole('button', { name: 'Drop pin' }))
+      await user.type(screen.getByLabelText(/name of your start location/i), 'My sister’s house')
+      await user.click(screen.getByRole('button', { name: 'Pick control' }))
+      expect(screen.getByLabelText(/name of your start location/i)).toHaveValue('My sister’s house')
+    })
+
+    it('never overwrites a suggestion the rider edited', async () => {
+      const user = userEvent.setup()
+      await openPicker(user)
+      await user.click(screen.getByRole('button', { name: 'Pick control' }))
+      await user.type(screen.getByLabelText(/name of your start location/i), ', Uxbridge')
+      await user.click(screen.getByRole('button', { name: 'Pick other control' }))
+      expect(screen.getByLabelText(/name of your start location/i)).toHaveValue('Cafe, Uxbridge')
+    })
+
+    it("replaces an unedited suggestion with the next control's name", async () => {
+      const user = userEvent.setup()
+      await openPicker(user)
+      await user.click(screen.getByRole('button', { name: 'Pick control' }))
+      await user.click(screen.getByRole('button', { name: 'Pick other control' }))
+      expect(screen.getByLabelText(/name of your start location/i)).toHaveValue('Georgetown')
+    })
+
+    it('leaves the name alone on a plain map tap', async () => {
+      const user = userEvent.setup()
+      await openPicker(user)
+      await user.click(screen.getByRole('button', { name: 'Pick control' }))
+      await user.click(screen.getByRole('button', { name: 'Drop pin' }))
+      expect(screen.getByText('Starts 42.3 km into the posted route')).toBeInTheDocument()
+      expect(screen.getByLabelText(/name of your start location/i)).toHaveValue('Cafe')
+    })
+
+    it('clears the suggestion with the pin when the route changes', async () => {
+      const user = userEvent.setup()
+      await openPicker(user)
+      await user.click(screen.getByRole('button', { name: 'Pick control' }))
+      await selectRoute(user, mockRoutes[1])
+      await waitFor(() =>
+        expect(mockGetPermanentRouteTrack).toHaveBeenLastCalledWith(mockRoutes[1].id)
+      )
+      await user.click(await screen.findByRole('button', { name: /start somewhere else/i }))
+      expect(screen.getByTestId('picker-value')).toHaveTextContent('none')
+      await user.click(screen.getByRole('button', { name: 'Drop pin' }))
+      expect(screen.getByLabelText(/name of your start location/i)).toHaveValue('')
+      await user.click(screen.getByRole('button', { name: 'Pick other control' }))
+      expect(screen.getByLabelText(/name of your start location/i)).toHaveValue('Georgetown')
     })
   })
 

@@ -1,31 +1,44 @@
 /**
- * Cached GPS track for a route, used by the permanent start picker and by
- * registration to validate a chosen start.
+ * Cached GPS track and controls for a route, used by the permanent start
+ * picker and by registration to validate a chosen start.
  */
 import { unstable_cache } from 'next/cache'
-import { fetchRwgpsTrack } from '@/lib/rwgps'
-import { buildRouteTrack, type RouteTrack } from '@/lib/routeTrack'
+import { fetchRwgpsRouteMap } from '@/lib/rwgps'
+import { buildRouteTrack, type RouteControl, type RouteTrack } from '@/lib/routeTrack'
 import { handleDataError } from '@/lib/errors'
 
 const TRACK_REVALIDATE_SECONDS = 24 * 60 * 60
+
+export interface RouteMap {
+  track: RouteTrack
+  /** Empty when the route has no controls with coordinates. */
+  controls: RouteControl[]
+}
 
 /**
  * Null when the track cannot be loaded. Failures throw inside the cached
  * function so they are never cached: the next call retries RWGPS.
  */
-export async function loadRouteTrack(rwgpsId: string): Promise<RouteTrack | null> {
+export async function loadRouteMap(rwgpsId: string): Promise<RouteMap | null> {
   try {
     return await unstable_cache(
-      async () => {
-        const { points, totalKm } = await fetchRwgpsTrack(rwgpsId)
+      async (): Promise<RouteMap> => {
+        const { points, totalKm, controls } = await fetchRwgpsRouteMap(rwgpsId)
         const track = buildRouteTrack(points, totalKm)
         if (!track) throw new Error(`RWGPS route ${rwgpsId} has no usable track`)
-        return track
+        return { track, controls }
       },
-      ['route-track', rwgpsId],
+      // 'route-map', not the earlier 'route-track': entries cached in the
+      // old track-only shape must never be read as a RouteMap.
+      ['route-map', rwgpsId],
       { revalidate: TRACK_REVALIDATE_SECONDS, tags: ['routes'] }
     )()
   } catch (error) {
-    return handleDataError(error, { operation: 'loadRouteTrack' }, null)
+    return handleDataError(error, { operation: 'loadRouteMap' }, null)
   }
+}
+
+/** The track alone, for callers that do not need the controls. */
+export async function loadRouteTrack(rwgpsId: string): Promise<RouteTrack | null> {
+  return (await loadRouteMap(rwgpsId))?.track ?? null
 }

@@ -20,32 +20,44 @@ vi.mock('@/lib/supabase-server', () => ({
     },
   }),
 }))
-const mockLoadRouteTrack = vi.fn()
+const mockLoadRouteMap = vi.fn()
 vi.mock('@/lib/data/route-track', () => ({
-  loadRouteTrack: (id: string) => mockLoadRouteTrack(id),
+  loadRouteMap: (id: string) => mockLoadRouteMap(id),
 }))
 
 import { getPermanentRouteTrack, getExistingPermanentRide } from '@/lib/actions/permanent-start'
 
 const track = { points: [], totalKm: 20, isLoop: true }
+const controls = [{ name: 'Cafe', km: 9.5, lat: 44.1, lng: -79.2 }]
 
 beforeEach(() => {
   rows = {}
   eqCalls.length = 0
-  mockLoadRouteTrack.mockReset()
+  mockLoadRouteMap.mockReset()
 })
 
 describe('getPermanentRouteTrack', () => {
-  it('returns the track for an active route with an RWGPS id', async () => {
+  it('returns the track and controls for an active route with an RWGPS id', async () => {
     rows.routes = { id: 'r1', rwgps_id: '123' }
-    mockLoadRouteTrack.mockResolvedValue(track)
-    expect(await getPermanentRouteTrack('r1')).toEqual({ available: true, track })
+    mockLoadRouteMap.mockResolvedValue({ track, controls })
+    expect(await getPermanentRouteTrack('r1')).toEqual({ available: true, track, controls })
+    expect(mockLoadRouteMap).toHaveBeenCalledWith('123')
     expect(eqCalls).toContainEqual(['routes', 'is_active', true])
+  })
+
+  it('returns only the public fields of each control', async () => {
+    rows.routes = { id: 'r1', rwgps_id: '123' }
+    mockLoadRouteMap.mockResolvedValue({
+      track,
+      controls: [{ ...controls[0], notes: 'Ask for a stamp', distance: '9.5' }],
+    })
+    const result = await getPermanentRouteTrack('r1')
+    expect(result.available && result.controls).toEqual(controls)
   })
 
   it('is unavailable for an unknown or inactive route', async () => {
     expect(await getPermanentRouteTrack('nope')).toEqual({ available: false })
-    expect(mockLoadRouteTrack).not.toHaveBeenCalled()
+    expect(mockLoadRouteMap).not.toHaveBeenCalled()
   })
 
   it('is unavailable for a collection route (no RWGPS route id)', async () => {
@@ -55,7 +67,7 @@ describe('getPermanentRouteTrack', () => {
 
   it('is unavailable when the track cannot be loaded', async () => {
     rows.routes = { id: 'r1', rwgps_id: '123' }
-    mockLoadRouteTrack.mockResolvedValue(null)
+    mockLoadRouteMap.mockResolvedValue(null)
     expect(await getPermanentRouteTrack('r1')).toEqual({ available: false })
   })
 })

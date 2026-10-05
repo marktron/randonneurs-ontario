@@ -162,3 +162,47 @@ export function checkStoredStart(
     ? 'ok'
     : 'off_track'
 }
+
+/** A control from the route's RWGPS data, with the distance it is passed at. */
+export interface RouteControl {
+  name: string
+  /** Distance along the posted route, in km. */
+  km: number
+  lat: number
+  lng: number
+}
+
+/** One physical control place offered as a start, with every pass of it. */
+export interface ControlPlace {
+  name: string
+  lat: number
+  lng: number
+  /** Canonical starts, in route order. */
+  passes: StartPoint[]
+}
+
+/**
+ * Controls a rider can start at, one entry per physical place, in route
+ * order. Controls at the posted start or finish are left out (they are the
+ * posted start). Controls that share a name and sit within 150 m of each
+ * other are one place passed more than once.
+ */
+export function offeredControlPlaces(track: RouteTrack, controls: RouteControl[]): ControlPlace[] {
+  const places: ControlPlace[] = []
+  const sameName = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase()
+  for (const control of [...controls].sort((a, b) => a.km - b.km)) {
+    const start = canonicalStart(track, control.km)
+    if (!start) continue
+    const place = places.find(
+      (p) =>
+        sameName(p.name, control.name) &&
+        haversineMeters(p.lat, p.lng, control.lat, control.lng) <= OVERLAP_RADIUS_M
+    )
+    if (!place) {
+      places.push({ name: control.name, lat: control.lat, lng: control.lng, passes: [start] })
+    } else if (!place.passes.some((s) => s.offsetKm === start.offsetKm)) {
+      place.passes.push(start)
+    }
+  }
+  return places
+}

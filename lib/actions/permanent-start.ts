@@ -2,7 +2,7 @@
 
 /**
  * Read-only lookups for the permanent registration form: the route's track
- * for the start picker, and whether a ride already exists for a route, date
+ * and controls for the start picker, and whether a ride already exists for a route, date
  * and direction (the first registrant sets the start; see
  * docs/control-cards.md, "Direction and alternate start").
  *
@@ -12,16 +12,16 @@
  */
 
 import { getSupabaseAdmin } from '@/lib/supabase-server'
-import { loadRouteTrack } from '@/lib/data/route-track'
+import { loadRouteMap } from '@/lib/data/route-track'
 import { permanentEventSlug, toHHMM } from '@/lib/permanent-start'
-import type { RouteTrack } from '@/lib/routeTrack'
+import type { RouteControl, RouteTrack } from '@/lib/routeTrack'
 import {
   findPermanentRide,
   isPermanentRideReclaimable,
 } from '@/lib/actions/registration/permanent-event'
 
 export type PermanentRouteTrackResult =
-  { available: false } | { available: true; track: RouteTrack }
+  { available: false } | { available: true; track: RouteTrack; controls: RouteControl[] }
 
 export async function getPermanentRouteTrack(routeId: string): Promise<PermanentRouteTrackResult> {
   if (!routeId) return { available: false }
@@ -33,8 +33,11 @@ export async function getPermanentRouteTrack(routeId: string): Promise<Permanent
     .maybeSingle()
   const rwgpsId = (data as { rwgps_id: string | null } | null)?.rwgps_id
   if (!rwgpsId) return { available: false }
-  const track = await loadRouteTrack(rwgpsId)
-  return track ? { available: true, track } : { available: false }
+  const map = await loadRouteMap(rwgpsId)
+  if (!map) return { available: false }
+  // Controls are public route data; send only what the picker uses.
+  const controls = map.controls.map(({ name, km, lat, lng }) => ({ name, km, lat, lng }))
+  return { available: true, track: map.track, controls }
 }
 
 export interface ExistingPermanentRide {
