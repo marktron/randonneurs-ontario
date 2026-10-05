@@ -169,7 +169,11 @@ export function PermanentRegistrationForm({ routes }: PermanentRegistrationFormP
     let cancelled = false
     getExistingPermanentRide(routeId, formattedEventDate, direction)
       .then((ride) => {
-        if (!cancelled) setRideFor({ key: rideKey, ride })
+        if (cancelled) return
+        setRideFor({ key: rideKey, ride })
+        // A ride locks the start and hides the start section. Close the
+        // dialog too, or it would pop open by itself when the lock lifts.
+        if (ride) setStartDialogOpen(false)
       })
       .catch(() => {})
     return () => {

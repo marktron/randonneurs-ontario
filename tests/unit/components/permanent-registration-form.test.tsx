@@ -610,6 +610,35 @@ describe('PermanentRegistrationForm', () => {
       )
     })
 
+    it('closes the start dialog when a ride arrives, and keeps it closed after the lock lifts', async () => {
+      const user = userEvent.setup()
+      mockGetPermanentRouteTrack.mockResolvedValue({ available: true, track: loopTrack })
+      let resolveRide: (ride: unknown) => void = () => {}
+      mockGetExistingPermanentRide.mockImplementationOnce(
+        () => new Promise((resolve) => (resolveRide = resolve))
+      )
+      render(<PermanentRegistrationForm routes={mockRoutes} />)
+      await selectRoute(user, mockRoutes[0])
+      await selectDate(user)
+      await waitFor(() => expect(mockGetExistingPermanentRide).toHaveBeenCalled())
+
+      // The rider opens the dialog while the lookup is still out.
+      await openStartDialog(user)
+      resolveRide({ startTime: '06:30', startLocation: null, startOffsetKm: null })
+      expect(await screen.findByText(/already registered for this date/)).toBeInTheDocument()
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+
+      // No ride the other way: the lock lifts and the dialog stays closed.
+      await selectDirection(user, 'Reversed')
+      await waitFor(() =>
+        expect(screen.queryByText(/already registered for this date/)).not.toBeInTheDocument()
+      )
+      expect(
+        await screen.findByRole('button', { name: /start somewhere else/i })
+      ).toBeInTheDocument()
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    })
+
     it('describes an existing ride from the posted start', async () => {
       const user = userEvent.setup()
       mockGetExistingPermanentRide.mockResolvedValue({
