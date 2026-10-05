@@ -9,10 +9,12 @@ import { RouteStartPicker } from '@/components/route-start-picker'
 import { buildRouteTrack, type RouteControl, type TrackPoint } from '@/lib/routeTrack'
 
 /**
- * Chainable Leaflet stand-in. It records each control marker group's tooltip
- * and click handler so a test can tap a marker without a real map.
+ * Chainable Leaflet stand-in. It records each control flag's tooltip, click
+ * handler and current icon so a test can tap a flag without a real map.
  */
-const markerGroups: { tooltip: string; click: () => void }[] = []
+type FakeIcon = { html: string }
+const flags: { tooltip: string; click: () => void; icon: FakeIcon }[] = []
+const circleMarkers: { fillColor?: string }[] = []
 function layer() {
   const l: Record<string, unknown> = {}
   Object.assign(l, {
@@ -29,22 +31,31 @@ vi.mock('leaflet', () => ({
   map: vi.fn(() => ({ on: vi.fn(), fitBounds: vi.fn(), remove: vi.fn() })),
   tileLayer: vi.fn(layer),
   polyline: vi.fn(layer),
-  circleMarker: vi.fn(layer),
-  featureGroup: vi.fn(() => {
-    const entry = { tooltip: '', click: () => {} }
-    markerGroups.push(entry)
-    const group = {
+  circleMarker: vi.fn((_at: unknown, options: { fillColor?: string }) => {
+    circleMarkers.push(options)
+    return layer()
+  }),
+  divIcon: vi.fn((options: FakeIcon) => options),
+  marker: vi.fn((_at: unknown, options: { icon: FakeIcon }) => {
+    const entry = { tooltip: '', click: () => {}, icon: options.icon }
+    flags.push(entry)
+    const marker = {
       bindTooltip: (text: string) => {
         entry.tooltip = text
-        return group
+        return marker
       },
       on: (event: string, handler: () => void) => {
         if (event === 'click') entry.click = handler
-        return group
+        return marker
       },
-      addTo: () => group,
+      setIcon: (icon: FakeIcon) => {
+        entry.icon = icon
+        return marker
+      },
+      setZIndexOffset: () => marker,
+      addTo: () => marker,
     }
-    return group
+    return marker
   }),
 }))
 vi.mock('leaflet/dist/leaflet.css', () => ({}))
@@ -71,7 +82,8 @@ const controls: RouteControl[] = [
 
 describe('RouteStartPicker controls', () => {
   beforeEach(() => {
-    markerGroups.length = 0
+    flags.length = 0
+    circleMarkers.length = 0
   })
 
   it('lists the offered controls in route order, one option per pass', () => {
@@ -125,7 +137,7 @@ describe('RouteStartPicker controls', () => {
     expect(screen.queryByLabelText('Or start at a control')).not.toBeInTheDocument()
   })
 
-  it('marks each control place once, and a tap starts at its first pass and offers the others', async () => {
+  it('flags each control place once, and a tap starts at its first pass and offers the others', async () => {
     const onChange = vi.fn()
     const onPickControl = vi.fn()
     render(
@@ -137,18 +149,36 @@ describe('RouteStartPicker controls', () => {
         onPickControl={onPickControl}
       />
     )
-    await waitFor(() => expect(markerGroups).toHaveLength(2))
-    expect(markerGroups.map((g) => g.tooltip)).toEqual([
-      'Cafe, 3.3 km and 16.7 km',
-      'Turnaround, 10.0 km',
-    ])
+    await waitFor(() => expect(flags).toHaveLength(2))
+    expect(flags.map((g) => g.tooltip)).toEqual(['Cafe, 3.3 km and 16.7 km', 'Turnaround, 10.0 km'])
 
-    markerGroups[0].click()
+    flags[0].click()
     expect(onChange).toHaveBeenLastCalledWith(3.3)
     expect(onPickControl).toHaveBeenLastCalledWith('Cafe')
     expect(
       await screen.findByRole('group', { name: 'Which pass of the route?' })
     ).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '16.7 km' })).toBeInTheDocument()
+  })
+
+  it('draws a start at a control as that blue flag, with no separate pin', async () => {
+    const { rerender } = render(
+      <RouteStartPicker track={track} valueKm={null} onChange={vi.fn()} controls={controls} />
+    )
+    await waitFor(() => expect(flags).toHaveLength(2))
+    const PIN = '#2563eb'
+    expect(flags.every((f) => !f.icon.html.includes(PIN))).toBe(true)
+
+    rerender(
+      <RouteStartPicker track={track} valueKm={16.7} onChange={vi.fn()} controls={controls} />
+    )
+    await waitFor(() => expect(flags[0].icon.html).toContain(PIN))
+    expect(flags[1].icon.html).not.toContain(PIN)
+    expect(circleMarkers.some((m) => m.fillColor === PIN)).toBe(false)
+
+    // A start away from any control is the usual pin, and every flag is plain.
+    rerender(<RouteStartPicker track={track} valueKm={7} onChange={vi.fn()} controls={controls} />)
+    await waitFor(() => expect(circleMarkers.some((m) => m.fillColor === PIN)).toBe(true))
+    expect(flags.every((f) => !f.icon.html.includes(PIN))).toBe(true)
   })
 })

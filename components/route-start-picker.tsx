@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
-import type { CircleMarker, Map as LeafletMap } from 'leaflet'
+import type { CircleMarker, DivIcon, Map as LeafletMap, Marker } from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -34,6 +34,31 @@ const PIN_COLOR = '#2563eb' // blue-600
 const CONTROL_COLOR = '#1c1917' // stone-900, the style guide's near-black ink
 const NO_CONTROLS: RouteControl[] = []
 
+// Flag marker geometry, in px within a square icon that is also the tap area.
+// The pole's base (the anchor) sits on the control; the pennant flies up and
+// to the right so the route line stays visible underneath.
+const FLAG_BOX = 32
+const FLAG_BASE: [number, number] = [11, 27]
+
+/**
+ * A small flag on a pole with a dot at its base. The chosen start's flag is
+ * pin blue and its base is the pin itself.
+ */
+function flagSvg(selected: boolean): string {
+  const color = selected ? PIN_COLOR : CONTROL_COLOR
+  const [x, y] = FLAG_BASE
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${FLAG_BOX}" height="${FLAG_BOX}" viewBox="0 0 ${FLAG_BOX} ${FLAG_BOX}" overflow="visible" aria-hidden="true">
+<line x1="${x}" y1="${y}" x2="${x}" y2="${y - 18}" stroke="#fff" stroke-width="3.5" stroke-linecap="round"/>
+<line x1="${x}" y1="${y}" x2="${x}" y2="${y - 18}" stroke="${color}" stroke-width="1.5" stroke-linecap="round"/>
+<path d="M${x} ${y - 18} L${x + 12} ${y - 14} L${x} ${y - 10} Z" fill="${color}" stroke="#fff" stroke-width="1.25" stroke-linejoin="round"/>
+${
+  selected
+    ? `<circle cx="${x}" cy="${y}" r="5" fill="${PIN_COLOR}" stroke="#fff" stroke-width="2"/>`
+    : `<circle cx="${x}" cy="${y}" r="2.75" fill="#fff" stroke="${color}" stroke-width="1.5"/>`
+}
+</svg>`
+}
+
 const km = (offsetKm: number) => `${offsetKm.toFixed(1)} km`
 
 /** "Cafe, 30.0 km" or "Cafe, 30.0 km and 120.0 km". */
@@ -62,6 +87,8 @@ export function RouteStartPicker({
   const containerRef = useRef<HTMLDivElement | null>(null)
   const mapRef = useRef<LeafletMap | null>(null)
   const pinRef = useRef<CircleMarker | null>(null)
+  const flagsRef = useRef<{ place: ControlPlace; marker: Marker }[]>([])
+  const flagIconsRef = useRef<{ plain: DivIcon; selected: DivIcon } | null>(null)
   const [ready, setReady] = useState(false)
   const [choices, setChoices] = useState<StartPoint[]>([])
   const [hint, setHint] = useState<string | null>(null)
@@ -146,37 +173,35 @@ export function RouteStartPicker({
         .bindTooltip('Posted start')
         .addTo(map)
 
-      // A visible dot plus a larger transparent ring that catches taps on a
-      // phone. Neither passes the click on to the map, which would re-snap it.
-      for (const place of places) {
-        const at: [number, number] = [place.lat, place.lng]
-        L.featureGroup([
-          L.circleMarker(at, {
-            radius: 16,
-            stroke: false,
-            fillOpacity: 0,
-            bubblingMouseEvents: false,
-            // A clicked SVG path otherwise shows the browser's focus box.
-            className: 'outline-none',
-          }),
-          L.circleMarker(at, {
-            radius: 9,
-            color: '#fff',
-            weight: 2,
-            fillColor: CONTROL_COLOR,
-            fillOpacity: 1,
-            bubblingMouseEvents: false,
-            className: 'outline-none',
-          }),
-        ])
+      // Each control is a flag whose whole icon box is the tap area. A class of
+      // our own replaces Leaflet's default white `leaflet-div-icon` box. The
+      // flags are not tab stops; the control list below is the keyboard path.
+      const flagIcon = (selected: boolean) =>
+        L.divIcon({
+          html: flagSvg(selected),
+          className: 'outline-none',
+          iconSize: [FLAG_BOX, FLAG_BOX],
+          iconAnchor: FLAG_BASE,
+          tooltipAnchor: [12, -12],
+        })
+      flagIconsRef.current = { plain: flagIcon(false), selected: flagIcon(true) }
+      flagsRef.current = places.map((place) => ({
+        place,
+        marker: L.marker([place.lat, place.lng], {
+          icon: flagIconsRef.current!.plain,
+          keyboard: false,
+          riseOnHover: true,
+          // A tap on a flag must not also reach the map, which would re-snap it.
+          bubblingMouseEvents: false,
+        })
           // Long control names wrap instead of running past the map's edge on a
           // phone. `!` because leaflet.css sets white-space after Tailwind's layer.
           .bindTooltip(describePlace(place), {
             className: 'w-max! max-w-40! whitespace-normal!',
           })
           .on('click', () => onControlTap(place))
-          .addTo(map)
-      }
+          .addTo(map),
+      }))
 
       map.fitBounds(line.getBounds(), { padding: [16, 16] })
       map.on('click', (e) => onTap(e.latlng.lat, e.latlng.lng))
@@ -188,6 +213,8 @@ export function RouteStartPicker({
       mapRef.current?.remove()
       mapRef.current = null
       pinRef.current = null
+      flagsRef.current = []
+      flagIconsRef.current = null
       setReady(false)
     }
   }, [track, places])
@@ -202,7 +229,18 @@ export function RouteStartPicker({
       if (cancelled) return
       pinRef.current?.remove()
       pinRef.current = null
-      if (valueKm == null) return
+
+      // A start exactly at a control turns that control's flag blue and
+      // stands in for the pin, whose dot would sit under the flag's base.
+      const icons = flagIconsRef.current
+      let onControl = false
+      for (const { place, marker } of flagsRef.current) {
+        const selected = valueKm != null && place.passes.some((s) => s.offsetKm === valueKm)
+        onControl ||= selected
+        if (icons) marker.setIcon(selected ? icons.selected : icons.plain)
+        marker.setZIndexOffset(selected ? 1000 : 0)
+      }
+      if (valueKm == null || onControl) return
       const p = pointAtKm(track, valueKm)
       // Not interactive: a tap on the pin reaches the control marker or the
       // map underneath it.
@@ -234,8 +272,8 @@ export function RouteStartPicker({
         className="isolate h-64 w-full rounded-lg border border-border"
       />
       <p className="text-xs text-muted-foreground">
-        Tap the route where you will start and finish, or tap a black dot to start at that control.
-        The white dot is the posted start.
+        Tap the route where you will start and finish, or tap a flag to start at that control. The
+        white dot is the posted start.
       </p>
 
       {choices.length > 1 && (
