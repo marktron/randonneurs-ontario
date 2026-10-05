@@ -60,6 +60,7 @@ import {
   REGISTRATION_RATE_LIMIT_ERROR,
   validateTeamNameLength,
   validateStartLocationLength,
+  validateStartTime,
 } from './registration/validation'
 import {
   insertNewRider,
@@ -358,6 +359,11 @@ export async function registerForPermanent(
   // Validate required fields
   if (!routeId || !eventDate || !startTime) {
     return { success: false, error: 'Missing required fields' }
+  }
+
+  const startTimeError = validateStartTime(startTime)
+  if (startTimeError) {
+    return { success: false, error: startTimeError }
   }
 
   const validation = validateContactFields(data)

@@ -170,3 +170,11 @@ export function validateStartLocationLength(
     ? 'Start location is too long'
     : null
 }
+
+/**
+ * Returns an error message when the start time is not a 24-hour HH:MM time,
+ * else null. Joining an existing permanent ride compares times in this shape.
+ */
+export function validateStartTime(startTime: string): string | null {
+  return /^([01]\d|2[0-3]):[0-5]\d$/.test(startTime) ? null : 'Please enter a start time as HH:MM'
+}

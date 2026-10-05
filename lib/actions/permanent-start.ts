@@ -15,6 +15,10 @@ import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { loadRouteTrack } from '@/lib/data/route-track'
 import { permanentEventSlug, toHHMM } from '@/lib/permanent-start'
 import type { RouteTrack } from '@/lib/routeTrack'
+import {
+  findPermanentRide,
+  isPermanentRideReclaimable,
+} from '@/lib/actions/registration/permanent-event'
 
 export type PermanentRouteTrackResult =
   { available: false } | { available: true; track: RouteTrack }
@@ -46,30 +50,27 @@ export async function getExistingPermanentRide(
   direction: 'as_posted' | 'reversed'
 ): Promise<ExistingPermanentRide | null> {
   if (!routeId || !/^\d{4}-\d{2}-\d{2}$/.test(eventDate)) return null
-  const supabase = getSupabaseAdmin()
-  const { data: route } = await supabase
+  const { data: route } = await getSupabaseAdmin()
     .from('routes')
-    .select('slug')
+    .select('slug, chapter_id')
     .eq('id', routeId)
     .maybeSingle()
-  const routeSlug = (route as { slug: string } | null)?.slug
-  if (!routeSlug) return null
+  const { slug: routeSlug, chapter_id: chapterId } =
+    (route as { slug: string; chapter_id: string | null } | null) ?? {}
+  if (!routeSlug || !chapterId) return null
 
-  const { data: event } = await supabase
-    .from('events')
-    .select('start_time, start_location, start_offset_km')
-    .eq(
-      'slug',
-      permanentEventSlug(routeSlug, eventDate, direction === 'reversed' ? 'reversed' : 'as_posted')
-    )
-    .maybeSingle()
-  if (!event) return null
+  const row = await findPermanentRide({
+    chapter_id: chapterId,
+    slug: permanentEventSlug(
+      routeSlug,
+      eventDate,
+      direction === 'reversed' ? 'reversed' : 'as_posted'
+    ),
+    event_date: eventDate,
+  })
+  // A ride nobody is on does not lock the start: registering takes it over.
+  if (!row || (await isPermanentRideReclaimable(row))) return null
 
-  const row = event as {
-    start_time: string | null
-    start_location: string | null
-    start_offset_km: number | null
-  }
   return {
     startTime: toHHMM(row.start_time) ?? '08:00',
     startLocation: row.start_location,

@@ -12,6 +12,9 @@ vi.mock('@/lib/supabase-server', () => ({
           return builder
         },
         maybeSingle: async () => ({ data: rows[table] ?? null, error: null }),
+        // Awaiting the builder directly lists rows (the registrations lookup).
+        then: (resolve: (r: { data: unknown; error: null }) => unknown) =>
+          resolve({ data: rows[table] ?? [], error: null }),
       }
       return builder
     },
@@ -58,16 +61,40 @@ describe('getPermanentRouteTrack', () => {
 })
 
 describe('getExistingPermanentRide', () => {
-  it('looks the ride up by the registration slug and returns its start', async () => {
-    rows.routes = { slug: 'lake-loop' }
-    rows.events = { start_time: '08:00:00', start_location: 'Tim Hortons', start_offset_km: 42.3 }
-    const ride = await getExistingPermanentRide('r1', '2027-05-01', 'reversed')
-    expect(ride).toEqual({ startTime: '08:00', startLocation: 'Tim Hortons', startOffsetKm: 42.3 })
+  const ride = {
+    id: 'e1',
+    start_time: '08:00:00',
+    start_location: 'Tim Hortons',
+    start_offset_km: 42.3,
+    direction: 'reversed',
+    created_at: new Date(Date.now() - 60 * 60_000).toISOString(),
+  }
+
+  it('looks the ride up by its unique key and returns its start', async () => {
+    rows.routes = { slug: 'lake-loop', chapter_id: 'c1' }
+    rows.events = ride
+    rows.registrations = [{ status: 'registered' }]
+    expect(await getExistingPermanentRide('r1', '2027-05-01', 'reversed')).toEqual({
+      startTime: '08:00',
+      startLocation: 'Tim Hortons',
+      startOffsetKm: 42.3,
+    })
     expect(eqCalls).toContainEqual(['events', 'slug', 'permanent-lake-loop-2027-05-01-reverse'])
+    expect(eqCalls).toContainEqual(['events', 'chapter_id', 'c1'])
+    expect(eqCalls).toContainEqual(['events', 'event_date', '2027-05-01'])
+  })
+
+  it('returns null for a ride nobody is on, so the form does not lock onto it', async () => {
+    rows.routes = { slug: 'lake-loop', chapter_id: 'c1' }
+    rows.events = ride
+    rows.registrations = [{ status: 'cancelled' }]
+    expect(await getExistingPermanentRide('r1', '2027-05-01', 'reversed')).toBeNull()
+    rows.registrations = []
+    expect(await getExistingPermanentRide('r1', '2027-05-01', 'reversed')).toBeNull()
   })
 
   it('returns null when no ride exists', async () => {
-    rows.routes = { slug: 'lake-loop' }
+    rows.routes = { slug: 'lake-loop', chapter_id: 'c1' }
     expect(await getExistingPermanentRide('r1', '2027-05-01', 'as_posted')).toBeNull()
   })
 

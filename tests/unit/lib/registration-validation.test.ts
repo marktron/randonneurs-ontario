@@ -4,6 +4,7 @@ import {
   isRegistrationRateLimited,
   validateTeamNameLength,
   validateStartLocationLength,
+  validateStartTime,
   type ContactValidationInput,
 } from '@/lib/actions/registration/validation'
 import { resetRateLimitStores } from '@/lib/rate-limit'
@@ -187,5 +188,18 @@ describe('validateStartLocationLength', () => {
   })
   it('rejects 201 characters', () => {
     expect(validateStartLocationLength('s'.repeat(201))).toBe('Start location is too long')
+  })
+})
+
+describe('validateStartTime', () => {
+  it('accepts HH:MM times of day', () => {
+    for (const t of ['00:00', '07:05', '12:30', '23:59']) {
+      expect(validateStartTime(t)).toBeNull()
+    }
+  })
+  it('rejects anything else', () => {
+    for (const t of ['8:00', '08:00:00', '24:00', '12:60', '0800', 'ab:cd', '', ' 08:00']) {
+      expect(validateStartTime(t)).toBe('Please enter a start time as HH:MM')
+    }
   })
 })

@@ -825,4 +825,246 @@ describe('registerForPermanent (real DB)', () => {
       .eq('slug', `permanent-inttest-perm-route-${eventDate}`)
     expect(events).toHaveLength(1)
   })
+
+  // --- Re-claiming a ride nobody is on ---
+
+  const OTTAWA_CHAPTER_ID = '6c44658e-8f0d-4569-9f79-a5f2d1dd6db6'
+  const minutesAgo = (m: number) => new Date(Date.now() - m * 60_000).toISOString()
+  const seedRide = async (eventDate: string, fields: Record<string, unknown> = {}) =>
+    (await checked(
+      supabase
+        .from('events')
+        .insert({
+          slug: `permanent-inttest-perm-route-${eventDate}`,
+          name: 'IntTest Perm Route',
+          chapter_id: TORONTO_CHAPTER_ID,
+          route_id: IDS.route,
+          event_type: 'permanent',
+          distance_km: 200,
+          event_date: eventDate,
+          status: 'scheduled',
+          start_time: '07:00',
+          ...fields,
+        })
+        .select('id')
+        .single(),
+      'seed ride'
+    ))!.id as string
+  const seedControls = async (eventId: string) =>
+    (await checked(
+      supabase
+        .from('event_controls')
+        .insert([
+          { event_id: eventId, position: 1, name: 'Start', distance_km: 0 },
+          { event_id: eventId, position: 2, name: 'Finish', distance_km: 200 },
+        ])
+        .select('id'),
+      'seed controls'
+    ))!.map((c: { id: string }) => c.id)
+  const controlCount = async (eventId: string) =>
+    (
+      await supabase
+        .from('event_controls')
+        .select('id', { count: 'exact', head: true })
+        .eq('event_id', eventId)
+    ).count
+
+  it('a rider who cancelled can re-register at a different time', async () => {
+    member()
+    const eventDate = daysFromNow(51)
+    const { registerForPermanent } = await import('@/lib/actions/register')
+    expect(
+      (
+        await registerForPermanent(
+          buildPermanentRegistrationData({ routeId: IDS.route, eventDate, startTime: '07:00' })
+        )
+      ).success
+    ).toBe(true)
+    const event = await eventBySlug(`permanent-inttest-perm-route-${eventDate}`)
+    await checked(
+      supabase
+        .from('registrations')
+        .update({ status: 'cancelled', cancelled_at: new Date().toISOString() })
+        .eq('event_id', event!.id),
+      'cancel registration'
+    )
+
+    const again = await registerForPermanent(
+      buildPermanentRegistrationData({ routeId: IDS.route, eventDate, startTime: '08:00' })
+    )
+    expect(again.success).toBe(true)
+    expect(await eventBySlug(`permanent-inttest-perm-route-${eventDate}`)).toMatchObject({
+      id: event!.id,
+      start_time: '08:00:00',
+    })
+  })
+
+  it('takes over a ride nobody registered for once it is over 15 minutes old', async () => {
+    member()
+    const eventDate = daysFromNow(52)
+    const eventId = await seedRide(eventDate, { created_at: minutesAgo(20) })
+    const { registerForPermanent } = await import('@/lib/actions/register')
+    const result = await registerForPermanent(
+      buildPermanentRegistrationData({ routeId: IDS.route, eventDate, startTime: '08:00' })
+    )
+    expect(result.success).toBe(true)
+    expect(await eventBySlug(`permanent-inttest-perm-route-${eventDate}`)).toMatchObject({
+      id: eventId,
+      start_time: '08:00:00',
+    })
+  })
+
+  it('does not take over a ride created moments ago (its first rider may be mid-registration)', async () => {
+    member()
+    const eventDate = daysFromNow(53)
+    await seedRide(eventDate)
+    const { registerForPermanent } = await import('@/lib/actions/register')
+    const result = await registerForPermanent(
+      buildPermanentRegistrationData({ routeId: IDS.route, eventDate, startTime: '08:00' })
+    )
+    expect(result.success).toBe(false)
+    expect(result.error).toMatch(/^A ride on this route is already registered for this date/)
+    expect(await eventBySlug(`permanent-inttest-perm-route-${eventDate}`)).toMatchObject({
+      start_time: '07:00:00',
+    })
+  })
+
+  it('a takeover that moves the start deletes saved controls nobody has checked in at', async () => {
+    member()
+    const eventDate = daysFromNow(54)
+    const eventId = await seedRide(eventDate, { start_time: '08:00', created_at: minutesAgo(20) })
+    await seedControls(eventId)
+    const { registerForPermanent } = await import('@/lib/actions/register')
+    const result = await registerForPermanent(
+      buildPermanentRegistrationData({
+        routeId: IDS.route,
+        eventDate,
+        startOffsetKm: 5,
+        startLocation: 'Tim Hortons',
+      })
+    )
+    expect(result.success).toBe(true)
+    expect(await eventBySlug(`permanent-inttest-perm-route-${eventDate}`)).toMatchObject({
+      id: eventId,
+      start_offset_km: 5,
+      start_location: 'Tim Hortons',
+    })
+    expect(await controlCount(eventId)).toBe(0)
+  })
+
+  it('refuses a takeover that moves the start when a control has a check-in', async () => {
+    member()
+    const eventDate = daysFromNow(55)
+    const eventId = await seedRide(eventDate, { start_time: '08:00' })
+    const [controlId] = await seedControls(eventId)
+    const reg = await checked(
+      supabase
+        .from('registrations')
+        .insert({ event_id: eventId, rider_id: IDS.rider, status: 'cancelled' })
+        .select('id')
+        .single(),
+      'seed cancelled registration'
+    )
+    await checked(
+      supabase.from('control_checkins').insert({
+        control_id: controlId,
+        registration_id: (reg as { id: string }).id,
+        checked_in_at: new Date().toISOString(),
+        method: 'manual',
+      }),
+      'seed check-in'
+    )
+    const { registerForPermanent } = await import('@/lib/actions/register')
+    const result = await registerForPermanent(
+      buildPermanentRegistrationData({
+        routeId: IDS.route,
+        eventDate,
+        startOffsetKm: 5,
+        startLocation: 'Tim Hortons',
+        email: 'new-rider@example.com',
+        firstName: 'Another',
+        lastName: 'Person',
+      })
+    )
+    expect(result.success).toBe(false)
+    expect(result.error).toMatch(/^A ride on this route is already registered for this date/)
+    expect(await eventBySlug(`permanent-inttest-perm-route-${eventDate}`)).toMatchObject({
+      start_offset_km: null,
+    })
+    expect(await controlCount(eventId)).toBe(2)
+  })
+
+  it('a takeover that changes only the time keeps saved controls', async () => {
+    member()
+    const eventDate = daysFromNow(56)
+    const eventId = await seedRide(eventDate, { created_at: minutesAgo(20) })
+    await seedControls(eventId)
+    const { registerForPermanent } = await import('@/lib/actions/register')
+    const result = await registerForPermanent(
+      buildPermanentRegistrationData({ routeId: IDS.route, eventDate, startTime: '08:00' })
+    )
+    expect(result.success).toBe(true)
+    expect(await eventBySlug(`permanent-inttest-perm-route-${eventDate}`)).toMatchObject({
+      start_time: '08:00:00',
+    })
+    expect(await controlCount(eventId)).toBe(2)
+  })
+
+  it('getExistingPermanentRide hides a ride nobody is on and shows a live one', async () => {
+    member()
+    const { getExistingPermanentRide } = await import('@/lib/actions/permanent-start')
+    const abandonedDate = daysFromNow(57)
+    await seedRide(abandonedDate, { created_at: minutesAgo(20) })
+    expect(await getExistingPermanentRide(IDS.route, abandonedDate, 'as_posted')).toBeNull()
+
+    const liveDate = daysFromNow(58)
+    const { registerForPermanent } = await import('@/lib/actions/register')
+    await registerForPermanent(
+      buildPermanentRegistrationData({
+        routeId: IDS.route,
+        eventDate: liveDate,
+        startOffsetKm: 5,
+        startLocation: 'Tim Hortons',
+      })
+    )
+    expect(await getExistingPermanentRide(IDS.route, liveDate, 'as_posted')).toEqual({
+      startTime: '08:00',
+      startLocation: 'Tim Hortons',
+      startOffsetKm: 5,
+    })
+  })
+
+  it('ignores an event with the same slug in another chapter', async () => {
+    member()
+    const eventDate = daysFromNow(59)
+    const otherId = await seedRide(eventDate, {
+      chapter_id: OTTAWA_CHAPTER_ID,
+      start_time: '06:00',
+    })
+    const { registerForPermanent } = await import('@/lib/actions/register')
+    const result = await registerForPermanent(
+      buildPermanentRegistrationData({ routeId: IDS.route, eventDate })
+    )
+    expect(result.success).toBe(true)
+    const { data: own } = await supabase
+      .from('events')
+      .select('id, start_time')
+      .eq('slug', `permanent-inttest-perm-route-${eventDate}`)
+      .eq('chapter_id', TORONTO_CHAPTER_ID)
+      .single()
+    expect(own!.id).not.toBe(otherId)
+    expect(own!.start_time).toBe('08:00:00')
+  })
+
+  it('rejects a start time that is not HH:MM', async () => {
+    const { registerForPermanent } = await import('@/lib/actions/register')
+    const result = await registerForPermanent(
+      buildPermanentRegistrationData({
+        routeId: IDS.route,
+        eventDate: daysFromNow(60),
+        startTime: '8:00',
+      })
+    )
+    expect(result).toMatchObject({ success: false, error: 'Please enter a start time as HH:MM' })
+  })
 })

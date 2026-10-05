@@ -47,6 +47,11 @@ export interface StoredRideStart {
 
 const offsetTenths = (km: number | null) => (km == null ? null : Math.round(Number(km) * 10))
 
+/** Whether two start offsets name the same point (to 0.1 km; null is the posted start). */
+export function sameStartOffset(a: number | null, b: number | null): boolean {
+  return offsetTenths(a) === offsetTenths(b)
+}
+
 function formatClock(hhmm: string | null): string {
   if (!hhmm) return 'an unset time'
   const [h, m] = hhmm.split(':')
@@ -64,8 +69,7 @@ export function permanentStartMismatch(
   requested: { startTime: string; offsetKm: number | null }
 ): string | null {
   const sameTime = toHHMM(existing.start_time) === toHHMM(requested.startTime)
-  const sameOffset = offsetTenths(existing.start_offset_km) === offsetTenths(requested.offsetKm)
-  if (sameTime && sameOffset) return null
+  if (sameTime && sameStartOffset(existing.start_offset_km, requested.offsetKm)) return null
 
   const from =
     existing.start_offset_km == null
