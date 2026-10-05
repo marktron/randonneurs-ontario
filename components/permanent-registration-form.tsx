@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useRef, useState, useMemo } from 'react'
 import { ChevronDownIcon } from 'lucide-react'
 import { format, addDays, isBefore } from 'date-fns'
 import { Input } from '@/components/ui/input'
@@ -35,7 +35,7 @@ import {
 } from '@/lib/actions/permanent-start'
 import type { ActiveRoute } from '@/lib/data/routes'
 import type { RouteControl, RouteTrack } from '@/lib/routeTrack'
-import { RouteStartPicker } from '@/components/route-start-picker'
+import { RouteStartDialog } from '@/components/route-start-dialog'
 import { formatClock } from '@/lib/permanent-start'
 import { HoneypotField } from '@/components/honeypot-field'
 import { useRegistrationForm } from '@/hooks/use-registration-form'
@@ -94,7 +94,11 @@ export function PermanentRegistrationForm({ routes }: PermanentRegistrationFormP
   // True while the place name is a control's name the rider has not edited.
   const [startLocationSuggested, setStartLocationSuggested] = useState(false)
   const [startOffsetKm, setStartOffsetKm] = useState<number | null>(null)
-  const [alternateStartOpen, setAlternateStartOpen] = useState(false)
+  const [startDialogOpen, setStartDialogOpen] = useState(false)
+  // Focus returns here when the start dialog closes: "Change" once a start is
+  // chosen (the opening button is gone by then), else the opening button.
+  const startButtonRef = useRef<HTMLButtonElement>(null)
+  const changeStartButtonRef = useRef<HTMLButtonElement>(null)
   const [direction, setDirection] = useState<'as_posted' | 'reversed'>('as_posted')
   const [notes, setNotes] = useState('')
 
@@ -187,7 +191,7 @@ export function PermanentRegistrationForm({ routes }: PermanentRegistrationFormP
       : startLocation.trim()
 
   function clearAlternateStart() {
-    setAlternateStartOpen(false)
+    setStartDialogOpen(false)
     setStartOffsetKm(null)
     setStartLocation('')
     setStartLocationSuggested(false)
@@ -409,69 +413,86 @@ export function PermanentRegistrationForm({ routes }: PermanentRegistrationFormP
             />
           </div>
 
-          {/* Alternate start: loops only, and not when joining an existing ride */}
+          {/* Alternate start: loops only, and not when joining an existing ride.
+              The map itself is only in the dialog. */}
           {track && !startLocked && (
             <div className="space-y-3">
-              {!alternateStartOpen ? (
+              {startOffsetKm == null ? (
                 <Button
+                  ref={startButtonRef}
                   type="button"
                   variant="outline"
                   className="w-full h-12 sm:h-9"
                   disabled={isPending}
-                  onClick={() => setAlternateStartOpen(true)}
+                  onClick={() => setStartDialogOpen(true)}
                 >
                   Start somewhere else on the route
                 </Button>
               ) : (
                 <>
-                  <div className="flex items-center justify-between gap-2">
-                    <Label>Start somewhere else on the route</Label>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      disabled={isPending}
-                      onClick={clearAlternateStart}
-                    >
-                      Use the posted start
-                    </Button>
+                  <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+                    <p className="text-sm font-medium tabular-nums">
+                      Starts {startOffsetKm.toFixed(1)} km into the posted route
+                    </p>
+                    <div className="flex gap-1">
+                      <Button
+                        ref={changeStartButtonRef}
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-11 sm:h-8"
+                        disabled={isPending}
+                        onClick={() => setStartDialogOpen(true)}
+                      >
+                        Change
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-11 sm:h-8"
+                        disabled={isPending}
+                        onClick={clearAlternateStart}
+                      >
+                        Use the posted start
+                      </Button>
+                    </div>
                   </div>
-                  <RouteStartPicker
-                    track={track}
-                    valueKm={startOffsetKm}
-                    onChange={setStartOffsetKm}
-                    controls={routeControls}
-                    onPickControl={suggestStartLocation}
-                    disabled={isPending}
-                  />
-                  {startOffsetKm != null && (
-                    <>
-                      <p className="text-sm font-medium tabular-nums">
-                        Starts {startOffsetKm.toFixed(1)} km into the posted route
-                      </p>
-                      <div className="space-y-2">
-                        <Label htmlFor="location">Name of your start location</Label>
-                        <Input
-                          id="location"
-                          type="text"
-                          placeholder="e.g., Tim Hortons, 123 Main St, Uxbridge"
-                          value={startLocation}
-                          maxLength={200}
-                          onChange={(e) => {
-                            setStartLocation(e.target.value)
-                            setStartLocationSuggested(false)
-                          }}
-                          disabled={isPending}
-                          autoComplete="off"
-                        />
-                        <p className="text-xs text-muted-foreground">
-                          This becomes the first and last control on your card.
-                        </p>
-                      </div>
-                    </>
-                  )}
+                  <div className="space-y-2">
+                    <Label htmlFor="location">Name of your start location</Label>
+                    <Input
+                      id="location"
+                      type="text"
+                      placeholder="e.g., Tim Hortons, 123 Main St, Uxbridge"
+                      value={startLocation}
+                      maxLength={200}
+                      onChange={(e) => {
+                        setStartLocation(e.target.value)
+                        setStartLocationSuggested(false)
+                      }}
+                      disabled={isPending}
+                      autoComplete="off"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      This becomes the first and last control on your card.
+                    </p>
+                  </div>
                 </>
               )}
+              <RouteStartDialog
+                open={startDialogOpen}
+                onOpenChange={setStartDialogOpen}
+                track={track}
+                valueKm={startOffsetKm}
+                onChange={setStartOffsetKm}
+                controls={routeControls}
+                onPickControl={suggestStartLocation}
+                disabled={isPending}
+                onCloseAutoFocus={(e) => {
+                  e.preventDefault()
+                  ;(startOffsetKm == null ? startButtonRef : changeStartButtonRef).current?.focus()
+                }}
+              />
             </div>
           )}
 

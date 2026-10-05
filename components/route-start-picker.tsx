@@ -39,11 +39,11 @@ const NO_CONTROLS: RouteControl[] = []
 const START_DOT_RADIUS = 6
 const START_DOT_RING = 2
 
-// Flag marker geometry, in px within a square icon that is also the tap area.
-// The pole's base (the anchor) sits on the control; the pennant flies up and
-// to the right so the route line stays visible underneath.
-const FLAG_BOX = 40
-const FLAG_BASE: [number, number] = [14, 33]
+// Flag marker geometry, in px within a square icon that is also the 44 px tap
+// area. The pole's base (the anchor) sits on the control; the pennant flies up
+// and to the right so the route line stays visible underneath.
+const FLAG_BOX = 44
+const FLAG_BASE: [number, number] = [15, 36]
 const POLE = 24
 const PENNANT = { width: 16, top: POLE, bottom: POLE - 10.5 }
 
@@ -155,12 +155,15 @@ export function RouteStartPicker({
   useEffect(() => {
     if (!containerRef.current) return
     let cancelled = false
+    let resizeObserver: ResizeObserver | null = null
 
     ;(async () => {
       const L = await import('leaflet')
       if (cancelled || !containerRef.current) return
 
-      const map = L.map(containerRef.current, { attributionControl: true })
+      // Quarter zoom steps let the route fill a tall phone map; whole steps
+      // often leave it at half the width available.
+      const map = L.map(containerRef.current, { attributionControl: true, zoomSnap: 0.25 })
       mapRef.current = map
       L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
@@ -211,13 +214,31 @@ export function RouteStartPicker({
           .addTo(map),
       }))
 
-      map.fitBounds(line.getBounds(), { padding: [16, 16] })
+      // The map may be created while its dialog is still opening, so Leaflet
+      // re-measures whenever the container's size changes, and the route is
+      // fitted once the container first has a size.
+      const container = containerRef.current
+      let fitted = false
+      const fitOnceSized = () => {
+        if (fitted || container.clientWidth === 0 || container.clientHeight === 0) return
+        map.fitBounds(line.getBounds(), { padding: [16, 16] })
+        fitted = true
+      }
+      fitOnceSized()
+      if (typeof ResizeObserver !== 'undefined') {
+        resizeObserver = new ResizeObserver(() => {
+          map.invalidateSize()
+          fitOnceSized()
+        })
+        resizeObserver.observe(container)
+      }
       map.on('click', (e) => onTap(e.latlng.lat, e.latlng.lng))
       setReady(true)
     })()
 
     return () => {
       cancelled = true
+      resizeObserver?.disconnect()
       mapRef.current?.remove()
       mapRef.current = null
       pinRef.current = null
@@ -270,96 +291,96 @@ export function RouteStartPicker({
   const maxKm = Math.round(track.totalKm * 10 - 1) / 10
 
   return (
-    <div className="space-y-3">
-      {/* isolate: Leaflet's panes use z-index 400+, which would otherwise sit
-          above the form's popovers (date and route pickers). */}
+    // Fills the height its (flex column) parent gives it: the map takes what is
+    // left after the controls, which scroll on their own if a phone is short.
+    <div className="flex min-h-0 flex-1 flex-col gap-3">
+      {/* isolate keeps Leaflet's pane and control z-indexes (400 to 1000)
+          inside the map, below the rest of the dialog. */}
       <div
         ref={containerRef}
         role="region"
         aria-label="Route map. Tap the route to choose where you will start."
-        className="isolate h-64 w-full rounded-lg border border-border"
+        className="isolate min-h-48 w-full flex-1 rounded-lg border border-border"
       />
-      <p className="text-xs text-muted-foreground">
-        Tap the route where you will start and finish, or tap a flag to start at that control. The
-        white dot is the posted start.
-      </p>
 
-      {choices.length > 1 && (
-        <div className="space-y-2" role="group" aria-label="Which pass of the route?">
-          <p className="text-sm">The route passes this spot more than once. Which pass?</p>
-          <div className="flex flex-wrap gap-2">
-            {choices.map((choice) => (
-              <Button
-                key={choice.offsetKm}
-                type="button"
-                variant={valueKm === choice.offsetKm ? 'default' : 'outline'}
-                className="h-12 sm:h-9 tabular-nums"
-                disabled={disabled}
-                aria-pressed={valueKm === choice.offsetKm}
-                onClick={() => onChange(choice.offsetKm)}
-              >
-                {choice.offsetKm.toFixed(1)} km
-              </Button>
-            ))}
+      <div className="max-h-[40dvh] shrink-0 space-y-3 overflow-y-auto p-1">
+        {choices.length > 1 && (
+          <div className="space-y-2" role="group" aria-label="Which pass of the route?">
+            <p className="text-sm">The route passes this spot more than once. Which pass?</p>
+            <div className="flex flex-wrap gap-2">
+              {choices.map((choice) => (
+                <Button
+                  key={choice.offsetKm}
+                  type="button"
+                  variant={valueKm === choice.offsetKm ? 'default' : 'outline'}
+                  className="h-12 sm:h-9 tabular-nums"
+                  disabled={disabled}
+                  aria-pressed={valueKm === choice.offsetKm}
+                  onClick={() => onChange(choice.offsetKm)}
+                >
+                  {choice.offsetKm.toFixed(1)} km
+                </Button>
+              ))}
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {hint && <p className="text-sm text-muted-foreground">{hint}</p>}
+        {hint && <p className="text-sm text-muted-foreground">{hint}</p>}
 
-      {controlOptions.length > 0 && (
+        {controlOptions.length > 0 && (
+          <div className="space-y-2">
+            <Label htmlFor="start-control">Or start at a control</Label>
+            <select
+              id="start-control"
+              value={selectedControlKey}
+              disabled={disabled}
+              onChange={(e) => {
+                const option = controlOptions.find((o) => o.key === e.target.value)
+                if (option) startAtControl(option.place, option.start, false)
+              }}
+              className="bg-input/30 border-input focus-visible:border-ring focus-visible:ring-ring/50 h-12 sm:h-9 w-full min-w-0 rounded-4xl border px-3 text-base md:text-sm tabular-nums outline-none transition-colors focus-visible:ring-[3px] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <option value="" disabled>
+                Choose a control
+              </option>
+              {controlOptions.map(({ key, place, start }) => (
+                <option key={key} value={key}>
+                  {place.name} ({km(start.offsetKm)})
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
         <div className="space-y-2">
-          <Label htmlFor="start-control">Or start at a control</Label>
-          <select
-            id="start-control"
-            value={selectedControlKey}
+          <Label htmlFor="start-offset-km">Or enter the distance into the posted route (km)</Label>
+          <Input
+            id="start-offset-km"
+            type="number"
+            inputMode="decimal"
+            min={0.1}
+            max={maxKm}
+            step={0.1}
+            className="tabular-nums"
+            value={kmText}
             disabled={disabled}
             onChange={(e) => {
-              const option = controlOptions.find((o) => o.key === e.target.value)
-              if (option) startAtControl(option.place, option.start, false)
+              const text = e.target.value
+              const next =
+                text === '' ? null : (canonicalStart(track, Number(text))?.offsetKm ?? null)
+              setChoices([])
+              setHint(null)
+              setKmText(text)
+              setKmTextFor(next)
+              onChange(next)
             }}
-            className="bg-input/30 border-input focus-visible:border-ring focus-visible:ring-ring/50 h-12 sm:h-9 w-full min-w-0 rounded-4xl border px-3 text-base md:text-sm tabular-nums outline-none transition-colors focus-visible:ring-[3px] disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <option value="" disabled>
-              Choose a control
-            </option>
-            {controlOptions.map(({ key, place, start }) => (
-              <option key={key} value={key}>
-                {place.name} ({km(start.offsetKm)})
-              </option>
-            ))}
-          </select>
+            onBlur={() => setKmText(valueKm == null ? '' : String(valueKm))}
+          />
+          <p className="text-xs text-muted-foreground">
+            Measured along the route as posted, even if you ride it reversed. Between 0.1 and{' '}
+            {maxKm.toFixed(1)} km.
+          </p>
         </div>
-      )}
-
-      <div className="space-y-2">
-        <Label htmlFor="start-offset-km">Or enter the distance into the posted route (km)</Label>
-        <Input
-          id="start-offset-km"
-          type="number"
-          inputMode="decimal"
-          min={0.1}
-          max={maxKm}
-          step={0.1}
-          className="tabular-nums"
-          value={kmText}
-          disabled={disabled}
-          onChange={(e) => {
-            const text = e.target.value
-            const next =
-              text === '' ? null : (canonicalStart(track, Number(text))?.offsetKm ?? null)
-            setChoices([])
-            setHint(null)
-            setKmText(text)
-            setKmTextFor(next)
-            onChange(next)
-          }}
-          onBlur={() => setKmText(valueKm == null ? '' : String(valueKm))}
-        />
-        <p className="text-xs text-muted-foreground">
-          Measured along the route as posted, even if you ride it reversed. Between 0.1 and{' '}
-          {maxKm.toFixed(1)} km.
-        </p>
       </div>
     </div>
   )

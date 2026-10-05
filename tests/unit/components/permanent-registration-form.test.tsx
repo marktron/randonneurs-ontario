@@ -220,8 +220,36 @@ describe('PermanentRegistrationForm', () => {
     await user.click(screen.getByRole('button', { name: /schedule permanent/i }))
   }
 
+  /** Opens the start dialog from the form ("Start somewhere else" or "Change"). */
+  async function openStartDialog(user: User) {
+    const opener =
+      screen.queryByRole('button', { name: /^change/i }) ??
+      (await screen.findByRole('button', { name: /start somewhere else/i }))
+    await user.click(opener)
+    return screen.findByRole('dialog', { name: /choose where you start/i })
+  }
+
+  /** Clicks one of the mocked picker's buttons, inside the open dialog. */
+  async function pick(user: User, button: string) {
+    await user.click(screen.getByRole('button', { name: button }))
+  }
+
+  async function done(user: User) {
+    await user.click(screen.getByRole('button', { name: 'Done' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+  }
+
+  /** Opens the dialog, makes one pick and closes it with Done. */
+  async function chooseStart(user: User, button: string) {
+    await openStartDialog(user)
+    await pick(user, button)
+    await done(user)
+  }
+
+  const nameField = () => screen.getByLabelText(/name of your start location/i)
+
   describe('alternate start', () => {
-    it('hides the picker when the route has no usable track', async () => {
+    it('hides the start option when the route has no usable track', async () => {
       const user = userEvent.setup()
       render(<PermanentRegistrationForm routes={mockRoutes} />)
       await selectRoute(user, mockRoutes[0])
@@ -229,11 +257,10 @@ describe('PermanentRegistrationForm', () => {
       expect(
         screen.queryByRole('button', { name: /start somewhere else/i })
       ).not.toBeInTheDocument()
-      expect(screen.queryByTestId('route-start-picker')).not.toBeInTheDocument()
       expect(screen.queryByLabelText(/start location/i)).not.toBeInTheDocument()
     })
 
-    it('hides the picker for a point-to-point route', async () => {
+    it('hides the start option for a point-to-point route', async () => {
       const user = userEvent.setup()
       mockGetPermanentRouteTrack.mockResolvedValue({
         available: true,
@@ -245,21 +272,82 @@ describe('PermanentRegistrationForm', () => {
       expect(
         screen.queryByRole('button', { name: /start somewhere else/i })
       ).not.toBeInTheDocument()
-      expect(screen.queryByTestId('route-start-picker')).not.toBeInTheDocument()
     })
 
-    it('shows the picker for a loop and submits the offset and place name', async () => {
+    it('keeps the map out of the form until the rider opens the dialog', async () => {
       const user = userEvent.setup()
       mockGetPermanentRouteTrack.mockResolvedValue({ available: true, track: loopTrack })
       render(<PermanentRegistrationForm routes={mockRoutes} />)
       await selectRoute(user, mockRoutes[0])
-      await user.click(await screen.findByRole('button', { name: /start somewhere else/i }))
-      await user.click(screen.getByRole('button', { name: 'Drop pin' }))
+      await screen.findByRole('button', { name: /start somewhere else/i })
+      expect(screen.queryByTestId('route-start-picker')).not.toBeInTheDocument()
+      const dialog = await openStartDialog(user)
+      expect(dialog).toContainElement(screen.getByTestId('route-start-picker'))
+    })
+
+    it('shows the chosen start, Change and the name field after Done', async () => {
+      const user = userEvent.setup()
+      mockGetPermanentRouteTrack.mockResolvedValue({ available: true, track: loopTrack })
+      render(<PermanentRegistrationForm routes={mockRoutes} />)
+      await selectRoute(user, mockRoutes[0])
+      await chooseStart(user, 'Drop pin')
+      expect(screen.queryByTestId('route-start-picker')).not.toBeInTheDocument()
       expect(screen.getByText('Starts 42.3 km into the posted route')).toBeInTheDocument()
-      await user.type(
-        screen.getByLabelText(/name of your start location/i),
-        'Tim Hortons, Uxbridge'
+      expect(screen.getByRole('button', { name: /^change/i })).toBeInTheDocument()
+      expect(
+        screen.queryByRole('button', { name: /start somewhere else/i })
+      ).not.toBeInTheDocument()
+      expect(nameField()).toHaveValue('')
+    })
+
+    it('reopens on Change with the same start', async () => {
+      const user = userEvent.setup()
+      mockGetPermanentRouteTrack.mockResolvedValue({ available: true, track: loopTrack })
+      render(<PermanentRegistrationForm routes={mockRoutes} />)
+      await selectRoute(user, mockRoutes[0])
+      await chooseStart(user, 'Drop pin')
+      await openStartDialog(user)
+      expect(screen.getByTestId('picker-value')).toHaveTextContent('42.3')
+    })
+
+    it('goes back to the start button when closed with nothing chosen', async () => {
+      const user = userEvent.setup()
+      mockGetPermanentRouteTrack.mockResolvedValue({ available: true, track: loopTrack })
+      render(<PermanentRegistrationForm routes={mockRoutes} />)
+      await selectRoute(user, mockRoutes[0])
+      await openStartDialog(user)
+      await done(user)
+      expect(screen.getByRole('button', { name: /start somewhere else/i })).toBeInTheDocument()
+      expect(screen.queryByLabelText(/name of your start location/i)).not.toBeInTheDocument()
+
+      // Escape closes it the same way.
+      await openStartDialog(user)
+      await user.keyboard('{Escape}')
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+      expect(screen.getByRole('button', { name: /start somewhere else/i })).toBeInTheDocument()
+    })
+
+    it('returns focus to the button that now opens the dialog', async () => {
+      const user = userEvent.setup()
+      mockGetPermanentRouteTrack.mockResolvedValue({ available: true, track: loopTrack })
+      render(<PermanentRegistrationForm routes={mockRoutes} />)
+      await selectRoute(user, mockRoutes[0])
+      await openStartDialog(user)
+      await done(user)
+      await waitFor(() =>
+        expect(screen.getByRole('button', { name: /start somewhere else/i })).toHaveFocus()
       )
+      await chooseStart(user, 'Drop pin')
+      await waitFor(() => expect(screen.getByRole('button', { name: /^change/i })).toHaveFocus())
+    })
+
+    it('submits the offset and place name', async () => {
+      const user = userEvent.setup()
+      mockGetPermanentRouteTrack.mockResolvedValue({ available: true, track: loopTrack })
+      render(<PermanentRegistrationForm routes={mockRoutes} />)
+      await selectRoute(user, mockRoutes[0])
+      await chooseStart(user, 'Drop pin')
+      await user.type(nameField(), 'Tim Hortons, Uxbridge')
       await selectDate(user)
       await fillRiderFieldsAndSubmit(user)
       await waitFor(() =>
@@ -269,27 +357,28 @@ describe('PermanentRegistrationForm', () => {
       )
     })
 
-    it('requires a place name once a pin is set', async () => {
+    it('requires a place name once a start is chosen', async () => {
       const user = userEvent.setup()
       mockGetPermanentRouteTrack.mockResolvedValue({ available: true, track: loopTrack })
       render(<PermanentRegistrationForm routes={mockRoutes} />)
       await selectRoute(user, mockRoutes[0])
-      await user.click(await screen.findByRole('button', { name: /start somewhere else/i }))
-      await user.click(screen.getByRole('button', { name: 'Drop pin' }))
+      await chooseStart(user, 'Drop pin')
       await selectDate(user)
       await fillRiderFieldsAndSubmit(user)
       expect(await screen.findByText('Please name your start location')).toBeInTheDocument()
       expect(mockRegisterForPermanent).not.toHaveBeenCalled()
     })
 
-    it('sends no start when the pin is cleared', async () => {
+    it('sends no start when the pin is cleared in the dialog', async () => {
       const user = userEvent.setup()
       mockGetPermanentRouteTrack.mockResolvedValue({ available: true, track: loopTrack })
       render(<PermanentRegistrationForm routes={mockRoutes} />)
       await selectRoute(user, mockRoutes[0])
-      await user.click(await screen.findByRole('button', { name: /start somewhere else/i }))
-      await user.click(screen.getByRole('button', { name: 'Drop pin' }))
-      await user.click(screen.getByRole('button', { name: 'Clear pin' }))
+      await openStartDialog(user)
+      await pick(user, 'Drop pin')
+      await pick(user, 'Clear pin')
+      await done(user)
+      expect(screen.getByRole('button', { name: /start somewhere else/i })).toBeInTheDocument()
       await selectDate(user)
       await fillRiderFieldsAndSubmit(user)
       await waitFor(() => expect(mockRegisterForPermanent).toHaveBeenCalled())
@@ -303,11 +392,11 @@ describe('PermanentRegistrationForm', () => {
       mockGetPermanentRouteTrack.mockResolvedValue({ available: true, track: loopTrack })
       render(<PermanentRegistrationForm routes={mockRoutes} />)
       await selectRoute(user, mockRoutes[0])
-      await user.click(await screen.findByRole('button', { name: /start somewhere else/i }))
-      await user.click(screen.getByRole('button', { name: 'Drop pin' }))
-      await user.type(screen.getByLabelText(/name of your start location/i), 'Tim Hortons')
+      await chooseStart(user, 'Drop pin')
+      await user.type(nameField(), 'Tim Hortons')
       await user.click(screen.getByRole('button', { name: /use the posted start/i }))
-      expect(screen.queryByTestId('route-start-picker')).not.toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /start somewhere else/i })).toBeInTheDocument()
+      expect(screen.queryByLabelText(/name of your start location/i)).not.toBeInTheDocument()
       await selectDate(user)
       await fillRiderFieldsAndSubmit(user)
       await waitFor(() => expect(mockRegisterForPermanent).toHaveBeenCalled())
@@ -316,28 +405,31 @@ describe('PermanentRegistrationForm', () => {
       expect(payload.startLocation).toBe('')
     })
 
-    it('clears the pin and place name when the route changes', async () => {
+    it('clears the start and place name when the route changes', async () => {
       const user = userEvent.setup()
       mockGetPermanentRouteTrack.mockResolvedValue({ available: true, track: loopTrack })
       render(<PermanentRegistrationForm routes={mockRoutes} />)
       await selectRoute(user, mockRoutes[0])
-      await user.click(await screen.findByRole('button', { name: /start somewhere else/i }))
-      await user.click(screen.getByRole('button', { name: 'Drop pin' }))
-      await user.type(screen.getByLabelText(/name of your start location/i), 'Tim Hortons')
+      await chooseStart(user, 'Drop pin')
+      await user.type(nameField(), 'Tim Hortons')
       await selectRoute(user, mockRoutes[1])
       await waitFor(() =>
         expect(mockGetPermanentRouteTrack).toHaveBeenLastCalledWith(mockRoutes[1].id)
       )
-      await user.click(await screen.findByRole('button', { name: /start somewhere else/i }))
-      expect(screen.getByTestId('picker-value')).toHaveTextContent('none')
+      expect(
+        await screen.findByRole('button', { name: /start somewhere else/i })
+      ).toBeInTheDocument()
       expect(screen.queryByLabelText(/name of your start location/i)).not.toBeInTheDocument()
-      await user.click(screen.getByRole('button', { name: 'Drop pin' }))
-      expect(screen.getByLabelText(/name of your start location/i)).toHaveValue('')
+      await openStartDialog(user)
+      expect(screen.getByTestId('picker-value')).toHaveTextContent('none')
+      await pick(user, 'Drop pin')
+      await done(user)
+      expect(nameField()).toHaveValue('')
     })
   })
 
   describe('starting at a control', () => {
-    async function openPicker(user: User) {
+    async function setUp(user: User) {
       mockGetPermanentRouteTrack.mockResolvedValue({
         available: true,
         track: loopTrack,
@@ -345,23 +437,22 @@ describe('PermanentRegistrationForm', () => {
       })
       render(<PermanentRegistrationForm routes={mockRoutes} />)
       await selectRoute(user, mockRoutes[0])
-      await user.click(await screen.findByRole('button', { name: /start somewhere else/i }))
     }
 
     it("passes the route's controls to the picker", async () => {
       const user = userEvent.setup()
-      await openPicker(user)
+      await setUp(user)
+      await openStartDialog(user)
       expect(screen.getByTestId('picker-controls')).toHaveTextContent('Cafe|Georgetown')
     })
 
     it("submits the control's exact offset and suggests its name", async () => {
       const user = userEvent.setup()
-      await openPicker(user)
-      await user.click(screen.getByRole('button', { name: 'Pick control' }))
+      await setUp(user)
+      await chooseStart(user, 'Pick control')
       expect(screen.getByText('Starts 30.0 km into the posted route')).toBeInTheDocument()
-      const name = screen.getByLabelText(/name of your start location/i)
-      expect(name).toHaveValue('Cafe')
-      expect(name).toBeEnabled()
+      expect(nameField()).toHaveValue('Cafe')
+      expect(nameField()).toBeEnabled()
       await selectDate(user)
       await fillRiderFieldsAndSubmit(user)
       await waitFor(() =>
@@ -373,53 +464,54 @@ describe('PermanentRegistrationForm', () => {
 
     it('never overwrites a name the rider typed', async () => {
       const user = userEvent.setup()
-      await openPicker(user)
-      await user.click(screen.getByRole('button', { name: 'Drop pin' }))
-      await user.type(screen.getByLabelText(/name of your start location/i), 'My sister’s house')
-      await user.click(screen.getByRole('button', { name: 'Pick control' }))
-      expect(screen.getByLabelText(/name of your start location/i)).toHaveValue('My sister’s house')
+      await setUp(user)
+      await chooseStart(user, 'Drop pin')
+      await user.type(nameField(), 'My sister’s house')
+      await chooseStart(user, 'Pick control')
+      expect(nameField()).toHaveValue('My sister’s house')
     })
 
     it('never overwrites a suggestion the rider edited', async () => {
       const user = userEvent.setup()
-      await openPicker(user)
-      await user.click(screen.getByRole('button', { name: 'Pick control' }))
-      await user.type(screen.getByLabelText(/name of your start location/i), ', Uxbridge')
-      await user.click(screen.getByRole('button', { name: 'Pick other control' }))
-      expect(screen.getByLabelText(/name of your start location/i)).toHaveValue('Cafe, Uxbridge')
+      await setUp(user)
+      await chooseStart(user, 'Pick control')
+      await user.type(nameField(), ', Uxbridge')
+      await chooseStart(user, 'Pick other control')
+      expect(nameField()).toHaveValue('Cafe, Uxbridge')
     })
 
     it("replaces an unedited suggestion with the next control's name", async () => {
       const user = userEvent.setup()
-      await openPicker(user)
-      await user.click(screen.getByRole('button', { name: 'Pick control' }))
-      await user.click(screen.getByRole('button', { name: 'Pick other control' }))
-      expect(screen.getByLabelText(/name of your start location/i)).toHaveValue('Georgetown')
+      await setUp(user)
+      await chooseStart(user, 'Pick control')
+      await chooseStart(user, 'Pick other control')
+      expect(nameField()).toHaveValue('Georgetown')
     })
 
     it('leaves the name alone on a plain map tap', async () => {
       const user = userEvent.setup()
-      await openPicker(user)
-      await user.click(screen.getByRole('button', { name: 'Pick control' }))
-      await user.click(screen.getByRole('button', { name: 'Drop pin' }))
+      await setUp(user)
+      await chooseStart(user, 'Pick control')
+      await chooseStart(user, 'Drop pin')
       expect(screen.getByText('Starts 42.3 km into the posted route')).toBeInTheDocument()
-      expect(screen.getByLabelText(/name of your start location/i)).toHaveValue('Cafe')
+      expect(nameField()).toHaveValue('Cafe')
     })
 
-    it('clears the suggestion with the pin when the route changes', async () => {
+    it('clears the suggestion with the start when the route changes', async () => {
       const user = userEvent.setup()
-      await openPicker(user)
-      await user.click(screen.getByRole('button', { name: 'Pick control' }))
+      await setUp(user)
+      await chooseStart(user, 'Pick control')
       await selectRoute(user, mockRoutes[1])
       await waitFor(() =>
         expect(mockGetPermanentRouteTrack).toHaveBeenLastCalledWith(mockRoutes[1].id)
       )
-      await user.click(await screen.findByRole('button', { name: /start somewhere else/i }))
+      await openStartDialog(user)
       expect(screen.getByTestId('picker-value')).toHaveTextContent('none')
-      await user.click(screen.getByRole('button', { name: 'Drop pin' }))
-      expect(screen.getByLabelText(/name of your start location/i)).toHaveValue('')
-      await user.click(screen.getByRole('button', { name: 'Pick other control' }))
-      expect(screen.getByLabelText(/name of your start location/i)).toHaveValue('Georgetown')
+      await pick(user, 'Drop pin')
+      await done(user)
+      expect(nameField()).toHaveValue('')
+      await chooseStart(user, 'Pick other control')
+      expect(nameField()).toHaveValue('Georgetown')
     })
   })
 
