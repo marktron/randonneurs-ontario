@@ -945,7 +945,7 @@ describe('importEventControlsFromRwgps', () => {
     expect(result.data!.map((c) => c.name)).toEqual(['Start', 'Turnaround', 'Finish'])
   })
 
-  it('still imports when RWGPS gives no distance or track (Review Focus 5)', async () => {
+  it('still imports when RWGPS gives no distance or track', async () => {
     setupEvent('Loop', 20, '12345', {
       direction: 'reversed',
       start_offset_km: 5,

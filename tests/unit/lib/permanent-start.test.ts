@@ -3,6 +3,7 @@ import {
   describeRideStartForAdmin,
   permanentEventSlug,
   toHHMM,
+  formatClock,
   permanentStartMismatch,
   formatPermanentStartLocation,
 } from '@/lib/permanent-start'
@@ -62,6 +63,15 @@ describe('permanentEventSlug', () => {
   })
 })
 
+describe('formatClock', () => {
+  it('formats HH:MM or HH:MM:SS as a 12-hour time', () => {
+    expect(formatClock('06:30')).toBe('6:30 AM')
+    expect(formatClock('00:05:00')).toBe('12:05 AM')
+    expect(formatClock('12:00')).toBe('12:00 PM')
+    expect(formatClock('23:45')).toBe('11:45 PM')
+  })
+})
+
 describe('toHHMM', () => {
   it('cuts database TIME values to HH:MM', () => {
     expect(toHHMM('08:00:00')).toBe('08:00')
@@ -87,7 +97,7 @@ describe('permanentStartMismatch', () => {
 
   it('rejects a different time, naming the existing start', () => {
     expect(permanentStartMismatch(existing, { startTime: '09:00', offsetKm: 42.3 })).toBe(
-      'A ride on this route is already registered for this date, starting at 8:00 AM from Tim Hortons, Uxbridge (42.3 km into the route). Join it with the same start, or choose another date.'
+      'A ride on this route is already registered for this date, starting at 8:00 AM from Tim Hortons, Uxbridge (42.3 km into the posted route). Join it with the same start, or choose another date.'
     )
   })
 
@@ -96,7 +106,7 @@ describe('permanentStartMismatch', () => {
     expect(permanentStartMismatch(existing, { startTime: '08:00', offsetKm: null })).not.toBeNull()
   })
 
-  it('lets a rider with no alternate start join a legacy ride (Review Focus 3)', () => {
+  it('lets a rider with no alternate start join a legacy ride', () => {
     const legacy = { ...existing, start_location: 'My driveway', start_offset_km: null }
     expect(permanentStartMismatch(legacy, { startTime: '08:00', offsetKm: null })).toBeNull()
   })
@@ -131,14 +141,14 @@ describe('formatPermanentStartLocation', () => {
         start_offset_km: 42.3,
         direction: 'as_posted',
       })
-    ).toBe('Tim Hortons, Uxbridge (42.3 km into the route)')
+    ).toBe('Tim Hortons, Uxbridge (42.3 km into the posted route)')
     expect(
       formatPermanentStartLocation({
         start_location: 'Tim Hortons, Uxbridge',
         start_offset_km: 42,
         direction: 'reversed',
       })
-    ).toBe('Tim Hortons, Uxbridge (42.0 km into the route), riding the route reversed')
+    ).toBe('Tim Hortons, Uxbridge (42.0 km into the posted route), riding the route reversed')
     expect(
       formatPermanentStartLocation({
         start_location: 'My driveway',

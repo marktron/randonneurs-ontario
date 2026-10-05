@@ -224,18 +224,18 @@ Above those, a grayscale **"New! Try out the digital brevet card"** banner with 
 
 ## Direction and alternate start
 
-A permanent can be ridden reversed, from a start point elsewhere on a loop, or both. The choice is stored on the `events` row, and the control import (admin control-cards form and digital card manager) re-expresses the route's posted controls to match.
+A permanent can be ridden reversed, from a start point elsewhere on a loop, or both. Direction also applies to other event types. The choice is stored on the `events` row, and the control import (admin control-cards form and digital card manager) re-expresses the route's posted controls to match.
 
 ### Stored fields
 
 Four `events` columns hold the ride start (migration `20261004120000_permanent_alternate_start.sql`):
 
-| Column            | Meaning                                                                                                     |
-| ----------------- | ----------------------------------------------------------------------------------------------------------- |
-| `direction`       | `as_posted` (default) or `reversed`. The migration backfilled `reversed` for permanents named `(Reversed)`. |
-| `start_offset_km` | The rider's start, in km along the route as posted, to 0.1 km. Null means the posted start.                 |
-| `start_lat`       | Latitude of the start point. Null together with `start_lng`.                                                |
-| `start_lng`       | Longitude of the start point.                                                                               |
+| Column            | Meaning                                                                                                                                                                             |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `direction`       | `as_posted` (default) or `reversed`. The migration backfilled `reversed` for every event named `(Reversed)`, of any type, because the old import reversed any event with that name. |
+| `start_offset_km` | The rider's start, in km along the route as posted, to 0.1 km. Null means the posted start.                                                                                         |
+| `start_lat`       | Latitude of the start point. Null together with `start_lng`.                                                                                                                        |
+| `start_lng`       | Longitude of the start point.                                                                                                                                                       |
 
 Check constraints keep the set consistent: `direction` is one of the two values, the offset is not negative, latitude and longitude are both set or both null, and an offset requires coordinates. The event name still gets `(Reversed)` appended for display, but nothing reads the name to decide direction. `start_location` holds the place name the rider typed for an alternate start.
 
@@ -243,11 +243,12 @@ The offset is always measured on the route as posted, whatever the direction. Re
 
 ### Choosing a start at registration
 
-Alternate starts are for loops only: the route's first and last track points must be within 500 m of each other (`RouteTrack.isLoop`). On `/register/permanent` the rider opens a map (`components/route-start-picker.tsx`) and either taps the route or types a distance in the "km into the route" field. The rider must also name the start location. Direction is a separate choice and works on any route.
+Alternate starts are for loops only: the route's first and last track points must be within 500 m of each other (`RouteTrack.isLoop`). On `/register/permanent` the rider opens a map (`components/route-start-picker.tsx`) and either taps the route or types a distance in the "distance into the posted route" field. The rider must also name the start location. Direction is a separate choice and works on any route.
 
 - A tap snaps to the nearest point on the route at any distance from the tap. Where the route passes that spot more than once (two points more than 1 km apart along the route, within 150 m of each other, or the track point spacing if that is wider), the rider picks which pass.
 - A distance must be between 0.1 km and 0.1 km short of the route length. A start closer than 0.1 km to the posted start or finish means "start where the route starts" and is stored as no alternate start.
-- The client sends only the distance and the place name. `registerForPermanent` loads the route's track (`loadRouteTrack`, cached for a day) and derives the coordinates from it. It returns an error if the track cannot be loaded, if the route is not a loop, or if no place name was given.
+- The client sends only the distance and the place name. When the registration creates the ride or takes one over, `registerForPermanent` loads the route's track (`loadRouteTrack`, cached for a day) and derives the coordinates from it. It returns an error if the track cannot be loaded, if the route is not a loop, or if no place name was given.
+- Joining a ride someone is already on needs none of that. The server compares the requested start time and offset (to 0.1 km) with the stored ride and either joins it or refuses. It does not load the track or require a place name, so a joiner is not turned away when RWGPS is unreachable or when an admin has cleared the ride's place name.
 - Start time must be `HH:MM` (24-hour). `validateStartTime` rejects anything else, because joining an existing ride compares times in that form.
 
 Route length `T` is the RWGPS track length rounded to 0.1 km, and offsets are rounded to 0.1 km. Start times are compared as `HH:MM`.
@@ -256,15 +257,20 @@ Route length `T` is the RWGPS track length rounded to 0.1 km, and offsets are ro
 
 The `events` slug is `permanent-{route}-{date}`, with `-reverse` added for reversed rides, so there is one ride per route, date and direction. The first registrant sets the start time and start point. A later registrant must match both, or the registration is refused with a message that names the existing start and suggests the same start or another date. The registration form looks the ride up (`getExistingPermanentRide`) and, when one exists, shows its start, fills in and locks the time, and hides the alternate-start picker.
 
-A ride nobody is on can be taken over by the next registrant. This is the rule in `isRideReclaimable` (`lib/actions/registration/permanent-event.ts`): the ride has no active registrations (status `registered` or `incomplete: membership`), and either it has a cancelled registration or it was created more than 15 minutes ago (`RECLAIM_GRACE_MS`). On a takeover the event row takes the new start time, place name and start point. If the start point moved and the ride has saved controls, those controls are deleted so the admin re-imports them for the new start. A takeover is refused, and the registrant gets the usual mismatch message, if any saved control has a check-in. The form's existing-ride lookup returns nothing for a ride that can be taken over, so the form does not lock it.
+A ride nobody is on can be taken over by the next registrant. This is the rule in `isRideReclaimable` (`lib/actions/registration/permanent-event.ts`): the ride has no active registrations (status `registered` or `incomplete: membership`), and either a registration was cancelled after the ride was last written (`cancelled_at` later than the event's `updated_at`), or more than 15 minutes have passed since the ride was last written (`RECLAIM_GRACE_MS`, measured from `updated_at`, else `created_at`). A cancellation with no `cancelled_at`, or one older than the last write, counts only through the 15 minutes. Because a takeover updates the row, it restarts the 15 minutes, which protects the new registrant while they finish registering.
 
-Known limitation: a takeover does not restart the 15-minute grace period. In the few seconds while the rider who took the ride over is still completing registration (rider, membership and registration rows are created after the event row), the ride has no active registrations and is past the grace period, so another rider with a different start could take it over again.
+On a takeover the event row takes the new start time, place name and start point. The update only applies if the row's start time, offset and `updated_at` are still the values that were read; otherwise the registration is compared against whoever wrote it first. If the takeover moves the start point and the ride has saved controls, those controls are deleted so the admin re-imports them for the new start, and the takeover is refused with the usual mismatch message if any of those controls has a check-in. A takeover that changes only the start time leaves saved controls alone. The form's existing-ride lookup returns nothing for a ride that can be taken over, so the form does not lock it.
+
+A rider who pauses in the rider-match dialog has already been matched to the ride. The `needsRiderMatch` response carries the ride's stored start (`pendingData.rideStart`), the form sends it back unchanged, and `completeRegistrationWithRider` refuses with the mismatch message if the ride's start has changed since.
+
+Known limitation: the start is checked a few seconds before the registration row is written (the rider and membership steps run in between). A takeover that lands inside that gap is not caught.
 
 ### Control transform
 
 `transformControlsForRide` in `lib/controlPoints.ts` takes the posted controls, the route length `T`, the direction and the optional start, and returns the controls for the way the ride is ridden. It works in integer tenths of a km. `d` is a control's posted distance and `o` is the start offset.
 
-- Endpoints are snapped first. Control distances arrive rounded to 0.1 km, so `d <= 0.1` becomes 0 and `d >= T - 0.1` becomes `T`. An exact `d === T` test would miss a 204.5 finish on a 204.54 km route.
+- Endpoints are snapped first. Control distances arrive rounded to 0.1 km, so any control with `d <= 0.1` becomes 0 and `d >= T - 0.1` becomes `T`. An exact `d === T` test would miss a 204.5 finish on a 204.54 km route.
+- The first control (lowest distance) also counts as the posted start if it is within 1.0 km of 0, and the last control (highest distance) counts as the posted finish if it is within 1.0 km of `T` (`POSTED_ENDPOINT_TOLERANCE_KM`). They snap to 0 and `T`. A finish placed at a POI often sits a little short of the track end; without this, a finish at 203.9 on a 204.5 km track would become a separate control next to the rider's start, and a reversed ride would start at 0.6 km. Only the first and last controls are eligible, so a control 0.8 km in that is not the first control keeps its distance.
 - No alternate start, as posted: the controls are returned unchanged.
 - No alternate start, reversed: `d' = T - d`, in reverse order.
 - Alternate start, as posted: `d' = (d - o) mod T`.
@@ -296,7 +302,7 @@ Above the control list, the admin control-cards form and the digital card manage
 
 ### Confirmation email
 
-The start line in a permanent's confirmation email comes from `formatPermanentStartLocation`: the place name, the offset in km, and "riding the route reversed" where it applies. With no place name it reads "Start control per route", or "Route finish (riding the route reversed)" for a reversed ride. The same function is used on the direct registration path and when registration is completed after a rider match.
+The start line in a permanent's confirmation email comes from `formatPermanentStartLocation`: the place name, the offset ("{n} km into the posted route"), and "riding the route reversed" where it applies. With no place name it reads "Start control per route", or "Route finish (riding the route reversed)" for a reversed ride. The same function is used on the direct registration path and when registration is completed after a rider match.
 
 ### Public form
 
@@ -433,7 +439,7 @@ All route fetching goes through the **authenticated v1 API** (`https://ridewithg
 The two forms differ in **how** they fetch:
 
 - **Public form** calls the `loadRwgpsControls(rwgpsId)` / `loadRwgpsRoute(rwgpsId, privacyCode)` server actions. It does not reverse or rotate controls. It strips coordinates.
-- **Admin form** calls the `importEventControlsFromRwgps(eventId)` **server action**, which fetches with coordinates (`fetchRwgpsControlsWithCoords`) and applies the event's direction and alternate start server-side (see "Direction and alternate start"). This is the same importer the digital brevet card manager uses, so both produce identical results. Coordinates are kept internally (for save-back to `event_controls`) but never encoded into the print URL.
+- **Admin form** calls the `importEventControlsFromRwgps(eventId)` **server action**, which fetches controls, coordinates, track and length (`fetchRwgpsRouteForImport`) and applies the event's direction and alternate start server-side (see "Direction and alternate start"). This is the same importer the digital brevet card manager uses, so both produce identical results. Coordinates are kept internally (for save-back to `event_controls`) but never encoded into the print URL.
 
 ### Shared controls with the digital brevet card
 

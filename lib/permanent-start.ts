@@ -52,9 +52,9 @@ export function sameStartOffset(a: number | null, b: number | null): boolean {
   return offsetTenths(a) === offsetTenths(b)
 }
 
-function formatClock(hhmm: string | null): string {
-  if (!hhmm) return 'an unset time'
-  const [h, m] = hhmm.split(':')
+/** "06:30" or "06:30:00" as "6:30 AM". */
+export function formatClock(time: string): string {
+  const [h, m] = time.split(':')
   const hour = parseInt(h, 10)
   return `${hour % 12 || 12}:${m} ${hour >= 12 ? 'PM' : 'AM'}`
 }
@@ -66,7 +66,7 @@ function formatClock(hhmm: string | null): string {
  */
 export function permanentStartMismatch(
   existing: StoredRideStart,
-  requested: { startTime: string; offsetKm: number | null }
+  requested: { startTime: string | null; offsetKm: number | null }
 ): string | null {
   const sameTime = toHHMM(existing.start_time) === toHHMM(requested.startTime)
   if (sameTime && sameStartOffset(existing.start_offset_km, requested.offsetKm)) return null
@@ -74,8 +74,8 @@ export function permanentStartMismatch(
   const from =
     existing.start_offset_km == null
       ? 'the posted start'
-      : `${existing.start_location?.trim() || 'a point'} (${Number(existing.start_offset_km).toFixed(1)} km into the route)`
-  return `A ride on this route is already registered for this date, starting at ${formatClock(toHHMM(existing.start_time))} from ${from}. Join it with the same start, or choose another date.`
+      : `${existing.start_location?.trim() || 'a point'} (${Number(existing.start_offset_km).toFixed(1)} km into the posted route)`
+  return `A ride on this route is already registered for this date, starting at ${existing.start_time ? formatClock(existing.start_time) : 'an unset time'} from ${from}. Join it with the same start, or choose another date.`
 }
 
 /** Start line for a permanent's confirmation email, from the stored event. */
@@ -90,6 +90,6 @@ export function formatPermanentStartLocation(
   const position =
     ride.start_offset_km == null
       ? ''
-      : ` (${Number(ride.start_offset_km).toFixed(1)} km into the route)`
+      : ` (${Number(ride.start_offset_km).toFixed(1)} km into the posted route)`
   return `${name}${position}${reversed ? ', riding the route reversed' : ''}`
 }

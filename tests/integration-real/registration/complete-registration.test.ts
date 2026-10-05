@@ -536,7 +536,7 @@ describe('completeRegistrationWithRider (real DB)', () => {
 
     expect(result.success).toBe(true)
     assertEmailPayload(sendEmail, {
-      eventLocation: 'Tim Hortons (5.0 km into the route), riding the route reversed',
+      eventLocation: 'Tim Hortons (5.0 km into the posted route), riding the route reversed',
     })
   })
 })

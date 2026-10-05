@@ -227,6 +227,10 @@ export async function registerForEvent(data: RegistrationData): Promise<Registra
 // Register for a permanent ride. `startOffsetKm` (with `startLocation` as the
 // place name) is the rider's start in km along the route as posted; the server
 // derives the coordinates from the cached track and rejects it on non-loop routes.
+// Joining a ride someone is already on compares only start time and offset.
+// A `needsRiderMatch` result carries `pendingData.rideStart`, which the form
+// echoes to `completeRegistrationWithRider` so it can refuse a ride whose
+// start changed in the meantime.
 export async function registerForPermanent(
   data: PermanentRegistrationData
 ): Promise<RegistrationResult>

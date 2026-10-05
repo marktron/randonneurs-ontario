@@ -8,7 +8,7 @@
  *
  * Neither is rate limited: the registration limiter is keyed by email, which
  * the form does not have yet. The track is cached per route for a day and
- * the ride lookup is a single indexed read.
+ * the ride lookup is a few small indexed reads (route, event, registrations).
  */
 
 import { getSupabaseAdmin } from '@/lib/supabase-server'

@@ -68,12 +68,16 @@ import {
   type FindOrCreateRiderMatchResult,
 } from './registration/rider'
 import { finalizeRegistration } from './registration/finalize'
-import { createOrJoinPermanentEvent } from './registration/permanent-event'
+import { createOrJoinPermanentEvent, type ResolveRideStart } from './registration/permanent-event'
 import type { BaseEmailPayload } from './registration/types'
 import { normalizeBrevetCardType, type BrevetCardType } from '@/lib/brevet-card'
 import { loadRouteTrack } from '@/lib/data/route-track'
 import { canonicalStart } from '@/lib/routeTrack'
-import { permanentEventSlug, formatPermanentStartLocation } from '@/lib/permanent-start'
+import {
+  permanentEventSlug,
+  formatPermanentStartLocation,
+  permanentStartMismatch,
+} from '@/lib/permanent-start'
 
 export interface RegistrationData {
   eventId: string
@@ -96,6 +100,16 @@ export interface RegistrationData {
   brevetCardType?: BrevetCardType
 }
 
+/**
+ * A permanent ride's start as stored when the rider-match dialog opened.
+ * The form echoes it back unchanged so completion can refuse a ride whose
+ * start has changed since.
+ */
+export interface PermanentRideStart {
+  startTime: string | null
+  offsetKm: number | null
+}
+
 export interface RegistrationResult {
   success: boolean
   error?: string
@@ -104,7 +118,7 @@ export interface RegistrationResult {
   /** Potential rider matches for user to select from */
   matchCandidates?: RiderMatchCandidate[]
   /** Original form data to resubmit after selection */
-  pendingData?: RegistrationData
+  pendingData?: RegistrationData & { rideStart?: PermanentRideStart }
   /** Set when membership verification fails */
   membershipError?: 'no-membership' | 'trial-used'
   /**
@@ -426,33 +440,11 @@ export async function registerForPermanent(
     return { success: false, error: 'Route does not have an assigned chapter' }
   }
 
-  // Resolve the alternate start against the route's track. The client sends
-  // only a distance; coordinates always come from the track.
-  let start: { offsetKm: number; lat: number; lng: number } | null = null
-  if (startOffsetKm != null) {
-    const track = route.rwgps_id ? await loadRouteTrack(route.rwgps_id) : null
-    if (!track) {
-      return {
-        success: false,
-        error:
-          'We could not load the route map to place your start. Try again, or register from the posted start.',
-      }
-    }
-    if (!track.isLoop) {
-      return { success: false, error: 'An alternate start is only available on loop routes' }
-    }
-    // Null when the point is the posted start itself: no alternate start.
-    start = canonicalStart(track, startOffsetKm)
-    if (start && !startLocation?.trim()) {
-      return { success: false, error: 'Please name your start location' }
-    }
-  }
-
   // Generate event name and slug (reversed rides get a distinct slug)
   const eventName = direction === 'reversed' ? `${route.name} (Reversed)` : route.name
   const eventSlug = permanentEventSlug(route.slug, eventDate, direction)
 
-  const insertEvent: EventInsert = {
+  const baseEvent: EventInsert = {
     slug: eventSlug,
     name: eventName,
     event_type: 'permanent',
@@ -461,19 +453,54 @@ export async function registerForPermanent(
     chapter_id: route.chapter_id,
     distance_km: route.distance_km || 0,
     event_date: eventDate,
-    start_time: startTime,
     direction: direction === 'reversed' ? 'reversed' : 'as_posted',
-    start_location: start ? startLocation!.trim() : null,
-    start_offset_km: start?.offsetKm ?? null,
-    start_lat: start?.lat ?? null,
-    start_lng: start?.lng ?? null,
   }
 
+  // Place the alternate start on the route's track. Only needed to create a
+  // ride or take one over; joining compares the stored start. The client
+  // sends only a distance; coordinates always come from the track.
+  const resolveStart: ResolveRideStart = async () => {
+    const posted = { start_location: null, start_offset_km: null, start_lat: null, start_lng: null }
+    if (startOffsetKm == null) return { ok: true, start: posted }
+    const track = route.rwgps_id ? await loadRouteTrack(route.rwgps_id) : null
+    if (!track) {
+      return {
+        ok: false,
+        error:
+          'We could not load the route map to place your start. Try again, or register from the posted start.',
+      }
+    }
+    if (!track.isLoop) {
+      return { ok: false, error: 'An alternate start is only available on loop routes' }
+    }
+    // Null when the point is the posted start itself: no alternate start.
+    const start = canonicalStart(track, startOffsetKm)
+    if (!start) return { ok: true, start: posted }
+    const name = startLocation?.trim()
+    if (!name) return { ok: false, error: 'Please name your start location' }
+    return {
+      ok: true,
+      start: {
+        start_location: name,
+        start_offset_km: start.offsetKm,
+        start_lat: start.lat,
+        start_lng: start.lng,
+      },
+    }
+  }
+
+  // An offset under 0.1 km is the posted start, as on the track.
+  const requestedOffsetKm =
+    startOffsetKm != null && Number.isFinite(startOffsetKm) && Math.round(startOffsetKm * 10) >= 1
+      ? startOffsetKm
+      : null
+
   // One ride per route, date and direction: join it only on the same start.
-  const rideResult = await createOrJoinPermanentEvent(insertEvent, {
-    startTime,
-    offsetKm: start?.offsetKm ?? null,
-  })
+  const rideResult = await createOrJoinPermanentEvent(
+    baseEvent,
+    { startTime, offsetKm: requestedOffsetKm },
+    resolveStart
+  )
   if (!rideResult.ok) {
     if (rideResult.cause) {
       return handleSupabaseError(
@@ -517,6 +544,7 @@ export async function registerForPermanent(
           emergencyContactName: data.emergencyContactName,
           emergencyContactPhone: data.emergencyContactPhone,
           brevetCardType: data.brevetCardType,
+          rideStart: { startTime: ride.start_time, offsetKm: ride.start_offset_km },
         },
       }
     }
@@ -587,6 +615,8 @@ export interface CompleteRegistrationData {
   homepageUrl?: string
   /** Paper (default) or digital brevet card. Unrecognised values fall back to paper server-side. */
   brevetCardType?: BrevetCardType
+  /** Echoed from `pendingData` for a permanent; the start the rider agreed to. */
+  rideStart?: PermanentRideStart
 }
 
 /**
@@ -664,6 +694,12 @@ export async function completeRegistrationWithRider(
 
     if (event.status !== 'scheduled') {
       return { success: false, error: 'Registration is not open for this event' }
+    }
+
+    // The ride may have been taken over while the rider was choosing a match.
+    if (event.event_type === 'permanent' && data.rideStart) {
+      const mismatch = permanentStartMismatch(event, data.rideStart)
+      if (mismatch) return { success: false, error: mismatch }
     }
 
     let riderId: string

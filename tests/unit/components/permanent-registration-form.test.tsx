@@ -62,16 +62,18 @@ vi.mock('next/navigation', () => ({
 vi.mock('@/components/rider-match-dialog', () => ({
   RiderMatchDialog: ({
     open,
-    onSelect,
+    onSelectRider,
+    onCreateNew,
   }: {
     open: boolean
-    onSelect: (id: string | null) => void
+    onSelectRider: (id: string) => void
+    onCreateNew: () => void
   }) => {
     if (!open) return null
     return (
       <div data-testid="rider-match-dialog">
-        <button onClick={() => onSelect('rider-1')}>Select Rider</button>
-        <button onClick={() => onSelect(null)}>Create New</button>
+        <button onClick={() => onSelectRider('rider-1')}>Select Rider</button>
+        <button onClick={() => onCreateNew()}>Create New</button>
       </div>
     )
   },
@@ -226,7 +228,7 @@ describe('PermanentRegistrationForm', () => {
       await selectRoute(user, mockRoutes[0])
       await user.click(await screen.findByRole('button', { name: /start somewhere else/i }))
       await user.click(screen.getByRole('button', { name: 'Drop pin' }))
-      expect(screen.getByText('Starts 42.3 km into the route')).toBeInTheDocument()
+      expect(screen.getByText('Starts 42.3 km into the posted route')).toBeInTheDocument()
       await user.type(
         screen.getByLabelText(/name of your start location/i),
         'Tim Hortons, Uxbridge'
@@ -287,7 +289,7 @@ describe('PermanentRegistrationForm', () => {
       expect(payload.startLocation).toBe('')
     })
 
-    it('clears the pin and place name when the route changes (Review Focus 4)', async () => {
+    it('clears the pin and place name when the route changes', async () => {
       const user = userEvent.setup()
       mockGetPermanentRouteTrack.mockResolvedValue({ available: true, track: loopTrack })
       render(<PermanentRegistrationForm routes={mockRoutes} />)
@@ -321,7 +323,7 @@ describe('PermanentRegistrationForm', () => {
       await selectDate(user)
       expect(
         await screen.findByText(
-          /A ride on this route is already registered for this date: 6:30 AM from Tim Hortons, Uxbridge, 42\.3 km into the route/
+          /A ride on this route is already registered for this date: 6:30 AM from Tim Hortons, Uxbridge, 42\.3 km into the posted route/
         )
       ).toBeInTheDocument()
       expect(screen.getByLabelText('Start Time')).toBeDisabled()
@@ -392,6 +394,42 @@ describe('PermanentRegistrationForm', () => {
         startLocation: '',
         direction: 'reversed',
       })
+    })
+  })
+
+  describe('rider match', () => {
+    it("echoes the ride's start from pendingData when completing the registration", async () => {
+      const rideStart = { startTime: '07:00:00', offsetKm: 12.5 }
+      mockRegisterForPermanent.mockResolvedValue({
+        success: false,
+        needsRiderMatch: true,
+        matchCandidates: [
+          {
+            id: 'rider-1',
+            firstName: 'John',
+            lastName: 'Doe',
+            fullName: 'John Doe',
+            firstSeason: 2020,
+            totalRides: 5,
+            obfuscatedEmail: null,
+          },
+        ],
+        pendingData: { eventId: 'event-1', rideStart },
+      })
+      mockCompleteRegistrationWithRider.mockResolvedValue({ success: true })
+
+      const user = userEvent.setup()
+      render(<PermanentRegistrationForm routes={mockRoutes} />)
+      await selectRoute(user, mockRoutes[0])
+      await selectDate(user)
+      await fillRiderFieldsAndSubmit(user)
+      await user.click(await screen.findByRole('button', { name: 'Select Rider' }))
+
+      await waitFor(() =>
+        expect(mockCompleteRegistrationWithRider).toHaveBeenCalledWith(
+          expect.objectContaining({ eventId: 'event-1', selectedRiderId: 'rider-1', rideStart })
+        )
+      )
     })
   })
 

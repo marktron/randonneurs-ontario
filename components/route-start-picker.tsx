@@ -174,7 +174,7 @@ export function RouteStartPicker({ track, valueKm, onChange, disabled }: RouteSt
       {hint && <p className="text-sm text-muted-foreground">{hint}</p>}
 
       <div className="space-y-2">
-        <Label htmlFor="start-offset-km">Or enter the distance into the route (km)</Label>
+        <Label htmlFor="start-offset-km">Or enter the distance into the posted route (km)</Label>
         <Input
           id="start-offset-km"
           type="number"
@@ -197,7 +197,10 @@ export function RouteStartPicker({ track, valueKm, onChange, disabled }: RouteSt
           }}
           onBlur={() => setKmText(valueKm == null ? '' : String(valueKm))}
         />
-        <p className="text-xs text-muted-foreground">Between 0.1 and {maxKm.toFixed(1)} km.</p>
+        <p className="text-xs text-muted-foreground">
+          Measured along the route as posted, even if you ride it reversed. Between 0.1 and{' '}
+          {maxKm.toFixed(1)} km.
+        </p>
       </div>
     </div>
   )

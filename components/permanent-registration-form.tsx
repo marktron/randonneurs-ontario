@@ -23,7 +23,11 @@ import {
   CommandItem,
   CommandList,
 } from '@/components/ui/command'
-import { registerForPermanent, completeRegistrationWithRider } from '@/lib/actions/register'
+import {
+  registerForPermanent,
+  completeRegistrationWithRider,
+  type PermanentRideStart,
+} from '@/lib/actions/register'
 import {
   getPermanentRouteTrack,
   getExistingPermanentRide,
@@ -32,6 +36,7 @@ import {
 import type { ActiveRoute } from '@/lib/data/routes'
 import type { RouteTrack } from '@/lib/routeTrack'
 import { RouteStartPicker } from '@/components/route-start-picker'
+import { formatClock } from '@/lib/permanent-start'
 import { HoneypotField } from '@/components/honeypot-field'
 import { useRegistrationForm } from '@/hooks/use-registration-form'
 import {
@@ -71,12 +76,6 @@ export function getMinPermanentDate(): Date {
 
 const minDate = getMinPermanentDate()
 
-function formatClock(hhmm: string): string {
-  const [h, m] = hhmm.split(':')
-  const hour = parseInt(h, 10)
-  return `${hour % 12 || 12}:${m} ${hour >= 12 ? 'PM' : 'AM'}`
-}
-
 interface PermanentRegistrationFormProps {
   routes: ActiveRoute[]
 }
@@ -99,6 +98,8 @@ export function PermanentRegistrationForm({ routes }: PermanentRegistrationFormP
 
   // Fuzzy matching context: the event created before the rider match was needed
   const [pendingEventId, setPendingEventId] = useState<string>('')
+  // The ride's start when the match dialog opened, echoed back unchanged.
+  const [pendingRideStart, setPendingRideStart] = useState<PermanentRideStart | undefined>()
 
   // Group routes by chapter
   const routesByChapter = useMemo(() => {
@@ -221,7 +222,10 @@ export function PermanentRegistrationForm({ routes }: PermanentRegistrationFormP
       })
       form.handleRegistrationResult(result, {
         onNeedsMatch: (r) => {
-          if (r.pendingData) setPendingEventId(r.pendingData.eventId)
+          if (r.pendingData) {
+            setPendingEventId(r.pendingData.eventId)
+            setPendingRideStart(r.pendingData.rideStart)
+          }
         },
       })
     })
@@ -236,6 +240,7 @@ export function PermanentRegistrationForm({ routes }: PermanentRegistrationFormP
       const result = await completeRegistrationWithRider({
         eventId: pendingEventId,
         selectedRiderId: riderId,
+        rideStart: pendingRideStart,
         ...form.riderPayload,
         notes: notes || undefined,
       })
@@ -367,7 +372,7 @@ export function PermanentRegistrationForm({ routes }: PermanentRegistrationFormP
               {formatClock(existingRide.startTime)} from{' '}
               {existingRide.startOffsetKm == null
                 ? 'the posted start'
-                : `${existingRide.startLocation ?? 'a point'}, ${existingRide.startOffsetKm.toFixed(1)} km into the route`}
+                : `${existingRide.startLocation ?? 'a point'}, ${existingRide.startOffsetKm.toFixed(1)} km into the posted route`}
               . You will join that ride. To use a different start or time, pick another date.
             </div>
           )}
@@ -421,7 +426,7 @@ export function PermanentRegistrationForm({ routes }: PermanentRegistrationFormP
                   {startOffsetKm != null && (
                     <>
                       <p className="text-sm font-medium tabular-nums">
-                        Starts {startOffsetKm.toFixed(1)} km into the route
+                        Starts {startOffsetKm.toFixed(1)} km into the posted route
                       </p>
                       <div className="space-y-2">
                         <Label htmlFor="location">Name of your start location</Label>

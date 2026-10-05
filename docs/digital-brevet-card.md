@@ -711,7 +711,7 @@ Two implementation notes worth keeping:
 
 ### Manage controls (top section)
 
-- "Import from RWGPS" button: uses `fetchRwgpsControlsWithCoords()` (the
+- "Import from RWGPS" button: uses `fetchRwgpsRouteForImport()` (the
   parser was extended to preserve each control's lat/lng; course points
   without coordinates interpolate from the nearest track point) seeded from
   the event's route; reversed and alternate-start permanents get order +

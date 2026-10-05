@@ -128,7 +128,7 @@ describe('snapToTrack', () => {
     expect(result.map((c) => c.offsetKm)).toEqual([5, 15])
   })
 
-  it('snaps a tap far from the route to the nearest point (Review Focus 1)', () => {
+  it('snaps a tap far from the route to the nearest point', () => {
     const track = buildRouteTrack(line(90), 10.008)!
     // About 4 km east of the line at lat 44.045.
     const result = snapToTrack(track, 44.045, -78.95)
@@ -136,7 +136,7 @@ describe('snapToTrack', () => {
     expect(result[0].offsetKm).toBe(5)
   })
 
-  it("returns nothing for a tap on a loop's posted start (Review Focus 2)", () => {
+  it("returns nothing for a tap on a loop's posted start", () => {
     const track = buildRouteTrack(outAndBack(90), 20.016)!
     expect(snapToTrack(track, 44, -79)).toEqual([])
   })
