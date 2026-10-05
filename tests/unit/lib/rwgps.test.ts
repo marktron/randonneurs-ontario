@@ -7,7 +7,10 @@ import {
   extractRwgpsRefs,
   fetchRwgpsCollection,
   fetchRwgpsControls,
+  fetchRwgpsControlsWithCoords,
   fetchRwgpsRoute,
+  fetchRwgpsRouteForImport,
+  fetchRwgpsTrack,
   parseRwgpsRouteRef,
 } from '@/lib/rwgps'
 
@@ -983,5 +986,88 @@ describe('fetchRwgpsCollection', () => {
 describe('buildRwgpsCollectionUrl', () => {
   it('builds the collection page URL', () => {
     expect(buildRwgpsCollectionUrl('8387874')).toBe('https://ridewithgps.com/collections/8387874')
+  })
+})
+
+function stubRouteResponse(body: unknown) {
+  vi.mocked(global.fetch).mockResolvedValueOnce({ ok: true, json: async () => body } as Response)
+}
+
+describe('route import and track fetchers', () => {
+  beforeEach(() => {
+    vi.stubEnv('RWGPS_API_KEY', 'test-key')
+    vi.stubEnv('RWGPS_AUTH_TOKEN', 'test-token')
+    vi.stubGlobal('fetch', vi.fn())
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.unstubAllEnvs()
+  })
+
+  describe('fetchRwgpsRouteForImport', () => {
+    const route = {
+      name: 'Loop 200',
+      distance: 204540,
+      course_points: [{ n: 'Control: Cafe', d: 97700, t: 'Control', x: -79.2, y: 44.2 }],
+      track_points: [
+        { x: -79, y: 44, d: 0 },
+        { x: -79.1, y: 44.1, d: 50000 },
+        { x: -79, y: 44, d: 204540 },
+        { x: -79, d: 1 }, // unusable: no latitude
+      ],
+    }
+
+    it('returns controls, the unrounded length and usable track points', async () => {
+      stubRouteResponse({ route })
+      const result = await fetchRwgpsRouteForImport('123')
+      expect(result.controls.map((c) => c.distance)).toEqual(['97.7'])
+      expect(result.totalKm).toBeCloseTo(204.54, 5)
+      expect(result.points).toEqual([
+        { lat: 44, lng: -79, km: 0 },
+        { lat: 44.1, lng: -79.1, km: 50 },
+        { lat: 44, lng: -79, km: 204.54 },
+      ])
+    })
+
+    it('reports a zero length when RWGPS omits the distance', async () => {
+      stubRouteResponse({ route: { ...route, distance: undefined } })
+      expect((await fetchRwgpsRouteForImport('123')).totalKm).toBe(0)
+    })
+
+    it('throws the no-controls message', async () => {
+      stubRouteResponse({ route: { ...route, course_points: [] } })
+      await expect(fetchRwgpsRouteForImport('123')).rejects.toThrow('No control points found')
+    })
+  })
+
+  describe('fetchRwgpsTrack', () => {
+    it('returns the track for a route with no controls', async () => {
+      stubRouteResponse({
+        route: {
+          distance: 1000,
+          track_points: [
+            { x: -79, y: 44, d: 0 },
+            { x: -79, y: 44.009, d: 1000 },
+          ],
+        },
+      })
+      const result = await fetchRwgpsTrack('123')
+      expect(result.totalKm).toBe(1)
+      expect(result.points).toHaveLength(2)
+    })
+  })
+
+  describe('fetchRwgpsControlsWithCoords', () => {
+    it('still returns just the controls (collection import depends on this shape)', async () => {
+      stubRouteResponse({
+        route: {
+          course_points: [{ n: 'Control: Cafe', d: 97700, t: 'Control', x: -79.2, y: 44.2 }],
+        },
+      })
+      const result = await fetchRwgpsControlsWithCoords('123')
+      expect(Array.isArray(result)).toBe(true)
+      expect(result[0]).toMatchObject({ distance: '97.7', lat: 44.2, lng: -79.2 })
+    })
   })
 })
