@@ -194,9 +194,11 @@ export function RouteStartPicker({
         fillColor: '#ffffff',
         fillOpacity: 1,
       }).bindTooltip('Posted start')
-      // Leaflet makes a layer with a tooltip focusable; keep this unnamed dot
-      // out of the dialog's tab order, like the flags. Its element exists only
-      // once the map has a view, hence the add event.
+      // Leaflet's tooltip adds focus and blur listeners to this dot's SVG path,
+      // and Chromium treats an SVG element with focus listeners as focusable,
+      // which made the unnamed dot a tab stop. Keep it out of the tab order,
+      // like the flags. Its element exists only once the map has a view, hence
+      // the add event.
       postedStart.on('add', () => postedStart.getElement()?.setAttribute('tabindex', '-1'))
       postedStart.addTo(map)
 
@@ -238,7 +240,9 @@ export function RouteStartPicker({
       let fitted = false
       const fitOnceSized = () => {
         if (fitted || container.clientWidth === 0 || container.clientHeight === 0) return
-        map.fitBounds(line.getBounds(), { padding: [8, 8] })
+        // Extra room above and to the right for a flag's pennant at the edge,
+        // kept small so long routes still open a zoom level closer on a phone.
+        map.fitBounds(line.getBounds(), { paddingTopLeft: [4, 30], paddingBottomRight: [18, 8] })
         fitted = true
       }
       fitOnceSized()
