@@ -311,6 +311,7 @@ export type Database = {
           collection: string | null
           created_at: string | null
           description: string | null
+          direction: string
           distance_km: number
           erw_canonical_url: string | null
           erw_event_id: string | null
@@ -328,7 +329,10 @@ export type Database = {
           route_id: string | null
           season: number | null
           slug: string
+          start_lat: number | null
+          start_lng: number | null
           start_location: string | null
+          start_offset_km: number | null
           start_time: string | null
           status: string
           updated_at: string | null
@@ -338,6 +342,7 @@ export type Database = {
           collection?: string | null
           created_at?: string | null
           description?: string | null
+          direction?: string
           distance_km: number
           erw_canonical_url?: string | null
           erw_event_id?: string | null
@@ -355,7 +360,10 @@ export type Database = {
           route_id?: string | null
           season?: number | null
           slug: string
+          start_lat?: number | null
+          start_lng?: number | null
           start_location?: string | null
+          start_offset_km?: number | null
           start_time?: string | null
           status?: string | null
           updated_at?: string | null
@@ -365,6 +373,7 @@ export type Database = {
           collection?: string | null
           created_at?: string | null
           description?: string | null
+          direction?: string
           distance_km?: number
           erw_canonical_url?: string | null
           erw_event_id?: string | null
@@ -382,7 +391,10 @@ export type Database = {
           route_id?: string | null
           season?: number | null
           slug?: string
+          start_lat?: number | null
+          start_lng?: number | null
           start_location?: string | null
+          start_offset_km?: number | null
           start_time?: string | null
           status?: string | null
           updated_at?: string | null
