@@ -58,6 +58,11 @@ describe('RouteStartDialog', () => {
     expect(screen.getByText('Starts 58.9 km into the posted route')).toBeInTheDocument()
   })
 
+  it('opens with focus on the dialog itself, so nothing looks chosen', async () => {
+    render(<Harness />)
+    await waitFor(() => expect(screen.getByRole('dialog')).toHaveFocus())
+  })
+
   it('closes on Done', async () => {
     const user = userEvent.setup()
     render(<Harness />)

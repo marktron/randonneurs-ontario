@@ -12,7 +12,7 @@ import { buildRouteTrack, type RouteControl, type TrackPoint } from '@/lib/route
  * Chainable Leaflet stand-in. It records each control flag's tooltip, click
  * handler and current icon so a test can tap a flag without a real map.
  */
-type FakeIcon = { html: string }
+type FakeIcon = { html: string; className?: string }
 const flags: { tooltip: string; click: () => void; icon: FakeIcon }[] = []
 const circleMarkers: { fillColor?: string }[] = []
 function layer() {
@@ -116,7 +116,7 @@ describe('RouteStartPicker controls', () => {
     const option = screen.getByRole('option', { name: 'Cafe (16.7 km)' }) as HTMLOptionElement
     await user.selectOptions(select, option.value)
     expect(onChange).toHaveBeenCalledWith(16.7)
-    expect(onPickControl).toHaveBeenCalledWith('Cafe')
+    expect(onPickControl).toHaveBeenCalledWith('Cafe', [3.3, 16.7])
   })
 
   it('shows the chosen control when the start is exactly one', () => {
@@ -154,7 +154,7 @@ describe('RouteStartPicker controls', () => {
 
     flags[0].click()
     expect(onChange).toHaveBeenLastCalledWith(3.3)
-    expect(onPickControl).toHaveBeenLastCalledWith('Cafe')
+    expect(onPickControl).toHaveBeenLastCalledWith('Cafe', [3.3, 16.7])
     expect(
       await screen.findByRole('group', { name: 'Which pass of the route?' })
     ).toBeInTheDocument()
@@ -180,5 +180,20 @@ describe('RouteStartPicker controls', () => {
     rerender(<RouteStartPicker track={track} valueKm={7} onChange={vi.fn()} controls={controls} />)
     await waitFor(() => expect(circleMarkers.some((m) => m.fillColor === PIN)).toBe(true))
     expect(flags.every((f) => !f.icon.html.includes(PIN))).toBe(true)
+  })
+
+  it('takes taps only on the flag itself: a 44 px circle on the control and the pennant', async () => {
+    render(<RouteStartPicker track={track} valueKm={null} onChange={vi.fn()} controls={controls} />)
+    await waitFor(() => expect(flags).toHaveLength(2))
+    const icon = flags[0].icon
+    // The icon box ignores the pointer; only the drawn tap shapes take it.
+    expect(icon.className).toContain('pointer-events-none!')
+    const svg = new DOMParser().parseFromString(icon.html, 'text/html')
+    const hits = Array.from(svg.querySelectorAll('[data-hit]'))
+    expect(hits.map((h) => h.getAttribute('pointer-events'))).toEqual(['all', 'all'])
+    const circle = svg.querySelector('circle[data-hit]')!
+    expect(circle.getAttribute('r')).toBe('22')
+    // Centred on the pole base, which is the icon's anchor (the control).
+    expect([circle.getAttribute('cx'), circle.getAttribute('cy')]).toEqual(['22', '27'])
   })
 })

@@ -35,7 +35,7 @@ vi.mock('@/components/route-start-picker', () => ({
   }: {
     valueKm: number | null
     onChange: (km: number | null) => void
-    onPickControl?: (name: string) => void
+    onPickControl?: (name: string, passesKm: number[]) => void
     controls?: { name: string }[]
     disabled?: boolean
   }) => (
@@ -52,16 +52,23 @@ vi.mock('@/components/route-start-picker', () => ({
         type="button"
         onClick={() => {
           onChange(30)
-          onPickControl?.('Cafe')
+          onPickControl?.('Cafe', [30, 150])
         }}
       >
         Pick control
+      </button>
+      {/* The pass chooser only moves the start; it suggests no name. */}
+      <button type="button" onClick={() => onChange(150)}>
+        Choose other pass
+      </button>
+      <button type="button" onClick={() => onChange(77.7)}>
+        Type km
       </button>
       <button
         type="button"
         onClick={() => {
           onChange(120.5)
-          onPickControl?.('Georgetown')
+          onPickControl?.('Georgetown', [120.5])
         }}
       >
         Pick other control
@@ -488,13 +495,67 @@ describe('PermanentRegistrationForm', () => {
       expect(nameField()).toHaveValue('Georgetown')
     })
 
-    it('leaves the name alone on a plain map tap', async () => {
+    it('clears an unedited suggestion when a map tap moves the start off the control', async () => {
       const user = userEvent.setup()
       await setUp(user)
       await chooseStart(user, 'Pick control')
       await chooseStart(user, 'Drop pin')
       expect(screen.getByText('Starts 42.3 km into the posted route')).toBeInTheDocument()
+      expect(nameField()).toHaveValue('')
+      // The flag went with it: a later control pick fills the field again.
+      await chooseStart(user, 'Pick other control')
+      expect(nameField()).toHaveValue('Georgetown')
+    })
+
+    it('clears an unedited suggestion when a typed distance moves the start', async () => {
+      const user = userEvent.setup()
+      await setUp(user)
+      await chooseStart(user, 'Pick control')
+      await chooseStart(user, 'Type km')
+      expect(nameField()).toHaveValue('')
+    })
+
+    it('clears an unedited suggestion when the start is cleared in the dialog', async () => {
+      const user = userEvent.setup()
+      await setUp(user)
+      await chooseStart(user, 'Pick control')
+      await openStartDialog(user)
+      await pick(user, 'Clear pin')
+      await pick(user, 'Drop pin')
+      await done(user)
+      expect(nameField()).toHaveValue('')
+    })
+
+    it('keeps the suggestion for another pass of the same control', async () => {
+      const user = userEvent.setup()
+      await setUp(user)
+      await chooseStart(user, 'Pick control')
+      await chooseStart(user, 'Choose other pass')
+      expect(screen.getByText('Starts 150.0 km into the posted route')).toBeInTheDocument()
       expect(nameField()).toHaveValue('Cafe')
+    })
+
+    it('never clears a name the rider typed when the start moves', async () => {
+      const user = userEvent.setup()
+      await setUp(user)
+      await chooseStart(user, 'Drop pin')
+      await user.type(nameField(), 'My spot')
+      await openStartDialog(user)
+      for (const button of ['Pick control', 'Drop pin', 'Type km', 'Clear pin', 'Drop pin']) {
+        await pick(user, button)
+      }
+      await done(user)
+      expect(nameField()).toHaveValue('My spot')
+    })
+
+    it('never clears an edited suggestion when the start moves', async () => {
+      const user = userEvent.setup()
+      await setUp(user)
+      await chooseStart(user, 'Pick control')
+      await user.type(nameField(), ', Uxbridge')
+      await chooseStart(user, 'Drop pin')
+      await chooseStart(user, 'Type km')
+      expect(nameField()).toHaveValue('Cafe, Uxbridge')
     })
 
     it('clears the suggestion with the start when the route changes', async () => {

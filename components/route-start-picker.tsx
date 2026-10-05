@@ -24,8 +24,8 @@ interface RouteStartPickerProps {
   onChange: (km: number | null) => void
   /** The route's controls, as posted. Those away from the start/finish are offered as starts. */
   controls?: RouteControl[]
-  /** Called with a control's name when the rider starts at that control. */
-  onPickControl?: (name: string) => void
+  /** Called when the rider starts at a control, with its name and every pass's distance. */
+  onPickControl?: (name: string, passesKm: number[]) => void
   disabled?: boolean
 }
 
@@ -39,13 +39,15 @@ const NO_CONTROLS: RouteControl[] = []
 const START_DOT_RADIUS = 6
 const START_DOT_RING = 2
 
-// Flag marker geometry, in px within a square icon that is also the 44 px tap
-// area. The pole's base (the anchor) sits on the control; the pennant flies up
-// and to the right so the route line stays visible underneath.
-const FLAG_BOX = 44
-const FLAG_BASE: [number, number] = [15, 36]
+// Flag marker geometry, in px within the icon. The pole's base (the anchor)
+// sits on the control; the pennant flies up and to the right so the route line
+// stays visible underneath. The tap area is drawn to match what the rider sees
+// (see flagSvg), so taps on the route beside a control reach the map.
+const FLAG_SIZE: [number, number] = [44, 50]
+const FLAG_BASE: [number, number] = [22, 27]
 const POLE = 24
 const PENNANT = { width: 16, top: POLE, bottom: POLE - 10.5 }
+const HIT_RADIUS = 22 // a 44 px circle on the control itself
 
 /**
  * A small flag on a pole with a dot at its base. The chosen start's flag is
@@ -55,7 +57,13 @@ function flagSvg(selected: boolean): string {
   const color = selected ? PIN_COLOR : CONTROL_COLOR
   const [x, y] = FLAG_BASE
   const mid = (PENNANT.top + PENNANT.bottom) / 2
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${FLAG_BOX}" height="${FLAG_BOX}" viewBox="0 0 ${FLAG_BOX} ${FLAG_BOX}" overflow="visible" aria-hidden="true">
+  const [w, h] = FLAG_SIZE
+  // The icon box ignores the pointer (see flagIcon); only these two invisible
+  // shapes take taps: a circle on the control and a slim box over the pennant
+  // and the top of the pole. Everything visible ignores the pointer.
+  const hit = `fill="none" pointer-events="all" style="cursor:pointer"`
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" overflow="visible" aria-hidden="true">
+<g pointer-events="none">
 <line x1="${x}" y1="${y}" x2="${x}" y2="${y - POLE}" stroke="#fff" stroke-width="4.5" stroke-linecap="round"/>
 <line x1="${x}" y1="${y}" x2="${x}" y2="${y - POLE}" stroke="${color}" stroke-width="2" stroke-linecap="round"/>
 <path d="M${x} ${y - PENNANT.top} L${x + PENNANT.width} ${y - mid} L${x} ${y - PENNANT.bottom} Z" fill="${color}" stroke="#fff" stroke-width="1.5" stroke-linejoin="round"/>
@@ -64,6 +72,9 @@ ${
     ? `<circle cx="${x}" cy="${y}" r="${START_DOT_RADIUS}" fill="${PIN_COLOR}" stroke="#fff" stroke-width="${START_DOT_RING}"/>`
     : `<circle cx="${x}" cy="${y}" r="3.5" fill="#fff" stroke="${color}" stroke-width="2"/>`
 }
+</g>
+<circle data-hit cx="${x}" cy="${y}" r="${HIT_RADIUS}" ${hit}/>
+<rect data-hit x="${x - 3}" y="${y - POLE - 3}" width="${PENNANT.width + 6}" height="${PENNANT.top - PENNANT.bottom + 6}" ${hit}/>
 </svg>`
 }
 
@@ -119,7 +130,10 @@ export function RouteStartPicker({
     setHint(null)
     setChoices(offerPasses && place.passes.length > 1 ? place.passes : [])
     onChange(start.offsetKm)
-    onPickControl?.(place.name)
+    onPickControl?.(
+      place.name,
+      place.passes.map((p) => p.offsetKm)
+    )
   }
 
   // The km field keeps its own text so a half-typed value ("0.", "4") is not
@@ -161,9 +175,8 @@ export function RouteStartPicker({
       const L = await import('leaflet')
       if (cancelled || !containerRef.current) return
 
-      // Quarter zoom steps let the route fill a tall phone map; whole steps
-      // often leave it at half the width available.
-      const map = L.map(containerRef.current, { attributionControl: true, zoomSnap: 0.25 })
+      // Whole zoom levels only: fractional zoom leaves hairline gaps between tiles.
+      const map = L.map(containerRef.current, { attributionControl: true })
       mapRef.current = map
       L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
@@ -175,23 +188,27 @@ export function RouteStartPicker({
         { color: ROUTE_COLOR, weight: 3 }
       ).addTo(map)
       const first = track.points[0]
-      L.circleMarker([first.lat, first.lng], {
+      const postedStart = L.circleMarker([first.lat, first.lng], {
         radius: 6,
         color: ROUTE_COLOR,
         fillColor: '#ffffff',
         fillOpacity: 1,
-      })
-        .bindTooltip('Posted start')
-        .addTo(map)
+      }).bindTooltip('Posted start')
+      // Leaflet makes a layer with a tooltip focusable; keep this unnamed dot
+      // out of the dialog's tab order, like the flags. Its element exists only
+      // once the map has a view, hence the add event.
+      postedStart.on('add', () => postedStart.getElement()?.setAttribute('tabindex', '-1'))
+      postedStart.addTo(map)
 
-      // Each control is a flag whose whole icon box is the tap area. A class of
-      // our own replaces Leaflet's default white `leaflet-div-icon` box. The
-      // flags are not tab stops; the control list below is the keyboard path.
+      // Each control is a flag. A class of our own replaces Leaflet's default
+      // white `leaflet-div-icon` box, and the box itself ignores the pointer
+      // (`!` beats leaflet.css) so only the flag's drawn tap area takes taps.
+      // The flags are not tab stops; the control list is the keyboard path.
       const flagIcon = (selected: boolean) =>
         L.divIcon({
           html: flagSvg(selected),
-          className: 'outline-none',
-          iconSize: [FLAG_BOX, FLAG_BOX],
+          className: 'outline-none pointer-events-none!',
+          iconSize: FLAG_SIZE,
           iconAnchor: FLAG_BASE,
           tooltipAnchor: [16, -16],
         })
@@ -221,7 +238,7 @@ export function RouteStartPicker({
       let fitted = false
       const fitOnceSized = () => {
         if (fitted || container.clientWidth === 0 || container.clientHeight === 0) return
-        map.fitBounds(line.getBounds(), { padding: [16, 16] })
+        map.fitBounds(line.getBounds(), { padding: [8, 8] })
         fitted = true
       }
       fitOnceSized()

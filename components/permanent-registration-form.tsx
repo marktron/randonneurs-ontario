@@ -91,8 +91,9 @@ export function PermanentRegistrationForm({ routes }: PermanentRegistrationFormP
   const [datePickerOpen, setDatePickerOpen] = useState(false)
   const [startTime, setStartTime] = useState<string>('08:00')
   const [startLocation, setStartLocation] = useState<string>('')
-  // True while the place name is a control's name the rider has not edited.
-  const [startLocationSuggested, setStartLocationSuggested] = useState(false)
+  // While the place name is a control's name the rider has not edited: the
+  // distances of that control's passes. Null once the rider types.
+  const [suggestedForKm, setSuggestedForKm] = useState<number[] | null>(null)
   const [startOffsetKm, setStartOffsetKm] = useState<number | null>(null)
   const [startDialogOpen, setStartDialogOpen] = useState(false)
   // Focus returns here when the start dialog closes: "Change" once a start is
@@ -194,15 +195,26 @@ export function PermanentRegistrationForm({ routes }: PermanentRegistrationFormP
     setStartDialogOpen(false)
     setStartOffsetKm(null)
     setStartLocation('')
-    setStartLocationSuggested(false)
+    setSuggestedForKm(null)
   }
 
   // Starting at a control suggests its name, but never replaces a name the
   // rider typed.
-  function suggestStartLocation(name: string) {
-    if (startLocation.trim() !== '' && !startLocationSuggested) return
+  function suggestStartLocation(name: string, passesKm: number[]) {
+    if (startLocation.trim() !== '' && suggestedForKm == null) return
     setStartLocation(name)
-    setStartLocationSuggested(true)
+    setSuggestedForKm(passesKm)
+  }
+
+  // A suggested name belongs to its control: moving the start anywhere else
+  // (another pass of the same control is fine) drops it, so a control's name
+  // is never printed for a start that is not there. Typed text stays.
+  function changeStart(km: number | null) {
+    setStartOffsetKm(km)
+    if (suggestedForKm != null && (km == null || !suggestedForKm.includes(km))) {
+      setStartLocation('')
+      setSuggestedForKm(null)
+    }
   }
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -468,7 +480,7 @@ export function PermanentRegistrationForm({ routes }: PermanentRegistrationFormP
                       maxLength={200}
                       onChange={(e) => {
                         setStartLocation(e.target.value)
-                        setStartLocationSuggested(false)
+                        setSuggestedForKm(null)
                       }}
                       disabled={isPending}
                       autoComplete="off"
@@ -484,7 +496,7 @@ export function PermanentRegistrationForm({ routes }: PermanentRegistrationFormP
                 onOpenChange={setStartDialogOpen}
                 track={track}
                 valueKm={startOffsetKm}
-                onChange={setStartOffsetKm}
+                onChange={changeStart}
                 controls={routeControls}
                 onPickControl={suggestStartLocation}
                 disabled={isPending}

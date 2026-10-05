@@ -1,6 +1,6 @@
 'use client'
 
-import type { ComponentProps } from 'react'
+import { useRef, type ComponentProps } from 'react'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -21,7 +21,7 @@ interface RouteStartDialogProps {
   valueKm: number | null
   onChange: (km: number | null) => void
   controls?: RouteControl[]
-  onPickControl?: (name: string) => void
+  onPickControl?: (name: string, passesKm: number[]) => void
   disabled?: boolean
   /** Where focus goes when the dialog closes (Radix's default is the element focused before it opened). */
   onCloseAutoFocus?: ComponentProps<typeof DialogContent>['onCloseAutoFocus']
@@ -45,11 +45,20 @@ export function RouteStartDialog({
   disabled,
   onCloseAutoFocus,
 }: RouteStartDialogProps) {
+  const contentRef = useRef<HTMLDivElement>(null)
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
+        ref={contentRef}
+        // Focus the dialog itself rather than its first field: a focus ring on
+        // the control list read as if a control were already chosen. Tab
+        // goes on to the map, its zoom buttons, the list, the km field, Done.
+        onOpenAutoFocus={(e) => {
+          e.preventDefault()
+          contentRef.current?.focus()
+        }}
         onCloseAutoFocus={onCloseAutoFocus}
-        className="top-0 left-0 flex h-dvh w-full max-w-none translate-x-0 translate-y-0 flex-col gap-3 rounded-none p-4 sm:top-1/2 sm:left-1/2 sm:h-[90dvh] sm:w-[calc(100%-4rem)] sm:max-w-4xl sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-4xl sm:p-6"
+        className="outline-none top-0 left-0 flex h-dvh w-full max-w-none translate-x-0 translate-y-0 flex-col gap-3 rounded-none p-4 sm:top-1/2 sm:left-1/2 sm:h-[90dvh] sm:w-[calc(100%-4rem)] sm:max-w-4xl sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-4xl sm:p-6"
       >
         <DialogHeader className="shrink-0 pr-10">
           <DialogTitle>Choose where you start</DialogTitle>
