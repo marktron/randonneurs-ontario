@@ -129,6 +129,28 @@ describe('EventControlsManager mount auto-load', () => {
   })
 })
 
+describe('EventControlsManager ride start', () => {
+  it('shows the ride-start note and the import warning', async () => {
+    mockImportEventControlsFromRwgps.mockResolvedValue({
+      success: true,
+      data: [],
+      warning: 'Set the start control by hand.',
+    })
+    render(
+      <EventControlsManager
+        eventId="event-1"
+        initialControls={[]}
+        hasRwgpsRoute={true}
+        hasRwgpsCollection={false}
+        initialOrganizer={emptyOrganizer}
+        rideStartNote="Reversed."
+      />
+    )
+    expect(screen.getByText('Reversed.')).toBeTruthy()
+    expect(await screen.findByText('Set the start control by hand.')).toBeTruthy()
+  })
+})
+
 describe('EventControlsManager mobile card layout', () => {
   it('stacks control rows into labelled cards on mobile', () => {
     const { container } = render(

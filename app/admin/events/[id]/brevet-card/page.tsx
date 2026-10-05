@@ -9,6 +9,7 @@ import { controlWindowDistancesKm, cumulativeLegDistanceKm } from '@/lib/control
 import { getEventControlsForAdmin } from '@/lib/actions/event-controls'
 import { getChapterOrganizerDefaults, type OrganizerContact } from '@/lib/actions/event-organizer'
 import { getEventCheckinsForAdmin } from '@/lib/actions/control-checkins'
+import { describeRideStartForAdmin } from '@/lib/permanent-start'
 import { EventControlsManager } from '@/components/admin/event-controls-manager'
 import { EventCheckinsGrid, type GridControl } from '@/components/admin/event-checkins-grid'
 import { PreRideManager } from '@/components/admin/pre-ride-manager'
@@ -24,7 +25,7 @@ export default async function BrevetCardAdminPage({ params }: BrevetCardAdminPag
   const { data: event } = await getSupabaseAdmin()
     .from('events')
     .select(
-      'id, name, event_date, start_time, distance_km, event_type, status, chapter_id, organizer_name, organizer_phone, organizer_email, routes (rwgps_id, rwgps_collection_id)'
+      'id, name, event_date, start_time, start_location, direction, start_offset_km, distance_km, event_type, status, chapter_id, organizer_name, organizer_phone, organizer_email, routes (rwgps_id, rwgps_collection_id)'
     )
     .eq('id', id)
     .single()
@@ -38,6 +39,9 @@ export default async function BrevetCardAdminPage({ params }: BrevetCardAdminPag
     name: string
     event_date: string
     start_time: string | null
+    start_location: string | null
+    direction: string
+    start_offset_km: number | null
     distance_km: number
     event_type: string | null
     status: string | null
@@ -117,6 +121,11 @@ export default async function BrevetCardAdminPage({ params }: BrevetCardAdminPag
         initialControls={controls}
         hasRwgpsRoute={Boolean(typedEvent.routes?.rwgps_id)}
         hasRwgpsCollection={Boolean(typedEvent.routes?.rwgps_collection_id)}
+        rideStartNote={describeRideStartForAdmin({
+          direction: typedEvent.direction,
+          startLocation: typedEvent.start_location,
+          startOffsetKm: typedEvent.start_offset_km,
+        })}
         initialOrganizer={initialOrganizer}
       />
 

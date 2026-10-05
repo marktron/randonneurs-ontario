@@ -19,8 +19,8 @@ import {
   AlertTriangle,
 } from 'lucide-react'
 import type { CardRider } from '@/types/control-card'
+import { describeRideStartForAdmin } from '@/lib/permanent-start'
 import {
-  isReversedEvent,
   matchImportedControls,
   controlsInSync,
   cumulativeLegDistanceKm,
@@ -70,6 +70,8 @@ interface EventInput {
   rwgpsId: string | null
   rwgpsCollectionId: string | null
   eventType: string
+  direction: 'as_posted' | 'reversed'
+  startOffsetKm: number | null
 }
 
 interface OrganizerInput {
@@ -116,7 +118,15 @@ export function ControlCardsForm({
   const [organizerPhone, setOrganizerPhone] = useState(organizer?.phone || '')
   const [organizerEmail, setOrganizerEmail] = useState(organizer?.email || '')
 
-  const reversed = isReversedEvent(event.name)
+  const reversed = event.direction === 'reversed'
+  // With a positioned alternate start the rider starts and finishes there.
+  const hasAlternateStart = event.startOffsetKm != null
+  const rideStartNote = describeRideStartForAdmin({
+    direction: event.direction,
+    startLocation: event.startLocation || null,
+    startOffsetKm: event.startOffsetKm,
+  })
+  const [importWarning, setImportWarning] = useState<string | null>(null)
 
   // Snapshot of the saved controls; drift is measured against this and it is
   // refreshed after a successful save so a subsequent save updates rather than
@@ -137,7 +147,11 @@ export function ControlCardsForm({
           {
             id: crypto.randomUUID(),
             savedId: undefined,
-            name: reversed ? 'Finish' : event.startLocation || 'Start',
+            name: hasAlternateStart
+              ? event.startLocation || 'Start'
+              : reversed
+                ? 'Finish'
+                : event.startLocation || 'Start',
             distance: '0',
             lat: null,
             lng: null,
@@ -149,7 +163,11 @@ export function ControlCardsForm({
           {
             id: crypto.randomUUID(),
             savedId: undefined,
-            name: reversed ? event.startLocation || 'Start' : 'Finish',
+            name: hasAlternateStart
+              ? event.startLocation || 'Finish'
+              : reversed
+                ? event.startLocation || 'Start'
+                : 'Finish',
             distance: String(event.distance),
             lat: null,
             lng: null,
@@ -332,16 +350,18 @@ export function ControlCardsForm({
 
       setIsLoadingRwgps(true)
       setRwgpsError(null)
+      setImportWarning(null)
 
       try {
-        // Canonical importer: fetches coordinates and applies reversed-event
-        // handling server-side, so the printed and digital cards import
+        // Canonical importer: fetches coordinates and applies direction and
+        // alternate-start handling server-side, so the printed and digital cards import
         // identically.
         const result = await importEventControlsFromRwgps(event.id)
         if (!result.success || !result.data) {
           setRwgpsError(result.error || 'Failed to fetch route data')
           return
         }
+        setImportWarning(result.warning ?? null)
 
         // Preserve saved ids/radius/notes across a re-import so saving updates
         // rows in place rather than delete+reinserting (which loses check-ins).
@@ -632,16 +652,19 @@ export function ControlCardsForm({
             The text in each control field will appear on the printed control card. Times are
             calculated automatically based on BRM rules.
           </CardDescription>
-          {(reversed || (event.eventType === 'permanent' && event.startLocation)) && (
+          {rideStartNote && (
             <div className="flex items-center gap-2 text-sm text-muted-foreground mt-2">
               <Info className="h-4 w-4 shrink-0" />
-              <span>
-                {reversed && event.eventType === 'permanent' && event.startLocation
-                  ? `Controls are shown in reversed direction, starting from ${event.startLocation}.`
-                  : reversed
-                    ? 'Controls are shown in reversed direction.'
-                    : `Starting from ${event.startLocation}.`}
-              </span>
+              <span>{rideStartNote}</span>
+            </div>
+          )}
+          {importWarning && (
+            <div
+              role="alert"
+              className="flex items-center gap-2 text-sm text-amber-700 dark:text-amber-400 mt-2"
+            >
+              <Info className="h-4 w-4 shrink-0" />
+              <span>{importWarning}</span>
             </div>
           )}
         </CardHeader>

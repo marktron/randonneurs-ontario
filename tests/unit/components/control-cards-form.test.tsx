@@ -41,6 +41,8 @@ const event = {
   rwgpsId: null,
   rwgpsCollectionId: null,
   eventType: 'brevet',
+  direction: 'as_posted' as const,
+  startOffsetKm: null as number | null,
 }
 
 const organizer = { name: 'Org Anizer', phone: '416-555-1212', email: 'org@example.com' }
@@ -1082,5 +1084,49 @@ describe('ControlCardsForm leg heading rows', () => {
     // One heading per leg, not one per control.
     expect(screen.getAllByText('Leg 1: A')).toHaveLength(1)
     expect(screen.getAllByText('Leg 2: B')).toHaveLength(1)
+  })
+})
+
+describe('ControlCardsForm direction and alternate start', () => {
+  function controlNames() {
+    return (screen.getAllByPlaceholderText('Control name') as HTMLInputElement[]).map(
+      (el) => el.value
+    )
+  }
+
+  it('seeds swapped Start/Finish rows from event.direction, not the name', () => {
+    renderForm({ event: { ...event, name: 'Renamed', direction: 'reversed', startLocation: '' } })
+    expect(controlNames()).toEqual(['Finish', 'Start'])
+  })
+
+  it('does not swap rows for a name containing (Reversed) when direction is as_posted', () => {
+    renderForm({
+      event: { ...event, name: 'Loop (Reversed)', direction: 'as_posted', startLocation: '' },
+    })
+    expect(controlNames()).toEqual(['Start', 'Finish'])
+  })
+
+  it('shows the ride-start line and an import warning', async () => {
+    mockImportEventControlsFromRwgps.mockResolvedValue({
+      success: true,
+      data: [],
+      warning: 'The route has changed since this rider chose their start.',
+    })
+    renderForm({
+      event: {
+        ...event,
+        direction: 'reversed',
+        startLocation: 'Tim Hortons',
+        startOffsetKm: 42.3,
+        eventType: 'permanent',
+        rwgpsId: 'route-1',
+      },
+    })
+    expect(
+      screen.getByText('Reversed. Starts at Tim Hortons, 42.3 km into the posted route.')
+    ).toBeTruthy()
+    expect(
+      await screen.findByText('The route has changed since this rider chose their start.')
+    ).toBeTruthy()
   })
 })

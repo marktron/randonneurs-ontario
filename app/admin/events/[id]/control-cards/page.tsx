@@ -23,6 +23,8 @@ async function getEventDetails(eventId: string): Promise<EventForControlCardsWit
       start_location,
       distance_km,
       event_type,
+      direction,
+      start_offset_km,
       status,
       chapters (id, name),
       routes (id, name, rwgps_id, rwgps_collection_id)
@@ -109,6 +111,8 @@ export default async function ControlCardsPage({ params }: ControlCardsPageProps
           rwgpsId: event.routes?.rwgps_id || null,
           rwgpsCollectionId: event.routes?.rwgps_collection_id || null,
           eventType: event.event_type,
+          direction: event.direction === 'reversed' ? 'reversed' : 'as_posted',
+          startOffsetKm: event.start_offset_km,
         }}
         riders={registrations
           .filter((r) => r.riders)
