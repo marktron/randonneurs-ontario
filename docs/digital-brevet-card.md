@@ -714,9 +714,10 @@ Two implementation notes worth keeping:
 - "Import from RWGPS" button: uses `fetchRwgpsControlsWithCoords()` (the
   parser was extended to preserve each control's lat/lng; course points
   without coordinates interpolate from the nearest track point) seeded from
-  the event's route; reversed permanents get order + distances flipped with
-  coordinates kept. Results land in an editable table (name, km, lat/lng,
-  radius, notes) — nothing is saved until the admin hits Save.
+  the event's route; reversed and alternate-start permanents get order +
+  distances recalculated with coordinates kept (see `docs/control-cards.md`,
+  "Direction and alternate start"). Results land in an editable table (name,
+  km, lat/lng, radius, notes) — nothing is saved until the admin hits Save.
 - **POI notes.** A control POI's RWGPS `description` field is imported into
   the control's `notes` (trimmed; blank descriptions and course-point controls
   import as no note). Notes render on the rider's digital card under each
@@ -733,6 +734,12 @@ Two implementation notes worth keeping:
   rows are the single source of truth for control points. The printed
   control-cards form (`app/admin/events/[id]/control-cards`) prefills from
   them, so controls are defined once. See §16.
+
+- **Alternate starts.** On a permanent where the rider chose a start elsewhere
+  on a loop, position 1 and the final control are that start (its name and
+  coordinates), so the card's first and last check-in are at the rider's own
+  start. The manager shows the same ride-start line and import warnings as the
+  printed-card form.
 
 ### Ride organizer
 

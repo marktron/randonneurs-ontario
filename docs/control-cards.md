@@ -44,7 +44,9 @@ components/
 
 lib/
   brmTimes.ts                                 # ACP/BRM opening/closing time math + Toronto TZ helpers
-  controlPoints.ts                            # reverseControls() + isReversedEvent() for permanents
+  controlPoints.ts                            # transformControlsForRide() for reversed / alternate-start permanents; control matching helpers
+  routeTrack.ts                               # Route GPS track geometry for permanent start points
+  permanent-start.ts                          # Permanent ride-start rules and wording (slug, mismatch message, email and admin lines)
   rwgps.ts                                    # Shared RWGPS fetch + parse + dedupe (used by both forms)
   geo.ts                                      # haversineMeters() for POI distance interpolation
 
@@ -220,20 +222,87 @@ Rendered with `qrcode.react`. Up to two QR codes appear in the bottom of the mid
 
 Above those, a grayscale **"New! Try out the digital brevet card"** banner with its own QR (linking to `/card/{management_token}`) appears when the digital card would actually be usable — the admin print page mirrors the `/card/[token]` availability check (`CardRider.cardUrl` is set only when the event type passes `isDigitalCardEventType`, the event has stored `event_controls` rows, and the registration has a `management_token`), so the printed QR never lands on the "not set up" page. The public `/control-cards/print` flow has no registration tokens and never shows the banner.
 
-## Reversed permanent routes
+## Direction and alternate start
 
-Permanents can be ridden in reverse. The `events.name` convention is to append `(Reversed)` to the route name. The admin control-cards form detects this via `isReversedEvent(name)` and:
+A permanent can be ridden reversed, from a start point elsewhere on a loop, or both. The choice is stored on the `events` row, and the control import (admin control-cards form and digital card manager) re-expresses the route's posted controls to match.
 
-1. Swaps the default Start/Finish labels in the initial 2-control list.
-2. Reverses imported controls. The public form uses `reverseControls(controls, totalDistance)` directly. The **admin** form now imports via the `importEventControlsFromRwgps(eventId)` server action, which applies the reversal server-side (using the event's `distance_km`) — see "RWGPS import" below.
-3. Shows an info banner in the form. Combined with custom start locations on permanents, the banner has three variants (see `components/admin/control-cards-form.tsx`):
-   - Reversed + custom start: "Controls are shown in reversed direction, starting from {location}."
-   - Reversed only: "Controls are shown in reversed direction."
-   - Custom start only: "Starting from {location}."
+### Stored fields
 
-The public form does **not** implement reversal — that flow has no concept of a permanent event, so if you're printing cards for a reversed permanent you should use the admin flow (or reverse them manually in the form).
+Four `events` columns hold the ride start (migration `20261004120000_permanent_alternate_start.sql`):
 
-Logic lives in `lib/controlPoints.ts`, covered by `tests/unit/lib/controlPoints.test.ts`.
+| Column            | Meaning                                                                                                     |
+| ----------------- | ----------------------------------------------------------------------------------------------------------- |
+| `direction`       | `as_posted` (default) or `reversed`. The migration backfilled `reversed` for permanents named `(Reversed)`. |
+| `start_offset_km` | The rider's start, in km along the route as posted, to 0.1 km. Null means the posted start.                 |
+| `start_lat`       | Latitude of the start point. Null together with `start_lng`.                                                |
+| `start_lng`       | Longitude of the start point.                                                                               |
+
+Check constraints keep the set consistent: `direction` is one of the two values, the offset is not negative, latitude and longitude are both set or both null, and an offset requires coordinates. The event name still gets `(Reversed)` appended for display, but nothing reads the name to decide direction. `start_location` holds the place name the rider typed for an alternate start.
+
+The offset is always measured on the route as posted, whatever the direction. Reversing the ride does not change it.
+
+### Choosing a start at registration
+
+Alternate starts are for loops only: the route's first and last track points must be within 500 m of each other (`RouteTrack.isLoop`). On `/register/permanent` the rider opens a map (`components/route-start-picker.tsx`) and either taps the route or types a distance in the "km into the route" field. The rider must also name the start location. Direction is a separate choice and works on any route.
+
+- A tap snaps to the nearest point on the route at any distance from the tap. Where the route passes that spot more than once (two points more than 1 km apart along the route, within 150 m of each other, or the track point spacing if that is wider), the rider picks which pass.
+- A distance must be between 0.1 km and 0.1 km short of the route length. A start closer than 0.1 km to the posted start or finish means "start where the route starts" and is stored as no alternate start.
+- The client sends only the distance and the place name. `registerForPermanent` loads the route's track (`loadRouteTrack`, cached for a day) and derives the coordinates from it. It returns an error if the track cannot be loaded, if the route is not a loop, or if no place name was given.
+- Start time must be `HH:MM` (24-hour). `validateStartTime` rejects anything else, because joining an existing ride compares times in that form.
+
+Route length `T` is the RWGPS track length rounded to 0.1 km, and offsets are rounded to 0.1 km. Start times are compared as `HH:MM`.
+
+### One ride per route, date and direction
+
+The `events` slug is `permanent-{route}-{date}`, with `-reverse` added for reversed rides, so there is one ride per route, date and direction. The first registrant sets the start time and start point. A later registrant must match both, or the registration is refused with a message that names the existing start and suggests the same start or another date. The registration form looks the ride up (`getExistingPermanentRide`) and, when one exists, shows its start, fills in and locks the time, and hides the alternate-start picker.
+
+A ride nobody is on can be taken over by the next registrant. This is the rule in `isRideReclaimable` (`lib/actions/registration/permanent-event.ts`): the ride has no active registrations (status `registered` or `incomplete: membership`), and either it has a cancelled registration or it was created more than 15 minutes ago (`RECLAIM_GRACE_MS`). On a takeover the event row takes the new start time, place name and start point. If the start point moved and the ride has saved controls, those controls are deleted so the admin re-imports them for the new start. A takeover is refused, and the registrant gets the usual mismatch message, if any saved control has a check-in. The form's existing-ride lookup returns nothing for a ride that can be taken over, so the form does not lock it.
+
+Known limitation: a takeover does not restart the 15-minute grace period. In the few seconds while the rider who took the ride over is still completing registration (rider, membership and registration rows are created after the event row), the ride has no active registrations and is past the grace period, so another rider with a different start could take it over again.
+
+### Control transform
+
+`transformControlsForRide` in `lib/controlPoints.ts` takes the posted controls, the route length `T`, the direction and the optional start, and returns the controls for the way the ride is ridden. It works in integer tenths of a km. `d` is a control's posted distance and `o` is the start offset.
+
+- Endpoints are snapped first. Control distances arrive rounded to 0.1 km, so `d <= 0.1` becomes 0 and `d >= T - 0.1` becomes `T`. An exact `d === T` test would miss a 204.5 finish on a 204.54 km route.
+- No alternate start, as posted: the controls are returned unchanged.
+- No alternate start, reversed: `d' = T - d`, in reverse order.
+- Alternate start, as posted: `d' = (d - o) mod T`.
+- Alternate start, reversed: `d' = (o - d) mod T`, in reverse order.
+- With an alternate start, the rider's start becomes km 0 and km `T`. Both rows carry the rider's place name and the stored coordinates.
+- On a loop the posted start and finish are one place. They land on the same `d'` and collapse into a single intermediate control. The start's row is kept when there is one, else the finish's.
+- Posted controls that land within 0.1 km of the rider's start or finish are dropped in its favour.
+
+Example: on a 204.5 km loop with controls at 0, 45.2, 97.7, 142.3 and 204.5 km, a rider starting 100 km in gets the rider's start at 0, then 142.3 at 42.3, then the posted start and finish as one control at 104.5, then 45.2 at 149.7, then 97.7 at 202.2 (97.7 is behind the start by 2.3 km on the way round), and the rider's start again at 204.5.
+
+Collection imports are not transformed: they have no reversal and no alternate start.
+
+### Closing times after rotation
+
+`computeControlTimes` treats any control at or beyond the integer route length as the finish and gives it the nominal finish limit. On a route longer than its nominal distance, a rotation can put the posted start in that band. For a 204.5 km route with nominal distance 200 and a pin 1 km in, the posted start lands at 203.5 km and closes at 13:30 (the 200 km limit) where the band formula alone gives 13:32. This only happens when the pin is within the overage (here 4.5 km) of the posted start. The result is accepted: an intermediate control should not close after the finish. A test pins it (`tests/unit/lib/brevet-card.test.ts`).
+
+### Import recheck and warnings
+
+The rider chose the start against the track as it was at registration, and the organizer may have edited the RWGPS route since. `importEventControlsFromRwgps` re-checks the stored start against the current track (`checkStoredStart`) before transforming. Two warnings can come back with the controls, and the admin forms show them in an amber alert above the control list:
+
+- `START_OFF_TRACK_WARNING`: the stored coordinates are no longer on the route at the stored offset. The start is still applied. Check the start control's distance and location.
+- `START_BEYOND_ROUTE_WARNING`: the stored offset is now past the end of the route. The start is not applied and the controls come back for the direction only. Set the start control by hand.
+
+If the track cannot be built, the import compares the offset against the route length only.
+
+### Admin ride-start line
+
+Above the control list, the admin control-cards form and the digital card manager show a one-line summary from `describeRideStartForAdmin` (`lib/permanent-start.ts`): "Reversed." and/or "Starts at {place}, {n} km into the posted route." If a place name is stored without an offset, the line says the rider noted a start with no position on the route and that controls were not adjusted. The line is omitted when the ride is as posted from the posted start.
+
+### Confirmation email
+
+The start line in a permanent's confirmation email comes from `formatPermanentStartLocation`: the place name, the offset in km, and "riding the route reversed" where it applies. With no place name it reads "Start control per route", or "Route finish (riding the route reversed)" for a reversed ride. The same function is used on the direct registration path and when registration is completed after a rider match.
+
+### Public form
+
+The public `/control-cards` form does not support reversal or alternate starts. That flow has no concept of a permanent event, so cards for a reversed or alternate-start permanent come from the admin flow.
+
+Logic lives in `lib/controlPoints.ts`, `lib/routeTrack.ts` and `lib/permanent-start.ts`, covered by `tests/unit/lib/controlPoints.test.ts`, `tests/unit/lib/routeTrack.test.ts` and `tests/unit/lib/permanent-start.test.ts`.
 
 ## Collection routes (whole-event or per-leg cards)
 
@@ -363,8 +432,8 @@ All route fetching goes through the **authenticated v1 API** (`https://ridewithg
 
 The two forms differ in **how** they fetch:
 
-- **Public form** calls the `loadRwgpsControls(rwgpsId)` / `loadRwgpsRoute(rwgpsId, privacyCode)` server actions and applies `reverseControls()` itself when needed. It strips coordinates.
-- **Admin form** calls the `importEventControlsFromRwgps(eventId)` **server action**, which fetches with coordinates (`fetchRwgpsControlsWithCoords`) and applies reversed-event handling server-side. This is the same importer the digital brevet card manager uses, so both produce identical results. Coordinates are kept internally (for save-back to `event_controls`) but never encoded into the print URL.
+- **Public form** calls the `loadRwgpsControls(rwgpsId)` / `loadRwgpsRoute(rwgpsId, privacyCode)` server actions. It does not reverse or rotate controls. It strips coordinates.
+- **Admin form** calls the `importEventControlsFromRwgps(eventId)` **server action**, which fetches with coordinates (`fetchRwgpsControlsWithCoords`) and applies the event's direction and alternate start server-side (see "Direction and alternate start"). This is the same importer the digital brevet card manager uses, so both produce identical results. Coordinates are kept internally (for save-back to `event_controls`) but never encoded into the print URL.
 
 ### Shared controls with the digital brevet card
 
@@ -451,7 +520,9 @@ If you need to change regulation wording, edit it here — `<ControlCardsPrint>`
 Unit tests cover the pure modules:
 
 - `tests/unit/lib/brmTimes.test.ts` — opening/closing formulas, nominal bands, finish clamping, Toronto TZ.
-- `tests/unit/lib/controlPoints.test.ts` — `reverseControls` and `isReversedEvent`.
+- `tests/unit/lib/controlPoints.test.ts`: `transformControlsForRide`, `matchImportedControls`, `controlsInSync`.
+- `tests/unit/lib/routeTrack.test.ts`: track thinning, loop detection, snapping, stored-start recheck.
+- `tests/unit/lib/permanent-start.test.ts`: slug, start-mismatch message, email and admin start lines.
 - `tests/unit/lib/rwgps.test.ts` — `cleanControlName`, `extractControls` (source merging, dedupe, POI interpolation, off-route rejection), and `fetchRwgpsControls` (mocked `fetch`).
 - `tests/unit/lib/geo.test.ts` — `haversineMeters` sanity checks.
 
@@ -508,9 +579,9 @@ Route designers can validate a draft route by visiting `/control-cards?rwgps=tru
 
 Private routes work too — paste the share link URL (which includes `?privacy_code=...`) and the privacy code is forwarded to RWGPS automatically.
 
-### Reversed permanents
+### Reversed and alternate-start permanents
 
-When a permanent is registered as reversed, the event name includes "(Reversed)". Controls are automatically reversed and distances recalculated. An info banner in the form tells you when this is happening. Example:
+Direction and start point come from the event's stored fields, not its name. Controls are transformed when they are imported (see "Direction and alternate start"), and the control pages show a ride-start line so you can see what was applied. A reversed ride from the posted start looks like this:
 
 | Original      | Distance | Reversed      | Distance |
 | ------------- | -------- | ------------- | -------- |
@@ -519,6 +590,8 @@ When a permanent is registered as reversed, the event name includes "(Reversed)"
 | Little Lake   | 97.7 km  | Little Lake   | 106.8 km |
 | Campbellville | 142.3 km | Georgetown    | 159.3 km |
 | Finish        | 204.5 km | Start         | 204.5 km |
+
+If an import shows a warning about the rider's start, fix the rows by hand in the control list and save.
 
 ### Route Map and Submission QR codes
 

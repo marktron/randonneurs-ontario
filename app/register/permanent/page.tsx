@@ -47,7 +47,10 @@ export default async function PermanentRegistrationPage() {
                       <span className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-medium flex items-center justify-center">
                         2
                       </span>
-                      <span>Select your start date, time, and location</span>
+                      <span>
+                        Select your start date and time. On loop routes you can also start from any
+                        point on the route.
+                      </span>
                     </li>
                     <li className="flex gap-3">
                       <span className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-medium flex items-center justify-center">

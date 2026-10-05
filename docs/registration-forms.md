@@ -15,6 +15,13 @@ don't re-inline them (see GitHub issue #82 for the duplication this replaced).
 | `components/registration/registration-dialogs.tsx` | `RegistrationDialogs` — rider-match dialog, membership error modal, and the email-typo confirmation dialog.                                                                                                                                                                                                                     |
 | `components/registration/email-confirm-dialog.tsx` | `EmailConfirmDialog` — blocking "did you mean …?" confirmation raised by the server-side typo guard. See [email-typo-guard.md](email-typo-guard.md).                                                                                                                                                                            |
 
+## Permanent start picker
+
+The permanent form adds two pieces on top of the shared ones.
+
+- **Start picker.** On loop routes, a "Start somewhere else on the route" button opens `components/route-start-picker.tsx`, a Leaflet map of the route. The rider taps the route, or types a distance in the "km into the route" field, and names the start. A tap snaps to the nearest point on the route; where the route passes that spot more than once the rider chooses the pass. The form gets the track from `getPermanentRouteTrack` and shows the picker only when the track is a loop. It sends the server only `startOffsetKm` and the place name. The server derives coordinates from the cached track.
+- **Existing-ride lock.** When the rider picks a route, date and direction, the form calls `getExistingPermanentRide`. If a ride already exists, a notice states its start, the time field shows that ride's time and is disabled, and the picker is hidden; the form submits the existing ride's time and start. The lookup returns nothing for a ride nobody is on that can be taken over (see "Direction and alternate start" in `docs/control-cards.md`), so the form stays editable in that case. Start time must be `HH:MM`.
+
 ## How a form is assembled
 
 Each form keeps only its unique sections (fleche team picker, permanent

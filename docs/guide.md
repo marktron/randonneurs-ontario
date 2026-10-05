@@ -249,13 +249,15 @@ Rider data (name, email, cell phone, emergency contact) is saved to localStorage
 Permanents work differently from scheduled events. Instead of registering for a specific event, riders go to [/register/permanent](/register/permanent) and configure their own ride:
 
 1. **Pick a route** from the list of active permanent routes (grouped by chapter, searchable).
-2. **Choose a date** (must be at least two weeks in the future per RO rules, but we can change this if we want).
-3. **Set a start time, location and direction** - Alternate start location and ride direction (as posted or reversed) are optional, and default to the route start point and direction.
+2. **Choose a date.** Registration closes at 8 p.m. Eastern the day before the ride.
+3. **Set a start time, direction and, on loops, a start point.** Direction (as posted or reversed) defaults to as posted. On loop routes a rider can also start somewhere else on the route by tapping a map or typing a distance, and naming the place. Alternate starts are for loops only.
 4. Fill in the same rider info as a brevet registration.
 
-Behind the scenes, the system creates an event record for that route and date combination. If another rider has already registered for the same route on the same day, they share the same event record. Membership verification and confirmation emails work the same way as brevets.
+Behind the scenes, the system creates an event record for that route, date and direction. If another rider has already registered for the same route, date and direction, they share the same event record, so the first rider to register sets the start time and start point. Later riders see that start and join it; to start somewhere else or at another time they have to pick another date. If everyone on a ride has cancelled, the next rider can set a new start. Membership verification and confirmation emails work the same way as brevets, and the email names the start point.
 
-**A note about permanent control cards:** Currently, you still have to generate and email the control card to permanent riders. Making that more self-service is an upcoming future enhancement. The tool _does not_ recalculate distances based on a custom starting location; it will produce a standard control card with distances calculated from the original starting point. If the route is being ridden in reverse direction from the starting point, the tool _will_ reverse the listed control points and update the control point distances.
+**A note about permanent control cards:** Currently, you still have to generate and email the control card to permanent riders. Making that more self-service is an upcoming future enhancement. When you import controls for a permanent, the tool recalculates the control points and distances for the way the rider is riding it: reversed, from an alternate start, or both. On the control pages, a line above the control list says what the rider chose, for example "Starts at Tim Hortons, Uxbridge, 100.0 km into the posted route." The rider's start becomes the first and last control.
+
+Two warnings can appear above the control list after an import. One says the route has changed since the rider chose their start, so check the start control's distance and location. The other says the start is past the end of the current route and was not applied, so set the start control by hand. If a rider's pin turns out to be wrong, edit the control rows by hand and save. If a ride had controls saved for a start and a new rider changes the start after everyone cancelled, the saved controls are removed and you import them again.
 
 ## Common workflows
 

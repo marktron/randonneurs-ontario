@@ -224,10 +224,37 @@ All write operations live in `lib/actions/`. These are [Server Actions](https://
 // Register for a scheduled event
 export async function registerForEvent(data: RegistrationData): Promise<RegistrationResult>
 
-// Register for a permanent ride
+// Register for a permanent ride. `startOffsetKm` (with `startLocation` as the
+// place name) is the rider's start in km along the route as posted; the server
+// derives the coordinates from the cached track and rejects it on non-loop routes.
 export async function registerForPermanent(
   data: PermanentRegistrationData
 ): Promise<RegistrationResult>
+```
+
+### lib/actions/permanent-start.ts
+
+Read-only lookups for the permanent registration form (Server Actions, not rate limited).
+
+```typescript
+// The route's track for the start picker, or { available: false }
+export async function getPermanentRouteTrack(routeId: string): Promise<PermanentRouteTrackResult>
+
+// The ride already registered for a route, date and direction, or null. Also null
+// for a ride nobody is on that a new registrant could take over.
+export async function getExistingPermanentRide(
+  routeId: string,
+  eventDate: string,
+  direction: 'as_posted' | 'reversed'
+): Promise<ExistingPermanentRide | null>
+```
+
+### lib/data/route-track.ts
+
+```typescript
+// Cached RWGPS track for a route (24 hours, tag `routes`). Null when it cannot be
+// loaded; failures are not cached.
+export async function loadRouteTrack(rwgpsId: string): Promise<RouteTrack | null>
 ```
 
 ### lib/actions/events.ts (Admin)
