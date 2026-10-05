@@ -24,6 +24,99 @@ export function isReversedEvent(eventName: string): boolean {
   return eventName.includes('(Reversed)')
 }
 
+export type RideDirection = 'as_posted' | 'reversed'
+
+/** A control as imported for an event. Matches `ImportedControl` in lib/actions/event-controls.ts. */
+export interface RideControl {
+  name: string
+  distanceKm: number
+  lat: number | null
+  lng: number | null
+  notes: string | null
+  legRwgpsId: string | null
+  legName: string | null
+}
+
+/** A rider-chosen start, `offsetKm` along the route as posted. */
+export interface RideStart {
+  offsetKm: number
+  lat: number
+  lng: number
+  name: string
+}
+
+/**
+ * Re-express a route's posted controls for the way a permanent is ridden:
+ * reversed, from a start point elsewhere on the loop, or both. Works in
+ * integer tenths of a km so the modulo never drifts.
+ *
+ * - No alternate start, as posted: input returned unchanged.
+ * - No alternate start, reversed: d' = T - d.
+ * - Alternate start: d' = (d - o) mod T as posted, (o - d) mod T reversed.
+ *   The rider's start becomes km 0 and km T. The posted start and finish land
+ *   on the same d' and collapse into one intermediate control. Posted controls
+ *   within 0.1 km of the rider's start are dropped in its favour.
+ *
+ * `totalKm` is the RWGPS track length. Control distances arrive rounded to
+ * 0.1 km, so endpoints are snapped (d <= 0.1 to 0, d >= T - 0.1 to T) before
+ * anything else: an exact d === T test would miss a 204.5 finish on a
+ * 204.54 km route.
+ */
+export function transformControlsForRide(
+  controls: RideControl[],
+  opts: { direction: RideDirection; totalKm: number; start: RideStart | null }
+): RideControl[] {
+  const { direction, start } = opts
+  if (direction === 'as_posted' && !start) return controls
+
+  const T = Math.round(opts.totalKm * 10)
+  const normalized = controls.map((control) => {
+    let d = Math.min(Math.max(Math.round(control.distanceKm * 10), 0), T)
+    if (d <= 1) d = 0
+    if (d >= T - 1) d = T
+    return { control, d }
+  })
+
+  if (!start) {
+    return normalized
+      .map(({ control, d }) => ({ control, d: T - d }))
+      .reverse()
+      .sort((a, b) => a.d - b.d)
+      .map(({ control, d }) => ({ ...control, distanceKm: d / 10 }))
+  }
+
+  const o = Math.round(start.offsetKm * 10)
+  const mod = (x: number) => ((x % T) + T) % T
+  // The posted start (d = 0) and finish (d = T) are one place on a loop.
+  // Keep the start's row when it exists, else the finish's.
+  const hasPostedStart = normalized.some(({ d }) => d === 0)
+  const rotated = normalized
+    .filter(({ d }) => !(hasPostedStart && d === T))
+    .map(({ control, d }) => ({
+      control,
+      d: mod(direction === 'reversed' ? o - d : d - o),
+    }))
+    .filter(({ d }) => d > 1 && d < T - 1)
+  if (direction === 'reversed') rotated.reverse()
+  rotated.sort((a, b) => a.d - b.d)
+
+  const terminus = (distanceKm: number): RideControl => ({
+    name: start.name,
+    distanceKm,
+    lat: start.lat,
+    lng: start.lng,
+    notes: null,
+    legRwgpsId: null,
+    legName: null,
+  })
+
+  return [
+    terminus(0),
+    ...rotated.map(({ control, d }) => ({ ...control, distanceKm: d / 10 })),
+    terminus(T / 10),
+  ]
+}
+
 /**
  * Minimal control shape for matching/sync comparisons: an identifying name and
  * a route distance in km.

@@ -101,6 +101,22 @@ describe('computeControlWindow', () => {
   })
 })
 
+describe('control windows after an alternate start rotates the route', () => {
+  const start = new Date('2026-06-01T10:00:00Z')
+  const minutes = (d: Date) => (d.getTime() - start.getTime()) / 60000
+
+  it('closes a mid-route control by the 15 km/h rule', () => {
+    // 154 km (truncated) / 15 km/h = 616 minutes.
+    expect(minutes(computeControlWindow(start, 154.5, 200).closeAt)).toBe(616)
+  })
+
+  it('gives the 200 finish limit to a posted start rotated past the nominal distance', () => {
+    // Accepted consequence (spec section 5, "Closing times after rotation"):
+    // 203.5 km on a nominal 200 closes at 13:30, not the formula's 13:32.
+    expect(minutes(computeControlWindow(start, 203.5, 200).closeAt)).toBe(13.5 * 60)
+  })
+})
+
 describe('deriveCheckinFlags', () => {
   const start = createTorontoDate(2026, 6, 11, 8, 0)
   const window = computeControlWindow(start, 100, 200)

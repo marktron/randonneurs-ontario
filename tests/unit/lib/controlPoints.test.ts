@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest'
 import {
   reverseControls,
   isReversedEvent,
+  transformControlsForRide,
+  type RideControl,
   matchImportedControls,
   controlsInSync,
   backCardLayout,
@@ -571,5 +573,166 @@ describe('titleStatesDistance', () => {
 
   it('does not match a number embedded mid-title', () => {
     expect(titleStatesDistance('200 Loop of Ottawa', 200)).toBe(false)
+  })
+})
+
+describe('transformControlsForRide', () => {
+  const c = (name: string, distanceKm: number): RideControl => ({
+    name,
+    distanceKm,
+    lat: 44 + distanceKm / 1000,
+    lng: -79,
+    notes: null,
+    legRwgpsId: null,
+    legName: null,
+  })
+  // A 204.54 km route whose controls arrive rounded to 0.1 km.
+  const posted = [
+    c('Start', 0),
+    c('Georgetown', 45.2),
+    c('Little Lake', 97.7),
+    c('Campbellville', 142.3),
+    c('Finish', 204.5),
+  ]
+  const pin = { offsetKm: 50, lat: 43.9, lng: -79.5, name: 'Tim Hortons, Acton' }
+  const summary = (controls: RideControl[]) => controls.map((x) => [x.name, x.distanceKm])
+
+  it('returns the posted controls untouched with no alternate start, as posted', () => {
+    const result = transformControlsForRide(posted, {
+      direction: 'as_posted',
+      totalKm: 204.54,
+      start: null,
+    })
+    expect(result).toEqual(posted)
+  })
+
+  it('reverses against the route length, not the nominal distance', () => {
+    const result = transformControlsForRide(posted, {
+      direction: 'reversed',
+      totalKm: 204.54,
+      start: null,
+    })
+    expect(summary(result)).toEqual([
+      ['Finish', 0],
+      ['Campbellville', 62.2],
+      ['Little Lake', 106.8],
+      ['Georgetown', 159.3],
+      ['Start', 204.5],
+    ])
+    // Each control keeps its own coordinates.
+    expect(result[1].lat).toBe(posted[3].lat)
+    expect(result.every((x) => x.distanceKm >= 0)).toBe(true)
+  })
+
+  it('rotates around an alternate start and collapses the posted start/finish', () => {
+    const result = transformControlsForRide(posted, {
+      direction: 'as_posted',
+      totalKm: 204.54,
+      start: pin,
+    })
+    expect(summary(result)).toEqual([
+      ['Tim Hortons, Acton', 0],
+      ['Little Lake', 47.7],
+      ['Campbellville', 92.3],
+      ['Start', 154.5],
+      ['Georgetown', 199.7],
+      ['Tim Hortons, Acton', 204.5],
+    ])
+    expect(result[0]).toMatchObject({ lat: 43.9, lng: -79.5, notes: null })
+    expect(result.at(-1)).toMatchObject({ lat: 43.9, lng: -79.5 })
+    // The collapsed control is the posted start, with its coordinates.
+    expect(result[3].lat).toBe(posted[0].lat)
+  })
+
+  it('never emits two controls at the same distance for a fractional route length', () => {
+    const result = transformControlsForRide(posted, {
+      direction: 'as_posted',
+      totalKm: 204.54,
+      start: pin,
+    })
+    const distances = result.map((x) => x.distanceKm)
+    expect(new Set(distances).size).toBe(distances.length)
+  })
+
+  it('combines reversal with an alternate start', () => {
+    const result = transformControlsForRide(posted, {
+      direction: 'reversed',
+      totalKm: 204.54,
+      start: pin,
+    })
+    expect(summary(result)).toEqual([
+      ['Tim Hortons, Acton', 0],
+      ['Georgetown', 4.8],
+      ['Start', 50],
+      ['Campbellville', 112.2],
+      ['Little Lake', 156.8],
+      ['Tim Hortons, Acton', 204.5],
+    ])
+  })
+
+  it('drops a posted control within 0.1 km of the pin in favour of the start/finish', () => {
+    for (const offsetKm of [45.2, 45.3, 45.1]) {
+      const result = transformControlsForRide(posted, {
+        direction: 'as_posted',
+        totalKm: 204.54,
+        start: { ...pin, offsetKm },
+      })
+      expect(result.map((x) => x.name)).not.toContain('Georgetown')
+      expect(result).toHaveLength(5)
+    }
+  })
+
+  it('does not invent a control when the posted endpoints are missing', () => {
+    const result = transformControlsForRide(posted.slice(1, 4), {
+      direction: 'as_posted',
+      totalKm: 204.54,
+      start: pin,
+    })
+    expect(summary(result)).toEqual([
+      ['Tim Hortons, Acton', 0],
+      ['Little Lake', 47.7],
+      ['Campbellville', 92.3],
+      ['Georgetown', 199.7],
+      ['Tim Hortons, Acton', 204.5],
+    ])
+  })
+
+  it('keeps the posted finish as the intermediate control when only it exists', () => {
+    const result = transformControlsForRide(posted.slice(1), {
+      direction: 'as_posted',
+      totalKm: 204.54,
+      start: pin,
+    })
+    expect(summary(result)).toContainEqual(['Finish', 154.5])
+    expect(result).toHaveLength(6)
+  })
+
+  it('clamps a control recorded past the end of the route', () => {
+    const result = transformControlsForRide([c('Start', 0), c('Finish', 204.9)], {
+      direction: 'reversed',
+      totalKm: 204.54,
+      start: null,
+    })
+    expect(summary(result)).toEqual([
+      ['Finish', 0],
+      ['Start', 204.5],
+    ])
+  })
+
+  it('keeps each pass of a multi-pass control', () => {
+    const result = transformControlsForRide(
+      [c('Start', 0), c('Cafe', 30), c('Cafe', 120), c('Finish', 204.5)],
+      { direction: 'as_posted', totalKm: 204.54, start: pin }
+    )
+    expect(summary(result).filter(([name]) => name === 'Cafe')).toEqual([
+      ['Cafe', 70],
+      ['Cafe', 184.5],
+    ])
+  })
+
+  it('does not mutate its input', () => {
+    const copy = structuredClone(posted)
+    transformControlsForRide(posted, { direction: 'reversed', totalKm: 204.54, start: pin })
+    expect(posted).toEqual(copy)
   })
 })
