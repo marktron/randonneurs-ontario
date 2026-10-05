@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { ChevronDownIcon } from 'lucide-react'
 import { format, addDays, isBefore } from 'date-fns'
 import { Input } from '@/components/ui/input'
@@ -24,7 +24,14 @@ import {
   CommandList,
 } from '@/components/ui/command'
 import { registerForPermanent, completeRegistrationWithRider } from '@/lib/actions/register'
+import {
+  getPermanentRouteTrack,
+  getExistingPermanentRide,
+  type ExistingPermanentRide,
+} from '@/lib/actions/permanent-start'
 import type { ActiveRoute } from '@/lib/data/routes'
+import type { RouteTrack } from '@/lib/routeTrack'
+import { RouteStartPicker } from '@/components/route-start-picker'
 import { HoneypotField } from '@/components/honeypot-field'
 import { useRegistrationForm } from '@/hooks/use-registration-form'
 import {
@@ -64,6 +71,12 @@ export function getMinPermanentDate(): Date {
 
 const minDate = getMinPermanentDate()
 
+function formatClock(hhmm: string): string {
+  const [h, m] = hhmm.split(':')
+  const hour = parseInt(h, 10)
+  return `${hour % 12 || 12}:${m} ${hour >= 12 ? 'PM' : 'AM'}`
+}
+
 interface PermanentRegistrationFormProps {
   routes: ActiveRoute[]
 }
@@ -79,6 +92,8 @@ export function PermanentRegistrationForm({ routes }: PermanentRegistrationFormP
   const [datePickerOpen, setDatePickerOpen] = useState(false)
   const [startTime, setStartTime] = useState<string>('08:00')
   const [startLocation, setStartLocation] = useState<string>('')
+  const [startOffsetKm, setStartOffsetKm] = useState<number | null>(null)
+  const [alternateStartOpen, setAlternateStartOpen] = useState(false)
   const [direction, setDirection] = useState<'as_posted' | 'reversed'>('as_posted')
   const [notes, setNotes] = useState('')
 
@@ -101,6 +116,71 @@ export function PermanentRegistrationForm({ routes }: PermanentRegistrationFormP
 
   const selectedRoute = routes.find((r) => r.id === routeId)
 
+  // Each lookup result is stored with the inputs it answers, so a result for
+  // an earlier route, date or direction is never shown for the current ones.
+  const [trackFor, setTrackFor] = useState<{ routeId: string; track: RouteTrack | null } | null>(
+    null
+  )
+  const [rideFor, setRideFor] = useState<{
+    key: string
+    ride: ExistingPermanentRide | null
+  } | null>(null)
+
+  // Only loops offer an alternate start.
+  useEffect(() => {
+    if (!routeId) return
+    let cancelled = false
+    getPermanentRouteTrack(routeId)
+      .then((result) => {
+        if (cancelled) return
+        const track = result.available && result.track.isLoop ? result.track : null
+        setTrackFor({ routeId, track })
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [routeId])
+  const track = trackFor?.routeId === routeId ? trackFor.track : null
+
+  // One ride per route, date and direction: if it exists, its first
+  // registrant set the start and later riders join on the same terms.
+  const formattedEventDate = eventDate ? format(eventDate, 'yyyy-MM-dd') : null
+  const rideKey =
+    routeId && formattedEventDate ? `${routeId}|${formattedEventDate}|${direction}` : null
+  useEffect(() => {
+    if (!rideKey || !formattedEventDate) return
+    let cancelled = false
+    getExistingPermanentRide(routeId, formattedEventDate, direction)
+      .then((ride) => {
+        if (!cancelled) setRideFor({ key: rideKey, ride })
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [rideKey, routeId, formattedEventDate, direction])
+  const existingRide = rideKey && rideFor?.key === rideKey ? rideFor.ride : null
+  const startLocked = existingRide !== null
+
+  // Joining an existing ride takes its start; the rider's own choices are
+  // kept underneath and come back if the ride no longer applies.
+  const effectiveStartTime = existingRide ? existingRide.startTime : startTime
+  const effectiveOffsetKm = existingRide ? existingRide.startOffsetKm : startOffsetKm
+  const effectiveStartLocation = existingRide
+    ? existingRide.startOffsetKm == null
+      ? ''
+      : (existingRide.startLocation ?? '')
+    : startOffsetKm == null
+      ? ''
+      : startLocation.trim()
+
+  function clearAlternateStart() {
+    setAlternateStartOpen(false)
+    setStartOffsetKm(null)
+    setStartLocation('')
+  }
+
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     form.setError(null)
@@ -115,22 +195,25 @@ export function PermanentRegistrationForm({ routes }: PermanentRegistrationFormP
       return
     }
 
+    if (!startLocked && startOffsetKm != null && !startLocation.trim()) {
+      form.setError('Please name your start location')
+      return
+    }
+
     submitRegistration()
   }
 
   /** `emailOverride` carries the address resolved by the typo confirmation. */
   function submitRegistration(emailOverride?: string) {
-    if (!routeId || !eventDate) return
-
-    // Format date as YYYY-MM-DD for the server
-    const formattedDate = format(eventDate, 'yyyy-MM-dd')
+    if (!routeId || !formattedEventDate) return
 
     startTransition(async () => {
       const result = await registerForPermanent({
         routeId,
-        eventDate: formattedDate,
-        startTime,
-        startLocation: startLocation.trim(),
+        eventDate: formattedEventDate,
+        startTime: effectiveStartTime,
+        startLocation: effectiveStartLocation,
+        startOffsetKm: effectiveOffsetKm,
         direction,
         ...form.riderPayload,
         ...(emailOverride !== undefined && { email: emailOverride, emailConfirmed: true }),
@@ -190,6 +273,7 @@ export function PermanentRegistrationForm({ routes }: PermanentRegistrationFormP
             <Popover open={routePickerOpen} onOpenChange={setRoutePickerOpen}>
               <PopoverTrigger asChild>
                 <Button
+                  id="route"
                   variant="outline"
                   role="combobox"
                   aria-expanded={routePickerOpen}
@@ -218,6 +302,8 @@ export function PermanentRegistrationForm({ routes }: PermanentRegistrationFormP
                             key={route.id}
                             value={`${route.name} ${route.chapterName} ${route.distanceKm}`}
                             onSelect={() => {
+                              // A start point belongs to one route.
+                              if (route.id !== routeId) clearAlternateStart()
                               setRouteId(route.id)
                               setRoutePickerOpen(false)
                             }}
@@ -275,39 +361,90 @@ export function PermanentRegistrationForm({ routes }: PermanentRegistrationFormP
             </p>
           </div>
 
+          {existingRide && (
+            <div role="status" className="rounded-lg border border-border bg-muted/50 p-3 text-sm">
+              A ride on this route is already registered for this date:{' '}
+              {formatClock(existingRide.startTime)} from{' '}
+              {existingRide.startOffsetKm == null
+                ? 'the posted start'
+                : `${existingRide.startLocation ?? 'a point'}, ${existingRide.startOffsetKm.toFixed(1)} km into the route`}
+              . You will join that ride. To use a different start or time, pick another date.
+            </div>
+          )}
+
           {/* Time Picker */}
           <div className="space-y-2">
             <Label htmlFor="time">Start Time</Label>
             <Input
               id="time"
               type="time"
-              value={startTime}
+              value={effectiveStartTime}
               onChange={(e) => setStartTime(e.target.value)}
-              disabled={isPending}
+              disabled={isPending || startLocked}
               required
             />
           </div>
 
-          {/* Start Location */}
-          <div className="space-y-2">
-            <Label htmlFor="location">
-              Alternate Start Location
-              <span className="text-muted-foreground font-normal ml-1">(optional)</span>
-            </Label>
-            <Input
-              id="location"
-              type="text"
-              placeholder="e.g., Tim Hortons, 123 Main St, Toronto"
-              value={startLocation}
-              maxLength={200}
-              onChange={(e) => setStartLocation(e.target.value)}
-              disabled={isPending}
-              autoComplete="off"
-            />
-            <p className="text-xs text-muted-foreground">
-              Only needed if you&apos;re not starting at the route&apos;s planned start control
-            </p>
-          </div>
+          {/* Alternate start: loops only, and not when joining an existing ride */}
+          {track && !startLocked && (
+            <div className="space-y-3">
+              {!alternateStartOpen ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full h-12 sm:h-9"
+                  disabled={isPending}
+                  onClick={() => setAlternateStartOpen(true)}
+                >
+                  Start somewhere else on the route
+                </Button>
+              ) : (
+                <>
+                  <div className="flex items-center justify-between gap-2">
+                    <Label>Start somewhere else on the route</Label>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      disabled={isPending}
+                      onClick={clearAlternateStart}
+                    >
+                      Use the posted start
+                    </Button>
+                  </div>
+                  <RouteStartPicker
+                    track={track}
+                    valueKm={startOffsetKm}
+                    onChange={setStartOffsetKm}
+                    disabled={isPending}
+                  />
+                  {startOffsetKm != null && (
+                    <>
+                      <p className="text-sm font-medium tabular-nums">
+                        Starts {startOffsetKm.toFixed(1)} km into the route
+                      </p>
+                      <div className="space-y-2">
+                        <Label htmlFor="location">Name of your start location</Label>
+                        <Input
+                          id="location"
+                          type="text"
+                          placeholder="e.g., Tim Hortons, 123 Main St, Uxbridge"
+                          value={startLocation}
+                          maxLength={200}
+                          onChange={(e) => setStartLocation(e.target.value)}
+                          disabled={isPending}
+                          autoComplete="off"
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          This becomes the first and last control on your card.
+                        </p>
+                      </div>
+                    </>
+                  )}
+                </>
+              )}
+            </div>
+          )}
 
           {/* Direction */}
           <div className="space-y-2">

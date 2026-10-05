@@ -17,6 +17,38 @@ vi.mock('@/lib/actions/register', () => ({
   completeRegistrationWithRider: (...args: unknown[]) => mockCompleteRegistrationWithRider(...args),
 }))
 
+const mockGetPermanentRouteTrack = vi.fn()
+const mockGetExistingPermanentRide = vi.fn()
+vi.mock('@/lib/actions/permanent-start', () => ({
+  getPermanentRouteTrack: (...args: unknown[]) => mockGetPermanentRouteTrack(...args),
+  getExistingPermanentRide: (...args: unknown[]) => mockGetExistingPermanentRide(...args),
+}))
+
+// Leaflet does not run in happy-dom; stand in for the map with buttons.
+vi.mock('@/components/route-start-picker', () => ({
+  RouteStartPicker: ({
+    valueKm,
+    onChange,
+    disabled,
+  }: {
+    valueKm: number | null
+    onChange: (km: number | null) => void
+    disabled?: boolean
+  }) => (
+    <div data-testid="route-start-picker" data-disabled={disabled ? 'true' : 'false'}>
+      <span data-testid="picker-value">{valueKm ?? 'none'}</span>
+      <button type="button" onClick={() => onChange(42.3)}>
+        Drop pin
+      </button>
+      <button type="button" onClick={() => onChange(null)}>
+        Clear pin
+      </button>
+    </div>
+  ),
+}))
+
+const loopTrack = { points: [], totalKm: 204.5, isLoop: true }
+
 // Mock router
 const mockRefresh = vi.fn()
 
@@ -119,10 +151,248 @@ describe('PermanentRegistrationForm', () => {
     vi.clearAllMocks()
     localStorage.clear()
     mockRegisterForPermanent.mockResolvedValue({ success: true })
+    mockGetPermanentRouteTrack.mockResolvedValue({ available: false })
+    mockGetExistingPermanentRide.mockResolvedValue(null)
   })
 
   afterEach(() => {
     vi.clearAllMocks()
+  })
+
+  type User = ReturnType<typeof userEvent.setup>
+
+  async function selectRoute(user: User, route: ActiveRoute) {
+    await user.click(screen.getByRole('combobox', { name: 'Route' }))
+    await user.click(await screen.findByRole('option', { name: new RegExp(route.name) }))
+  }
+
+  /** Picks a day next month, which is always on or after the earliest allowed date. */
+  async function selectDate(user: User) {
+    await user.click(screen.getByRole('button', { name: 'Ride Date' }))
+    await user.click(screen.getByRole('button', { name: 'Go to the Next Month' }))
+    const dayButtons = screen
+      .getAllByRole('button')
+      .filter((b) => /^\d+$/.test(b.textContent || ''))
+    await user.click(dayButtons[15])
+  }
+
+  async function selectDirection(user: User, label: 'As Posted' | 'Reversed') {
+    await user.click(screen.getByRole('combobox', { name: 'Direction' }))
+    await user.click(await screen.findByRole('option', { name: label }))
+  }
+
+  async function fillRiderFieldsAndSubmit(user: User) {
+    await user.type(screen.getByLabelText(/first name/i), 'John')
+    await user.type(screen.getByLabelText(/last name/i), 'Doe')
+    await user.type(screen.getByLabelText(/email/i), 'john@example.com')
+    await user.type(document.querySelector('#emergencyContactName')!, 'Jane Doe')
+    await user.type(document.querySelector('#emergencyContactPhone')!, '555-1234')
+    await user.type(document.querySelector('#phone')!, '416-555-9999')
+    await user.click(screen.getByRole('button', { name: /schedule permanent/i }))
+  }
+
+  describe('alternate start', () => {
+    it('hides the picker when the route has no usable track', async () => {
+      const user = userEvent.setup()
+      render(<PermanentRegistrationForm routes={mockRoutes} />)
+      await selectRoute(user, mockRoutes[0])
+      await waitFor(() => expect(mockGetPermanentRouteTrack).toHaveBeenCalledWith(mockRoutes[0].id))
+      expect(
+        screen.queryByRole('button', { name: /start somewhere else/i })
+      ).not.toBeInTheDocument()
+      expect(screen.queryByTestId('route-start-picker')).not.toBeInTheDocument()
+      expect(screen.queryByLabelText(/start location/i)).not.toBeInTheDocument()
+    })
+
+    it('hides the picker for a point-to-point route', async () => {
+      const user = userEvent.setup()
+      mockGetPermanentRouteTrack.mockResolvedValue({
+        available: true,
+        track: { ...loopTrack, isLoop: false },
+      })
+      render(<PermanentRegistrationForm routes={mockRoutes} />)
+      await selectRoute(user, mockRoutes[0])
+      await waitFor(() => expect(mockGetPermanentRouteTrack).toHaveBeenCalled())
+      expect(
+        screen.queryByRole('button', { name: /start somewhere else/i })
+      ).not.toBeInTheDocument()
+      expect(screen.queryByTestId('route-start-picker')).not.toBeInTheDocument()
+    })
+
+    it('shows the picker for a loop and submits the offset and place name', async () => {
+      const user = userEvent.setup()
+      mockGetPermanentRouteTrack.mockResolvedValue({ available: true, track: loopTrack })
+      render(<PermanentRegistrationForm routes={mockRoutes} />)
+      await selectRoute(user, mockRoutes[0])
+      await user.click(await screen.findByRole('button', { name: /start somewhere else/i }))
+      await user.click(screen.getByRole('button', { name: 'Drop pin' }))
+      expect(screen.getByText('Starts 42.3 km into the route')).toBeInTheDocument()
+      await user.type(
+        screen.getByLabelText(/name of your start location/i),
+        'Tim Hortons, Uxbridge'
+      )
+      await selectDate(user)
+      await fillRiderFieldsAndSubmit(user)
+      await waitFor(() =>
+        expect(mockRegisterForPermanent).toHaveBeenCalledWith(
+          expect.objectContaining({ startOffsetKm: 42.3, startLocation: 'Tim Hortons, Uxbridge' })
+        )
+      )
+    })
+
+    it('requires a place name once a pin is set', async () => {
+      const user = userEvent.setup()
+      mockGetPermanentRouteTrack.mockResolvedValue({ available: true, track: loopTrack })
+      render(<PermanentRegistrationForm routes={mockRoutes} />)
+      await selectRoute(user, mockRoutes[0])
+      await user.click(await screen.findByRole('button', { name: /start somewhere else/i }))
+      await user.click(screen.getByRole('button', { name: 'Drop pin' }))
+      await selectDate(user)
+      await fillRiderFieldsAndSubmit(user)
+      expect(await screen.findByText('Please name your start location')).toBeInTheDocument()
+      expect(mockRegisterForPermanent).not.toHaveBeenCalled()
+    })
+
+    it('sends no start when the pin is cleared', async () => {
+      const user = userEvent.setup()
+      mockGetPermanentRouteTrack.mockResolvedValue({ available: true, track: loopTrack })
+      render(<PermanentRegistrationForm routes={mockRoutes} />)
+      await selectRoute(user, mockRoutes[0])
+      await user.click(await screen.findByRole('button', { name: /start somewhere else/i }))
+      await user.click(screen.getByRole('button', { name: 'Drop pin' }))
+      await user.click(screen.getByRole('button', { name: 'Clear pin' }))
+      await selectDate(user)
+      await fillRiderFieldsAndSubmit(user)
+      await waitFor(() => expect(mockRegisterForPermanent).toHaveBeenCalled())
+      const payload = mockRegisterForPermanent.mock.calls[0][0]
+      expect(payload.startOffsetKm).toBeNull()
+      expect(payload.startLocation).toBe('')
+    })
+
+    it('sends no start after the rider goes back to the posted start', async () => {
+      const user = userEvent.setup()
+      mockGetPermanentRouteTrack.mockResolvedValue({ available: true, track: loopTrack })
+      render(<PermanentRegistrationForm routes={mockRoutes} />)
+      await selectRoute(user, mockRoutes[0])
+      await user.click(await screen.findByRole('button', { name: /start somewhere else/i }))
+      await user.click(screen.getByRole('button', { name: 'Drop pin' }))
+      await user.type(screen.getByLabelText(/name of your start location/i), 'Tim Hortons')
+      await user.click(screen.getByRole('button', { name: /use the posted start/i }))
+      expect(screen.queryByTestId('route-start-picker')).not.toBeInTheDocument()
+      await selectDate(user)
+      await fillRiderFieldsAndSubmit(user)
+      await waitFor(() => expect(mockRegisterForPermanent).toHaveBeenCalled())
+      const payload = mockRegisterForPermanent.mock.calls[0][0]
+      expect(payload.startOffsetKm).toBeNull()
+      expect(payload.startLocation).toBe('')
+    })
+
+    it('clears the pin and place name when the route changes (Review Focus 4)', async () => {
+      const user = userEvent.setup()
+      mockGetPermanentRouteTrack.mockResolvedValue({ available: true, track: loopTrack })
+      render(<PermanentRegistrationForm routes={mockRoutes} />)
+      await selectRoute(user, mockRoutes[0])
+      await user.click(await screen.findByRole('button', { name: /start somewhere else/i }))
+      await user.click(screen.getByRole('button', { name: 'Drop pin' }))
+      await user.type(screen.getByLabelText(/name of your start location/i), 'Tim Hortons')
+      await selectRoute(user, mockRoutes[1])
+      await waitFor(() =>
+        expect(mockGetPermanentRouteTrack).toHaveBeenLastCalledWith(mockRoutes[1].id)
+      )
+      await user.click(await screen.findByRole('button', { name: /start somewhere else/i }))
+      expect(screen.getByTestId('picker-value')).toHaveTextContent('none')
+      expect(screen.queryByLabelText(/name of your start location/i)).not.toBeInTheDocument()
+      await user.click(screen.getByRole('button', { name: 'Drop pin' }))
+      expect(screen.getByLabelText(/name of your start location/i)).toHaveValue('')
+    })
+  })
+
+  describe('joining an existing ride', () => {
+    it('shows the existing start, locks time and start, and submits those values', async () => {
+      const user = userEvent.setup()
+      mockGetPermanentRouteTrack.mockResolvedValue({ available: true, track: loopTrack })
+      mockGetExistingPermanentRide.mockResolvedValue({
+        startTime: '06:30',
+        startLocation: 'Tim Hortons, Uxbridge',
+        startOffsetKm: 42.3,
+      })
+      render(<PermanentRegistrationForm routes={mockRoutes} />)
+      await selectRoute(user, mockRoutes[0])
+      await selectDate(user)
+      expect(
+        await screen.findByText(
+          /A ride on this route is already registered for this date: 6:30 AM from Tim Hortons, Uxbridge, 42\.3 km into the route/
+        )
+      ).toBeInTheDocument()
+      expect(screen.getByLabelText('Start Time')).toBeDisabled()
+      expect(screen.getByLabelText('Start Time')).toHaveValue('06:30')
+      expect(
+        screen.queryByRole('button', { name: /start somewhere else/i })
+      ).not.toBeInTheDocument()
+      await fillRiderFieldsAndSubmit(user)
+      await waitFor(() =>
+        expect(mockRegisterForPermanent).toHaveBeenCalledWith(
+          expect.objectContaining({
+            startTime: '06:30',
+            startOffsetKm: 42.3,
+            startLocation: 'Tim Hortons, Uxbridge',
+          })
+        )
+      )
+    })
+
+    it('describes an existing ride from the posted start', async () => {
+      const user = userEvent.setup()
+      mockGetExistingPermanentRide.mockResolvedValue({
+        startTime: '08:00',
+        startLocation: null,
+        startOffsetKm: null,
+      })
+      render(<PermanentRegistrationForm routes={mockRoutes} />)
+      await selectRoute(user, mockRoutes[0])
+      await selectDate(user)
+      expect(
+        await screen.findByText(/already registered for this date: 8:00 AM from the posted start/)
+      ).toBeInTheDocument()
+    })
+
+    it('looks the ride up again when the direction changes, and unlocks when none exists', async () => {
+      const user = userEvent.setup()
+      mockGetPermanentRouteTrack.mockResolvedValue({ available: true, track: loopTrack })
+      mockGetExistingPermanentRide.mockResolvedValueOnce({
+        startTime: '06:30',
+        startLocation: 'Tim Hortons, Uxbridge',
+        startOffsetKm: 42.3,
+      })
+      render(<PermanentRegistrationForm routes={mockRoutes} />)
+      await selectRoute(user, mockRoutes[0])
+      await selectDate(user)
+      await screen.findByText(/already registered for this date/)
+      await selectDirection(user, 'Reversed')
+      await waitFor(() =>
+        expect(mockGetExistingPermanentRide).toHaveBeenLastCalledWith(
+          mockRoutes[0].id,
+          expect.any(String),
+          'reversed'
+        )
+      )
+      await waitFor(() =>
+        expect(screen.queryByText(/already registered for this date/)).not.toBeInTheDocument()
+      )
+      expect(screen.getByLabelText('Start Time')).not.toBeDisabled()
+      expect(screen.getByLabelText('Start Time')).toHaveValue('08:00')
+
+      // The unlocked ride carries the rider's own (empty) start, not the other ride's.
+      await fillRiderFieldsAndSubmit(user)
+      await waitFor(() => expect(mockRegisterForPermanent).toHaveBeenCalled())
+      const payload = mockRegisterForPermanent.mock.calls[0][0]
+      expect(payload).toMatchObject({
+        startTime: '08:00',
+        startOffsetKm: null,
+        startLocation: '',
+        direction: 'reversed',
+      })
+    })
   })
 
   describe('rendering', () => {
