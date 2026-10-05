@@ -142,7 +142,23 @@ const mockFetchRwgpsCollection = vi.fn(
     }[]
   } | null> => null
 )
+const mockFetchRwgpsRouteForImport = vi.fn(
+  async (
+    _rwgpsId: string
+  ): Promise<{
+    controls: {
+      name: string
+      distance: string
+      lat: number | null
+      lng: number | null
+      notes: string | null
+    }[]
+    totalKm: number
+    points: { lat: number; lng: number; km: number }[]
+  }> => ({ controls: [], totalKm: 0, points: [] })
+)
 vi.mock('@/lib/rwgps', () => ({
+  fetchRwgpsRouteForImport: (rwgpsId: string) => mockFetchRwgpsRouteForImport(rwgpsId),
   fetchRwgpsControlsWithCoords: (rwgpsId: string) => mockFetchRwgpsControls(rwgpsId),
   fetchRwgpsCollection: (collectionId: string) => mockFetchRwgpsCollection(collectionId),
 }))
@@ -154,6 +170,7 @@ import {
   getEventCollectionLegs,
   importEventControlsFromRwgpsCollection,
 } from '@/lib/actions/event-controls'
+import { START_OFF_TRACK_WARNING, START_BEYOND_ROUTE_WARNING } from '@/lib/controlPoints'
 
 function resetAll() {
   vi.clearAllMocks()
@@ -703,13 +720,30 @@ describe('saveEventControls', () => {
 describe('importEventControlsFromRwgps', () => {
   beforeEach(resetAll)
 
-  function setupEvent(name: string, distanceKm = 200, rwgpsId: string | null = '12345') {
+  function setupEvent(
+    name: string,
+    distanceKm = 200,
+    rwgpsId: string | null = '12345',
+    ride: {
+      direction?: string
+      start_offset_km?: number | null
+      start_lat?: number | null
+      start_lng?: number | null
+      start_location?: string | null
+    } = {}
+  ) {
     tables.events = {
       singleResponse: {
         data: {
           id: 'event-1',
           name,
           distance_km: distanceKm,
+          direction: 'as_posted',
+          start_offset_km: null,
+          start_lat: null,
+          start_lng: null,
+          start_location: null,
+          ...ride,
           routes: rwgpsId === null ? null : { rwgps_id: rwgpsId },
         },
         error: null,
@@ -719,16 +753,20 @@ describe('importEventControlsFromRwgps', () => {
 
   it('returns parsed controls in route order for a forward event', async () => {
     setupEvent('Test 200')
-    mockFetchRwgpsControls.mockResolvedValue([
-      { name: 'Start', distance: '0.0', lat: 43.6, lng: -79.4, notes: 'Sign in here' },
-      { name: 'Mid', distance: '98.7', lat: 44.0, lng: -79.0, notes: null },
-      { name: 'Finish', distance: '200.0', lat: null, lng: null, notes: null },
-    ])
+    mockFetchRwgpsRouteForImport.mockResolvedValue({
+      controls: [
+        { name: 'Start', distance: '0.0', lat: 43.6, lng: -79.4, notes: 'Sign in here' },
+        { name: 'Mid', distance: '98.7', lat: 44.0, lng: -79.0, notes: null },
+        { name: 'Finish', distance: '200.0', lat: null, lng: null, notes: null },
+      ],
+      totalKm: 200,
+      points: [],
+    })
 
     const result = await importEventControlsFromRwgps('event-1')
 
     expect(result.success).toBe(true)
-    expect(mockFetchRwgpsControls).toHaveBeenCalledWith('12345')
+    expect(mockFetchRwgpsRouteForImport).toHaveBeenCalledWith('12345')
     expect(result.data).toEqual([
       {
         name: 'Start',
@@ -761,12 +799,16 @@ describe('importEventControlsFromRwgps', () => {
   })
 
   it('reverses control order and flips distances for a reversed event, keeping coordinates', async () => {
-    setupEvent('Test 200 (Reversed)', 200)
-    mockFetchRwgpsControls.mockResolvedValue([
-      { name: 'Start', distance: '0.0', lat: 43.6, lng: -79.4, notes: 'Depart A&W' },
-      { name: 'Mid', distance: '49.9', lat: 44.0, lng: -79.0, notes: null },
-      { name: 'Finish', distance: '200.0', lat: 45.0, lng: -78.0, notes: 'Final control' },
-    ])
+    setupEvent('Test 200 (Reversed)', 200, '12345', { direction: 'reversed' })
+    mockFetchRwgpsRouteForImport.mockResolvedValue({
+      controls: [
+        { name: 'Start', distance: '0.0', lat: 43.6, lng: -79.4, notes: 'Depart A&W' },
+        { name: 'Mid', distance: '49.9', lat: 44.0, lng: -79.0, notes: null },
+        { name: 'Finish', distance: '200.0', lat: 45.0, lng: -78.0, notes: 'Final control' },
+      ],
+      totalKm: 200,
+      points: [],
+    })
 
     const result = await importEventControlsFromRwgps('event-1')
 
@@ -804,6 +846,129 @@ describe('importEventControlsFromRwgps', () => {
     ])
   })
 
+  // A 20 km out-and-back loop along a line of longitude, points every ~111 m.
+  const loopPoints = Array.from({ length: 181 }, (_, i) => ({
+    lat: 44 + (i <= 90 ? i : 180 - i) * 0.001,
+    lng: -79,
+    km: i * 0.1112,
+  }))
+  const loopControls = [
+    { name: 'Start', distance: '0.0', lat: 44, lng: -79, notes: null },
+    { name: 'Turnaround', distance: '10.0', lat: 44.09, lng: -79, notes: null },
+    { name: 'Finish', distance: '20.0', lat: 44, lng: -79, notes: null },
+  ]
+
+  it('reverses on the direction column even when the name no longer says Reversed', async () => {
+    setupEvent('Renamed by an admin', 200, '12345', { direction: 'reversed' })
+    mockFetchRwgpsRouteForImport.mockResolvedValue({
+      controls: [
+        { name: 'Start', distance: '0.0', lat: 43.6, lng: -79.4, notes: null },
+        { name: 'Finish', distance: '204.5', lat: 45, lng: -78, notes: null },
+      ],
+      totalKm: 204.54,
+      points: [],
+    })
+    const result = await importEventControlsFromRwgps('event-1')
+    expect(result.data!.map((c) => [c.name, c.distanceKm])).toEqual([
+      ['Finish', 0],
+      ['Start', 204.5],
+    ])
+  })
+
+  it('does not reverse on the name alone', async () => {
+    setupEvent('Test 200 (Reversed)', 200, '12345', { direction: 'as_posted' })
+    mockFetchRwgpsRouteForImport.mockResolvedValue({
+      controls: loopControls,
+      totalKm: 20.016,
+      points: [],
+    })
+    const result = await importEventControlsFromRwgps('event-1')
+    expect(result.data!.map((c) => c.name)).toEqual(['Start', 'Turnaround', 'Finish'])
+  })
+
+  it('rotates controls around the stored alternate start', async () => {
+    setupEvent('Loop', 20, '12345', {
+      start_offset_km: 5,
+      start_lat: 44.045,
+      start_lng: -79,
+      start_location: 'Tim Hortons',
+    })
+    mockFetchRwgpsRouteForImport.mockResolvedValue({
+      controls: loopControls,
+      totalKm: 20.016,
+      points: loopPoints,
+    })
+    const result = await importEventControlsFromRwgps('event-1')
+    expect(result.success).toBe(true)
+    expect(result.warning).toBeUndefined()
+    expect(result.data!.map((c) => [c.name, c.distanceKm])).toEqual([
+      ['Tim Hortons', 0],
+      ['Turnaround', 5],
+      ['Start', 15],
+      ['Tim Hortons', 20],
+    ])
+    expect(result.data![0]).toMatchObject({ lat: 44.045, lng: -79 })
+  })
+
+  it('warns when the stored start is no longer on the track', async () => {
+    setupEvent('Loop', 20, '12345', {
+      start_offset_km: 5,
+      start_lat: 44.3,
+      start_lng: -79,
+      start_location: 'Tim Hortons',
+    })
+    mockFetchRwgpsRouteForImport.mockResolvedValue({
+      controls: loopControls,
+      totalKm: 20.016,
+      points: loopPoints,
+    })
+    const result = await importEventControlsFromRwgps('event-1')
+    expect(result.warning).toBe(START_OFF_TRACK_WARNING)
+    // The transform still ran.
+    expect(result.data![0].name).toBe('Tim Hortons')
+  })
+
+  it('ignores a stored start beyond a shortened route and says so', async () => {
+    setupEvent('Loop', 20, '12345', {
+      start_offset_km: 42.3,
+      start_lat: 44.045,
+      start_lng: -79,
+      start_location: 'Tim Hortons',
+    })
+    mockFetchRwgpsRouteForImport.mockResolvedValue({
+      controls: loopControls,
+      totalKm: 20.016,
+      points: loopPoints,
+    })
+    const result = await importEventControlsFromRwgps('event-1')
+    expect(result.warning).toBe(START_BEYOND_ROUTE_WARNING)
+    expect(result.data!.map((c) => c.name)).toEqual(['Start', 'Turnaround', 'Finish'])
+  })
+
+  it('still imports when RWGPS gives no distance or track (Review Focus 5)', async () => {
+    setupEvent('Loop', 20, '12345', {
+      direction: 'reversed',
+      start_offset_km: 5,
+      start_lat: 44.045,
+      start_lng: -79,
+      start_location: 'Tim Hortons',
+    })
+    mockFetchRwgpsRouteForImport.mockResolvedValue({
+      controls: loopControls,
+      totalKm: 0,
+      points: [],
+    })
+    const result = await importEventControlsFromRwgps('event-1')
+    expect(result.success).toBe(true)
+    // Length falls back to max(event distance, furthest control) = 20.
+    expect(result.data!.map((c) => [c.name, c.distanceKm])).toEqual([
+      ['Tim Hortons', 0],
+      ['Start', 5],
+      ['Turnaround', 15],
+      ['Tim Hortons', 20],
+    ])
+  })
+
   it('returns an error when the event does not exist', async () => {
     tables.events = { singleResponse: { data: null, error: { code: 'PGRST116' } } }
 
@@ -811,7 +976,7 @@ describe('importEventControlsFromRwgps', () => {
 
     expect(result.success).toBe(false)
     expect(result.error).toMatch(/event not found/i)
-    expect(mockFetchRwgpsControls).not.toHaveBeenCalled()
+    expect(mockFetchRwgpsRouteForImport).not.toHaveBeenCalled()
   })
 
   it('returns an error when the route has no RWGPS id', async () => {
@@ -821,12 +986,12 @@ describe('importEventControlsFromRwgps', () => {
 
     expect(result.success).toBe(false)
     expect(result.error).toMatch(/no ridewithgps id/i)
-    expect(mockFetchRwgpsControls).not.toHaveBeenCalled()
+    expect(mockFetchRwgpsRouteForImport).not.toHaveBeenCalled()
   })
 
   it('surfaces user-facing fetch errors verbatim', async () => {
     setupEvent('Test 200')
-    mockFetchRwgpsControls.mockRejectedValue(
+    mockFetchRwgpsRouteForImport.mockRejectedValue(
       new Error('No control points found in the RWGPS route. Add controls as course points.')
     )
 
@@ -981,6 +1146,7 @@ describe('importEventControlsFromRwgpsCollection', () => {
     // Read-only action: this only returns parsed controls for the admin to
     // review — saveEventControls performs the actual DB write afterward.
     expect(writeCalls()).toEqual([])
+    expect(mockFetchRwgpsRouteForImport).not.toHaveBeenCalled()
   })
 
   it('is all-or-nothing: a failing leg aborts with a leg-specific message and no data', async () => {

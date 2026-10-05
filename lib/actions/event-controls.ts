@@ -11,8 +11,18 @@ import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { requireAdmin } from '@/lib/auth/get-admin'
 import { assertEventMutable } from '@/lib/actions/event-mutability'
 import { logAuditEvent } from '@/lib/audit-log'
-import { fetchRwgpsControlsWithCoords, fetchRwgpsCollection } from '@/lib/rwgps'
-import { isReversedEvent } from '@/lib/controlPoints'
+import {
+  fetchRwgpsRouteForImport,
+  fetchRwgpsControlsWithCoords,
+  fetchRwgpsCollection,
+} from '@/lib/rwgps'
+import {
+  transformControlsForRide,
+  START_OFF_TRACK_WARNING,
+  START_BEYOND_ROUTE_WARNING,
+  type RideStart,
+} from '@/lib/controlPoints'
+import { buildRouteTrack, checkStoredStart, roundKm } from '@/lib/routeTrack'
 import { handleActionError, handleSupabaseError, createActionResult } from '@/lib/errors'
 import { isValidLatitude, isValidLongitude } from '@/lib/location-diagnostics'
 import type { ActionResult } from '@/types/actions'
@@ -356,14 +366,16 @@ export async function saveEventControls(
 
 export async function importEventControlsFromRwgps(
   eventId: string
-): Promise<ActionResult<ImportedControl[]>> {
+): Promise<ActionResult<ImportedControl[]> & { warning?: string }> {
   try {
     await requireAdmin()
     const supabase = getSupabaseAdmin()
 
     const { data: event, error: eventError } = await supabase
       .from('events')
-      .select('id, name, distance_km, routes (rwgps_id)')
+      .select(
+        'id, name, distance_km, direction, start_offset_km, start_lat, start_lng, start_location, routes (rwgps_id)'
+      )
       .eq('id', eventId)
       .single()
 
@@ -375,6 +387,11 @@ export async function importEventControlsFromRwgps(
       id: string
       name: string
       distance_km: number
+      direction: string
+      start_offset_km: number | null
+      start_lat: number | null
+      start_lng: number | null
+      start_location: string | null
       routes: { rwgps_id: string | null } | null
     }
 
@@ -383,9 +400,9 @@ export async function importEventControlsFromRwgps(
       return { success: false, error: "This event's route has no RideWithGPS ID" }
     }
 
-    const parsed = await fetchRwgpsControlsWithCoords(rwgpsId)
+    const { controls: parsed, totalKm: rwgpsKm, points } = await fetchRwgpsRouteForImport(rwgpsId)
 
-    let controls: ImportedControl[] = parsed.map((c) => ({
+    const posted: ImportedControl[] = parsed.map((c) => ({
       name: c.name,
       distanceKm: parseFloat(c.distance),
       lat: c.lat,
@@ -395,19 +412,49 @@ export async function importEventControlsFromRwgps(
       legName: null,
     }))
 
-    // Reversed permanents ride the route backwards: reverse the order and
-    // flip distances, keeping each control's physical coordinates
-    // (mirrors reverseControls() in the printed-card flow).
-    if (isReversedEvent(typedEvent.name)) {
-      controls = [...controls].reverse().map((c) => ({
-        ...c,
-        distanceKm: Math.round((typedEvent.distance_km - c.distanceKm) * 10) / 10,
-      }))
+    // The RWGPS track length is the route's real length. When RWGPS omits it,
+    // fall back to the furthest thing we know about.
+    const totalKm = roundKm(
+      rwgpsKm > 0 ? rwgpsKm : Math.max(typedEvent.distance_km, ...posted.map((c) => c.distanceKm))
+    )
+
+    // The rider chose their start against the track as it was at registration.
+    // Re-check it against the track as it is now.
+    let start: RideStart | null = null
+    let warning: string | undefined
+    if (
+      typedEvent.start_offset_km != null &&
+      typedEvent.start_lat != null &&
+      typedEvent.start_lng != null
+    ) {
+      const stored = {
+        offsetKm: Number(typedEvent.start_offset_km),
+        lat: typedEvent.start_lat,
+        lng: typedEvent.start_lng,
+      }
+      const track = buildRouteTrack(points, totalKm)
+      const status = track
+        ? checkStoredStart(track, stored)
+        : stored.offsetKm > totalKm - 0.1
+          ? 'beyond_route'
+          : 'ok'
+      if (status === 'beyond_route') {
+        warning = START_BEYOND_ROUTE_WARNING
+      } else {
+        start = { ...stored, name: typedEvent.start_location?.trim() || 'Start' }
+        if (status === 'off_track') warning = START_OFF_TRACK_WARNING
+      }
     }
 
-    return createActionResult(controls)
+    const controls = transformControlsForRide(posted, {
+      direction: typedEvent.direction === 'reversed' ? 'reversed' : 'as_posted',
+      totalKm,
+      start,
+    })
+
+    return { ...createActionResult(controls), ...(warning ? { warning } : {}) }
   } catch (error) {
-    // fetchRwgpsControlsWithCoords throws user-facing messages worth
+    // fetchRwgpsRouteForImport throws user-facing messages worth
     // surfacing verbatim (e.g. "No control points found in the RWGPS
     // route…"). Auth failures still go through the standard handler.
     if (error instanceof Error && error.message && error.message !== 'Unauthorized') {

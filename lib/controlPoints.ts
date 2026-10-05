@@ -37,6 +37,11 @@ export interface RideControl {
   legName: string | null
 }
 
+export const START_OFF_TRACK_WARNING =
+  "The route has changed since this rider chose their start. Check the start control's distance and location."
+export const START_BEYOND_ROUTE_WARNING =
+  "The rider's start point is beyond the end of the current route, so it was not applied. Set the start control by hand."
+
 /** A rider-chosen start, `offsetKm` along the route as posted. */
 export interface RideStart {
   offsetKm: number
