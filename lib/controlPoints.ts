@@ -38,11 +38,20 @@ export interface RideStart {
  *   on the same d' and collapse into one intermediate control. Posted controls
  *   within 0.1 km of the rider's start are dropped in its favour.
  *
- * `totalKm` is the RWGPS track length. Control distances arrive rounded to
- * 0.1 km, so endpoints are snapped (d <= 0.1 to 0, d >= T - 0.1 to T) before
- * anything else: an exact d === T test would miss a 204.5 finish on a
- * 204.54 km route.
+ * `totalKm` is the RWGPS track length. Before anything else, endpoints are
+ * snapped: any control within 0.1 km of either end (distances arrive rounded
+ * to 0.1 km, so an exact d === T test would miss a 204.5 finish on a 204.54 km
+ * route), plus the first control if it is within 1.0 km of km 0 and the last
+ * if it is within 1.0 km of T (see POSTED_ENDPOINT_TOLERANCE_KM).
  */
+/**
+ * How far the first or last control may sit from the end of the track and
+ * still count as the posted start or finish. A finish placed at a POI often
+ * sits a little short of where the track ends; left unsnapped it would
+ * become a separate control next to the rider's start.
+ */
+const POSTED_ENDPOINT_TOLERANCE_KM = 1.0
+
 export function transformControlsForRide(
   controls: RideControl[],
   opts: { direction: RideDirection; totalKm: number; start: RideStart | null }
@@ -57,6 +66,18 @@ export function transformControlsForRide(
     if (d >= T - 1) d = T
     return { control, d }
   })
+
+  // Only the first (lowest) and last (highest) controls can be the posted
+  // start and finish.
+  const tolerance = Math.round(POSTED_ENDPOINT_TOLERANCE_KM * 10)
+  if (normalized.length > 0) {
+    const ds = normalized.map(({ d }) => d)
+    const first = ds.indexOf(Math.min(...ds))
+    const last = ds.lastIndexOf(Math.max(...ds))
+    if (normalized[first].d <= tolerance) normalized[first].d = 0
+    // A lone control already snapped to 0 stays there.
+    if (normalized[last].d >= T - tolerance) normalized[last].d = T
+  }
 
   if (!start) {
     return normalized

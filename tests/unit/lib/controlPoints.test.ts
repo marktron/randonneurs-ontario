@@ -628,6 +628,66 @@ describe('transformControlsForRide', () => {
     ])
   })
 
+  // A POI-based finish that sits a little short of the track end.
+  const shortFinish = [c('Start', 0), c('Midway', 50), c('Finish', 203.9)]
+
+  it('treats a last control within 1 km of the track end as the posted finish', () => {
+    const result = transformControlsForRide(shortFinish, {
+      direction: 'as_posted',
+      totalKm: 204.5,
+      start: { ...pin, offsetKm: 100 },
+    })
+    expect(summary(result)).toEqual([
+      ['Tim Hortons, Acton', 0],
+      ['Start', 104.5],
+      ['Midway', 154.5],
+      ['Tim Hortons, Acton', 204.5],
+    ])
+  })
+
+  it('reverses a short finish to km 0', () => {
+    const result = transformControlsForRide(shortFinish, {
+      direction: 'reversed',
+      totalKm: 204.5,
+      start: null,
+    })
+    expect(summary(result)).toEqual([
+      ['Finish', 0],
+      ['Midway', 154.5],
+      ['Start', 204.5],
+    ])
+  })
+
+  it('treats a first control within 1 km of km 0 as the posted start', () => {
+    const result = transformControlsForRide(
+      [c('Start', 0.7), c('Midway', 50), c('Finish', 204.5)],
+      {
+        direction: 'reversed',
+        totalKm: 204.5,
+        start: null,
+      }
+    )
+    expect(summary(result)).toEqual([
+      ['Finish', 0],
+      ['Midway', 154.5],
+      ['Start', 204.5],
+    ])
+  })
+
+  it('does not snap a control near an end that is not the first or last control', () => {
+    const result = transformControlsForRide(
+      [c('Start', 0), c('Early', 0.8), c('Midway', 50), c('Late', 203.7), c('Finish', 204.5)],
+      { direction: 'reversed', totalKm: 204.5, start: null }
+    )
+    expect(summary(result)).toEqual([
+      ['Finish', 0],
+      ['Late', 0.8],
+      ['Midway', 154.5],
+      ['Early', 203.7],
+      ['Start', 204.5],
+    ])
+  })
+
   it('does not mutate its input', () => {
     const copy = structuredClone(posted)
     transformControlsForRide(posted, { direction: 'reversed', totalKm: 204.54, start: pin })
