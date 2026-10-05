@@ -34,27 +34,35 @@ const PIN_COLOR = '#2563eb' // blue-600
 const CONTROL_COLOR = '#1c1917' // stone-900, the style guide's near-black ink
 const NO_CONTROLS: RouteControl[] = []
 
+// The chosen start, drawn the same whether it is a free point (a circle
+// marker) or a control (the base of its flag): path radius and white ring, px.
+const START_DOT_RADIUS = 6
+const START_DOT_RING = 2
+
 // Flag marker geometry, in px within a square icon that is also the tap area.
 // The pole's base (the anchor) sits on the control; the pennant flies up and
 // to the right so the route line stays visible underneath.
-const FLAG_BOX = 32
-const FLAG_BASE: [number, number] = [11, 27]
+const FLAG_BOX = 40
+const FLAG_BASE: [number, number] = [14, 33]
+const POLE = 24
+const PENNANT = { width: 16, top: POLE, bottom: POLE - 10.5 }
 
 /**
  * A small flag on a pole with a dot at its base. The chosen start's flag is
- * pin blue and its base is the pin itself.
+ * pin blue and its base is the start dot itself.
  */
 function flagSvg(selected: boolean): string {
   const color = selected ? PIN_COLOR : CONTROL_COLOR
   const [x, y] = FLAG_BASE
+  const mid = (PENNANT.top + PENNANT.bottom) / 2
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${FLAG_BOX}" height="${FLAG_BOX}" viewBox="0 0 ${FLAG_BOX} ${FLAG_BOX}" overflow="visible" aria-hidden="true">
-<line x1="${x}" y1="${y}" x2="${x}" y2="${y - 18}" stroke="#fff" stroke-width="3.5" stroke-linecap="round"/>
-<line x1="${x}" y1="${y}" x2="${x}" y2="${y - 18}" stroke="${color}" stroke-width="1.5" stroke-linecap="round"/>
-<path d="M${x} ${y - 18} L${x + 12} ${y - 14} L${x} ${y - 10} Z" fill="${color}" stroke="#fff" stroke-width="1.25" stroke-linejoin="round"/>
+<line x1="${x}" y1="${y}" x2="${x}" y2="${y - POLE}" stroke="#fff" stroke-width="4.5" stroke-linecap="round"/>
+<line x1="${x}" y1="${y}" x2="${x}" y2="${y - POLE}" stroke="${color}" stroke-width="2" stroke-linecap="round"/>
+<path d="M${x} ${y - PENNANT.top} L${x + PENNANT.width} ${y - mid} L${x} ${y - PENNANT.bottom} Z" fill="${color}" stroke="#fff" stroke-width="1.5" stroke-linejoin="round"/>
 ${
   selected
-    ? `<circle cx="${x}" cy="${y}" r="5" fill="${PIN_COLOR}" stroke="#fff" stroke-width="2"/>`
-    : `<circle cx="${x}" cy="${y}" r="2.75" fill="#fff" stroke="${color}" stroke-width="1.5"/>`
+    ? `<circle cx="${x}" cy="${y}" r="${START_DOT_RADIUS}" fill="${PIN_COLOR}" stroke="#fff" stroke-width="${START_DOT_RING}"/>`
+    : `<circle cx="${x}" cy="${y}" r="3.5" fill="#fff" stroke="${color}" stroke-width="2"/>`
 }
 </svg>`
 }
@@ -182,7 +190,7 @@ export function RouteStartPicker({
           className: 'outline-none',
           iconSize: [FLAG_BOX, FLAG_BOX],
           iconAnchor: FLAG_BASE,
-          tooltipAnchor: [12, -12],
+          tooltipAnchor: [16, -16],
         })
       flagIconsRef.current = { plain: flagIcon(false), selected: flagIcon(true) }
       flagsRef.current = places.map((place) => ({
@@ -245,9 +253,9 @@ export function RouteStartPicker({
       // Not interactive: a tap on the pin reaches the control marker or the
       // map underneath it.
       pinRef.current = L.circleMarker([p.lat, p.lng], {
-        radius: 8,
+        radius: START_DOT_RADIUS,
         color: '#fff',
-        weight: 2,
+        weight: START_DOT_RING,
         fillColor: PIN_COLOR,
         fillOpacity: 1,
         interactive: false,
