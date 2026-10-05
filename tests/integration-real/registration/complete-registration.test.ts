@@ -17,7 +17,9 @@ const IDS = {
   route: '00000000-1a22-4000-a000-000000000002',
   scheduledEvent: '00000000-1a22-4000-a000-000000000003',
   completedEvent: '00000000-1a22-4000-a000-000000000004',
+  permanentEvent: '00000000-1a22-4000-a000-000000000005',
 }
+const EVENT_IDS = [IDS.scheduledEvent, IDS.completedEvent, IDS.permanentEvent]
 
 describe('completeRegistrationWithRider (real DB)', () => {
   const supabase = getTestSupabase()
@@ -48,11 +50,9 @@ describe('completeRegistrationWithRider (real DB)', () => {
     const riderIds = [IDS.rider]
     await supabase.from('rider_merges').delete().in('rider_id', riderIds)
     await supabase.from('rider_memberships').delete().in('rider_id', riderIds)
-    await supabase
-      .from('registrations')
-      .delete()
-      .in('event_id', [IDS.scheduledEvent, IDS.completedEvent])
-    await supabase.from('events').delete().in('id', [IDS.scheduledEvent, IDS.completedEvent])
+    await supabase.from('registrations').delete().in('event_id', EVENT_IDS)
+    await supabase.from('events').delete().in('id', EVENT_IDS)
+    await supabase.from('events').delete().like('slug', 'inttest-complete-permanent-%')
     await supabase.from('routes').delete().eq('id', IDS.route)
     await supabase.from('riders').delete().in('id', riderIds)
 
@@ -111,6 +111,27 @@ describe('completeRegistrationWithRider (real DB)', () => {
       }),
       'insert completed event'
     )
+
+    await checked(
+      supabase.from('events').insert({
+        id: IDS.permanentEvent,
+        slug: `inttest-complete-permanent-${futureDate}-reverse`,
+        name: 'IntTest Complete Route (Reversed)',
+        chapter_id: TORONTO_CHAPTER_ID,
+        route_id: IDS.route,
+        event_type: 'permanent',
+        distance_km: 200,
+        event_date: futureDate,
+        start_time: '08:00',
+        status: 'scheduled',
+        direction: 'reversed',
+        start_location: 'Tim Hortons',
+        start_offset_km: 5,
+        start_lat: 44.045,
+        start_lng: -79,
+      }),
+      'insert permanent event'
+    )
   })
 
   afterEach(async () => {
@@ -130,11 +151,8 @@ describe('completeRegistrationWithRider (real DB)', () => {
         )
     }
     await supabase.from('rider_memberships').delete().in('rider_id', [IDS.rider])
-    await supabase.from('results').delete().in('event_id', [IDS.scheduledEvent, IDS.completedEvent])
-    await supabase
-      .from('registrations')
-      .delete()
-      .in('event_id', [IDS.scheduledEvent, IDS.completedEvent])
+    await supabase.from('results').delete().in('event_id', EVENT_IDS)
+    await supabase.from('registrations').delete().in('event_id', EVENT_IDS)
     // Restore seeded rider BEFORE deleting by email, in case it was updated with completer@example.com
     await supabase
       .from('riders')
@@ -159,12 +177,9 @@ describe('completeRegistrationWithRider (real DB)', () => {
   afterAll(async () => {
     await supabase.from('rider_merges').delete().in('rider_id', [IDS.rider])
     await supabase.from('rider_memberships').delete().in('rider_id', [IDS.rider])
-    await supabase.from('results').delete().in('event_id', [IDS.scheduledEvent, IDS.completedEvent])
-    await supabase
-      .from('registrations')
-      .delete()
-      .in('event_id', [IDS.scheduledEvent, IDS.completedEvent])
-    await supabase.from('events').delete().in('id', [IDS.scheduledEvent, IDS.completedEvent])
+    await supabase.from('results').delete().in('event_id', EVENT_IDS)
+    await supabase.from('registrations').delete().in('event_id', EVENT_IDS)
+    await supabase.from('events').delete().in('id', EVENT_IDS)
     await supabase.from('routes').delete().eq('id', IDS.route)
     await supabase.from('riders').delete().in('id', [IDS.rider])
     await supabase.from('riders').delete().eq('email', 'completer@example.com')
@@ -495,5 +510,33 @@ describe('completeRegistrationWithRider (real DB)', () => {
 
     expect(result.success).toBe(false)
     expect(result.error).toBe('Missing required fields')
+  })
+
+  // --- Permanent ---
+
+  it('permanent event — email names the stored start and direction', async () => {
+    searchCCNMembership.mockResolvedValue({
+      found: true,
+      membershipId: 42,
+      type: 'Individual Membership',
+      city: 'Toronto',
+      country: 'Canada',
+    })
+
+    const { completeRegistrationWithRider } = await import('@/lib/actions/register')
+    const result = await completeRegistrationWithRider(
+      buildCompleteRegistrationData({
+        eventId: IDS.permanentEvent,
+        selectedRiderId: null,
+        email: 'completer@example.com',
+        firstName: 'Brand',
+        lastName: 'New',
+      })
+    )
+
+    expect(result.success).toBe(true)
+    assertEmailPayload(sendEmail, {
+      eventLocation: 'Tim Hortons (5.0 km into the route), riding the route reversed',
+    })
   })
 })

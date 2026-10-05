@@ -44,7 +44,6 @@ import type {
   EventInsert,
   EventWithRelations,
   RouteWithChapter,
-  EventIdOnly,
   RiderMergeInsert,
 } from '@/types/queries'
 import type { RiderMatchCandidate } from './rider-match'
@@ -68,8 +67,12 @@ import {
   type FindOrCreateRiderMatchResult,
 } from './registration/rider'
 import { finalizeRegistration } from './registration/finalize'
+import { createOrJoinPermanentEvent } from './registration/permanent-event'
 import type { BaseEmailPayload } from './registration/types'
 import { normalizeBrevetCardType, type BrevetCardType } from '@/lib/brevet-card'
+import { loadRouteTrack } from '@/lib/data/route-track'
+import { canonicalStart } from '@/lib/routeTrack'
+import { permanentEventSlug, formatPermanentStartLocation } from '@/lib/permanent-start'
 
 export interface RegistrationData {
   eventId: string
@@ -123,7 +126,10 @@ function eventEmailBase(
     eventName: event.name,
     eventDate: formatEventDate(event.event_date),
     eventTime: formatEventTime(event.start_time),
-    eventLocation: event.start_location || 'TBD',
+    eventLocation:
+      event.event_type === 'permanent'
+        ? formatPermanentStartLocation(event)
+        : event.start_location || 'TBD',
     eventDistance: event.distance_km,
     eventType: formatEventType(event.event_type),
     chapterName: event.chapters?.name || '',
@@ -146,6 +152,7 @@ function realChapterIdFor(
 const EVENT_SELECT = `
   id, slug, status, name, event_date, start_time,
   start_location, distance_km, event_type, chapter_id,
+  direction, start_offset_km,
   chapters (slug, name),
   routes (slug, rwgps_id, rwgps_collection_id)
 `
@@ -304,6 +311,8 @@ export interface PermanentRegistrationData {
   eventDate: string // YYYY-MM-DD
   startTime: string // HH:MM
   startLocation?: string // Optional - only if different from route start
+  /** Km along the posted route where the rider starts; requires startLocation as the place name. */
+  startOffsetKm?: number | null
   direction: 'as_posted' | 'reversed'
   firstName: string
   lastName: string
@@ -339,6 +348,7 @@ export async function registerForPermanent(
     eventDate,
     startTime,
     startLocation,
+    startOffsetKm,
     direction,
     gender,
     shareRegistration,
@@ -410,56 +420,66 @@ export async function registerForPermanent(
     return { success: false, error: 'Route does not have an assigned chapter' }
   }
 
+  // Resolve the alternate start against the route's track. The client sends
+  // only a distance; coordinates always come from the track.
+  let start: { offsetKm: number; lat: number; lng: number } | null = null
+  if (startOffsetKm != null) {
+    const track = route.rwgps_id ? await loadRouteTrack(route.rwgps_id) : null
+    if (!track) {
+      return {
+        success: false,
+        error:
+          'We could not load the route map to place your start. Try again, or register from the posted start.',
+      }
+    }
+    if (!track.isLoop) {
+      return { success: false, error: 'An alternate start is only available on loop routes' }
+    }
+    // Null when the point is the posted start itself: no alternate start.
+    start = canonicalStart(track, startOffsetKm)
+    if (start && !startLocation?.trim()) {
+      return { success: false, error: 'Please name your start location' }
+    }
+  }
+
   // Generate event name and slug (reversed rides get a distinct slug)
   const eventName = direction === 'reversed' ? `${route.name} (Reversed)` : route.name
-  const eventSlug =
-    direction === 'reversed'
-      ? `permanent-${route.slug}-${eventDate}-reverse`
-      : `permanent-${route.slug}-${eventDate}`
+  const eventSlug = permanentEventSlug(route.slug, eventDate, direction)
 
-  // Check if an event with this slug already exists
-  const { data: existingEvent } = await getSupabaseAdmin()
-    .from('events')
-    .select('id')
-    .eq('slug', eventSlug)
-    .single()
+  const insertEvent: EventInsert = {
+    slug: eventSlug,
+    name: eventName,
+    event_type: 'permanent',
+    status: 'scheduled',
+    route_id: route.id,
+    chapter_id: route.chapter_id,
+    distance_km: route.distance_km || 0,
+    event_date: eventDate,
+    start_time: startTime,
+    direction: direction === 'reversed' ? 'reversed' : 'as_posted',
+    start_location: start ? startLocation!.trim() : null,
+    start_offset_km: start?.offsetKm ?? null,
+    start_lat: start?.lat ?? null,
+    start_lng: start?.lng ?? null,
+  }
 
-  let eventId: string
-
-  if (existingEvent) {
-    // Use existing event (another rider might have created it for the same route/date)
-    eventId = (existingEvent as EventIdOnly).id
-  } else {
-    // Create new event
-    const insertEvent: EventInsert = {
-      slug: eventSlug,
-      name: eventName,
-      event_type: 'permanent',
-      status: 'scheduled',
-      route_id: route.id,
-      chapter_id: route.chapter_id,
-      distance_km: route.distance_km || 0,
-      event_date: eventDate,
-      start_time: startTime,
-      start_location: startLocation?.trim() || null,
-    }
-
-    const { data: newEvent, error: createError } = await getSupabaseAdmin()
-      .from('events')
-      .insert(insertEvent)
-      .select('id')
-      .single()
-
-    if (createError || !newEvent) {
+  // One ride per route, date and direction: join it only on the same start.
+  const rideResult = await createOrJoinPermanentEvent(insertEvent, {
+    startTime,
+    offsetKm: start?.offsetKm ?? null,
+  })
+  if (!rideResult.ok) {
+    if (rideResult.cause) {
       return handleSupabaseError(
-        createError,
+        rideResult.cause as Parameters<typeof handleSupabaseError>[0],
         { operation: 'registerForPermanent.createEvent', context: { routeId, eventSlug } },
-        'Failed to create permanent ride event'
+        rideResult.error
       )
     }
-
-    eventId = (newEvent as EventIdOnly).id
+    return { success: false, error: rideResult.error }
   }
+  const ride = rideResult.event
+  const eventId = ride.id
 
   // Find or create rider, then run the shared finalization flow
   try {
@@ -511,8 +531,8 @@ export async function registerForPermanent(
         registrantEmail: normalizedEmail,
         eventName,
         eventDate: formatEventDate(eventDate),
-        eventTime: formatEventTime(startTime),
-        eventLocation: startLocation?.trim() || 'Start control per route',
+        eventTime: formatEventTime(ride.start_time),
+        eventLocation: formatPermanentStartLocation(ride),
         eventDistance: route.distance_km || 0,
         eventType: 'Permanent',
         chapterName: route.chapters?.name || '',

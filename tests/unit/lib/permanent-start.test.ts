@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest'
-import { describeRideStartForAdmin } from '@/lib/permanent-start'
+import {
+  describeRideStartForAdmin,
+  permanentEventSlug,
+  toHHMM,
+  permanentStartMismatch,
+  formatPermanentStartLocation,
+} from '@/lib/permanent-start'
 
 describe('describeRideStartForAdmin', () => {
   it('is null for an as-posted ride from the posted start', () => {
@@ -42,5 +48,103 @@ describe('describeRideStartForAdmin', () => {
         startOffsetKm: null,
       })
     ).toBe('Rider noted a start at My driveway (no position on the route, controls not adjusted).')
+  })
+})
+
+describe('permanentEventSlug', () => {
+  it('matches the existing slug scheme', () => {
+    expect(permanentEventSlug('lake-loop', '2027-05-01', 'as_posted')).toBe(
+      'permanent-lake-loop-2027-05-01'
+    )
+    expect(permanentEventSlug('lake-loop', '2027-05-01', 'reversed')).toBe(
+      'permanent-lake-loop-2027-05-01-reverse'
+    )
+  })
+})
+
+describe('toHHMM', () => {
+  it('cuts database TIME values to HH:MM', () => {
+    expect(toHHMM('08:00:00')).toBe('08:00')
+    expect(toHHMM('08:00')).toBe('08:00')
+    expect(toHHMM(null)).toBeNull()
+  })
+})
+
+describe('permanentStartMismatch', () => {
+  const existing = {
+    start_time: '08:00:00',
+    start_location: 'Tim Hortons, Uxbridge',
+    start_offset_km: 42.3,
+    direction: 'as_posted',
+  }
+
+  it('accepts the same start after a database round trip', () => {
+    expect(permanentStartMismatch(existing, { startTime: '08:00', offsetKm: 42.3 })).toBeNull()
+    expect(
+      permanentStartMismatch(existing, { startTime: '08:00', offsetKm: 42.30000001 })
+    ).toBeNull()
+  })
+
+  it('rejects a different time, naming the existing start', () => {
+    expect(permanentStartMismatch(existing, { startTime: '09:00', offsetKm: 42.3 })).toBe(
+      'A ride on this route is already registered for this date, starting at 8:00 AM from Tim Hortons, Uxbridge (42.3 km into the route). Join it with the same start, or choose another date.'
+    )
+  })
+
+  it('rejects a different offset and a missing offset', () => {
+    expect(permanentStartMismatch(existing, { startTime: '08:00', offsetKm: 50 })).not.toBeNull()
+    expect(permanentStartMismatch(existing, { startTime: '08:00', offsetKm: null })).not.toBeNull()
+  })
+
+  it('lets a rider with no alternate start join a legacy ride (Review Focus 3)', () => {
+    const legacy = { ...existing, start_location: 'My driveway', start_offset_km: null }
+    expect(permanentStartMismatch(legacy, { startTime: '08:00', offsetKm: null })).toBeNull()
+  })
+
+  it('describes a posted-start ride when rejecting an alternate start', () => {
+    const posted = { ...existing, start_location: null, start_offset_km: null }
+    expect(permanentStartMismatch(posted, { startTime: '08:00', offsetKm: 12 })).toBe(
+      'A ride on this route is already registered for this date, starting at 8:00 AM from the posted start. Join it with the same start, or choose another date.'
+    )
+  })
+})
+
+describe('formatPermanentStartLocation', () => {
+  it('formats the email start line for each case', () => {
+    expect(
+      formatPermanentStartLocation({
+        start_location: null,
+        start_offset_km: null,
+        direction: 'as_posted',
+      })
+    ).toBe('Start control per route')
+    expect(
+      formatPermanentStartLocation({
+        start_location: null,
+        start_offset_km: null,
+        direction: 'reversed',
+      })
+    ).toBe('Route finish (riding the route reversed)')
+    expect(
+      formatPermanentStartLocation({
+        start_location: 'Tim Hortons, Uxbridge',
+        start_offset_km: 42.3,
+        direction: 'as_posted',
+      })
+    ).toBe('Tim Hortons, Uxbridge (42.3 km into the route)')
+    expect(
+      formatPermanentStartLocation({
+        start_location: 'Tim Hortons, Uxbridge',
+        start_offset_km: 42,
+        direction: 'reversed',
+      })
+    ).toBe('Tim Hortons, Uxbridge (42.0 km into the route), riding the route reversed')
+    expect(
+      formatPermanentStartLocation({
+        start_location: 'My driveway',
+        start_offset_km: null,
+        direction: 'as_posted',
+      })
+    ).toBe('My driveway')
   })
 })

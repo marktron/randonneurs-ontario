@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeAll, afterAll, afterEach } from 'vitest'
+import { describe, it, expect, vi, beforeAll, beforeEach, afterAll, afterEach } from 'vitest'
 import { getTestSupabase, checked } from '../helpers/supabase'
 import {
   TORONTO_CHAPTER_ID,
@@ -7,10 +7,12 @@ import {
   assertEmailPayload,
   assertManagementUrl,
 } from './helpers'
+import { buildRouteTrack } from '@/lib/routeTrack'
 
 vi.mock('@/lib/email/send-registration-email')
 vi.mock('@/lib/ccn/client')
 vi.mock('@/lib/actions/rider-match')
+vi.mock('@/lib/data/route-track')
 
 const IDS = {
   rider: '00000000-1a21-4000-a000-000000000001',
@@ -18,12 +20,27 @@ const IDS = {
   inactiveRoute: '00000000-1a21-4000-a000-000000000003',
 }
 
+// A 20 km out-and-back that closes on itself (a loop), and a 10 km line.
+const LOOP_TRACK = buildRouteTrack(
+  Array.from({ length: 181 }, (_, i) => ({
+    lat: 44 + (i <= 90 ? i : 180 - i) * 0.001,
+    lng: -79,
+    km: i * 0.1112,
+  })),
+  20.016
+)!
+const LINE_TRACK = buildRouteTrack(
+  Array.from({ length: 91 }, (_, i) => ({ lat: 44 + i * 0.001, lng: -79, km: i * 0.1112 })),
+  10.008
+)!
+
 describe('registerForPermanent (real DB)', () => {
   const supabase = getTestSupabase()
 
   let sendEmail: ReturnType<typeof vi.fn>
   let searchCCNMembership: ReturnType<typeof vi.fn>
   let searchRiderCandidates: ReturnType<typeof vi.fn>
+  let loadRouteTrack: ReturnType<typeof vi.fn>
 
   beforeAll(async () => {
     process.env.NEXT_PUBLIC_CURRENT_SEASON = '2026'
@@ -38,6 +55,9 @@ describe('registerForPermanent (real DB)', () => {
     const matchMod = await import('@/lib/actions/rider-match')
     searchRiderCandidates = vi.mocked(matchMod.searchRiderCandidates)
     searchRiderCandidates.mockResolvedValue({ candidates: [] })
+
+    const trackMod = await import('@/lib/data/route-track')
+    loadRouteTrack = vi.mocked(trackMod.loadRouteTrack)
 
     // Clean up
     await supabase.from('rider_merges').delete().eq('rider_id', IDS.rider)
@@ -83,6 +103,7 @@ describe('registerForPermanent (real DB)', () => {
         chapter_id: TORONTO_CHAPTER_ID,
         distance_km: 200,
         is_active: true,
+        rwgps_id: '990001',
       }),
       'insert route'
     )
@@ -98,6 +119,11 @@ describe('registerForPermanent (real DB)', () => {
       }),
       'insert inactive route'
     )
+  })
+
+  beforeEach(() => {
+    loadRouteTrack.mockReset()
+    loadRouteTrack.mockResolvedValue(LOOP_TRACK)
   })
 
   afterEach(async () => {
@@ -552,5 +578,251 @@ describe('registerForPermanent (real DB)', () => {
     )
     expect(result2.success).toBe(false)
     expect(result2.error).toContain('already registered')
+  })
+
+  // --- Ride start: direction, alternate start, one ride per route/date/direction ---
+
+  const member = () =>
+    searchCCNMembership.mockResolvedValue({
+      found: true,
+      membershipId: 42,
+      type: 'Individual Membership',
+      city: 'Toronto',
+      country: 'Canada',
+    })
+  const eventBySlug = async (slug: string) =>
+    (
+      await supabase
+        .from('events')
+        .select('id, direction, start_time, start_location, start_offset_km, start_lat, start_lng')
+        .eq('slug', slug)
+        .single()
+    ).data
+
+  it('stores direction, offset, coordinates and place name for an alternate start', async () => {
+    member()
+    const eventDate = daysFromNow(41)
+    const { registerForPermanent } = await import('@/lib/actions/register')
+    const result = await registerForPermanent(
+      buildPermanentRegistrationData({
+        routeId: IDS.route,
+        eventDate,
+        direction: 'reversed',
+        startOffsetKm: 5.04,
+        startLocation: '  Tim Hortons, Uxbridge  ',
+      })
+    )
+    expect(result.success).toBe(true)
+    const event = await eventBySlug(`permanent-inttest-perm-route-${eventDate}-reverse`)
+    expect(event).toMatchObject({
+      direction: 'reversed',
+      start_location: 'Tim Hortons, Uxbridge',
+      start_offset_km: 5,
+    })
+    // Coordinates come from the track, not the client.
+    expect(event!.start_lat).toBeCloseTo(44.045, 3)
+    expect(event!.start_lng).toBe(-79)
+    assertEmailPayload(sendEmail, {
+      eventLocation: 'Tim Hortons, Uxbridge (5.0 km into the route), riding the route reversed',
+    })
+  })
+
+  it('stores no start point for a plain registration', async () => {
+    member()
+    const eventDate = daysFromNow(42)
+    const { registerForPermanent } = await import('@/lib/actions/register')
+    await registerForPermanent(buildPermanentRegistrationData({ routeId: IDS.route, eventDate }))
+    expect(await eventBySlug(`permanent-inttest-perm-route-${eventDate}`)).toMatchObject({
+      direction: 'as_posted',
+      start_location: null,
+      start_offset_km: null,
+      start_lat: null,
+      start_lng: null,
+    })
+    expect(loadRouteTrack).not.toHaveBeenCalled()
+  })
+
+  it('requires a place name with an alternate start', async () => {
+    member()
+    const { registerForPermanent } = await import('@/lib/actions/register')
+    const result = await registerForPermanent(
+      buildPermanentRegistrationData({
+        routeId: IDS.route,
+        eventDate: daysFromNow(43),
+        startOffsetKm: 5,
+      })
+    )
+    expect(result).toMatchObject({ success: false, error: 'Please name your start location' })
+  })
+
+  it('refuses an alternate start on a route that is not a loop', async () => {
+    member()
+    loadRouteTrack.mockResolvedValue(LINE_TRACK)
+    const { registerForPermanent } = await import('@/lib/actions/register')
+    const result = await registerForPermanent(
+      buildPermanentRegistrationData({
+        routeId: IDS.route,
+        eventDate: daysFromNow(44),
+        startOffsetKm: 5,
+        startLocation: 'Somewhere',
+      })
+    )
+    expect(result).toMatchObject({
+      success: false,
+      error: 'An alternate start is only available on loop routes',
+    })
+  })
+
+  it('refuses an alternate start when the route track cannot be loaded', async () => {
+    member()
+    loadRouteTrack.mockResolvedValue(null)
+    const { registerForPermanent } = await import('@/lib/actions/register')
+    const result = await registerForPermanent(
+      buildPermanentRegistrationData({
+        routeId: IDS.route,
+        eventDate: daysFromNow(45),
+        startOffsetKm: 5,
+        startLocation: 'Somewhere',
+      })
+    )
+    expect(result.success).toBe(false)
+    expect(result.error).toMatch(/could not load the route map/i)
+  })
+
+  it('treats an offset at the posted start as no alternate start', async () => {
+    member()
+    const eventDate = daysFromNow(46)
+    const { registerForPermanent } = await import('@/lib/actions/register')
+    const result = await registerForPermanent(
+      buildPermanentRegistrationData({
+        routeId: IDS.route,
+        eventDate,
+        startOffsetKm: 0.04,
+        startLocation: 'x',
+      })
+    )
+    expect(result.success).toBe(true)
+    expect(await eventBySlug(`permanent-inttest-perm-route-${eventDate}`)).toMatchObject({
+      start_offset_km: null,
+      start_location: null,
+    })
+  })
+
+  it('lets a second rider join with the same start after a database round trip', async () => {
+    member()
+    const eventDate = daysFromNow(47)
+    const { registerForPermanent } = await import('@/lib/actions/register')
+    const start = { startTime: '08:00', startOffsetKm: 5, startLocation: 'Tim Hortons' }
+    expect(
+      (
+        await registerForPermanent(
+          buildPermanentRegistrationData({ routeId: IDS.route, eventDate, ...start })
+        )
+      ).success
+    ).toBe(true)
+    const second = await registerForPermanent(
+      buildPermanentRegistrationData({
+        routeId: IDS.route,
+        eventDate,
+        ...start,
+        email: 'new-rider@example.com',
+        firstName: 'Another',
+        lastName: 'Person',
+      })
+    )
+    expect(second.success).toBe(true)
+    const { data: events } = await supabase
+      .from('events')
+      .select('id')
+      .eq('slug', `permanent-inttest-perm-route-${eventDate}`)
+    expect(events).toHaveLength(1)
+  })
+
+  it('rejects a second rider with a different start and writes nothing', async () => {
+    member()
+    const eventDate = daysFromNow(48)
+    const { registerForPermanent } = await import('@/lib/actions/register')
+    await registerForPermanent(
+      buildPermanentRegistrationData({
+        routeId: IDS.route,
+        eventDate,
+        startOffsetKm: 5,
+        startLocation: 'Tim Hortons',
+      })
+    )
+    const second = await registerForPermanent(
+      buildPermanentRegistrationData({
+        routeId: IDS.route,
+        eventDate,
+        startTime: '09:30',
+        email: 'new-rider@example.com',
+        firstName: 'Another',
+        lastName: 'Person',
+      })
+    )
+    expect(second.success).toBe(false)
+    expect(second.error).toBe(
+      'A ride on this route is already registered for this date, starting at 8:00 AM from Tim Hortons (5.0 km into the route). Join it with the same start, or choose another date.'
+    )
+    const event = await eventBySlug(`permanent-inttest-perm-route-${eventDate}`)
+    const { count } = await supabase
+      .from('registrations')
+      .select('id', { count: 'exact', head: true })
+      .eq('event_id', event!.id)
+    expect(count).toBe(1)
+    expect(event).toMatchObject({ start_time: '08:00:00', start_offset_km: 5 })
+  })
+
+  it('two simultaneous first registrations with the same start share one event', async () => {
+    member()
+    const eventDate = daysFromNow(49)
+    const { registerForPermanent } = await import('@/lib/actions/register')
+    const results = await Promise.all([
+      registerForPermanent(buildPermanentRegistrationData({ routeId: IDS.route, eventDate })),
+      registerForPermanent(
+        buildPermanentRegistrationData({
+          routeId: IDS.route,
+          eventDate,
+          email: 'new-rider@example.com',
+          firstName: 'Another',
+          lastName: 'Person',
+        })
+      ),
+    ])
+    expect(results.map((r) => r.success)).toEqual([true, true])
+    const { data: events } = await supabase
+      .from('events')
+      .select('id')
+      .eq('slug', `permanent-inttest-perm-route-${eventDate}`)
+    expect(events).toHaveLength(1)
+  })
+
+  it('two simultaneous first registrations with different starts: one wins, one is told why', async () => {
+    member()
+    const eventDate = daysFromNow(50)
+    const { registerForPermanent } = await import('@/lib/actions/register')
+    const results = await Promise.all([
+      registerForPermanent(
+        buildPermanentRegistrationData({ routeId: IDS.route, eventDate, startTime: '07:00' })
+      ),
+      registerForPermanent(
+        buildPermanentRegistrationData({
+          routeId: IDS.route,
+          eventDate,
+          startTime: '09:00',
+          email: 'new-rider@example.com',
+          firstName: 'Another',
+          lastName: 'Person',
+        })
+      ),
+    ])
+    expect(results.filter((r) => r.success)).toHaveLength(1)
+    const loser = results.find((r) => !r.success)!
+    expect(loser.error).toMatch(/^A ride on this route is already registered for this date/)
+    const { data: events } = await supabase
+      .from('events')
+      .select('id')
+      .eq('slug', `permanent-inttest-perm-route-${eventDate}`)
+    expect(events).toHaveLength(1)
   })
 })
