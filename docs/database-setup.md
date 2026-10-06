@@ -226,7 +226,7 @@ If needed, re-run via:
 gh workflow run deploy-migrations.yml
 ```
 
-Or push locally with the direct commands (note that the workflow passes `--project-ref` instead of linking):
+Or push locally with the direct commands (note that the workflow links first because GitHub runners lack IPv6):
 
 ```bash
 npx supabase link --project-ref <project-ref>

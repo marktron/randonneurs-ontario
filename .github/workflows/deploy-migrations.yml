@@ -66,9 +66,18 @@ jobs:
           # and this job never starts a local stack.
           version: 2.115.0
 
-      # --project-ref makes `supabase link` unnecessary (verified locally with
-      # --dry-run). Only migrations absent from the remote history table are
-      # applied, so re-running on an already-current database is a no-op.
+      # GitHub runners have no IPv6, and without a link the CLI dials the
+      # database host directly, which resolves to IPv6 only (both deploy runs
+      # on 2026-10-06 failed with "IPv6 is not supported on your current
+      # network"). Linking first makes the CLI use the IPv4 pooler.
+      - name: Link project
+        run: >-
+          supabase link
+          --project-ref "$SUPABASE_PROJECT_REF"
+          --password "$SUPABASE_DB_PASSWORD"
+
+      # Only migrations absent from the remote history table are applied, so
+      # re-running on an already-current database is a no-op.
       - name: Push migrations to production
         run: >-
           supabase db push
