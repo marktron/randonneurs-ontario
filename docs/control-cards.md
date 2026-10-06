@@ -473,7 +473,7 @@ Two passes:
 
 ### Name cleanup
 
-Common prefixes on control names are stripped from both sources: `CTL - `, `CTL-`, `CTL `, `CTRL - `, `CTRL-`, `CTRL `, `CONTROL - `, `CONTROL-`, `CONTROL `, and a leading `-`/`- `. This keeps organizer-friendly names like `CTL - Little Lake` from cluttering the printed card. Lives in `cleanControlName()` in `lib/rwgps.ts`.
+Common prefixes on control names are stripped from both sources: `CTL`, `CTRL` or `CONTROL` in any case, followed by a hyphen or colon (with or without spaces around it) or by spaces, so `CTL - `, `CTL-`, `CTL: `, `CTL:`, `CTRL `, `Control: ` and the like all go; a word that merely starts with those letters (`CTLA Store`) is kept. A leading `-`/`- ` left after that is stripped too. This keeps organizer-friendly names like `CTL - Little Lake` from cluttering the printed card. Lives in `cleanControlName()` in `lib/rwgps.ts`.
 
 ### Errors
 

@@ -28,9 +28,10 @@ export async function loadRouteMap(rwgpsId: string): Promise<RouteMap | null> {
         if (!track) throw new Error(`RWGPS route ${rwgpsId} has no usable track`)
         return { track, controls }
       },
-      // 'route-map', not the earlier 'route-track': entries cached in the
-      // old track-only shape must never be read as a RouteMap.
-      ['route-map', rwgpsId],
+      // A new key whenever the cached shape or the control-name cleaning
+      // changes, so stale entries are never served: 'route-track' held the
+      // track alone, 'route-map' kept names like "CTL: Paris" uncleaned.
+      ['route-map-v2', rwgpsId],
       { revalidate: TRACK_REVALIDATE_SECONDS, tags: ['routes'] }
     )()
   } catch (error) {

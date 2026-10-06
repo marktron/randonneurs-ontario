@@ -95,17 +95,10 @@ interface RwgpsRoute {
   track_points?: RwgpsTrackPoint[]
 }
 
-const CONTROL_NAME_PREFIXES = [
-  'CTL - ',
-  'CTL-',
-  'CTL ',
-  'CTRL - ',
-  'CTRL-',
-  'CTRL ',
-  'CONTROL - ',
-  'CONTROL-',
-  'CONTROL ',
-]
+// "CTL", "CTRL" or "CONTROL" (any case) followed by a separator: a hyphen or
+// colon with optional spaces around it, or just spaces. "CTL - X", "CTL-X",
+// "CTL: X", "CTL:X" and "CTL X" all match; "CTLA Store" does not.
+const CONTROL_NAME_PREFIX = /^(?:CTL|CTRL|CONTROL)(?:\s*[-:]\s*|\s+)/i
 
 /**
  * Parse a RideWithGPS route reference from a URL, share link, or bare ID.
@@ -177,17 +170,12 @@ export function extractRwgpsRefs(input: string | null | undefined): RwgpsRefs {
 }
 
 /**
- * Strip common control-name prefixes ("CTL -", "CTRL ", "CONTROL-", etc.)
- * used by organizers when tagging RWGPS waypoints and course points.
+ * Strip common control-name prefixes ("CTL -", "CTRL ", "CONTROL-", "CTL:",
+ * etc.) used by organizers when tagging RWGPS waypoints and course points.
  */
 export function cleanControlName(raw: string | undefined): string {
   let name = raw || 'Control'
-  for (const prefix of CONTROL_NAME_PREFIXES) {
-    if (name.toUpperCase().startsWith(prefix)) {
-      name = name.substring(prefix.length).trim()
-      break
-    }
-  }
+  name = name.replace(CONTROL_NAME_PREFIX, '').trim()
   if (name.startsWith('- ')) name = name.substring(2).trim()
   else if (name.startsWith('-')) name = name.substring(1).trim()
   return name
@@ -208,8 +196,7 @@ const POI_PHYSICAL_DEDUPE_METERS = 200
 
 function hasControlNamePrefix(name: string | undefined): boolean {
   if (!name) return false
-  const upper = name.toUpperCase()
-  return CONTROL_NAME_PREFIXES.some((p) => upper.startsWith(p))
+  return CONTROL_NAME_PREFIX.test(name)
 }
 
 function parseCoursePointControls(route: RwgpsRoute): InternalControl[] {

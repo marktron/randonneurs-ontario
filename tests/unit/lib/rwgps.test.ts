@@ -39,6 +39,27 @@ describe('cleanControlName', () => {
     expect(cleanControlName('Control Bar')).toBe('Bar')
   })
 
+  it('strips colon-separated prefixes (case-insensitive)', () => {
+    expect(cleanControlName('CTL: Paris')).toBe('Paris')
+    expect(cleanControlName('CTL:Paris')).toBe('Paris')
+    expect(cleanControlName('CONTROL: Paris')).toBe('Paris')
+    expect(cleanControlName('Ctrl: Paris')).toBe('Paris')
+    expect(cleanControlName('ctl : Paris')).toBe('Paris')
+  })
+
+  it('keeps the existing spaced and dashed forms', () => {
+    expect(cleanControlName('CTL-Foo')).toBe('Foo')
+    expect(cleanControlName('CTRL - Foo')).toBe('Foo')
+    expect(cleanControlName('CONTROL-Foo')).toBe('Foo')
+    expect(cleanControlName('CTL -Foo')).toBe('Foo')
+  })
+
+  it('does not strip a word that merely begins with the letters', () => {
+    expect(cleanControlName('CTLA Store')).toBe('CTLA Store')
+    expect(cleanControlName('Controller Cafe')).toBe('Controller Cafe')
+    expect(cleanControlName('CTL')).toBe('CTL')
+  })
+
   it('strips a single leading dash on a non-prefixed name', () => {
     expect(cleanControlName('- Stand-alone')).toBe('Stand-alone')
     expect(cleanControlName('-Tight Dash')).toBe('Tight Dash')

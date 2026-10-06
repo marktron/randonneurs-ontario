@@ -258,7 +258,7 @@ export async function getExistingPermanentRide(
 
 ```typescript
 // Cached RWGPS track and controls for a route (24 hours, tag `routes`, cache key
-// `route-map`). Both come from one v1 response (`fetchRwgpsRouteMap` in
+// `route-map-v2`). Both come from one v1 response (`fetchRwgpsRouteMap` in
 // lib/rwgps.ts); controls use the same parser as the event control import, and
 // ones without coordinates are dropped. A route with no controls still loads,
 // with `controls: []`. Null when the track cannot be loaded; failures are not cached.
