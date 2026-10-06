@@ -87,12 +87,11 @@ describe('RouteStartPicker controls', () => {
   })
 
   const optionLabels = () =>
-    Array.from(screen.getByLabelText('Or start at a control').querySelectorAll('option')).map(
+    Array.from(screen.getByLabelText('Start location').querySelectorAll('option')).map(
       (o) => o.textContent
     )
   const selectedLabel = () =>
-    (screen.getByLabelText('Or start at a control') as HTMLSelectElement).selectedOptions[0]
-      .textContent
+    (screen.getByLabelText('Start location') as HTMLSelectElement).selectedOptions[0].textContent
 
   it('lists the posted start first, then the offered controls in route order, one per pass', () => {
     render(<RouteStartPicker track={track} valueKm={null} onChange={vi.fn()} controls={controls} />)
@@ -133,20 +132,20 @@ describe('RouteStartPicker controls', () => {
     expect(optionLabels()[0]).toBe('Posted start (0.0 km)')
   })
 
-  it('shows "Somewhere else on the route" for a start that is not a control', () => {
+  it('shows "Custom starting control" for a start that is not a control', () => {
     render(<RouteStartPicker track={track} valueKm={7} onChange={vi.fn()} controls={controls} />)
-    expect(selectedLabel()).toBe('Somewhere else on the route')
-    const elsewhere = screen.getByRole('option', { name: 'Somewhere else on the route' })
+    expect(selectedLabel()).toBe('Custom starting control')
+    const elsewhere = screen.getByRole('option', { name: 'Custom starting control' })
     expect(elsewhere).toBeDisabled()
   })
 
-  it('offers no "somewhere else" entry while the start is the posted start or a control', () => {
+  it('offers no custom entry while the start is the posted start or a control', () => {
     const { rerender } = render(
       <RouteStartPicker track={track} valueKm={null} onChange={vi.fn()} controls={controls} />
     )
-    expect(optionLabels()).not.toContain('Somewhere else on the route')
+    expect(optionLabels()).not.toContain('Custom starting control')
     rerender(<RouteStartPicker track={track} valueKm={10} onChange={vi.fn()} controls={controls} />)
-    expect(optionLabels()).not.toContain('Somewhere else on the route')
+    expect(optionLabels()).not.toContain('Custom starting control')
   })
 
   it('choosing the posted start clears the start without suggesting a name', async () => {
@@ -165,7 +164,7 @@ describe('RouteStartPicker controls', () => {
     const option = screen.getByRole('option', {
       name: 'Posted start: Start (0.0 km)',
     }) as HTMLOptionElement
-    await user.selectOptions(screen.getByLabelText('Or start at a control'), option.value)
+    await user.selectOptions(screen.getByLabelText('Start location'), option.value)
     expect(onChange).toHaveBeenCalledWith(null)
     expect(onPickControl).not.toHaveBeenCalled()
   })
@@ -183,7 +182,7 @@ describe('RouteStartPicker controls', () => {
         onPickControl={onPickControl}
       />
     )
-    const select = screen.getByLabelText('Or start at a control')
+    const select = screen.getByLabelText('Start location')
     const option = screen.getByRole('option', { name: 'Cafe (16.7 km)' }) as HTMLOptionElement
     await user.selectOptions(select, option.value)
     expect(onChange).toHaveBeenCalledWith(16.7)
@@ -204,7 +203,7 @@ describe('RouteStartPicker controls', () => {
         controls={[controls[0], controls[4]]}
       />
     )
-    expect(screen.queryByLabelText('Or start at a control')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Start location')).not.toBeInTheDocument()
   })
 
   it('flags each control place once, and a tap starts at its first pass and offers the others', async () => {

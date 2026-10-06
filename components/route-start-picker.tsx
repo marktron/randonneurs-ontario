@@ -129,7 +129,7 @@ export function RouteStartPicker({
   )
   const postedStartName = useMemo(() => postedStartControlName(track, controls), [track, controls])
   // The list always shows something true: the posted start, the control the
-  // start is exactly at, or (for any other point) "Somewhere else on the route".
+  // start is exactly at, or (for any other point) "Custom starting control".
   const listValue =
     valueKm == null
       ? POSTED_START
@@ -361,7 +361,7 @@ export function RouteStartPicker({
 
         {controlOptions.length > 0 && (
           <div className="space-y-2">
-            <Label htmlFor="start-control">Or start at a control</Label>
+            <Label htmlFor="start-control">Start location</Label>
             <select
               id="start-control"
               value={listValue}
@@ -384,7 +384,7 @@ export function RouteStartPicker({
               </option>
               {listValue === ELSEWHERE && (
                 <option value={ELSEWHERE} disabled>
-                  Somewhere else on the route
+                  Custom starting control
                 </option>
               )}
               {controlOptions.map(({ key, place, start }) => (

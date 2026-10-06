@@ -81,7 +81,7 @@ describe('RouteStartDialog', () => {
     expect(field).toHaveAttribute('maxlength', '200')
     expect(field).toHaveAttribute('placeholder', 'e.g., Tim Hortons, 123 Main St, Uxbridge')
     expect(
-      screen.getByText('This becomes the first and last control on your card.')
+      screen.getByText('This appears as the first and last control on your card.')
     ).toBeInTheDocument()
   })
 

@@ -134,7 +134,7 @@ export function RouteStartDialog({
                 </p>
               )}
               <p id={nameHelpId} className="text-xs text-muted-foreground">
-                This becomes the first and last control on your card.
+                This appears as the first and last control on your card.
               </p>
             </div>
           )}
