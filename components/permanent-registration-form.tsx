@@ -443,7 +443,7 @@ export function PermanentRegistrationForm({ routes }: PermanentRegistrationFormP
               <Label id={startLabelId}>Start location</Label>
               {startOffsetKm == null ? (
                 <>
-                  <p className="text-sm font-medium">
+                  <p className="text-sm text-foreground">
                     {postedStartName
                       ? `Posted start: ${postedStartName}`
                       : "The route's posted start"}
@@ -465,7 +465,7 @@ export function PermanentRegistrationForm({ routes }: PermanentRegistrationFormP
                 <>
                   <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
                     <div className="space-y-1">
-                      <p className="text-sm font-medium tabular-nums">
+                      <p className="text-sm text-foreground tabular-nums">
                         Starts {startOffsetKm.toFixed(1)} km into the posted route
                         {startLocation.trim() && ` from ${startLocation.trim()}`}
                       </p>
