@@ -7,6 +7,7 @@ import {
   snapToTrack,
   checkStoredStart,
   offeredControlPlaces,
+  postedStartControlName,
   type RouteControl,
   type TrackPoint,
 } from '@/lib/routeTrack'
@@ -220,5 +221,32 @@ describe('offeredControlPlaces', () => {
 
   it('returns nothing for a route without controls', () => {
     expect(offeredControlPlaces(track, [])).toEqual([])
+  })
+})
+
+describe('postedStartControlName', () => {
+  const track = buildRouteTrack(outAndBack(90), 20.016)!
+  const c = (name: string, km: number): RouteControl => ({ name, km, lat: 44, lng: -79 })
+
+  it('names the control at km 0', () => {
+    expect(postedStartControlName(track, [c('Cafe', 5), c('London', 0), c('Finish', 20)])).toBe(
+      'London'
+    )
+  })
+
+  it('treats a control that rounds to 0.0 km as the start', () => {
+    expect(postedStartControlName(track, [c('London', 0.04)])).toBe('London')
+    expect(postedStartControlName(track, [c('Not quite', 0.1)])).toBeNull()
+  })
+
+  it('falls back to the control at the route end', () => {
+    expect(postedStartControlName(track, [c('Cafe', 5), c('London finish', 19.96)])).toBe(
+      'London finish'
+    )
+  })
+
+  it('is null when no control sits at either end', () => {
+    expect(postedStartControlName(track, [c('Cafe', 5)])).toBeNull()
+    expect(postedStartControlName(track, [])).toBeNull()
   })
 })

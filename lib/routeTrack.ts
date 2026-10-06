@@ -206,3 +206,16 @@ export function offeredControlPlaces(track: RouteTrack, controls: RouteControl[]
   }
   return places
 }
+
+/**
+ * Name of the route's own start control, for labelling the posted start: the
+ * control within 0.1 km of km 0, else the one within 0.1 km of the end (on a
+ * loop the finish control is the same place), else null.
+ */
+export function postedStartControlName(track: RouteTrack, controls: RouteControl[]): string | null {
+  const total = tenths(track.totalKm)
+  const sorted = [...controls].sort((a, b) => a.km - b.km)
+  const atStart = sorted.find((c) => tenths(c.km) < 1)
+  const atEnd = [...sorted].reverse().find((c) => tenths(c.km) > total - 1)
+  return (atStart ?? atEnd)?.name ?? null
+}

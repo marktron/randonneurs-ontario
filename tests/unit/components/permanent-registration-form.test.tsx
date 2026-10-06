@@ -526,6 +526,20 @@ describe('PermanentRegistrationForm', () => {
       expect(nameField()).toHaveValue('')
     })
 
+    it('empties an unedited suggestion when the rider goes back to the posted start in the list', async () => {
+      const user = userEvent.setup()
+      await setUp(user)
+      await chooseStart(user, 'Pick control')
+      expect(nameField()).toHaveValue('Cafe')
+      // Choosing the posted start in the list is onChange(null), like "Clear pin".
+      await openStartDialog(user)
+      await pick(user, 'Clear pin')
+      await done(user)
+      expect(screen.getByRole('button', { name: /start somewhere else/i })).toBeInTheDocument()
+      await chooseStart(user, 'Drop pin')
+      expect(nameField()).toHaveValue('')
+    })
+
     it('keeps the suggestion for another pass of the same control', async () => {
       const user = userEvent.setup()
       await setUp(user)

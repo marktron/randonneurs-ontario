@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button'
 import {
   canonicalStart,
   offeredControlPlaces,
+  postedStartControlName,
   pointAtKm,
   snapToTrack,
   type ControlPlace,
@@ -33,6 +34,9 @@ const ROUTE_COLOR = '#dc2626' // red-600
 const PIN_COLOR = '#2563eb' // blue-600
 const CONTROL_COLOR = '#1c1917' // stone-900, the style guide's near-black ink
 const NO_CONTROLS: RouteControl[] = []
+// Values of the control list's two entries that are not controls.
+const POSTED_START = 'posted-start'
+const ELSEWHERE = 'elsewhere'
 
 // The chosen start, drawn the same whether it is a free point (a circle
 // marker) or a control (the base of its flag): path radius and white ring, px.
@@ -123,7 +127,13 @@ export function RouteStartPicker({
         .sort((a, b) => a.start.offsetKm - b.start.offsetKm),
     [places]
   )
-  const selectedControlKey = controlOptions.find((o) => o.start.offsetKm === valueKm)?.key ?? ''
+  const postedStartName = useMemo(() => postedStartControlName(track, controls), [track, controls])
+  // The list always shows something true: the posted start, the control the
+  // start is exactly at, or (for any other point) "Somewhere else on the route".
+  const listValue =
+    valueKm == null
+      ? POSTED_START
+      : (controlOptions.find((o) => o.start.offsetKm === valueKm)?.key ?? ELSEWHERE)
 
   /** Start exactly at a control: `start` is one pass of `place`. */
   function startAtControl(place: ControlPlace, start: StartPoint, offerPasses: boolean) {
@@ -353,17 +363,29 @@ export function RouteStartPicker({
             <Label htmlFor="start-control">Or start at a control</Label>
             <select
               id="start-control"
-              value={selectedControlKey}
+              value={listValue}
               disabled={disabled}
               onChange={(e) => {
+                if (e.target.value === POSTED_START) {
+                  // Same as "Use the posted start": no start, and no name suggested.
+                  setChoices([])
+                  setHint(null)
+                  onChange(null)
+                  return
+                }
                 const option = controlOptions.find((o) => o.key === e.target.value)
                 if (option) startAtControl(option.place, option.start, false)
               }}
               className="bg-input/30 border-input focus-visible:border-ring focus-visible:ring-ring/50 h-12 sm:h-9 w-full min-w-0 rounded-4xl border px-3 text-base md:text-sm tabular-nums outline-none transition-colors focus-visible:ring-[3px] disabled:cursor-not-allowed disabled:opacity-50"
             >
-              <option value="" disabled>
-                Choose a control
+              <option value={POSTED_START}>
+                {postedStartName ? `Posted start: ${postedStartName}` : 'Posted start'} ({km(0)})
               </option>
+              {listValue === ELSEWHERE && (
+                <option value={ELSEWHERE} disabled>
+                  Somewhere else on the route
+                </option>
+              )}
               {controlOptions.map(({ key, place, start }) => (
                 <option key={key} value={key}>
                   {place.name} ({km(start.offsetKm)})

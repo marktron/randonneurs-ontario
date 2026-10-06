@@ -86,17 +86,88 @@ describe('RouteStartPicker controls', () => {
     circleMarkers.length = 0
   })
 
-  it('lists the offered controls in route order, one option per pass', () => {
+  const optionLabels = () =>
+    Array.from(screen.getByLabelText('Or start at a control').querySelectorAll('option')).map(
+      (o) => o.textContent
+    )
+  const selectedLabel = () =>
+    (screen.getByLabelText('Or start at a control') as HTMLSelectElement).selectedOptions[0]
+      .textContent
+
+  it('lists the posted start first, then the offered controls in route order, one per pass', () => {
     render(<RouteStartPicker track={track} valueKm={null} onChange={vi.fn()} controls={controls} />)
-    const select = screen.getByLabelText('Or start at a control')
-    const labels = Array.from(select.querySelectorAll('option')).map((o) => o.textContent)
-    expect(labels).toEqual([
-      'Choose a control',
+    expect(optionLabels()).toEqual([
+      'Posted start: Start (0.0 km)',
       'Cafe (3.3 km)',
       'Turnaround (10.0 km)',
       'Cafe (16.7 km)',
     ])
-    expect(select).toHaveValue('')
+  })
+
+  it('selects the posted start when no start is chosen', () => {
+    render(<RouteStartPicker track={track} valueKm={null} onChange={vi.fn()} controls={controls} />)
+    expect(selectedLabel()).toBe('Posted start: Start (0.0 km)')
+  })
+
+  it('names the posted start from the finish control when there is none at km 0', () => {
+    render(
+      <RouteStartPicker
+        track={track}
+        valueKm={null}
+        onChange={vi.fn()}
+        controls={controls.filter((c) => c.name !== 'Start')}
+      />
+    )
+    expect(optionLabels()[0]).toBe('Posted start: Finish (0.0 km)')
+  })
+
+  it('labels the posted start plainly when no control sits there', () => {
+    render(
+      <RouteStartPicker
+        track={track}
+        valueKm={null}
+        onChange={vi.fn()}
+        controls={controls.slice(1, 4)}
+      />
+    )
+    expect(optionLabels()[0]).toBe('Posted start (0.0 km)')
+  })
+
+  it('shows "Somewhere else on the route" for a start that is not a control', () => {
+    render(<RouteStartPicker track={track} valueKm={7} onChange={vi.fn()} controls={controls} />)
+    expect(selectedLabel()).toBe('Somewhere else on the route')
+    const elsewhere = screen.getByRole('option', { name: 'Somewhere else on the route' })
+    expect(elsewhere).toBeDisabled()
+  })
+
+  it('offers no "somewhere else" entry while the start is the posted start or a control', () => {
+    const { rerender } = render(
+      <RouteStartPicker track={track} valueKm={null} onChange={vi.fn()} controls={controls} />
+    )
+    expect(optionLabels()).not.toContain('Somewhere else on the route')
+    rerender(<RouteStartPicker track={track} valueKm={10} onChange={vi.fn()} controls={controls} />)
+    expect(optionLabels()).not.toContain('Somewhere else on the route')
+  })
+
+  it('choosing the posted start clears the start without suggesting a name', async () => {
+    const user = userEvent.setup()
+    const onChange = vi.fn()
+    const onPickControl = vi.fn()
+    render(
+      <RouteStartPicker
+        track={track}
+        valueKm={10}
+        onChange={onChange}
+        controls={controls}
+        onPickControl={onPickControl}
+      />
+    )
+    const option = screen.getByRole('option', {
+      name: 'Posted start: Start (0.0 km)',
+    }) as HTMLOptionElement
+    await user.selectOptions(screen.getByLabelText('Or start at a control'), option.value)
+    expect(onChange).toHaveBeenCalledWith(null)
+    expect(onPickControl).not.toHaveBeenCalled()
   })
 
   it('starts exactly at the chosen control and suggests its name', async () => {
@@ -121,8 +192,7 @@ describe('RouteStartPicker controls', () => {
 
   it('shows the chosen control when the start is exactly one', () => {
     render(<RouteStartPicker track={track} valueKm={10} onChange={vi.fn()} controls={controls} />)
-    const select = screen.getByLabelText('Or start at a control') as HTMLSelectElement
-    expect(select.selectedOptions[0].textContent).toBe('Turnaround (10.0 km)')
+    expect(selectedLabel()).toBe('Turnaround (10.0 km)')
   })
 
   it('omits the control list when no control is offered', () => {
