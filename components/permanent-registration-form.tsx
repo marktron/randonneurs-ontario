@@ -447,9 +447,17 @@ export function PermanentRegistrationForm({ routes }: PermanentRegistrationFormP
               ) : (
                 <>
                   <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-                    <p className="text-sm font-medium tabular-nums">
-                      Starts {startOffsetKm.toFixed(1)} km into the posted route
-                    </p>
+                    <div className="space-y-1">
+                      <p className="text-sm font-medium tabular-nums">
+                        Starts {startOffsetKm.toFixed(1)} km into the posted route
+                        {startLocation.trim() && ` from ${startLocation.trim()}`}
+                      </p>
+                      {!startLocation.trim() && (
+                        <p className="text-xs text-muted-foreground">
+                          This start still needs a name. Use Change to add one.
+                        </p>
+                      )}
+                    </div>
                     <div className="flex gap-1">
                       <Button
                         ref={changeStartButtonRef}
@@ -474,25 +482,6 @@ export function PermanentRegistrationForm({ routes }: PermanentRegistrationFormP
                       </Button>
                     </div>
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="location">Name of your start location</Label>
-                    <Input
-                      id="location"
-                      type="text"
-                      placeholder="e.g., Tim Hortons, 123 Main St, Uxbridge"
-                      value={startLocation}
-                      maxLength={200}
-                      onChange={(e) => {
-                        setStartLocation(e.target.value)
-                        setSuggestedForKm(null)
-                      }}
-                      disabled={isPending}
-                      autoComplete="off"
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      This becomes the first and last control on your card.
-                    </p>
-                  </div>
                 </>
               )}
               <RouteStartDialog
@@ -501,6 +490,11 @@ export function PermanentRegistrationForm({ routes }: PermanentRegistrationFormP
                 track={track}
                 valueKm={startOffsetKm}
                 onChange={changeStart}
+                startLocation={startLocation}
+                onStartLocationChange={(name) => {
+                  setStartLocation(name)
+                  setSuggestedForKm(null)
+                }}
                 controls={routeControls}
                 onPickControl={suggestStartLocation}
                 disabled={isPending}

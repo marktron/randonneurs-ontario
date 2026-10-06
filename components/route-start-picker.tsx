@@ -322,9 +322,10 @@ export function RouteStartPicker({
   const maxKm = Math.round(track.totalKm * 10 - 1) / 10
 
   return (
-    // Fills the height its (flex column) parent gives it: the map takes what is
-    // left after the controls, which scroll on their own if a phone is short.
-    <div className="flex min-h-0 flex-1 flex-col gap-3">
+    // Grows to fill its (flex column, scrolling) parent but never shrinks below
+    // its content: the map takes the spare height down to its minimum, and on
+    // a short screen the parent scrolls instead of squeezing the controls.
+    <div className="flex flex-[1_0_auto] flex-col gap-3">
       {/* isolate keeps Leaflet's pane and control z-indexes (400 to 1000)
           inside the map, below the rest of the dialog. */}
       <div
@@ -334,7 +335,7 @@ export function RouteStartPicker({
         className="isolate min-h-48 w-full flex-1 rounded-lg border border-border"
       />
 
-      <div className="max-h-[40dvh] shrink-0 space-y-3 overflow-y-auto p-1">
+      <div className="shrink-0 space-y-3 p-1">
         {choices.length > 1 && (
           <div className="space-y-2" role="group" aria-label="Which pass of the route?">
             <p className="text-sm">The route passes this spot more than once. Which pass?</p>
