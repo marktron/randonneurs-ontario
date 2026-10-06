@@ -82,7 +82,7 @@ export function RouteStartDialog({
         ref={contentRef}
         // Focus the dialog itself rather than its first field: a focus ring on
         // the control list read as if a control were already chosen. Tab
-        // goes on to the map, its zoom buttons, the list, the km field, Done.
+        // goes on to the map, its zoom buttons, the list, Done.
         // A start that still needs a name opens on the name field instead.
         onOpenAutoFocus={(e) => {
           e.preventDefault()

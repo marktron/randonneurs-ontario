@@ -243,7 +243,7 @@ The offset is always measured on the route as posted, whatever the direction. Re
 
 ### Choosing a start at registration
 
-Alternate starts are for loops only: the route's first and last track points must be within 500 m of each other (`RouteTrack.isLoop`). On `/register/permanent` the rider opens a map (`components/route-start-picker.tsx`) and either taps the route or types a distance in the "distance into the posted route" field. The rider must also name the start location. Direction is a separate choice and works on any route.
+Alternate starts are for loops only: the route's first and last track points must be within 500 m of each other (`RouteTrack.isLoop`). On `/register/permanent` the rider opens a map (`components/route-start-picker.tsx`) and either taps the route or picks a control from the list. The rider must also name the start location. Direction is a separate choice and works on any route.
 
 - A tap snaps to the nearest point on the route at any distance from the tap. Where the route passes that spot more than once (two points more than 1 km apart along the route, within 150 m of each other, or the track point spacing if that is wider), the rider picks which pass.
 - A distance must be between 0.1 km and 0.1 km short of the route length. A start closer than 0.1 km to the posted start or finish means "start where the route starts" and is stored as no alternate start.

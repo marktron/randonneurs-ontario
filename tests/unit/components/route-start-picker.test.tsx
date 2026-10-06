@@ -265,4 +265,10 @@ describe('RouteStartPicker controls', () => {
     // Centred on the pole base, which is the icon's anchor (the control).
     expect([circle.getAttribute('cx'), circle.getAttribute('cy')]).toEqual(['22', '27'])
   })
+
+  it('has no typed-distance field', () => {
+    render(<RouteStartPicker track={track} valueKm={null} onChange={vi.fn()} controls={controls} />)
+    expect(screen.queryByRole('spinbutton')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText(/distance into the posted route/i)).toBeNull()
+  })
 })

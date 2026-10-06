@@ -3,11 +3,9 @@
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
 import type { CircleMarker, DivIcon, Map as LeafletMap, Marker } from 'leaflet'
 import 'leaflet/dist/leaflet.css'
-import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import {
-  canonicalStart,
   offeredControlPlaces,
   postedStartControlName,
   pointAtKm,
@@ -96,8 +94,8 @@ function describePlace(place: ControlPlace): string {
  * Plain Leaflet loaded inside an effect, as in components/admin/checkin-map.tsx.
  * A tap snaps to the route. Where the route passes the tapped spot more than
  * once, the rider chooses which pass. The route's controls are marked and
- * start the ride exactly at the control. The control list and the km field
- * do the same jobs for keyboard users.
+ * start the ride exactly at the control. The control list is the keyboard path
+ * to a start at a control.
  */
 export function RouteStartPicker({
   track,
@@ -144,16 +142,6 @@ export function RouteStartPicker({
       place.name,
       place.passes.map((p) => p.offsetKm)
     )
-  }
-
-  // The km field keeps its own text so a half-typed value ("0.", "4") is not
-  // replaced by its canonical form mid-keystroke. A change from the map or the
-  // pass buttons rewrites the text.
-  const [kmText, setKmText] = useState(valueKm == null ? '' : String(valueKm))
-  const [kmTextFor, setKmTextFor] = useState(valueKm)
-  if (valueKm !== kmTextFor) {
-    setKmTextFor(valueKm)
-    setKmText(valueKm == null ? '' : String(valueKm))
   }
 
   // The map's click handler is registered once; this reads the latest props.
@@ -319,8 +307,6 @@ export function RouteStartPicker({
     }
   }, [ready, valueKm, track])
 
-  const maxKm = Math.round(track.totalKm * 10 - 1) / 10
-
   return (
     // Grows to fill its (flex column, scrolling) parent but never shrinks below
     // its content: the map takes the spare height down to its minimum, and on
@@ -395,36 +381,6 @@ export function RouteStartPicker({
             </select>
           </div>
         )}
-
-        <div className="space-y-2">
-          <Label htmlFor="start-offset-km">Or enter the distance into the posted route (km)</Label>
-          <Input
-            id="start-offset-km"
-            type="number"
-            inputMode="decimal"
-            min={0.1}
-            max={maxKm}
-            step={0.1}
-            className="tabular-nums"
-            value={kmText}
-            disabled={disabled}
-            onChange={(e) => {
-              const text = e.target.value
-              const next =
-                text === '' ? null : (canonicalStart(track, Number(text))?.offsetKm ?? null)
-              setChoices([])
-              setHint(null)
-              setKmText(text)
-              setKmTextFor(next)
-              onChange(next)
-            }}
-            onBlur={() => setKmText(valueKm == null ? '' : String(valueKm))}
-          />
-          <p className="text-xs text-muted-foreground">
-            Measured along the route as posted, even if you ride it reversed. Between 0.1 and{' '}
-            {maxKm.toFixed(1)} km.
-          </p>
-        </div>
       </div>
     </div>
   )
