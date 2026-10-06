@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { PermanentRegistrationForm } from '@/components/permanent-registration-form'
 import type { ActiveRoute } from '@/lib/data/routes'
@@ -267,6 +267,103 @@ describe('PermanentRegistrationForm', () => {
     await done(user)
   }
 
+  describe('start location field', () => {
+    const startGroup = () => screen.queryByRole('group', { name: 'Start location' })
+    const atStart = { name: 'Tim Horton’s, Lambeth', km: 0, lat: 42.9, lng: -81.3 }
+
+    it('shows nothing before a route is chosen', () => {
+      render(<PermanentRegistrationForm routes={mockRoutes} />)
+      expect(startGroup()).not.toBeInTheDocument()
+    })
+
+    it("names the posted start from the route's start control, above the button", async () => {
+      const user = userEvent.setup()
+      mockGetPermanentRouteTrack.mockResolvedValue({
+        available: true,
+        track: loopTrack,
+        controls: [atStart, ...routeControls],
+      })
+      render(<PermanentRegistrationForm routes={mockRoutes} />)
+      await selectRoute(user, mockRoutes[0])
+      const group = await screen.findByRole('group', { name: 'Start location' })
+      expect(
+        await within(group).findByText('Posted start: Tim Horton’s, Lambeth')
+      ).toBeInTheDocument()
+      const text = within(group).getByText('Posted start: Tim Horton’s, Lambeth')
+      const button = within(group).getByRole('button', { name: /start somewhere else/i })
+      // The value line comes before the button.
+      expect(text.compareDocumentPosition(button) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    })
+
+    it('says "The route\'s posted start" when no control sits at the start', async () => {
+      const user = userEvent.setup()
+      mockGetPermanentRouteTrack.mockResolvedValue({
+        available: true,
+        track: loopTrack,
+        controls: routeControls,
+      })
+      render(<PermanentRegistrationForm routes={mockRoutes} />)
+      await selectRoute(user, mockRoutes[0])
+      await screen.findByRole('button', { name: /start somewhere else/i })
+      expect(within(startGroup()!).getByText("The route's posted start")).toBeInTheDocument()
+    })
+
+    it('shows the posted start without the button on a point-to-point route', async () => {
+      const user = userEvent.setup()
+      mockGetPermanentRouteTrack.mockResolvedValue({
+        available: true,
+        track: { ...loopTrack, isLoop: false },
+        controls: [atStart],
+      })
+      render(<PermanentRegistrationForm routes={mockRoutes} />)
+      await selectRoute(user, mockRoutes[0])
+      expect(await screen.findByText('Posted start: Tim Horton’s, Lambeth')).toBeInTheDocument()
+      expect(
+        screen.queryByRole('button', { name: /start somewhere else/i })
+      ).not.toBeInTheDocument()
+    })
+
+    it('shows the posted start without the button when the track is unavailable', async () => {
+      const user = userEvent.setup()
+      render(<PermanentRegistrationForm routes={mockRoutes} />)
+      await selectRoute(user, mockRoutes[0])
+      await waitFor(() => expect(mockGetPermanentRouteTrack).toHaveBeenCalled())
+      expect(within(startGroup()!).getByText("The route's posted start")).toBeInTheDocument()
+      expect(
+        screen.queryByRole('button', { name: /start somewhere else/i })
+      ).not.toBeInTheDocument()
+    })
+
+    it('shows nothing while an existing ride locks the start', async () => {
+      const user = userEvent.setup()
+      mockGetPermanentRouteTrack.mockResolvedValue({ available: true, track: loopTrack })
+      mockGetExistingPermanentRide.mockResolvedValue({
+        startTime: '06:30',
+        startLocation: null,
+        startOffsetKm: null,
+      })
+      render(<PermanentRegistrationForm routes={mockRoutes} />)
+      await selectRoute(user, mockRoutes[0])
+      await selectDate(user)
+      await screen.findByText(/already registered for this date/)
+      expect(startGroup()).not.toBeInTheDocument()
+    })
+
+    it('puts the label above the summary once a start is chosen', async () => {
+      const user = userEvent.setup()
+      mockGetPermanentRouteTrack.mockResolvedValue({ available: true, track: loopTrack })
+      render(<PermanentRegistrationForm routes={mockRoutes} />)
+      await selectRoute(user, mockRoutes[0])
+      await chooseStart(user, 'Drop pin', 'Tim Hortons')
+      const group = startGroup()!
+      expect(
+        within(group).getByText('Starts 42.3 km into the posted route from Tim Hortons')
+      ).toBeInTheDocument()
+      expect(within(group).getByRole('button', { name: /^change/i })).toBeInTheDocument()
+      expect(within(group).queryByText(/posted start:/i)).not.toBeInTheDocument()
+    })
+  })
+
   describe('alternate start', () => {
     async function setUp(user: User) {
       mockGetPermanentRouteTrack.mockResolvedValue({ available: true, track: loopTrack })
@@ -282,7 +379,7 @@ describe('PermanentRegistrationForm', () => {
       expect(
         screen.queryByRole('button', { name: /start somewhere else/i })
       ).not.toBeInTheDocument()
-      expect(screen.queryByLabelText(/start location/i)).not.toBeInTheDocument()
+      expect(queryNameField()).not.toBeInTheDocument()
     })
 
     it('hides the start option for a point-to-point route', async () => {

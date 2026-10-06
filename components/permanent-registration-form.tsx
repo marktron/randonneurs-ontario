@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState, useMemo } from 'react'
+import { useEffect, useId, useRef, useState, useMemo } from 'react'
 import { ChevronDownIcon } from 'lucide-react'
 import { format, addDays, isBefore } from 'date-fns'
 import { Input } from '@/components/ui/input'
@@ -34,7 +34,7 @@ import {
   type ExistingPermanentRide,
 } from '@/lib/actions/permanent-start'
 import type { ActiveRoute } from '@/lib/data/routes'
-import type { RouteControl, RouteTrack } from '@/lib/routeTrack'
+import { postedStartControlName, type RouteControl, type RouteTrack } from '@/lib/routeTrack'
 import { RouteStartDialog } from '@/components/route-start-dialog'
 import { formatClock } from '@/lib/permanent-start'
 import { HoneypotField } from '@/components/honeypot-field'
@@ -136,18 +136,18 @@ export function PermanentRegistrationForm({ routes }: PermanentRegistrationFormP
     ride: ExistingPermanentRide | null
   } | null>(null)
 
-  // Only loops offer an alternate start.
+  // The route's track and controls name its posted start; on a loop they
+  // also drive the start dialog.
   useEffect(() => {
     if (!routeId) return
     let cancelled = false
     getPermanentRouteTrack(routeId)
       .then((result) => {
         if (cancelled) return
-        const loop = result.available && result.track.isLoop
         setTrackFor({
           routeId,
-          track: loop ? result.track : null,
-          controls: loop ? (result.controls ?? []) : [],
+          track: result.available ? result.track : null,
+          controls: result.available ? (result.controls ?? []) : [],
         })
       })
       .catch(() => {})
@@ -156,8 +156,14 @@ export function PermanentRegistrationForm({ routes }: PermanentRegistrationFormP
     }
   }, [routeId])
   const current = trackFor?.routeId === routeId ? trackFor : null
-  const track = current?.track ?? null
+  // Any route with a track names its posted start; only loops offer another.
+  const loopTrack = current?.track?.isLoop ? current.track : null
   const routeControls = current?.controls
+  const postedStartName = useMemo(
+    () => (current?.track ? postedStartControlName(current.track, current.controls) : null),
+    [current]
+  )
+  const startLabelId = useId()
 
   // One ride per route, date and direction: if it exists, its first
   // registrant set the start and later riders join on the same terms.
@@ -429,21 +435,32 @@ export function PermanentRegistrationForm({ routes }: PermanentRegistrationFormP
             />
           </div>
 
-          {/* Alternate start: loops only, and not when joining an existing ride.
-              The map itself is only in the dialog. */}
-          {track && !startLocked && (
-            <div className="space-y-3">
+          {/* Start location: the posted start by default, with another start
+              on loops. Hidden when an existing ride sets the start. The map
+              itself is only in the dialog. */}
+          {routeId && !startLocked && (
+            <div role="group" aria-labelledby={startLabelId} className="space-y-2">
+              <Label id={startLabelId}>Start location</Label>
               {startOffsetKm == null ? (
-                <Button
-                  ref={startButtonRef}
-                  type="button"
-                  variant="outline"
-                  className="w-full h-12 sm:h-9"
-                  disabled={isPending}
-                  onClick={() => setStartDialogOpen(true)}
-                >
-                  Start somewhere else on the route
-                </Button>
+                <>
+                  <p className="text-sm font-medium">
+                    {postedStartName
+                      ? `Posted start: ${postedStartName}`
+                      : "The route's posted start"}
+                  </p>
+                  {loopTrack && (
+                    <Button
+                      ref={startButtonRef}
+                      type="button"
+                      variant="outline"
+                      className="w-full h-12 sm:h-9"
+                      disabled={isPending}
+                      onClick={() => setStartDialogOpen(true)}
+                    >
+                      Start somewhere else on the route
+                    </Button>
+                  )}
+                </>
               ) : (
                 <>
                   <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
@@ -484,25 +501,30 @@ export function PermanentRegistrationForm({ routes }: PermanentRegistrationFormP
                   </div>
                 </>
               )}
-              <RouteStartDialog
-                open={startDialogOpen}
-                onOpenChange={setStartDialogOpen}
-                track={track}
-                valueKm={startOffsetKm}
-                onChange={changeStart}
-                startLocation={startLocation}
-                onStartLocationChange={(name) => {
-                  setStartLocation(name)
-                  setSuggestedForKm(null)
-                }}
-                controls={routeControls}
-                onPickControl={suggestStartLocation}
-                disabled={isPending}
-                onCloseAutoFocus={(e) => {
-                  e.preventDefault()
-                  ;(startOffsetKm == null ? startButtonRef : changeStartButtonRef).current?.focus()
-                }}
-              />
+              {loopTrack && (
+                <RouteStartDialog
+                  open={startDialogOpen}
+                  onOpenChange={setStartDialogOpen}
+                  track={loopTrack}
+                  valueKm={startOffsetKm}
+                  onChange={changeStart}
+                  startLocation={startLocation}
+                  onStartLocationChange={(name) => {
+                    setStartLocation(name)
+                    setSuggestedForKm(null)
+                  }}
+                  controls={routeControls}
+                  onPickControl={suggestStartLocation}
+                  disabled={isPending}
+                  onCloseAutoFocus={(e) => {
+                    e.preventDefault()
+                    ;(startOffsetKm == null
+                      ? startButtonRef
+                      : changeStartButtonRef
+                    ).current?.focus()
+                  }}
+                />
+              )}
             </div>
           )}
 
