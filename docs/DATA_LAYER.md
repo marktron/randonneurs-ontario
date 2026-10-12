@@ -275,11 +275,13 @@ export async function createEvent(data: EventFormData)
 export async function updateEvent(id: string, data: EventFormData)
 export async function deleteEvent(id: string)
 
-// Super-admin only: flips every draft event in a season to scheduled, syncs
-// Epic Ride Weather via lib/events/erw-sync.ts for each, audit-logs, and
-// busts `chapter-<slug>`, `events`, `event-<slug>` per event, `permanents`
-// (if any), `slugs`, and the admin event paths.
-export async function publishSeasonDrafts(season: number)
+// Any admin (chapter admins only for their own chapter): flips one chapter's
+// draft events dated in the ACP season (Nov 1 of acpSeason - 1 to Oct 31 of
+// acpSeason, see lib/acp-season.ts) to scheduled, syncs Epic Ride Weather
+// via lib/events/erw-sync.ts for each, audit-logs, and busts
+// `chapter-<slug>`, `events`, `event-<slug>` per event, `permanents` (if
+// any), `slugs`, and the admin event paths.
+export async function publishSeasonDrafts(acpSeason: number, chapterId: string)
 ```
 
 ### lib/actions/routes.ts (Admin)

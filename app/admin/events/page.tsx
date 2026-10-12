@@ -1,5 +1,4 @@
 import { requireAdmin } from '@/lib/auth/get-admin'
-import { isSuperAdmin } from '@/lib/auth/roles'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { getChapters } from '@/lib/actions/admin-users'
 import { getAdminEvents } from '@/lib/admin/admin-events-query'
@@ -11,7 +10,10 @@ import {
   type AdminEventsView,
 } from '@/components/admin/event-filters'
 import { AdminPagination } from '@/components/admin/admin-pagination'
-import { PublishSeasonButton } from '@/components/admin/publish-season-button'
+import {
+  PublishSeasonButton,
+  type PublishSeasonDraft,
+} from '@/components/admin/publish-season-button'
 import { AdminEventsGrid } from '@/components/admin/admin-events-grid'
 import { mapEventForGrid } from '@/lib/admin/map-event-for-grid'
 import {
@@ -22,6 +24,7 @@ import {
 import { Plus } from 'lucide-react'
 import Link from 'next/link'
 import { getCurrentSeasonLabel } from '@/lib/season'
+import { acpSeasonOf } from '@/lib/acp-season'
 
 const currentSeason = getCurrentSeasonLabel()
 const PAGE_SIZE = 50
@@ -34,29 +37,36 @@ async function getAvailableSeasons(): Promise<string[]> {
   return data.map((row: { season: number }) => row.season.toString())
 }
 
-interface DraftCountRow {
-  chapter_id: string
-  chapters: { name: string } | null
+interface DraftRow {
+  id: string
+  name: string
+  event_date: string
 }
 
-/** Drafts per chapter for the season (all chapters, regardless of the chapter filter). */
-async function getDraftCountsBySeason(
-  season: string
-): Promise<{ chapterName: string; count: number }[]> {
+/**
+ * The chapter's drafts grouped by ACP season (Nov 1 to Oct 31, labelled by the
+ * ending year), oldest season first. Ignores the season filter so a chapter's
+ * November and December drafts show up with the season they belong to.
+ */
+async function getChapterDraftsByAcpSeason(
+  chapterId: string
+): Promise<{ acpSeason: number; events: PublishSeasonDraft[] }[]> {
   const { data } = await getSupabaseAdmin()
     .from('events')
-    .select('chapter_id, chapters (name)')
+    .select('id, name, event_date')
     .eq('status', 'draft')
-    .gte('event_date', `${season}-01-01`)
-    .lte('event_date', `${season}-12-31`)
+    .eq('chapter_id', chapterId)
+    .order('event_date', { ascending: true })
 
-  const counts = new Map<string, number>()
-  for (const row of (data as DraftCountRow[] | null) ?? []) {
-    const name = row.chapters?.name ?? 'Unknown'
-    counts.set(name, (counts.get(name) ?? 0) + 1)
+  const groups = new Map<number, PublishSeasonDraft[]>()
+  for (const row of (data as DraftRow[] | null) ?? []) {
+    const acpSeason = acpSeasonOf(row.event_date)
+    const group = groups.get(acpSeason) ?? []
+    group.push({ id: row.id, name: row.name, eventDate: row.event_date })
+    groups.set(acpSeason, group)
   }
-  return Array.from(counts, ([chapterName, count]) => ({ chapterName, count })).sort((a, b) =>
-    a.chapterName.localeCompare(b.chapterName)
+  return Array.from(groups, ([acpSeason, events]) => ({ acpSeason, events })).sort(
+    (a, b) => a.acpSeason - b.acpSeason
   )
 }
 
@@ -82,12 +92,13 @@ export default async function AdminEventsPage({ searchParams }: AdminEventsPageP
   // Use URL param if set, otherwise default to admin's chapter (if they have one)
   // 'all' means explicitly show all chapters (overrides admin default)
   const chapterId = params.chapter === 'all' ? null : (params.chapter ?? admin.chapter_id ?? null)
-  const chapterSlug = chapterId ? chapters.find((c) => c.id === chapterId)?.slug : undefined
+  const selectedChapter = chapterId ? chapters.find((c) => c.id === chapterId) : undefined
+  const chapterSlug = selectedChapter?.slug
   const dateFilter: DateFilter =
     params.when === 'past' || params.when === 'upcoming' ? params.when : 'all'
   const view: AdminEventsView = parseAdminEventsView(params.view)
   const page = Math.max(1, parseInt(params.page || '1', 10))
-  const [{ events, totalCount }, draftCounts] = await Promise.all([
+  const [{ events, totalCount }, draftSeasons] = await Promise.all([
     getAdminEvents(
       getSupabaseAdmin(),
       season,
@@ -97,7 +108,8 @@ export default async function AdminEventsPage({ searchParams }: AdminEventsPageP
       page,
       view === 'grid' ? null : PAGE_SIZE
     ),
-    isSuperAdmin(admin.role) ? getDraftCountsBySeason(season) : Promise.resolve([]),
+    // Publishing is per chapter, so no buttons when viewing all chapters
+    chapterId ? getChapterDraftsByAcpSeason(chapterId) : Promise.resolve([]),
   ])
 
   return (
@@ -108,9 +120,16 @@ export default async function AdminEventsPage({ searchParams }: AdminEventsPageP
           <p className="text-muted-foreground">Manage event registrations and results</p>
         </div>
         <div className="flex flex-wrap items-center gap-2 self-start">
-          {isSuperAdmin(admin.role) && (
-            <PublishSeasonButton season={Number(season)} draftCounts={draftCounts} />
-          )}
+          {chapterId &&
+            draftSeasons.map((group) => (
+              <PublishSeasonButton
+                key={group.acpSeason}
+                acpSeason={group.acpSeason}
+                chapterId={chapterId}
+                chapterName={selectedChapter?.name ?? 'this chapter'}
+                events={group.events}
+              />
+            ))}
           <Button asChild>
             <Link href="/admin/events/new">
               <Plus className="h-4 w-4 mr-2" />

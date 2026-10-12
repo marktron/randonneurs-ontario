@@ -40,12 +40,19 @@ function getAnonClient(): SupabaseClient {
 const anon = getAnonClient()
 
 const SEASON = 2099 // far-future season isolates fixtures from real data
+const OTTAWA_CHAPTER_ID = '6c44658e-8f0d-4569-9f79-a5f2d1dd6db6'
 const IDS = {
   draftEvent: '00000000-2222-4000-a000-00000000d001',
   scheduledEvent: '00000000-2222-4000-a000-00000000d002',
   otherSeasonDraft: '00000000-2222-4000-a000-00000000d003',
   nullStatusEvent: '00000000-2222-4000-a000-00000000d004',
   draftPreviewEvent: '00000000-2222-4000-a000-00000000d005',
+  // ACP season SEASON runs Nov 1 (SEASON - 1) to Oct 31 SEASON.
+  novDraft: '00000000-2222-4000-a000-00000000d006',
+  decDraft: '00000000-2222-4000-a000-00000000d007',
+  oct31Draft: '00000000-2222-4000-a000-00000000d008',
+  otherChapterDraft: '00000000-2222-4000-a000-00000000d009',
+  nextAcpSeasonDraft: '00000000-2222-4000-a000-00000000d00a',
 }
 const SLUGS = {
   draft: `inttest-draft-event-200km-${SEASON}-05-02`,
@@ -59,6 +66,11 @@ const SLUGS = {
   // correct even if that mocking ever changes. Uses SEASON + 1 (not SEASON)
   // so it's not swept up by the publishSeasonDrafts(SEASON) count below.
   draftPreview: `inttest-draft-preview-200km-${SEASON + 1}-05-23`,
+  novDraft: `inttest-nov-draft-200km-${SEASON - 1}-11-01`,
+  decDraft: `inttest-dec-draft-200km-${SEASON - 1}-12-15`,
+  oct31Draft: `inttest-oct31-draft-200km-${SEASON}-10-31`,
+  otherChapterDraft: `inttest-other-chapter-draft-200km-${SEASON - 1}-11-15`,
+  nextAcpSeasonDraft: `inttest-next-acp-draft-200km-${SEASON}-11-01`,
 }
 
 async function cleanup(): Promise<void> {
@@ -71,6 +83,11 @@ async function cleanup(): Promise<void> {
       IDS.otherSeasonDraft,
       IDS.nullStatusEvent,
       IDS.draftPreviewEvent,
+      IDS.novDraft,
+      IDS.decDraft,
+      IDS.oct31Draft,
+      IDS.otherChapterDraft,
+      IDS.nextAcpSeasonDraft,
     ])
   await admin
     .from('events')
@@ -81,6 +98,11 @@ async function cleanup(): Promise<void> {
       SLUGS.otherSeasonDraft,
       SLUGS.nullStatus,
       SLUGS.draftPreview,
+      SLUGS.novDraft,
+      SLUGS.decDraft,
+      SLUGS.oct31Draft,
+      SLUGS.otherChapterDraft,
+      SLUGS.nextAcpSeasonDraft,
     ])
 }
 
@@ -126,6 +148,56 @@ beforeAll(async () => {
         event_type: 'brevet',
         distance_km: 200,
         event_date: `${SEASON + 1}-05-23`,
+        status: 'draft',
+      },
+      {
+        id: IDS.novDraft,
+        slug: SLUGS.novDraft,
+        name: 'Inttest Nov Draft Event',
+        chapter_id: TORONTO_CHAPTER_ID,
+        event_type: 'brevet',
+        distance_km: 200,
+        event_date: `${SEASON - 1}-11-01`,
+        status: 'draft',
+      },
+      {
+        id: IDS.decDraft,
+        slug: SLUGS.decDraft,
+        name: 'Inttest Dec Draft Event',
+        chapter_id: TORONTO_CHAPTER_ID,
+        event_type: 'brevet',
+        distance_km: 200,
+        event_date: `${SEASON - 1}-12-15`,
+        status: 'draft',
+      },
+      {
+        id: IDS.oct31Draft,
+        slug: SLUGS.oct31Draft,
+        name: 'Inttest Oct 31 Draft Event',
+        chapter_id: TORONTO_CHAPTER_ID,
+        event_type: 'brevet',
+        distance_km: 200,
+        event_date: `${SEASON}-10-31`,
+        status: 'draft',
+      },
+      {
+        id: IDS.otherChapterDraft,
+        slug: SLUGS.otherChapterDraft,
+        name: 'Inttest Other Chapter Draft Event',
+        chapter_id: OTTAWA_CHAPTER_ID,
+        event_type: 'brevet',
+        distance_km: 200,
+        event_date: `${SEASON - 1}-11-15`,
+        status: 'draft',
+      },
+      {
+        id: IDS.nextAcpSeasonDraft,
+        slug: SLUGS.nextAcpSeasonDraft,
+        name: 'Inttest Next ACP Season Draft Event',
+        chapter_id: TORONTO_CHAPTER_ID,
+        event_type: 'brevet',
+        distance_km: 200,
+        event_date: `${SEASON}-11-01`,
         status: 'draft',
       },
     ]),
@@ -235,23 +307,37 @@ describe('getEventBySlug with SHOW_DRAFT_EVENTS', () => {
 // This describe mutates IDS.draftEvent's status, so it must stay last in the
 // file (Vitest runs describes in file order).
 describe('publishSeasonDrafts', () => {
-  it('publishes drafts of the given season only, and the anon role can then read them', async () => {
-    const result = await publishSeasonDrafts(SEASON)
+  it("publishes one chapter's drafts in the ACP season window only, and the anon role can then read them", async () => {
+    const result = await publishSeasonDrafts(SEASON, TORONTO_CHAPTER_ID)
     expect(result.success).toBe(true)
     if (result.success) {
-      expect(result.data?.published).toBe(1)
+      // draftEvent (May), novDraft (Nov 1 prior year), decDraft, oct31Draft
+      expect(result.data?.published).toBe(4)
     }
 
     const { data: rows } = await admin
       .from('events')
       .select('id, status')
-      .in('id', [IDS.draftEvent, IDS.scheduledEvent, IDS.otherSeasonDraft])
+      .in('id', Object.values(IDS))
     const byId = Object.fromEntries((rows ?? []).map((r) => [r.id, r.status]))
+    // Inside the window, this chapter
     expect(byId[IDS.draftEvent]).toBe('scheduled')
+    expect(byId[IDS.novDraft]).toBe('scheduled')
+    expect(byId[IDS.decDraft]).toBe('scheduled')
+    expect(byId[IDS.oct31Draft]).toBe('scheduled')
     expect(byId[IDS.scheduledEvent]).toBe('scheduled')
+    // Same window, other chapter
+    expect(byId[IDS.otherChapterDraft]).toBe('draft')
+    // Outside the window (Nov 1 SEASON starts the next ACP season)
+    expect(byId[IDS.nextAcpSeasonDraft]).toBe('draft')
     expect(byId[IDS.otherSeasonDraft]).toBe('draft')
+    expect(byId[IDS.draftPreviewEvent]).toBe('draft')
 
-    const { data: anonRows } = await anon.from('events').select('id').eq('id', IDS.draftEvent)
-    expect(anonRows?.map((r) => r.id)).toEqual([IDS.draftEvent])
+    const { data: anonRows } = await anon
+      .from('events')
+      .select('id')
+      .in('id', [IDS.draftEvent, IDS.novDraft, IDS.decDraft])
+      .order('id')
+    expect(anonRows?.map((r) => r.id)).toEqual([IDS.draftEvent, IDS.novDraft, IDS.decDraft])
   })
 })
