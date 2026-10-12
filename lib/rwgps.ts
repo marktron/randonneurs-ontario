@@ -90,6 +90,7 @@ interface RwgpsTrackPoint {
 interface RwgpsRoute {
   name?: string
   distance?: number // meters
+  elevation_gain?: number // meters
   course_points?: RwgpsCoursePoint[]
   points_of_interest?: RwgpsPoi[]
   track_points?: RwgpsTrackPoint[]
@@ -449,6 +450,25 @@ async function fetchRouteJson(rwgpsId: string): Promise<RwgpsRoute> {
   const data: unknown = await response.json()
   // The v1 API nests the route under a `route` key; tolerate a bare body too.
   return (data as { route?: RwgpsRoute }).route ?? (data as RwgpsRoute)
+}
+
+/**
+ * A route's total elevation gain in metres, or null (with a warning) on any
+ * failure: missing credentials, HTTP error or a non-numeric value.
+ */
+export async function fetchRwgpsRouteElevationGain(rwgpsId: string): Promise<number | null> {
+  try {
+    const route = await fetchRouteJson(rwgpsId)
+    const gain = route.elevation_gain
+    if (typeof gain !== 'number' || !Number.isFinite(gain)) {
+      console.warn(`RWGPS route ${rwgpsId}: no numeric elevation gain`)
+      return null
+    }
+    return gain
+  } catch (err) {
+    console.warn(`RWGPS route ${rwgpsId}: elevation fetch failed`, err)
+    return null
+  }
 }
 
 function trackOf(route: RwgpsRoute): { totalKm: number; points: TrackPoint[] } {

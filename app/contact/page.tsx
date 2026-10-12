@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { PageShell } from '@/components/page-shell'
+import { CHAPTER_VPS } from '@/lib/chapter-vps'
 
 export const metadata = {
   title: 'Contact',
@@ -15,10 +16,10 @@ const contacts = [
     name: 'Peter Leiss',
     email: 'vp-admin@randonneursontario.ca',
   },
-  { role: 'VP, Huron', name: 'Fred Chagnon', email: 'vp-huron@randonneursontario.ca' },
-  { role: 'VP, Ottawa', name: 'Charles Major', email: 'vp-ottawa@randonneursontario.ca' },
-  { role: 'VP, Simcoe - Muskoka', name: 'Dave Thompson', email: 'vp-simcoe@randonneursontario.ca' },
-  { role: 'VP, Toronto', name: 'Mark Allen', email: 'vp-toronto@randonneursontario.ca' },
+  { role: 'VP, Huron', ...CHAPTER_VPS.huron },
+  { role: 'VP, Ottawa', ...CHAPTER_VPS.ottawa },
+  { role: 'VP, Simcoe - Muskoka', ...CHAPTER_VPS.simcoe },
+  { role: 'VP, Toronto', ...CHAPTER_VPS.toronto },
   {
     role: 'Member-at-large, Huron',
     name: 'Brenda Wiechers-Maxwell',

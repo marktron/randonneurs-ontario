@@ -9,6 +9,7 @@ import {
   fetchRwgpsControls,
   fetchRwgpsControlsWithCoords,
   fetchRwgpsRoute,
+  fetchRwgpsRouteElevationGain,
   fetchRwgpsRouteForImport,
   fetchRwgpsRouteMap,
   parseRwgpsRouteRef,
@@ -1059,6 +1060,42 @@ describe('route import and track fetchers', () => {
     it('throws the no-controls message', async () => {
       stubRouteResponse({ route: { ...route, course_points: [] } })
       await expect(fetchRwgpsRouteForImport('123')).rejects.toThrow('No control points found')
+    })
+  })
+
+  describe('fetchRwgpsRouteElevationGain', () => {
+    beforeEach(() => {
+      vi.spyOn(console, 'warn').mockImplementation(() => {})
+    })
+
+    it('returns the numeric elevation gain', async () => {
+      stubRouteResponse({ route: { elevation_gain: 1964.5 } })
+      expect(await fetchRwgpsRouteElevationGain('123')).toBe(1964.5)
+    })
+
+    it('returns null and warns on an HTTP error', async () => {
+      vi.mocked(global.fetch).mockResolvedValueOnce({
+        ok: false,
+        status: 404,
+        statusText: 'Not Found',
+      } as Response)
+      expect(await fetchRwgpsRouteElevationGain('123')).toBeNull()
+      expect(console.warn).toHaveBeenCalled()
+    })
+
+    it('returns null when the gain is missing or non-numeric', async () => {
+      stubRouteResponse({ route: {} })
+      expect(await fetchRwgpsRouteElevationGain('123')).toBeNull()
+      stubRouteResponse({ route: { elevation_gain: '1964' } })
+      expect(await fetchRwgpsRouteElevationGain('123')).toBeNull()
+      expect(console.warn).toHaveBeenCalledTimes(2)
+    })
+
+    it('returns null and warns when credentials are missing', async () => {
+      vi.stubEnv('RWGPS_API_KEY', '')
+      expect(await fetchRwgpsRouteElevationGain('123')).toBeNull()
+      expect(console.warn).toHaveBeenCalled()
+      expect(global.fetch).not.toHaveBeenCalled()
     })
   })
 
