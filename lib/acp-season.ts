@@ -7,11 +7,14 @@
  * event date. Only the bulk publish of draft events uses the ACP window.
  */
 
+/** ACP season for a calendar year and 1-based month: Nov and Dec roll forward. */
+export function acpSeasonOfParts(year: number, month: number): number {
+  return month >= 11 ? year + 1 : year
+}
+
 /** ACP season of a YYYY-MM-DD date: Nov and Dec roll forward into the next year. */
 export function acpSeasonOf(eventDate: string): number {
-  const year = Number(eventDate.slice(0, 4))
-  const month = Number(eventDate.slice(5, 7))
-  return month >= 11 ? year + 1 : year
+  return acpSeasonOfParts(Number(eventDate.slice(0, 4)), Number(eventDate.slice(5, 7)))
 }
 
 /** Inclusive date bounds (YYYY-MM-DD) of an ACP season. */

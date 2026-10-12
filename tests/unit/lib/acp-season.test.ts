@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { acpSeasonOf, acpSeasonWindow } from '@/lib/acp-season'
+import { acpSeasonOf, acpSeasonOfParts, acpSeasonWindow } from '@/lib/acp-season'
 
 describe('acpSeasonOf', () => {
   it('labels Jan through Oct with the same calendar year', () => {
@@ -21,6 +21,14 @@ describe('acpSeasonOf', () => {
 
   it('ignores any time component after the date', () => {
     expect(acpSeasonOf('2026-11-01T00:00:00Z')).toBe(2027)
+  })
+})
+
+describe('acpSeasonOfParts', () => {
+  it('takes a 1-based month and rolls Nov and Dec forward', () => {
+    expect(acpSeasonOfParts(2026, 10)).toBe(2026)
+    expect(acpSeasonOfParts(2026, 11)).toBe(2027)
+    expect(acpSeasonOfParts(2026, 12)).toBe(2027)
   })
 })
 

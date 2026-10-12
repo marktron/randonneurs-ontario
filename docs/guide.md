@@ -56,13 +56,13 @@ Click "New Event" in the top right of the Events page. The form asks for:
 7. **Start time and location**: optional but helpful for riders.
 8. **Description**: optional, supports Markdown formatting.
 9. **Event image**: optional photo to display with the event.
-10. **Visibility**: Draft or Published. Events dated in a season after the current one default to Draft so next season can be planned without anything appearing publicly. Current-season events default to Published.
+10. **Visibility**: Draft or Published. Events dated in an ACP season after the current one default to Draft so next season can be planned without anything appearing publicly. The ACP season starts Nov 1, so November and December dates count as next season. Current-season events default to Published.
 
 One thing to know: you can't create new brevets for the current season. This is by design. The brevet schedule is set at the start of the year and approved by ACP. You can still edit existing brevets, and you can create populaires, permanents, and fleches for any season. If you need to add a new brevet during the season, contact Mark Allen.
 
 ### Planning next season with drafts
 
-Create next season's events as drafts (the default when the date is in a future season). Drafts are only visible in the admin site. To make them live:
+Create next season's events as drafts (the default when the date is Nov 1 or later, or in a future year). Drafts are only visible in the admin site. To make them live:
 
 - **One at a time**: open the event and change its status from Draft to Scheduled. This also creates the Epic Ride Weather page.
 - **Whole season** (one chapter at a time): on the Events page, pick a chapter in the chapter filter (the button doesn't appear on All Chapters) and click **Publish <year> season (N drafts)**. The batch follows the ACP season, Nov 1 to Oct 31, labelled by the year it ends in: the 2027 season runs Nov 1, 2026 to Oct 31, 2027, so a chapter's November and December rides go out with the following season. If the chapter has drafts in more than one ACP season you'll see one button per season. The confirmation lists every event it will publish, and each of those drafts becomes Scheduled. Any admin can do this; chapter admins can only publish their own chapter. The season filter doesn't affect the button.

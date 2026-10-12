@@ -275,6 +275,34 @@ describe('EventForm', () => {
       expect(screen.getByRole('radio', { name: /published/i })).not.toBeChecked()
     })
 
+    it('defaults to Draft for a November date in the current year (next ACP season)', () => {
+      render(
+        <EventForm
+          chapters={mockChapters}
+          routes={mockRoutes}
+          event={{ ...futureSeasonEvent(), eventDate: `${CURRENT_SEASON}-11-07` }}
+        />
+      )
+
+      expect(screen.getByRole('radio', { name: /draft/i })).toBeChecked()
+    })
+
+    it('defaults to Published for an October date in the current year', () => {
+      render(
+        <EventForm
+          chapters={mockChapters}
+          routes={mockRoutes}
+          event={{
+            ...futureSeasonEvent(),
+            eventType: 'populaire',
+            eventDate: `${CURRENT_SEASON}-10-31`,
+          }}
+        />
+      )
+
+      expect(screen.getByRole('radio', { name: /published/i })).toBeChecked()
+    })
+
     it('defaults to Published when the date is in the current season', () => {
       render(
         <EventForm
