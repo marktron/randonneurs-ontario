@@ -53,6 +53,16 @@ export async function syncEventToErw(
       rwgpsId = route?.rwgps_id ?? null
     }
 
+    // ERW can't publish a routeless event, so a new one would stay a draft
+    // forever and use up one of the account's 10 draft slots. An already
+    // linked event still updates (the client keeps ERW's existing routes).
+    if (!event.erw_event_id && !rwgpsId) {
+      return {
+        success: false,
+        error: 'Add a Ride with GPS route before syncing to Epic Ride Weather',
+      }
+    }
+
     const eventData = {
       name: event.name,
       description: event.description || '',

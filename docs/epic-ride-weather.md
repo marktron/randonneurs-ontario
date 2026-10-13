@@ -38,16 +38,18 @@ An event with `erw_event_id` set is "linked". Nothing else on our side refers to
 | Draft published (`draft` to `scheduled`) | `updateEventStatus`                          | create                               |
 | Season drafts published in bulk          | `publishSeasonDrafts`                        | create per event                     |
 | Linked event edited                      | `updateEvent`                                | update                               |
+| Unlinked scheduled event edited          | `updateEvent`                                | create, if it now has an RWGPS route |
 | Linked event cancelled                   | `updateEventStatus`                          | delete, then clear both columns      |
 | Linked event deleted                     | `deleteEvent`                                | delete                               |
 | "Sync to ERW" / "Re-sync to ERW" button  | `syncEventToErw` (`lib/actions/erw-sync.ts`) | create if unlinked, otherwise update |
 
-The create path for the first three triggers is `syncNewEventToErw` in `lib/events/erw-sync.ts`.
+The create path for the first four triggers is `syncNewEventToErw` in `lib/events/erw-sync.ts`. The unlinked-edit row is how an event published without a route gets its ERW event: add the route, save, and it is created then.
 
 Rules that apply to all of them:
 
 - Permanents are never synced.
 - Drafts are never synced. The sync button refuses a draft, and the edit page hides the button until the event is published.
+- Events without an RWGPS route are never created on ERW: a routeless ERW event can't be published and permanently occupies one of the account's 10 draft slots. ERW refuses every create once the account holds 10 drafts ("Maximum draft event limit (10) reached"), for every chapter. `syncNewEventToErw` returns `skipped` when the route is missing, has no `rwgps_id`, or is a collection, and the sync button refuses with "Add a Ride with GPS route before syncing to Epic Ride Weather". An already linked event that loses its route still updates (see "Updating a linked event").
 - ERW failures never fail the local operation. The event is saved, the error goes to Sentry via `logError`, and the admin can retry with the sync button. `publishSeasonDrafts` reports a count of ERW failures in its toast. `updateEvent` fails silently from the admin's point of view.
 - The admin sync button is the only path that writes an audit log entry for the ERW call itself.
 
@@ -73,7 +75,7 @@ Routes that point at an RWGPS collection (`rwgps_collection_id`, see [rwgps-coll
 
 ERW imports a route from `sourceRouteUrl` asynchronously, and it rejects `published: true` for any route that has no path yet ("Route must have a GPX file or path for published events"). So any call that triggers an import sends the event as a draft first, then `publishErwEvent` polls: it waits 3s, 5s and 10s, and on each attempt re-reads the event and PUTs it back with `published: true`. A 400 means the import is still running and it tries again. If all three attempts fail, the event stays a draft on ERW and the timeout is logged to Sentry.
 
-- **Create** always posts as a draft. If there is no route, it skips the publish loop because a routeless event can never pass validation. Those events stay drafts on ERW.
+- **Create** always posts as a draft, then publishes once the route import finishes. Our callers never create a routeless event, because it could never pass validation and would stay a draft on ERW, using up one of the 10 draft slots. The client still skips the publish loop if it is handed one (only `scripts/bulk-sync-erw.ts` calls it directly, and that script already filters to events with an `rwgps_id`).
 - **Update** only drafts-then-publishes when the outgoing route will be re-imported (see below). Otherwise it PUTs with `published: true` directly.
 
 ## Updating a linked event
@@ -94,7 +96,7 @@ If the event has no RWGPS route to send (the route was unlinked, or it is a coll
 ## Known gaps
 
 - **Editing a route doesn't resync its events.** Changing a route's `rwgps_id` in the routes admin (`lib/actions/routes.ts`) updates the public site but makes no ERW call. Each linked event on that route needs an edit-and-save or a click on "Re-sync to ERW". Switching an event to a different route in the event editor does sync, because it goes through `updateEvent`.
-- **Un-cancelling doesn't recreate the ERW event.** Cancelling deletes the ERW event and clears the columns. Setting the event back to `scheduled` does not create a new one; use the "Sync to ERW" button.
+- **Un-cancelling doesn't recreate the ERW event.** Cancelling deletes the ERW event and clears the columns. Setting the event back to `scheduled` does not create a new one; use the "Sync to ERW" button, or edit and save the event.
 - **Collection routes get no forecast.** Multi-leg events have no single route to import.
 
 ## Operations

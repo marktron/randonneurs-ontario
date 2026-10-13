@@ -270,13 +270,30 @@ export async function updateEvent(eventId: string, data: UpdateEventData): Promi
     const { data: event } = await getSupabaseAdmin()
       .from('events')
       .select(
-        'chapter_id, event_type, slug, erw_event_id, route_id, name, description, distance_km, event_date, start_time'
+        'chapter_id, event_type, slug, erw_event_id, route_id, name, description, distance_km, event_date, start_time, status'
       )
       .eq('id', eventId)
       .single()
 
     if (event) {
       await revalidateCalendarTags(event.chapter_id, event.event_type, event.slug)
+    }
+
+    // An unlinked scheduled event has no ERW event yet, usually because it had
+    // no RWGPS route when it was published. Create it now; syncNewEventToErw
+    // skips permanents, non-production, and events that still have no route.
+    if (event && !event.erw_event_id && event.status === 'scheduled') {
+      await syncNewEventToErw({
+        id: eventId,
+        name: event.name,
+        description: event.description,
+        distance_km: event.distance_km,
+        event_date: event.event_date,
+        start_time: event.start_time,
+        slug: event.slug,
+        route_id: event.route_id,
+        event_type: event.event_type,
+      })
     }
 
     // Sync to Epic Ride Weather if event is linked (skip outside Vercel production)

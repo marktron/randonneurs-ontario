@@ -64,7 +64,7 @@ One thing to know: you can't create new brevets for the current season. This is 
 
 Create next season's events as drafts (the default when the date is Nov 1 or later, or in a future year). Drafts are only visible in the admin site. To make them live:
 
-- **One at a time**: open the event and change its status from Draft to Scheduled. This also creates the Epic Ride Weather page.
+- **One at a time**: open the event and change its status from Draft to Scheduled. This also creates the Epic Ride Weather page, but only if the event has a Ride with GPS route. Epic Ride Weather holds at most 10 unpublished events per account and can't publish one without a route, so routeless events are left off until you add the route and save.
 - **Whole season** (one chapter at a time): on the Events page, pick a chapter in the chapter filter (the button doesn't appear on All Chapters) and click **Publish <year> season (N drafts)**. The batch follows the ACP season, Nov 1 to Oct 31, labelled by the year it ends in: the 2027 season runs Nov 1, 2026 to Oct 31, 2027, so a chapter's November and December rides go out with the following season. If the chapter has drafts in more than one ACP season you'll see one button per season. The confirmation lists every event it will publish, and each of those drafts becomes Scheduled. Any admin can do this; chapter admins can only publish their own chapter. The season filter doesn't affect the button.
 
 Scheduled is a draft's only status move — the dropdown offers nothing else, and Cancelled and Completed are refused. To discard a draft, delete it.
