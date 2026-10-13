@@ -102,5 +102,6 @@ If the event has no RWGPS route to send (the route was unlinked, or it is a coll
 ## Operations
 
 - **Re-sync one event:** the button on `/admin/events/[id]/edit`. It works only on the production deploy.
+- **Free draft slots when creates fail with "Maximum draft event limit (10) reached":** `scripts/erw-delete-routeless-drafts.ts` lists ERW's drafts, matches each to our event by `erw_event_id`, and with `--apply` deletes them on ERW and clears both ERW columns on our rows. Run the dry run first (`npx tsx --env-file=.env.production.local scripts/erw-delete-routeless-drafts.ts`), then `--apply`, then the bulk create below to link the events that failed. The quota filled in October 2026 with ten routeless Simcoe events.
 - **Bulk create for unlinked events:** `scripts/bulk-sync-erw.ts` finds future scheduled events that have an RWGPS route and no `erw_event_id`, creates their ERW events and writes the ids back. It calls the client directly, so the production gate doesn't apply; run it with production credentials (`npx tsx --env-file=.env.production.local scripts/bulk-sync-erw.ts --dry-run` first).
 - **Checking what ERW has:** `GET /events/{erw_event_id}` with a bearer token returns the event, including each route's `routeId` and `sourceRouteUrl`. Compare `sourceRouteUrl` against the route's `rwgps_id` in our database when the forecast looks wrong.
