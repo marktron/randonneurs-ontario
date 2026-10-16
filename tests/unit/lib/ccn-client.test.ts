@@ -480,6 +480,43 @@ describe('getMembershipSeasonStatus', () => {
     expect(mockFetch).toHaveBeenCalledTimes(1)
   })
 
+  describe('cache expiry', () => {
+    const minutes = (n: number) => n * 60 * 1000
+
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
+    it('keeps a successful listing for an hour', async () => {
+      vi.useFakeTimers()
+      const { getMembershipSeasonStatus } = await load()
+      respond([listing()])
+      await getMembershipSeasonStatus(2026)
+      vi.advanceTimersByTime(minutes(59))
+      await getMembershipSeasonStatus(2026)
+      expect(mockFetch).toHaveBeenCalledTimes(1)
+      respond([listing()])
+      vi.advanceTimersByTime(minutes(2))
+      await getMembershipSeasonStatus(2026)
+      expect(mockFetch).toHaveBeenCalledTimes(2)
+    })
+
+    it('retries a failed discovery after 10 minutes', async () => {
+      vi.spyOn(console, 'warn').mockImplementation(() => {})
+      vi.useFakeTimers()
+      const { getMembershipSeasonStatus } = await load()
+      mockFetch.mockRejectedValueOnce(new Error('network down'))
+      await getMembershipSeasonStatus(2026)
+      vi.advanceTimersByTime(minutes(9))
+      await getMembershipSeasonStatus(2026)
+      expect(mockFetch).toHaveBeenCalledTimes(1)
+      respond([listing()])
+      vi.advanceTimersByTime(minutes(2))
+      expect(await getMembershipSeasonStatus(2026)).toEqual({ status: 'open', eventId: 21392 })
+      expect(mockFetch).toHaveBeenCalledTimes(2)
+    })
+  })
+
   it('falls back to CCN_MEMBERSHIP_EVENT_IDS as open when discovery throws', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const { getMembershipSeasonStatus } = await load()

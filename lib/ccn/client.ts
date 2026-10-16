@@ -47,7 +47,8 @@ const FUZZY_AMBIGUITY_GAP = 0.15
 
 const CCN_DEFAULT_API_BASE = 'https://ccnbikes.com/en/rest/v2'
 const RO_ORGANIZATION_ID = 1654
-const LISTING_CACHE_MS = 10 * 60 * 1000
+const LISTING_SUCCESS_TTL_MS = 60 * 60 * 1000
+const LISTING_FAILURE_TTL_MS = 10 * 60 * 1000
 
 export type MembershipSeasonStatus =
   { status: 'open'; eventId: number } | { status: 'closed'; eventId: number } | { status: 'none' }
@@ -132,8 +133,11 @@ async function loadListings(): Promise<Map<number, SeasonEvent>> {
 }
 
 async function getListings(): Promise<Map<number, SeasonEvent> | null> {
-  if (listingCache && Date.now() - listingCache.fetchedAt < LISTING_CACHE_MS) {
-    return listingCache.ok ? listingCache.seasons : null
+  if (listingCache) {
+    const ttl = listingCache.ok ? LISTING_SUCCESS_TTL_MS : LISTING_FAILURE_TTL_MS
+    if (Date.now() - listingCache.fetchedAt < ttl) {
+      return listingCache.ok ? listingCache.seasons : null
+    }
   }
   try {
     const seasons = await loadListings()
