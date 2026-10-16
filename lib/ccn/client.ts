@@ -45,6 +45,122 @@ interface CCNAPIResponse {
 const FUZZY_ACCEPT_THRESHOLD = 0.85
 const FUZZY_AMBIGUITY_GAP = 0.15
 
+const CCN_DEFAULT_API_BASE = 'https://ccnbikes.com/en/rest/v2'
+const RO_ORGANIZATION_ID = 1654
+const LISTING_CACHE_MS = 10 * 60 * 1000
+
+export type MembershipSeasonStatus =
+  { status: 'open'; eventId: number } | { status: 'closed'; eventId: number } | { status: 'none' }
+
+interface SeasonEvent {
+  eventId: number
+  open: boolean
+}
+
+interface CCNListingRow {
+  name?: string
+  event?: {
+    id?: number
+    status?: string
+    registration_opens?: string
+    organization?: { id?: number }
+  }
+}
+
+type ListingCache =
+  | { ok: true; fetchedAt: number; seasons: Map<number, SeasonEvent> }
+  | { ok: false; fetchedAt: number }
+
+let listingCache: ListingCache | null = null
+
+function ccnApiBase(): string {
+  return process.env.CCN_API_BASE || CCN_DEFAULT_API_BASE
+}
+
+/** Test hook: drop the in-process listing cache (successes and failures). */
+export function __resetMembershipSeasonCache(): void {
+  listingCache = null
+}
+
+/** Parses CCN_MEMBERSHIP_EVENT_IDS, e.g. "2026:21392,2027:23000". */
+function parseSeedEventIds(): Map<number, number> {
+  const seed = new Map<number, number>()
+  for (const pair of (process.env.CCN_MEMBERSHIP_EVENT_IDS ?? '').split(',')) {
+    const [season, eventId] = pair.split(':').map((part) => Number.parseInt(part.trim(), 10))
+    if (Number.isInteger(season) && Number.isInteger(eventId)) seed.set(season, eventId)
+  }
+  return seed
+}
+
+async function loadListings(): Promise<Map<number, SeasonEvent>> {
+  const url = `${ccnApiBase()}/listing_app/club-listings/?search=Randonneurs+Ontario`
+
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 10_000)
+
+  let response: Response
+  try {
+    response = await fetch(url, { signal: controller.signal })
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      throw new Error('CCN API timed out after 10s')
+    }
+    throw error
+  } finally {
+    clearTimeout(timeout)
+  }
+
+  if (!response.ok) {
+    throw new Error(`CCN API error: ${response.status}`)
+  }
+
+  const data: { results?: CCNListingRow[] } = await response.json()
+  const seasons = new Map<number, SeasonEvent>()
+  for (const row of data.results ?? []) {
+    const event = row.event
+    if (!event || typeof event.id !== 'number') continue
+    if (event.organization?.id !== RO_ORGANIZATION_ID) continue
+    const year = row.name?.match(/\b(\d{4})\b/)?.[1]
+    if (!year) continue
+    const opens = Date.parse(event.registration_opens ?? '')
+    seasons.set(Number(year), {
+      eventId: event.id,
+      open: event.status === 'AC' && opens <= Date.now(),
+    })
+  }
+  return seasons
+}
+
+async function getListings(): Promise<Map<number, SeasonEvent> | null> {
+  if (listingCache && Date.now() - listingCache.fetchedAt < LISTING_CACHE_MS) {
+    return listingCache.ok ? listingCache.seasons : null
+  }
+  try {
+    const seasons = await loadListings()
+    listingCache = { ok: true, fetchedAt: Date.now(), seasons }
+    return seasons
+  } catch (error) {
+    console.warn('CCN membership event discovery failed', error)
+    listingCache = { ok: false, fetchedAt: Date.now() }
+    return null
+  }
+}
+
+/**
+ * Resolve a membership season to its CCN event. Each year is a separate CCN
+ * event, discovered from the public club listings; CCN_MEMBERSHIP_EVENT_IDS
+ * ("2026:21392,...") seeds seasons (treated as open) when discovery fails.
+ */
+export async function getMembershipSeasonStatus(season: number): Promise<MembershipSeasonStatus> {
+  const found = (await getListings())?.get(season)
+  if (found) return { status: found.open ? 'open' : 'closed', eventId: found.eventId }
+
+  const seeded = parseSeedEventIds().get(season)
+  if (seeded !== undefined) return { status: 'open', eventId: seeded }
+
+  return { status: 'none' }
+}
+
 /**
  * Search CCN API for a member by name.
  *
@@ -55,17 +171,20 @@ const FUZZY_AMBIGUITY_GAP = 0.15
  *
  * @param firstName - Rider's first name
  * @param lastName - Rider's last name
+ * @param season - Membership season (calendar year) to search
  * @returns Membership data if found, or { found: false }
  * @throws Error if API request fails
  */
 export async function searchCCNMembership(
   firstName: string,
-  lastName: string
+  lastName: string,
+  season: number
 ): Promise<CCNSearchResult> {
-  const endpoint = process.env.CCN_ENDPOINT
-  if (!endpoint) {
-    throw new Error('CCN_ENDPOINT environment variable not set')
+  const seasonStatus = await getMembershipSeasonStatus(season)
+  if (seasonStatus.status === 'none') {
+    return { found: false }
   }
+  const endpoint = `${ccnApiBase()}/event_app/registration-search/?event_id=${seasonStatus.eventId}`
 
   const fullName = `${firstName} ${lastName}`.trim()
   const exact = await fetchCCN(endpoint, fullName)

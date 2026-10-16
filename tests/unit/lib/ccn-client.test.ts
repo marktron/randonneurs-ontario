@@ -4,16 +4,22 @@ describe('searchCCNMembership', () => {
   const originalFetch = global.fetch
   const mockFetch = vi.fn()
 
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.resetAllMocks()
     global.fetch = mockFetch
-    process.env.CCN_ENDPOINT =
-      'https://ccnbikes.com/en/rest/v2/event_app/registration-search/?event_id=21392'
+    process.env.CCN_MEMBERSHIP_EVENT_IDS = '2026:21392'
+    // Prime the listing cache so each test's queued fetches are search calls only.
+    const { __resetMembershipSeasonCache, getMembershipSeasonStatus } =
+      await import('@/lib/ccn/client')
+    __resetMembershipSeasonCache()
+    mockFetch.mockResolvedValueOnce({ ok: true, json: async () => ({ results: [] }) })
+    await getMembershipSeasonStatus(2026)
+    mockFetch.mockClear()
   })
 
   afterEach(() => {
     global.fetch = originalFetch
-    delete process.env.CCN_ENDPOINT
+    delete process.env.CCN_MEMBERSHIP_EVENT_IDS
   })
 
   it('returns membership data when member found', async () => {
@@ -35,7 +41,7 @@ describe('searchCCNMembership', () => {
 
     // Dynamic import to get fresh module with mocked fetch
     const { searchCCNMembership } = await import('@/lib/ccn/client')
-    const result = await searchCCNMembership('Mark', 'Allen')
+    const result = await searchCCNMembership('Mark', 'Allen', 2026)
 
     expect(result).toEqual({
       found: true,
@@ -77,7 +83,7 @@ describe('searchCCNMembership', () => {
     })
 
     const { searchCCNMembership } = await import('@/lib/ccn/client')
-    const result = await searchCCNMembership('Rider', 'Upgrade')
+    const result = await searchCCNMembership('Rider', 'Upgrade', 2026)
 
     expect(result).toEqual({
       found: true,
@@ -113,7 +119,7 @@ describe('searchCCNMembership', () => {
     })
 
     const { searchCCNMembership } = await import('@/lib/ccn/client')
-    const result = await searchCCNMembership('Trial', 'One')
+    const result = await searchCCNMembership('Trial', 'One', 2026)
 
     expect(result).toMatchObject({ found: true, membershipId: 1, type: 'Trial Member' })
   })
@@ -126,7 +132,7 @@ describe('searchCCNMembership', () => {
     })
 
     const { searchCCNMembership } = await import('@/lib/ccn/client')
-    const result = await searchCCNMembership('Nobody', 'Here')
+    const result = await searchCCNMembership('Nobody', 'Here', 2026)
 
     expect(result).toEqual({ found: false })
   })
@@ -138,15 +144,22 @@ describe('searchCCNMembership', () => {
     })
 
     const { searchCCNMembership } = await import('@/lib/ccn/client')
-    await expect(searchCCNMembership('Test', 'User')).rejects.toThrow('CCN API error: 500')
+    await expect(searchCCNMembership('Test', 'User', 2026)).rejects.toThrow('CCN API error: 500')
   })
 
-  it('throws error when CCN_ENDPOINT not set', async () => {
-    delete process.env.CCN_ENDPOINT
+  it('returns not found when the season has no membership event', async () => {
+    delete process.env.CCN_MEMBERSHIP_EVENT_IDS
+    const { searchCCNMembership, __resetMembershipSeasonCache } = await import('@/lib/ccn/client')
+    __resetMembershipSeasonCache()
+    mockFetch.mockResolvedValueOnce({ ok: true, json: async () => ({ results: [] }) })
 
-    const { searchCCNMembership } = await import('@/lib/ccn/client')
-    await expect(searchCCNMembership('Test', 'User')).rejects.toThrow(
-      'CCN_ENDPOINT environment variable not set'
+    const result = await searchCCNMembership('Test', 'User', 2031)
+
+    expect(result).toEqual({ found: false })
+    expect(mockFetch).toHaveBeenCalledTimes(1)
+    expect(mockFetch).toHaveBeenCalledWith(
+      expect.stringContaining('/listing_app/club-listings/'),
+      expect.anything()
     )
   })
 
@@ -180,7 +193,7 @@ describe('searchCCNMembership', () => {
       })
 
       const { searchCCNMembership } = await import('@/lib/ccn/client')
-      const result = await searchCCNMembership('Ludovic', 'Magne')
+      const result = await searchCCNMembership('Ludovic', 'Magne', 2026)
 
       expect(result).toEqual({
         found: true,
@@ -215,7 +228,7 @@ describe('searchCCNMembership', () => {
       })
 
       const { searchCCNMembership } = await import('@/lib/ccn/client')
-      await searchCCNMembership('Mark', 'Allen')
+      await searchCCNMembership('Mark', 'Allen', 2026)
 
       expect(mockFetch).toHaveBeenCalledTimes(1)
     })
@@ -243,7 +256,7 @@ describe('searchCCNMembership', () => {
       })
 
       const { searchCCNMembership } = await import('@/lib/ccn/client')
-      const result = await searchCCNMembership('Ludovic', 'Magne')
+      const result = await searchCCNMembership('Ludovic', 'Magne', 2026)
 
       expect(result).toEqual({ found: false })
     })
@@ -259,7 +272,7 @@ describe('searchCCNMembership', () => {
       })
 
       const { searchCCNMembership } = await import('@/lib/ccn/client')
-      const result = await searchCCNMembership('Ludovic', 'Magne')
+      const result = await searchCCNMembership('Ludovic', 'Magne', 2026)
 
       expect(result).toEqual({ found: false })
       expect(mockFetch).toHaveBeenCalledTimes(2)
@@ -297,7 +310,7 @@ describe('searchCCNMembership', () => {
       })
 
       const { searchCCNMembership } = await import('@/lib/ccn/client')
-      const result = await searchCCNMembership('Anna', 'Wong')
+      const result = await searchCCNMembership('Anna', 'Wong', 2026)
 
       expect(result).toEqual({ found: false })
     })
@@ -333,7 +346,7 @@ describe('searchCCNMembership', () => {
       })
 
       const { searchCCNMembership } = await import('@/lib/ccn/client')
-      const result = await searchCCNMembership('Ludovic', 'Magne')
+      const result = await searchCCNMembership('Ludovic', 'Magne', 2026)
 
       expect(result).toMatchObject({
         found: true,
@@ -349,10 +362,152 @@ describe('searchCCNMembership', () => {
       })
 
       const { searchCCNMembership } = await import('@/lib/ccn/client')
-      const result = await searchCCNMembership('Ludovic', '')
+      const result = await searchCCNMembership('Ludovic', '', 2026)
 
       expect(result).toEqual({ found: false })
       expect(mockFetch).toHaveBeenCalledTimes(1)
     })
+  })
+})
+
+describe('getMembershipSeasonStatus', () => {
+  const originalFetch = global.fetch
+  const mockFetch = vi.fn()
+
+  const listing = (overrides: Record<string, unknown> = {}) => ({
+    name: 'Randonneurs Ontario Membership 2026',
+    event: {
+      id: 21392,
+      status: 'AC',
+      registration_opens: '2025-12-07T00:00:00',
+      organization: { id: 1654 },
+    },
+    ...overrides,
+  })
+  const respond = (results: unknown[]) =>
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ count: results.length, results }),
+    })
+
+  async function load() {
+    const mod = await import('@/lib/ccn/client')
+    mod.__resetMembershipSeasonCache()
+    return mod
+  }
+
+  beforeEach(() => {
+    vi.resetAllMocks()
+    global.fetch = mockFetch
+    delete process.env.CCN_MEMBERSHIP_EVENT_IDS
+  })
+
+  afterEach(() => {
+    global.fetch = originalFetch
+    delete process.env.CCN_MEMBERSHIP_EVENT_IDS
+    vi.restoreAllMocks()
+  })
+
+  it('open when the listing is active and registration has opened', async () => {
+    const { getMembershipSeasonStatus } = await load()
+    respond([listing()])
+    expect(await getMembershipSeasonStatus(2026)).toEqual({ status: 'open', eventId: 21392 })
+  })
+
+  it('closed when registration_opens is in the future', async () => {
+    const { getMembershipSeasonStatus } = await load()
+    respond([
+      listing({
+        event: {
+          id: 21392,
+          status: 'AC',
+          registration_opens: '2099-01-01T00:00:00',
+          organization: { id: 1654 },
+        },
+      }),
+    ])
+    expect(await getMembershipSeasonStatus(2026)).toEqual({ status: 'closed', eventId: 21392 })
+  })
+
+  it('closed when the event status is not AC', async () => {
+    const { getMembershipSeasonStatus } = await load()
+    respond([
+      listing({
+        event: {
+          id: 21392,
+          status: 'CL',
+          registration_opens: '2025-12-07T00:00:00',
+          organization: { id: 1654 },
+        },
+      }),
+    ])
+    expect(await getMembershipSeasonStatus(2026)).toEqual({ status: 'closed', eventId: 21392 })
+  })
+
+  it('none when no listing names that season', async () => {
+    const { getMembershipSeasonStatus } = await load()
+    respond([listing()])
+    expect(await getMembershipSeasonStatus(2027)).toEqual({ status: 'none' })
+  })
+
+  it('ignores listings from other organisations', async () => {
+    const { getMembershipSeasonStatus } = await load()
+    respond([
+      listing({
+        name: 'Other Club Membership 2027',
+        event: {
+          id: 555,
+          status: 'AC',
+          registration_opens: '2025-12-07T00:00:00',
+          organization: { id: 999 },
+        },
+      }),
+    ])
+    expect(await getMembershipSeasonStatus(2027)).toEqual({ status: 'none' })
+  })
+
+  it('ignores listings whose name has no year', async () => {
+    const { getMembershipSeasonStatus } = await load()
+    respond([listing({ name: 'Randonneurs Ontario Membership' })])
+    expect(await getMembershipSeasonStatus(2026)).toEqual({ status: 'none' })
+  })
+
+  it('caches the listing for subsequent calls', async () => {
+    const { getMembershipSeasonStatus } = await load()
+    respond([listing()])
+    await getMembershipSeasonStatus(2026)
+    await getMembershipSeasonStatus(2026)
+    expect(mockFetch).toHaveBeenCalledTimes(1)
+  })
+
+  it('falls back to CCN_MEMBERSHIP_EVENT_IDS as open when discovery throws', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const { getMembershipSeasonStatus } = await load()
+    process.env.CCN_MEMBERSHIP_EVENT_IDS = '2026:21392'
+    mockFetch.mockRejectedValueOnce(new Error('network down'))
+    expect(await getMembershipSeasonStatus(2026)).toEqual({ status: 'open', eventId: 21392 })
+    expect(warn).toHaveBeenCalled()
+  })
+
+  it('returns none when discovery throws and nothing is seeded', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const { getMembershipSeasonStatus } = await load()
+    mockFetch.mockRejectedValueOnce(new Error('network down'))
+    expect(await getMembershipSeasonStatus(2026)).toEqual({ status: 'none' })
+    expect(warn).toHaveBeenCalled()
+  })
+
+  it('calls the club-listings URL under CCN_API_BASE', async () => {
+    const { getMembershipSeasonStatus } = await load()
+    process.env.CCN_API_BASE = 'https://example.test/rest/v2'
+    try {
+      respond([listing()])
+      await getMembershipSeasonStatus(2026)
+      expect(mockFetch.mock.calls[0][0]).toBe(
+        'https://example.test/rest/v2/listing_app/club-listings/?search=Randonneurs+Ontario'
+      )
+    } finally {
+      delete process.env.CCN_API_BASE
+    }
   })
 })
