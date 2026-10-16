@@ -28,7 +28,14 @@ const IDS = {
   lastYearResult: '00000000-1a10-4000-a000-000000000014',
 }
 
-const SEASON = new Date().getFullYear()
+// Season constants are derived from the fixture dates, not from today's year,
+// so every season/fixture pairing holds in any month (mid-December: +30d is next
+// year; first week of January: -7d is last year).
+const futureDate = daysFromNow(30)
+const pastDate = daysFromNow(-7)
+const SEASON = Number(futureDate.slice(0, 4)) // season of the upcoming scheduled event
+const NEXT_SEASON = SEASON + 1
+const PAST_SEASON = Number(pastDate.slice(0, 4)) // season of the completed event
 
 function lookup(overrides: { season?: number; chapterId?: string } = {}) {
   return {
@@ -55,10 +62,8 @@ const ALL_EVENT_IDS = [
 
 describe('membership service (real DB)', () => {
   const supabase = getTestSupabase()
-  const pastDate = daysFromNow(-7)
-  const futureDate = daysFromNow(30)
-  const nextSeasonDate = `${SEASON + 1}-01-15`
-  const lastYearDate = `${SEASON - 1}-06-15`
+  const nextSeasonDate = `${NEXT_SEASON}-01-15`
+  const lastYearDate = `${PAST_SEASON - 1}-06-15`
 
   beforeAll(async () => {
     // Clean up any leftover test data (in case a previous run crashed)
@@ -306,7 +311,7 @@ describe('membership service (real DB)', () => {
     })
 
     it('looks up and caches under the requested season, not the current one', async () => {
-      const nextSeason = SEASON + 1
+      const nextSeason = NEXT_SEASON
       await checked(
         supabase.from('rider_memberships').insert({
           rider_id: IDS.rider,
@@ -346,7 +351,7 @@ describe('membership service (real DB)', () => {
     })
 
     it('returns found:false for a season CCN has no event for', async () => {
-      const nextSeason = SEASON + 1
+      const nextSeason = NEXT_SEASON
       searchCCNMembership.mockResolvedValue({ found: false })
 
       const { getMembershipForRider } = await import('@/lib/memberships/service')
@@ -556,14 +561,14 @@ describe('membership service (real DB)', () => {
           rider_id: IDS.rider,
           event_id: IDS.completedEvent,
           status: 'finished',
-          season: SEASON,
+          season: PAST_SEASON,
           distance_km: 200,
         }),
         'insert finished result'
       )
 
       const { isTrialUsed } = await import('@/lib/memberships/service')
-      const result = await isTrialUsed(IDS.rider, SEASON)
+      const result = await isTrialUsed(IDS.rider, PAST_SEASON)
       expect(result).toBe(true)
     })
 
@@ -574,14 +579,14 @@ describe('membership service (real DB)', () => {
           rider_id: IDS.rider,
           event_id: IDS.completedEvent,
           status: 'dnf',
-          season: SEASON,
+          season: PAST_SEASON,
           distance_km: 200,
         }),
         'insert dnf result'
       )
 
       const { isTrialUsed } = await import('@/lib/memberships/service')
-      const result = await isTrialUsed(IDS.rider, SEASON)
+      const result = await isTrialUsed(IDS.rider, PAST_SEASON)
       expect(result).toBe(true)
     })
 
@@ -614,14 +619,14 @@ describe('membership service (real DB)', () => {
           rider_id: IDS.rider,
           event_id: IDS.completedEvent,
           status: 'otl',
-          season: SEASON,
+          season: PAST_SEASON,
           distance_km: 200,
         }),
         'insert otl result'
       )
 
       const { isTrialUsed } = await import('@/lib/memberships/service')
-      const result = await isTrialUsed(IDS.rider, SEASON)
+      const result = await isTrialUsed(IDS.rider, PAST_SEASON)
       expect(result).toBe(true)
     })
 
@@ -632,14 +637,14 @@ describe('membership service (real DB)', () => {
           rider_id: IDS.rider,
           event_id: IDS.completedEvent,
           status: 'dq',
-          season: SEASON,
+          season: PAST_SEASON,
           distance_km: 200,
         }),
         'insert dq result'
       )
 
       const { isTrialUsed } = await import('@/lib/memberships/service')
-      const result = await isTrialUsed(IDS.rider, SEASON)
+      const result = await isTrialUsed(IDS.rider, PAST_SEASON)
       expect(result).toBe(true)
     })
 
@@ -650,14 +655,14 @@ describe('membership service (real DB)', () => {
           rider_id: IDS.otherRider,
           event_id: IDS.completedEvent,
           status: 'finished',
-          season: SEASON,
+          season: PAST_SEASON,
           distance_km: 200,
         }),
         'insert other rider result'
       )
 
       const { isTrialUsed } = await import('@/lib/memberships/service')
-      const result = await isTrialUsed(IDS.rider, SEASON)
+      const result = await isTrialUsed(IDS.rider, PAST_SEASON)
       expect(result).toBe(false)
     })
 
@@ -668,14 +673,14 @@ describe('membership service (real DB)', () => {
           rider_id: IDS.rider,
           event_id: IDS.completedEvent,
           status: 'dns',
-          season: SEASON,
+          season: PAST_SEASON,
           distance_km: 200,
         }),
         'insert dns result'
       )
 
       const { isTrialUsed } = await import('@/lib/memberships/service')
-      const result = await isTrialUsed(IDS.rider, SEASON)
+      const result = await isTrialUsed(IDS.rider, PAST_SEASON)
       expect(result).toBe(false)
     })
 
@@ -686,14 +691,14 @@ describe('membership service (real DB)', () => {
           rider_id: IDS.rider,
           event_id: IDS.completedEvent,
           status: 'pending',
-          season: SEASON,
+          season: PAST_SEASON,
           distance_km: 200,
         }),
         'insert pending result'
       )
 
       const { isTrialUsed } = await import('@/lib/memberships/service')
-      const result = await isTrialUsed(IDS.rider, SEASON)
+      const result = await isTrialUsed(IDS.rider, PAST_SEASON)
       expect(result).toBe(false)
     })
 
@@ -725,7 +730,7 @@ describe('membership service (real DB)', () => {
       )
 
       const { isTrialUsed } = await import('@/lib/memberships/service')
-      const result = await isTrialUsed(IDS.rider, SEASON)
+      const result = await isTrialUsed(IDS.rider, PAST_SEASON)
       expect(result).toBe(false)
     })
 
@@ -737,15 +742,15 @@ describe('membership service (real DB)', () => {
             rider_id: IDS.rider,
             event_id: IDS.lastYearEvent,
             status: 'finished',
-            season: SEASON - 1,
+            season: PAST_SEASON - 1,
             distance_km: 200,
           }),
           'insert last-year result'
         )
 
         const { isTrialUsed } = await import('@/lib/memberships/service')
-        expect(await isTrialUsed(IDS.rider, SEASON)).toBe(false)
-        expect(await isTrialUsed(IDS.rider, SEASON - 1)).toBe(true)
+        expect(await isTrialUsed(IDS.rider, PAST_SEASON)).toBe(false)
+        expect(await isTrialUsed(IDS.rider, PAST_SEASON - 1)).toBe(true)
       })
 
       it('ignores an upcoming registration in another season', async () => {
@@ -761,7 +766,7 @@ describe('membership service (real DB)', () => {
 
         const { isTrialUsed } = await import('@/lib/memberships/service')
         expect(await isTrialUsed(IDS.rider, SEASON)).toBe(false)
-        expect(await isTrialUsed(IDS.rider, SEASON + 1)).toBe(true)
+        expect(await isTrialUsed(IDS.rider, NEXT_SEASON)).toBe(true)
       })
     })
   })
