@@ -7,7 +7,7 @@ const colorClassesMap = {
   'First Brevet': 'bg-zinc-200 dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200',
   'Super Randonneur': 'bg-amber-200 dark:bg-amber-800 text-amber-800 dark:text-amber-200',
   'Ontario Rover': 'bg-lime-200 dark:bg-lime-800 text-lime-800 dark:text-lime-200',
-  'Ontario Explorer': 'bg-emerald-200 dark:bg-emerald-800 text-emerald-800 dark:text-emerald-200',
+  'Ontario Explorer': 'bg-orange-200 dark:bg-orange-800 text-orange-800 dark:text-orange-200',
   'O-5000': 'bg-cyan-200 dark:bg-cyan-800 text-cyan-800 dark:text-cyan-200',
   'O-12': 'bg-violet-200 dark:bg-violet-800 text-violet-800 dark:text-violet-200',
   'Paris-Brest-Paris': 'bg-blue-200 dark:bg-blue-800 text-blue-800 dark:text-blue-200',
