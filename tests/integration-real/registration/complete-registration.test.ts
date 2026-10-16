@@ -7,6 +7,7 @@ import {
   assertEmailPayload,
   assertManagementUrl,
 } from './helpers'
+import { nextSeasonClosedMessage } from '@/lib/memberships/season-gate'
 
 vi.mock('@/lib/email/send-registration-email')
 vi.mock('@/lib/ccn/client')
@@ -18,16 +19,24 @@ const IDS = {
   scheduledEvent: '00000000-1a22-4000-a000-000000000003',
   completedEvent: '00000000-1a22-4000-a000-000000000004',
   permanentEvent: '00000000-1a22-4000-a000-000000000005',
+  nextSeasonEvent: '00000000-1a22-4000-a000-000000000006',
 }
-const EVENT_IDS = [IDS.scheduledEvent, IDS.completedEvent, IDS.permanentEvent]
+const EVENT_IDS = [IDS.scheduledEvent, IDS.completedEvent, IDS.permanentEvent, IDS.nextSeasonEvent]
 
 describe('completeRegistrationWithRider (real DB)', () => {
   const supabase = getTestSupabase()
   const futureDate = daysFromNow(30)
   const pastDate = daysFromNow(-7)
+  // Seasons come from the fixture dates, not today's year, so the suite holds
+  // in any month (mid-December: +30d is already next year).
+  const SEASON = Number(futureDate.slice(0, 4))
+  const NEXT_SEASON = SEASON + 1
+  const nextSeasonDate = `${NEXT_SEASON}-01-15`
+  const nextSeasonSlug = `inttest-complete-nextseason-${nextSeasonDate}`
 
   let sendEmail: ReturnType<typeof vi.fn>
   let searchCCNMembership: ReturnType<typeof vi.fn>
+  let getMembershipSeasonStatus: ReturnType<typeof vi.fn>
   let searchRiderCandidates: ReturnType<typeof vi.fn>
 
   beforeAll(async () => {
@@ -38,6 +47,10 @@ describe('completeRegistrationWithRider (real DB)', () => {
 
     const ccnMod = await import('@/lib/ccn/client')
     searchCCNMembership = vi.mocked(ccnMod.searchCCNMembership)
+    getMembershipSeasonStatus = vi.mocked(ccnMod.getMembershipSeasonStatus)
+    // Default: CCN sells every season, so the next-season gate never blocks
+    // a fixture that crosses into next year. Next-season tests override this.
+    getMembershipSeasonStatus.mockResolvedValue({ status: 'open', eventId: 99999 })
 
     const matchMod = await import('@/lib/actions/rider-match')
     searchRiderCandidates = vi.mocked(matchMod.searchRiderCandidates)
@@ -53,6 +66,7 @@ describe('completeRegistrationWithRider (real DB)', () => {
     await supabase.from('registrations').delete().in('event_id', EVENT_IDS)
     await supabase.from('events').delete().in('id', EVENT_IDS)
     await supabase.from('events').delete().like('slug', 'inttest-complete-permanent-%')
+    await supabase.from('events').delete().eq('slug', nextSeasonSlug)
     await supabase.from('routes').delete().eq('id', IDS.route)
     await supabase.from('riders').delete().in('id', riderIds)
 
@@ -132,6 +146,23 @@ describe('completeRegistrationWithRider (real DB)', () => {
       }),
       'insert permanent event'
     )
+
+    await checked(
+      supabase.from('events').insert({
+        id: IDS.nextSeasonEvent,
+        slug: nextSeasonSlug,
+        name: 'IntTest Complete Next Season',
+        chapter_id: TORONTO_CHAPTER_ID,
+        route_id: IDS.route,
+        event_type: 'brevet',
+        distance_km: 200,
+        event_date: nextSeasonDate,
+        start_time: '08:00',
+        start_location: 'Test Start',
+        status: 'scheduled',
+      }),
+      'insert next-season event'
+    )
   })
 
   afterEach(async () => {
@@ -172,6 +203,7 @@ describe('completeRegistrationWithRider (real DB)', () => {
     // Re-set mocks after resetAllMocks (critical — without this, .catch() on undefined throws)
     sendEmail.mockResolvedValue({ success: true })
     searchRiderCandidates.mockResolvedValue({ candidates: [] })
+    getMembershipSeasonStatus.mockResolvedValue({ status: 'open', eventId: 99999 })
   })
 
   afterAll(async () => {
@@ -180,6 +212,7 @@ describe('completeRegistrationWithRider (real DB)', () => {
     await supabase.from('results').delete().in('event_id', EVENT_IDS)
     await supabase.from('registrations').delete().in('event_id', EVENT_IDS)
     await supabase.from('events').delete().in('id', EVENT_IDS)
+    await supabase.from('events').delete().eq('slug', nextSeasonSlug)
     await supabase.from('routes').delete().eq('id', IDS.route)
     await supabase.from('riders').delete().in('id', [IDS.rider])
     await supabase.from('riders').delete().eq('email', 'completer@example.com')
@@ -392,7 +425,7 @@ describe('completeRegistrationWithRider (real DB)', () => {
         rider_id: IDS.rider,
         event_id: IDS.completedEvent,
         status: 'finished',
-        season: 2026,
+        season: SEASON,
         distance_km: 200,
       }),
       'insert finished result for trial'
@@ -538,5 +571,53 @@ describe('completeRegistrationWithRider (real DB)', () => {
     assertEmailPayload(sendEmail, {
       eventLocation: 'Tim Hortons (5.0 km into the posted route), riding the route reversed',
     })
+  })
+  // --- Season-aware membership ---
+
+  it('next-season event is refused on the match-completion path', async () => {
+    getMembershipSeasonStatus.mockResolvedValue({ status: 'none' })
+    searchCCNMembership.mockResolvedValue({
+      found: true,
+      membershipId: 42,
+      type: 'Individual Membership',
+      city: 'Toronto',
+      country: 'Canada',
+    })
+
+    const { completeRegistrationWithRider } = await import('@/lib/actions/register')
+    const result = await completeRegistrationWithRider(
+      buildCompleteRegistrationData({
+        eventId: IDS.nextSeasonEvent,
+        selectedRiderId: IDS.rider,
+        email: 'completer@example.com',
+        firstName: 'Existing',
+        lastName: 'Rider',
+      })
+    )
+
+    expect(result).toEqual({ success: false, error: nextSeasonClosedMessage(NEXT_SEASON) })
+    expect(getMembershipSeasonStatus).toHaveBeenCalledWith(NEXT_SEASON)
+
+    const { data: regs } = await supabase
+      .from('registrations')
+      .select('id')
+      .eq('event_id', IDS.nextSeasonEvent)
+    expect(regs).toEqual([])
+
+    // Refused before any rider write: the matched rider is untouched.
+    const { data: rider } = await supabase
+      .from('riders')
+      .select('email')
+      .eq('id', IDS.rider)
+      .single()
+    expect(rider?.email).toBeNull()
+    const { data: merges } = await supabase
+      .from('rider_merges')
+      .select('id')
+      .eq('rider_id', IDS.rider)
+    expect(merges).toEqual([])
+
+    expect(searchCCNMembership).not.toHaveBeenCalled()
+    expect(sendEmail).not.toHaveBeenCalled()
   })
 })

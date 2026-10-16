@@ -37,6 +37,8 @@ import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { formatEventType } from '@/lib/utils'
 import { fuzzyNameScore } from '@/lib/utils/fuzzy-match'
 import { createTorontoDate } from '@/lib/brmTimes'
+import { seasonOfEventDate } from '@/lib/season'
+import { registrationSeasonBlock } from '@/lib/memberships/season-gate'
 import { isRealChapterDbSlug } from '@/lib/chapter-config'
 import { handleActionError, handleSupabaseError, logError } from '@/lib/errors'
 import type {
@@ -121,6 +123,8 @@ export interface RegistrationResult {
   pendingData?: RegistrationData & { rideStart?: PermanentRideStart }
   /** Set when membership verification fails */
   membershipError?: 'no-membership' | 'trial-used'
+  /** Season the membership was checked for; set whenever `membershipError` is. */
+  membershipSeason?: number
   /**
    * Set when the submitted email looks like a typo of a common provider. The
    * form asks the rider to confirm and resubmits with `emailConfirmed: true`.
@@ -165,7 +169,7 @@ function realChapterIdFor(
 
 // Shared event SELECT for the scheduled-event entry points.
 const EVENT_SELECT = `
-  id, slug, status, name, event_date, start_time,
+  id, slug, status, name, event_date, season, start_time,
   start_location, distance_km, event_type, chapter_id,
   direction, start_offset_km,
   chapters (slug, name),
@@ -267,6 +271,14 @@ export async function registerForEvent(data: RegistrationData): Promise<Registra
     return { success: false, error: 'Registration is not open for this event' }
   }
 
+  // Membership is verified for the event's own season; next-season events
+  // stay closed until CCN is selling that season's memberships.
+  const season = event.season ?? seasonOfEventDate(event.event_date)
+  const seasonBlock = await registrationSeasonBlock(season)
+  if (seasonBlock) {
+    return { success: false, error: seasonBlock }
+  }
+
   // Find or create rider, then run the shared finalization flow
   try {
     const riderResult = await findOrCreateRider(
@@ -294,6 +306,7 @@ export async function registerForEvent(data: RegistrationData): Promise<Registra
       riderId: riderResult.riderId,
       firstName: trimmedFirstName,
       lastName: trimmedLastName,
+      season,
       realChapterId: realChapterIdFor(event.chapters?.slug, event.chapter_id),
       shareRegistration,
       notes,
@@ -411,6 +424,14 @@ export async function registerForPermanent(
       success: false,
       error: 'Registration for permanent rides closes at 8 p.m. Eastern the day before the ride',
     }
+  }
+
+  // Next-season gate, before the route lookup so a blocked date never
+  // creates an event row.
+  const season = seasonOfEventDate(eventDate)
+  const seasonBlock = await registrationSeasonBlock(season)
+  if (seasonBlock) {
+    return { success: false, error: seasonBlock }
   }
 
   // Fetch route details
@@ -554,6 +575,7 @@ export async function registerForPermanent(
       riderId: riderResult.riderId,
       firstName: trimmedFirstName,
       lastName: trimmedLastName,
+      season,
       // Permanent rides use the route's chapter — only pass if it's a real chapter
       realChapterId: realChapterIdFor(route.chapters?.slug, route.chapter_id),
       shareRegistration,
@@ -696,6 +718,13 @@ export async function completeRegistrationWithRider(
       return { success: false, error: 'Registration is not open for this event' }
     }
 
+    // Same next-season gate as registerForEvent, before any rider write.
+    const season = event.season ?? seasonOfEventDate(event.event_date)
+    const seasonBlock = await registrationSeasonBlock(season)
+    if (seasonBlock) {
+      return { success: false, error: seasonBlock }
+    }
+
     // The ride may have been taken over while the rider was choosing a match.
     if (event.event_type === 'permanent' && data.rideStart) {
       const mismatch = permanentStartMismatch(event, data.rideStart)
@@ -794,6 +823,7 @@ export async function completeRegistrationWithRider(
       riderId,
       firstName: trimmedFirstName,
       lastName: trimmedLastName,
+      season,
       realChapterId: realChapterIdFor(event.chapters?.slug, event.chapter_id),
       shareRegistration,
       notes,

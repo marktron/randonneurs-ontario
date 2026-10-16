@@ -10,9 +10,10 @@ import type { RegistrationEmailData } from '@/lib/email/templates'
 /**
  * The portion of a confirmation-email payload a caller assembles up front.
  * `finalizeRegistration` fills in the membership-dependent fields
- * (`membershipStatus`, `membershipType`) and the `managementUrl`.
+ * (`membershipStatus`, `membershipType`, `membershipSeason`) and the
+ * `managementUrl`.
  */
 export type BaseEmailPayload = Omit<
   RegistrationEmailData,
-  'membershipStatus' | 'membershipType' | 'managementUrl'
+  'membershipStatus' | 'membershipType' | 'membershipSeason' | 'managementUrl'
 >

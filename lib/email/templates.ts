@@ -28,6 +28,8 @@ export interface RegistrationEmailData {
   notes?: string
   membershipType?: string
   membershipStatus?: 'valid' | 'none' | 'trial-used'
+  /** Season the membership was checked for; named in the `none` warning. */
+  membershipSeason?: number
   managementUrl?: string
   digitalCardUrl?: string
 }
@@ -56,13 +58,17 @@ export function buildRegistrationConfirmationEmail(data: RegistrationEmailData):
     digitalCardUrl: data.digitalCardUrl ? escapeHtml(data.digitalCardUrl) : '',
   }
 
+  const yourMembership = data.membershipSeason
+    ? `your ${data.membershipSeason} club membership`
+    : 'your club membership'
+
   // Membership warning for text version
   const membershipWarningText =
     data.membershipStatus === 'none'
       ? `
 ⚠️ IMPORTANT: Your registration is NOT YET VALID
 
-We could not verify your club membership. Please join Randonneurs Ontario at ${SITE_URL}/membership before the event to complete your registration.
+We could not verify ${yourMembership}. Please join Randonneurs Ontario at ${SITE_URL}/membership before the event to complete your registration.
 
 ---
 
@@ -85,7 +91,7 @@ Your trial membership was used for a previous event this season. Please upgrade 
   <div style="background-color: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 16px; margin: 16px 0;">
     <p style="color: #dc2626; font-weight: 600; margin: 0 0 8px 0;">⚠️ Your registration is NOT YET VALID</p>
     <p style="color: #7f1d1d; margin: 0;">
-      We could not verify your club membership. Please
+      We could not verify ${yourMembership}. Please
       <a href="${SITE_URL}/membership" style="color: #dc2626;">join Randonneurs Ontario</a>
       before the event to complete your registration.
     </p>

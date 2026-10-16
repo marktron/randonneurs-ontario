@@ -8,6 +8,7 @@ import {
   assertManagementUrl,
 } from './helpers'
 import { buildRouteTrack } from '@/lib/routeTrack'
+import { nextSeasonClosedMessage } from '@/lib/memberships/season-gate'
 
 vi.mock('@/lib/email/send-registration-email')
 vi.mock('@/lib/ccn/client')
@@ -36,9 +37,14 @@ const LINE_TRACK = buildRouteTrack(
 
 describe('registerForPermanent (real DB)', () => {
   const supabase = getTestSupabase()
+  // Seasons come from the fixture dates, not today's year, so the suite holds
+  // in any month (mid-December: +30d is already next year).
+  const SEASON = Number(daysFromNow(30).slice(0, 4))
+  const NEXT_SEASON = SEASON + 1
 
   let sendEmail: ReturnType<typeof vi.fn>
   let searchCCNMembership: ReturnType<typeof vi.fn>
+  let getMembershipSeasonStatus: ReturnType<typeof vi.fn>
   let searchRiderCandidates: ReturnType<typeof vi.fn>
   let loadRouteTrack: ReturnType<typeof vi.fn>
 
@@ -51,6 +57,10 @@ describe('registerForPermanent (real DB)', () => {
 
     const ccnMod = await import('@/lib/ccn/client')
     searchCCNMembership = vi.mocked(ccnMod.searchCCNMembership)
+    getMembershipSeasonStatus = vi.mocked(ccnMod.getMembershipSeasonStatus)
+    // Default: CCN sells every season, so the next-season gate never blocks
+    // a fixture date that crosses into next year. Next-season tests override.
+    getMembershipSeasonStatus.mockResolvedValue({ status: 'open', eventId: 99999 })
 
     const matchMod = await import('@/lib/actions/rider-match')
     searchRiderCandidates = vi.mocked(matchMod.searchRiderCandidates)
@@ -142,6 +152,7 @@ describe('registerForPermanent (real DB)', () => {
     vi.resetAllMocks()
     sendEmail.mockResolvedValue({ success: true })
     searchRiderCandidates.mockResolvedValue({ candidates: [] })
+    getMembershipSeasonStatus.mockResolvedValue({ status: 'open', eventId: 99999 })
   })
 
   afterAll(async () => {
@@ -351,6 +362,35 @@ describe('registerForPermanent (real DB)', () => {
     expect(result.error).toContain('8 p.m.')
   })
 
+  it('next-season date is refused before any event row is created', async () => {
+    getMembershipSeasonStatus.mockResolvedValue({ status: 'none' })
+    searchCCNMembership.mockResolvedValue({
+      found: true,
+      membershipId: 42,
+      type: 'Individual Membership',
+      city: 'Toronto',
+      country: 'Canada',
+    })
+
+    const eventDate = `${NEXT_SEASON}-01-15`
+    const { registerForPermanent } = await import('@/lib/actions/register')
+    const result = await registerForPermanent(
+      buildPermanentRegistrationData({ routeId: IDS.route, eventDate })
+    )
+
+    expect(result).toEqual({ success: false, error: nextSeasonClosedMessage(NEXT_SEASON) })
+    expect(getMembershipSeasonStatus).toHaveBeenCalledWith(NEXT_SEASON)
+
+    const { data: events } = await supabase
+      .from('events')
+      .select('id')
+      .eq('route_id', IDS.route)
+      .eq('event_date', eventDate)
+    expect(events).toEqual([])
+    expect(searchCCNMembership).not.toHaveBeenCalled()
+    expect(sendEmail).not.toHaveBeenCalled()
+  })
+
   it('invalid route ID returns error', async () => {
     const { registerForPermanent } = await import('@/lib/actions/register')
     const result = await registerForPermanent(
@@ -510,6 +550,7 @@ describe('registerForPermanent (real DB)', () => {
       country: 'Canada',
     })
     const tempEventId = '00000000-1a21-4000-a000-000000000010'
+    const eventDate = daysFromNow(34)
     await checked(
       supabase.from('events').insert({
         id: tempEventId,
@@ -530,13 +571,12 @@ describe('registerForPermanent (real DB)', () => {
         rider_id: IDS.rider,
         event_id: tempEventId,
         status: 'finished',
-        season: 2026,
+        season: Number(eventDate.slice(0, 4)),
         distance_km: 200,
       }),
       'insert finished result for trial'
     )
 
-    const eventDate = daysFromNow(34)
     const { registerForPermanent } = await import('@/lib/actions/register')
     const result = await registerForPermanent(
       buildPermanentRegistrationData({ routeId: IDS.route, eventDate })
@@ -544,6 +584,7 @@ describe('registerForPermanent (real DB)', () => {
 
     expect(result.success).toBe(false)
     expect(result.membershipError).toBe('trial-used')
+    expect(result.membershipSeason).toBe(Number(eventDate.slice(0, 4)))
 
     expect(sendEmail).toHaveBeenCalledTimes(1)
     assertEmailPayload(sendEmail, { membershipStatus: 'trial-used' })
