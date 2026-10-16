@@ -16,6 +16,21 @@ const colorClassesMap = {
   'Ontario Rouleur': 'bg-sky-200 dark:bg-sky-800 text-sky-800 dark:text-sky-200',
   'Randonneur 5000': 'bg-teal-200 dark:bg-teal-800 text-teal-800 dark:text-teal-200',
   'Randonneur 10000': 'bg-purple-200 dark:bg-purple-800 text-purple-800 dark:text-purple-200',
+  // Banquet awards (voted on by members) share one colour
+  'Mike Barry/Jock Wadley Award':
+    'bg-emerald-200 dark:bg-emerald-800 text-emerald-800 dark:text-emerald-200',
+  'Beryl Burton Award': 'bg-emerald-200 dark:bg-emerald-800 text-emerald-800 dark:text-emerald-200',
+  'Coronation Cup': 'bg-emerald-200 dark:bg-emerald-800 text-emerald-800 dark:text-emerald-200',
+  'Jim Griffin Rookie of the Year':
+    'bg-emerald-200 dark:bg-emerald-800 text-emerald-800 dark:text-emerald-200',
+  'Organiser of the Year':
+    'bg-emerald-200 dark:bg-emerald-800 text-emerald-800 dark:text-emerald-200',
+  'Outstanding Performance on a Brevet':
+    'bg-emerald-200 dark:bg-emerald-800 text-emerald-800 dark:text-emerald-200',
+  'Dan Herbert Award': 'bg-emerald-200 dark:bg-emerald-800 text-emerald-800 dark:text-emerald-200',
+  'Half Wheel Award': 'bg-emerald-200 dark:bg-emerald-800 text-emerald-800 dark:text-emerald-200',
+  'Special Recognition Award':
+    'bg-emerald-200 dark:bg-emerald-800 text-emerald-800 dark:text-emerald-200',
   default: 'bg-zinc-200 dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200',
 } as const
 
@@ -35,6 +50,18 @@ const defaultDescriptions: Record<string, string> = {
     'Awarded by ACP to recognize finishing ACP and Randonneurs Mondiaux events totaling at least 5000 km within a four-year period.',
   'Randonneur 10000':
     'Awarded by ACP to recognize finishing ACP and Randonneurs Mondiaux events totaling at least 10000 km within a six-year period.',
+  'Mike Barry/Jock Wadley Award':
+    "Voted the club's outstanding rider of the year at the members' banquet.",
+  'Beryl Burton Award': "Voted the club's best female rider of the year at the members' banquet.",
+  'Coronation Cup': "Voted the club's most improved rider of the year at the members' banquet.",
+  'Jim Griffin Rookie of the Year': "Voted the club's rookie of the year at the members' banquet.",
+  'Organiser of the Year':
+    "Voted organiser of the year at the members' banquet for supporting club rides and riders.",
+  'Outstanding Performance on a Brevet':
+    'Showed fortitude, courage, or generosity on a brevet beyond what the ride normally asks.',
+  'Dan Herbert Award': 'Made the club better by mentoring other members.',
+  'Half Wheel Award': 'Kept forcing the pace on brevets all season.',
+  'Special Recognition Award': 'Completed a ride in the award year worth remembering.',
 }
 
 export interface Award {

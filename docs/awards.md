@@ -43,25 +43,34 @@ RLS: public SELECT, admin-only INSERT/UPDATE/DELETE (not chapter_admin, since se
 
 ## Available Awards
 
-| Award                | Scope  | Description                                                | Badge Color   |
-| -------------------- | ------ | ---------------------------------------------------------- | ------------- |
-| First Brevet         | result | Rode their first brevet with Randonneurs Ontario           | Zinc          |
-| Super Randonneur     | season | Completed 200, 300, 400, and 600 km brevets in one season  | Amber         |
-| Completed Devil Week | result | Completed 200, 300, 400, and 600 km during Devil Week      | Red           |
-| Ontario Rover        | season | 1200 km of Permanents with at least two 300+ km            | Lime          |
-| Ontario Explorer     | season | Completed a brevet in every chapter during a calendar year | Emerald       |
-| O-5000               | season | Completed 5000+ km of sanctioned events in a calendar year | Cyan          |
-| O-12                 | season | Completed a 200+ km event for 12 consecutive months        | Violet        |
-| Ontario Rouleur      | season | Completed 4 populaires, a brevet, and an Audax-style event | Sky           |
-| Paris-Brest-Paris    | result | Completed Paris-Brest-Paris                                | Blue          |
-| Granite Anvil        | result | Completed the Granite Anvil 1200 km brevet                 | Fuchsia       |
-| Course Record\*      | —      | Fastest recorded time for a route                          | Gold gradient |
+| Award                               | Scope  | Description                                                | Badge Color   |
+| ----------------------------------- | ------ | ---------------------------------------------------------- | ------------- |
+| First Brevet                        | result | Rode their first brevet with Randonneurs Ontario           | Zinc          |
+| Super Randonneur                    | season | Completed 200, 300, 400, and 600 km brevets in one season  | Amber         |
+| Completed Devil Week                | result | Completed 200, 300, 400, and 600 km during Devil Week      | Red           |
+| Ontario Rover                       | season | 1200 km of Permanents with at least two 300+ km            | Lime          |
+| Ontario Explorer                    | season | Completed a brevet in every chapter during a calendar year | Emerald       |
+| O-5000                              | season | Completed 5000+ km of sanctioned events in a calendar year | Cyan          |
+| O-12                                | season | Completed a 200+ km event for 12 consecutive months        | Violet        |
+| Ontario Rouleur                     | season | Completed 4 populaires, a brevet, and an Audax-style event | Sky           |
+| Paris-Brest-Paris                   | result | Completed Paris-Brest-Paris                                | Blue          |
+| Granite Anvil                       | result | Completed the Granite Anvil 1200 km brevet                 | Fuchsia       |
+| Mike Barry/Jock Wadley Award        | season | Outstanding rider, voted on by members                     | Emerald       |
+| Beryl Burton Award                  | season | Outstanding woman rider, voted on by members               | Emerald       |
+| Coronation Cup                      | season | Most improved rider, voted on by members                   | Emerald       |
+| Jim Griffin Rookie of the Year      | season | Best new rider, voted on by members                        | Emerald       |
+| Organiser of the Year               | season | Organised and supported club rides                         | Emerald       |
+| Outstanding Performance on a Brevet | season | Fortitude, courage, or generosity on a brevet              | Emerald       |
+| Dan Herbert Award                   | season | Mentored other members                                     | Emerald       |
+| Half Wheel Award                    | season | Kept forcing the pace on brevets                           | Emerald       |
+| Special Recognition Award           | season | Completed something worth remembering                      | Emerald       |
+| Course Record\*                     | —      | Fastest recorded time for a route                          | Gold gradient |
 
 \*Course Record is a **calculated award** that is not stored in the database. It is computed dynamically on the route detail page (`/routes/[chapter]/[slug]`) by finding the fastest finish time among all results for that route. If multiple riders share the same fastest time, they all receive the Course Record badge.
 
 ## Awards Page (`/awards`)
 
-Dedicated page displaying Ontario club awards and ACP distance awards. Each Ontario award section shows the award badge image, description, and a table of recipients. The O-5000 section includes a distance column showing the rider's total season distance.
+Dedicated page displaying Ontario club awards, ACP distance awards, and club honours (the member-voted banquet awards). Each Ontario award section shows the award badge image, description, and a table of recipients. The O-5000 section includes a distance column showing the rider's total season distance.
 
 ### Ontario Awards
 
@@ -71,18 +80,28 @@ Displayed in order: O-12, Ontario Explorer, O-5000, Ontario Rouleur, Ontario Rov
 
 Randonneur 10000 and Randonneur 5000 — moved here from the `/records` page.
 
+### Club Honours
+
+The second group on the page, between the achievement awards and the ACP awards, with a jump nav at the top linking to the three groups (Achievement awards, Club honours, ACP awards). These nine awards are voted on by members and presented at the annual banquet; the page notes that none were presented for 2020. Display order: Mike Barry/Jock Wadley (full width, via `RecordSection`), then Beryl Burton, Coronation Cup, Jim Griffin Rookie of the Year, Organiser of the Year, Outstanding Performance on a Brevet, Dan Herbert, Half Wheel, and Special Recognition in a two-column grid on `lg` (single column below), each rendered by `ClubHonourSection`. Mike Barry/Jock Wadley, Beryl Burton, and Coronation Cup carry static subtitles ("Outstanding Rider", "Best Female Rider", "Most Improved Rider") that live in the page, not the DB.
+
+Recipients come from `getClubHonours()`. Name-only recipients (`rider_id` NULL, `recipient_name` set, e.g. an organizing committee) come back from `get_award_recipients` with `rider_slug` null and render as plain text without a profile link.
+
+All nine club honours share the emerald badge colour in `components/award-badge.tsx` and have default tooltip descriptions there. Profile badges show "× N" for repeat winners via the existing `AwardSummary` component.
+
 ### Data Fetching
 
 Award recipient data is fetched in `lib/data/awards.ts`:
 
 - **`getOntarioAwards()`** — Fetches recipients for all five Ontario awards in parallel. Uses `get_award_recipients` for most awards, and `get_award_recipients_with_distance` for O-5000.
 - **`getAcpAwards()`** — Fetches Randonneur 10000 and 5000 recipients.
+- **`getClubHonours()`** — Fetches recipients for the nine club honours in parallel via `get_award_recipients`.
 
-Both use `unstable_cache` with 24-hour TTL and `awards` cache tags.
+All use `unstable_cache` with 24-hour TTL and `awards` cache tags.
 
 ### Components
 
-- **`AwardRecipientTable`** — Displays rider name and year. Title prop is optional.
+- **`AwardRecipientTable`** — Displays rider name and year. Title prop is optional. Recipients with a null `riderSlug` render without a link.
+- **`ClubHonourSection`** — Compact award block (optional subtitle, h3 title, description, recipient table) used in the club honours grid.
 - **`AwardRecipientDistanceTable`** — Like `AwardRecipientTable` but with a distance column showing `seasonDistance`. Used for O-5000.
 - **`RecordSection`** — Shared with `/records`. Accepts an optional `image` prop for badge display alongside the section header.
 

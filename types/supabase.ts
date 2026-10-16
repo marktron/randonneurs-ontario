@@ -712,7 +712,8 @@ export type Database = {
           created_at: string | null
           id: string
           note: string | null
-          rider_id: string
+          recipient_name: string | null
+          rider_id: string | null
           season: number
           updated_at: string | null
         }
@@ -721,7 +722,8 @@ export type Database = {
           created_at?: string | null
           id?: string
           note?: string | null
-          rider_id: string
+          recipient_name?: string | null
+          rider_id?: string | null
           season: number
           updated_at?: string | null
         }
@@ -730,7 +732,8 @@ export type Database = {
           created_at?: string | null
           id?: string
           note?: string | null
-          rider_id?: string
+          recipient_name?: string | null
+          rider_id?: string | null
           season?: number
           updated_at?: string | null
         }
@@ -1123,7 +1126,7 @@ export type Database = {
         Returns: {
           award_year: number
           rider_name: string
-          rider_slug: string
+          rider_slug: string | null
         }[]
       }
       get_award_recipients_with_distance: {

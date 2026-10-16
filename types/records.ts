@@ -130,7 +130,8 @@ export interface GraniteAnvilRecords {
  * A recipient of a specific award (e.g., Randonneur 5000/10000)
  */
 export interface AwardRecipient {
-  riderSlug: string
+  /** Null for name-only recipients (e.g. a committee) with no rider profile */
+  riderSlug: string | null
   riderName: string
   awardYear: number
 }
@@ -139,7 +140,7 @@ export interface AwardRecipient {
  * A recipient of a distance-based award (e.g., O-5000) with season distance
  */
 export interface AwardRecipientWithDistance {
-  riderSlug: string
+  riderSlug: string | null
   riderName: string
   awardYear: number
   seasonDistance: number
