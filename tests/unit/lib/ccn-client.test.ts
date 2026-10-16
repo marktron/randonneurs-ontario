@@ -472,6 +472,25 @@ describe('getMembershipSeasonStatus', () => {
     expect(await getMembershipSeasonStatus(2026)).toEqual({ status: 'none' })
   })
 
+  it('ignores same-organisation listings that are not membership events', async () => {
+    const { getMembershipSeasonStatus } = await load()
+    const series = listing({
+      name: 'Randonneurs Ontario Brevet Series 2026',
+      event: {
+        id: 777,
+        status: 'AC',
+        registration_opens: '2025-12-07T00:00:00',
+        organization: { id: 1654 },
+      },
+    })
+    respond([series])
+    expect(await getMembershipSeasonStatus(2026)).toEqual({ status: 'none' })
+
+    const again = await load()
+    respond([listing(), series])
+    expect(await again.getMembershipSeasonStatus(2026)).toEqual({ status: 'open', eventId: 21392 })
+  })
+
   it('caches the listing for subsequent calls', async () => {
     const { getMembershipSeasonStatus } = await load()
     respond([listing()])
@@ -499,6 +518,35 @@ describe('getMembershipSeasonStatus', () => {
       vi.advanceTimersByTime(minutes(2))
       await getMembershipSeasonStatus(2026)
       expect(mockFetch).toHaveBeenCalledTimes(2)
+    })
+
+    it('keeps serving the last good listing when a refetch fails', async () => {
+      vi.spyOn(console, 'warn').mockImplementation(() => {})
+      vi.useFakeTimers()
+      const { getMembershipSeasonStatus } = await load()
+      respond([listing()])
+      await getMembershipSeasonStatus(2026)
+      vi.advanceTimersByTime(minutes(61))
+      mockFetch.mockRejectedValueOnce(new Error('network down'))
+      expect(await getMembershipSeasonStatus(2026)).toEqual({ status: 'open', eventId: 21392 })
+      expect(mockFetch).toHaveBeenCalledTimes(2)
+
+      vi.advanceTimersByTime(minutes(5))
+      expect(await getMembershipSeasonStatus(2026)).toEqual({ status: 'open', eventId: 21392 })
+      expect(mockFetch).toHaveBeenCalledTimes(2)
+
+      vi.advanceTimersByTime(minutes(6))
+      respond([
+        listing({
+          event: {
+            id: 99,
+            status: 'CL',
+            registration_opens: '2025-12-07T00:00:00',
+            organization: { id: 1654 },
+          },
+        }),
+      ])
+      expect(await getMembershipSeasonStatus(2026)).toEqual({ status: 'closed', eventId: 99 })
     })
 
     it('retries a failed discovery after 10 minutes', async () => {

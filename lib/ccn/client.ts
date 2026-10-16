@@ -68,9 +68,13 @@ interface CCNListingRow {
   }
 }
 
-type ListingCache =
-  | { ok: true; fetchedAt: number; seasons: Map<number, SeasonEvent> }
-  | { ok: false; fetchedAt: number }
+// `seasons` is the last good listing; a failed refetch keeps serving it while
+// `ok: false` makes the failure window (not the success TTL) govern retries.
+interface ListingCache {
+  ok: boolean
+  fetchedAt: number
+  seasons: Map<number, SeasonEvent> | null
+}
 
 let listingCache: ListingCache | null = null
 
@@ -121,7 +125,7 @@ async function loadListings(): Promise<Map<number, SeasonEvent>> {
     const event = row.event
     if (!event || typeof event.id !== 'number') continue
     if (event.organization?.id !== RO_ORGANIZATION_ID) continue
-    const year = row.name?.match(/\b(\d{4})\b/)?.[1]
+    const year = row.name?.match(/Membership (\d{4})/)?.[1]
     if (!year) continue
     const opens = Date.parse(event.registration_opens ?? '')
     seasons.set(Number(year), {
@@ -136,7 +140,7 @@ async function getListings(): Promise<Map<number, SeasonEvent> | null> {
   if (listingCache) {
     const ttl = listingCache.ok ? LISTING_SUCCESS_TTL_MS : LISTING_FAILURE_TTL_MS
     if (Date.now() - listingCache.fetchedAt < ttl) {
-      return listingCache.ok ? listingCache.seasons : null
+      return listingCache.seasons
     }
   }
   try {
@@ -145,8 +149,8 @@ async function getListings(): Promise<Map<number, SeasonEvent> | null> {
     return seasons
   } catch (error) {
     console.warn('CCN membership event discovery failed', error)
-    listingCache = { ok: false, fetchedAt: Date.now() }
-    return null
+    listingCache = { ok: false, fetchedAt: Date.now(), seasons: listingCache?.seasons ?? null }
+    return listingCache.seasons
   }
 }
 
