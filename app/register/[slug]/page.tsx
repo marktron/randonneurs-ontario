@@ -309,7 +309,9 @@ export default async function RegisterPage({ params }: PageProps) {
             ) : isDraft ? (
               <RegistrationClosed message="Registration is not open yet for this draft event." />
             ) : seasonBlock ? (
-              <RegistrationClosed message={seasonBlock} />
+              <RegistrationClosed
+                message={`Registration is not open yet for ${eventSeason} events.`}
+              />
             ) : (
               <RegisterCTA
                 eventId={event.id}
@@ -449,7 +451,9 @@ export default async function RegisterPage({ params }: PageProps) {
             ) : isDraft ? (
               <RegistrationClosed message="Registration is not open yet for this draft event." />
             ) : seasonBlock ? (
-              <RegistrationClosed message={seasonBlock} />
+              <RegistrationClosed
+                message={`Registration is not open yet for ${eventSeason} events.`}
+              />
             ) : (
               <RegisterCTA
                 eventId={event.id}

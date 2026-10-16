@@ -103,8 +103,12 @@ describe('RegisterPage /register/[slug] — next-season gate', () => {
     await renderPage()
 
     expect(mockRegistrationSeasonBlock).toHaveBeenCalledWith(nextSeason)
-    // Alert description plus the mobile and desktop closed boxes.
-    expect(screen.getAllByText(closedMessage)).toHaveLength(3)
+    // The alert carries the full gate message; both closed boxes carry the short line.
+    expect(screen.getAllByText(closedMessage)).toHaveLength(1)
+    expect(screen.getByText(closedMessage)).toHaveAttribute('data-slot', 'alert-description')
+    expect(
+      screen.getAllByText(`Registration is not open yet for ${nextSeason} events.`)
+    ).toHaveLength(2)
     expect(
       screen.getByText(`Registration opens with ${nextSeason} memberships`)
     ).toBeInTheDocument()
