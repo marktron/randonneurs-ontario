@@ -20,6 +20,8 @@ import { Badge } from '@/components/ui/badge'
 import { EventJsonLd } from '@/components/structured-data'
 import { formatRideName } from '@/lib/events/format'
 import { SITE_URL } from '@/lib/site-url'
+import { seasonOfEventDate, torontoCalendarYear } from '@/lib/season'
+import { registrationSeasonBlock } from '@/lib/memberships/season-gate'
 
 interface PageProps {
   params: Promise<{ slug: string }>
@@ -131,6 +133,13 @@ export default async function RegisterPage({ params }: PageProps) {
   const flecheDisplayName = isFleche
     ? `${new Date(event.date + 'T00:00:00').getFullYear()} Flèche${event.startLocation ? ` – ${event.startLocation}` : ''}`
     : null
+  // Next-season events stay closed until CCN sells that season's memberships.
+  // Cancelled and draft events already render closed, so skip the CCN lookup.
+  const eventSeason = seasonOfEventDate(event.date)
+  const seasonBlock =
+    !isCancelled && !isDraft && eventSeason > torontoCalendarYear()
+      ? await registrationSeasonBlock(eventSeason)
+      : null
   // Drafts show neither the riders list nor team info (see the alert
   // rendered below instead), so skip fetching data nobody will see.
   const [registeredRiders, flecheTeams, collection] = await Promise.all([
@@ -284,12 +293,23 @@ export default async function RegisterPage({ params }: PageProps) {
             </Alert>
           )}
 
+          {seasonBlock && (
+            <Alert className="mt-6 border-dashed py-4">
+              <AlertTitle className="text-base font-semibold">
+                Registration opens with {eventSeason} memberships
+              </AlertTitle>
+              <AlertDescription>{seasonBlock}</AlertDescription>
+            </Alert>
+          )}
+
           {/* Mobile Register CTA */}
           <div className="lg:hidden mt-6">
             {isCancelled ? (
               <RegistrationClosed />
             ) : isDraft ? (
               <RegistrationClosed message="Registration is not open yet for this draft event." />
+            ) : seasonBlock ? (
+              <RegistrationClosed message={seasonBlock} />
             ) : (
               <RegisterCTA
                 eventId={event.id}
@@ -428,6 +448,8 @@ export default async function RegisterPage({ params }: PageProps) {
               <RegistrationClosed />
             ) : isDraft ? (
               <RegistrationClosed message="Registration is not open yet for this draft event." />
+            ) : seasonBlock ? (
+              <RegistrationClosed message={seasonBlock} />
             ) : (
               <RegisterCTA
                 eventId={event.id}

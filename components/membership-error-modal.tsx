@@ -10,15 +10,21 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { AlertCircle } from 'lucide-react'
-import { getCurrentSeasonLabel } from '@/lib/season'
 
 interface MembershipErrorModalProps {
   open: boolean
   onClose: () => void
   variant: 'no-membership' | 'trial-used'
+  /** Season the rider needs a membership for (the event's season). */
+  season: number
 }
 
-export function MembershipErrorModal({ open, onClose, variant }: MembershipErrorModalProps) {
+export function MembershipErrorModal({
+  open,
+  onClose,
+  variant,
+  season,
+}: MembershipErrorModalProps) {
   const isNoMembership = variant === 'no-membership'
 
   return (
@@ -37,7 +43,7 @@ export function MembershipErrorModal({ open, onClose, variant }: MembershipError
             {isNoMembership ? (
               <>
                 To register for events, you need to be an active member of Randonneurs Ontario for
-                the {getCurrentSeasonLabel()}. <br />
+                the {season} season. <br />
                 <br />
                 Join the club first, then return to complete your registration.
               </>

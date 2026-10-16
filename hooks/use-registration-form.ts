@@ -11,6 +11,7 @@ import {
   normalizeBrevetCardType,
   type BrevetCardType,
 } from '@/lib/brevet-card'
+import { torontoCalendarYear } from '@/lib/season'
 
 export type MembershipErrorVariant = 'no-membership' | 'trial-used'
 
@@ -50,8 +51,15 @@ export function useRegistrationForm(options: UseRegistrationFormOptions = {}) {
   // UI state
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
-  const [membershipErrorVariant, setMembershipErrorVariant] =
+  const [membershipErrorVariant, setMembershipErrorVariantState] =
     useState<MembershipErrorVariant | null>(null)
+  // Season the membership error refers to (the event's season); cleared with the variant.
+  const [membershipErrorSeason, setMembershipErrorSeason] = useState<number | null>(null)
+
+  function setMembershipErrorVariant(variant: MembershipErrorVariant | null) {
+    setMembershipErrorVariantState(variant)
+    if (variant === null) setMembershipErrorSeason(null)
+  }
 
   // Fuzzy matching state
   const [matchDialogOpen, setMatchDialogOpen] = useState(false)
@@ -182,6 +190,7 @@ export function useRegistrationForm(options: UseRegistrationFormOptions = {}) {
       setMatchDialogOpen(true)
     } else if (result.membershipError) {
       setMatchDialogOpen(false)
+      setMembershipErrorSeason(result.membershipSeason ?? torontoCalendarYear())
       setMembershipErrorVariant(result.membershipError)
     } else {
       setMatchDialogOpen(false)
@@ -226,6 +235,7 @@ export function useRegistrationForm(options: UseRegistrationFormOptions = {}) {
     success,
     membershipErrorVariant,
     setMembershipErrorVariant,
+    membershipErrorSeason,
     matchDialogOpen,
     setMatchDialogOpen,
     matchCandidates,
