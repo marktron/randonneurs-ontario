@@ -7,7 +7,6 @@
  */
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { searchCCNMembership } from '@/lib/ccn/client'
-import { getCurrentSeason } from '@/lib/season'
 import type { MembershipType } from '@/types/queries'
 
 export type MembershipResult =
@@ -20,6 +19,16 @@ export type MembershipResult =
       found: false
     }
 
+export interface MembershipLookup {
+  riderId: string
+  firstName: string
+  lastName: string
+  /** Season to verify membership for (the event's season) */
+  season: number
+  /** Optional chapter ID from the event (only real chapters) */
+  chapterId?: string
+}
+
 /**
  * Get membership for a rider, checking rider_memberships first then CCN API.
  *
@@ -27,27 +36,19 @@ export type MembershipResult =
  * If the rider has a Trial membership, re-checks CCN to detect upgrades.
  * If no cached membership, queries CCN and caches the result.
  *
- * @param riderId - Rider's UUID
- * @param firstName - Rider's first name (for CCN lookup)
- * @param lastName - Rider's last name (for CCN lookup)
- * @param chapterId - Optional chapter ID from the event (only real chapters)
+ * @param params - Rider identity, the season to verify, and optional chapter
  * @returns Membership data if found, or { found: false }
  */
-export async function getMembershipForRider(
-  riderId: string,
-  firstName: string,
-  lastName: string,
-  chapterId?: string
-): Promise<MembershipResult> {
+export async function getMembershipForRider(params: MembershipLookup): Promise<MembershipResult> {
+  const { riderId, firstName, lastName, season, chapterId } = params
   const supabase = getSupabaseAdmin()
-  const currentSeason = getCurrentSeason()
 
   // Check rider_memberships first
   const { data: existingMembership } = await supabase
     .from('rider_memberships')
     .select('ccn_id, membership_type, chapter_id')
     .eq('rider_id', riderId)
-    .eq('season', currentSeason)
+    .eq('season', season)
     .single()
 
   // If found and NOT Trial, return immediately (skip API call)
@@ -60,7 +61,7 @@ export async function getMembershipForRider(
   }
 
   // Either no row exists, or it's a Trial Member — check CCN API
-  const ccnResult = await searchCCNMembership(firstName, lastName)
+  const ccnResult = await searchCCNMembership(firstName, lastName, season)
 
   if (!ccnResult.found) {
     // If we had an existing Trial row, preserve it (graceful degradation)
@@ -78,7 +79,7 @@ export async function getMembershipForRider(
   const shouldSetChapter = chapterId && (!existingMembership || !existingMembership.chapter_id)
   const upsertData = {
     rider_id: riderId,
-    season: currentSeason,
+    season,
     ccn_id: ccnResult.membershipId,
     membership_type: ccnResult.type,
     city: ccnResult.city || null,
@@ -105,15 +106,15 @@ export async function getMembershipForRider(
  * Check if a Trial Member has already used their trial event.
  *
  * Trial is "used" if:
- * 1. Any result with status finished/dnf/otl/dq in current season
- * 2. Any registration for event_date >= today
+ * 1. Any result with status finished/dnf/otl/dq in the given season
+ * 2. Any registration for an event in the given season with event_date >= today
  *
  * @param riderId - Rider's UUID
+ * @param season - Season to check (the event's season)
  * @returns true if trial is used, false if still available
  */
-export async function isTrialUsed(riderId: string): Promise<boolean> {
+export async function isTrialUsed(riderId: string, season: number): Promise<boolean> {
   const supabase = getSupabaseAdmin()
-  const currentSeason = getCurrentSeason()
   const today = new Date().toISOString().split('T')[0]
 
   // Check for counting results (finished, dnf, otl, dq - not dns)
@@ -121,7 +122,7 @@ export async function isTrialUsed(riderId: string): Promise<boolean> {
     .from('results')
     .select('id')
     .eq('rider_id', riderId)
-    .eq('season', currentSeason)
+    .eq('season', season)
     .in('status', ['finished', 'dnf', 'otl', 'dq'])
     .limit(1)
 
@@ -132,10 +133,11 @@ export async function isTrialUsed(riderId: string): Promise<boolean> {
   // Check for upcoming registrations (excluding current registration being made)
   const { data: registrations } = await supabase
     .from('registrations')
-    .select('id, events!inner(event_date)')
+    .select('id, events!inner(event_date, season)')
     .eq('rider_id', riderId)
     .eq('status', 'registered')
     .gte('events.event_date', today)
+    .eq('events.season', season)
     .limit(1)
 
   return registrations !== null && registrations.length > 0
