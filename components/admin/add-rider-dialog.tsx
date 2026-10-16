@@ -19,7 +19,6 @@ import { createResult, addRegistration, type AdminMembershipStatus } from '@/lib
 import { SelectedRiderCard } from './selected-rider-card'
 import { toast } from 'sonner'
 import { Loader2, Plus, Search, UserPlus } from 'lucide-react'
-import { getCurrentSeason } from '@/lib/season'
 
 interface AddRiderDialogProps {
   open: boolean
@@ -47,9 +46,9 @@ interface AddRiderDialogProps {
  */
 export function membershipWarningMessage(
   riderName: string,
-  membershipStatus: AdminMembershipStatus
+  membershipStatus: AdminMembershipStatus,
+  season: number
 ): string | null {
-  const season = getCurrentSeason()
   switch (membershipStatus) {
     case 'none':
       return `Added ${riderName}. No ${season} membership found. They won't appear on start lists or cards until membership is re-checked.`
@@ -153,7 +152,9 @@ export function AddRiderDialog({
         const membershipStatus = isScheduled
           ? (res as { data?: { membershipStatus?: AdminMembershipStatus } }).data?.membershipStatus
           : undefined
-        const warning = membershipStatus && membershipWarningMessage(riderName, membershipStatus)
+        const warning =
+          membershipStatus &&
+          membershipWarningMessage(riderName, membershipStatus, season ?? new Date().getFullYear())
         if (warning) {
           toast.warning(warning)
         } else {
@@ -204,7 +205,9 @@ export function AddRiderDialog({
           ? (addRes as { data?: { membershipStatus?: AdminMembershipStatus } }).data
               ?.membershipStatus
           : undefined
-        const warning = membershipStatus && membershipWarningMessage(riderName, membershipStatus)
+        const warning =
+          membershipStatus &&
+          membershipWarningMessage(riderName, membershipStatus, season ?? new Date().getFullYear())
         if (warning) {
           toast.warning(warning)
         } else {

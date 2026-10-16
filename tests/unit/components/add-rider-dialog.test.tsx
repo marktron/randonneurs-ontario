@@ -5,7 +5,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { AddRiderDialog } from '@/components/admin/add-rider-dialog'
+import { AddRiderDialog, membershipWarningMessage } from '@/components/admin/add-rider-dialog'
 import { searchRiders } from '@/lib/actions/riders'
 import { addRegistration } from '@/lib/actions/results'
 import { toast } from 'sonner'
@@ -22,10 +22,6 @@ vi.mock('@/lib/actions/results', () => ({
 
 vi.mock('sonner', () => ({
   toast: { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() },
-}))
-
-vi.mock('@/lib/season', () => ({
-  getCurrentSeason: () => 2026,
 }))
 
 vi.mock('next/navigation', () => ({
@@ -191,6 +187,14 @@ describe('AddRiderDialog — membership warnings', () => {
       expect(toast.warning).toHaveBeenCalledWith(
         "Added Paul Young. Couldn't verify membership (CCN unavailable). They won't appear on start lists or cards until membership is re-checked."
       )
+    )
+  })
+})
+
+describe('membershipWarningMessage', () => {
+  it('names the event season', () => {
+    expect(membershipWarningMessage('Ada Lovelace', 'none', 2027)).toContain(
+      'No 2027 membership found'
     )
   })
 })

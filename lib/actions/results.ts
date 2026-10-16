@@ -7,6 +7,7 @@ import { logAuditEvent } from '@/lib/audit-log'
 import { handleSupabaseError, createActionResult, logError } from '@/lib/errors'
 import { revalidateResultsTags } from '@/lib/revalidate-results'
 import type { ActionResult } from '@/types/actions'
+import { seasonOfEventDate } from '@/lib/season'
 import { getMembershipForRider, isTrialUsed } from '@/lib/memberships/service'
 import type {
   RegistrationInsert,
@@ -128,10 +129,18 @@ async function resolveAdminRegistrationStatus(
 }> {
   const [{ data: riderData }, { data: eventData }] = await Promise.all([
     getSupabaseAdmin().from('riders').select('first_name, last_name').eq('id', riderId).single(),
-    getSupabaseAdmin().from('events').select('chapter_id').eq('id', eventId).single(),
+    getSupabaseAdmin()
+      .from('events')
+      .select('chapter_id, season, event_date')
+      .eq('id', eventId)
+      .single(),
   ])
   const rider = riderData as { first_name: string; last_name: string } | null
-  const event = eventData as { chapter_id: string | null } | null
+  const event = eventData as {
+    chapter_id: string | null
+    season: number | null
+    event_date: string
+  } | null
 
   if (!rider) {
     logError(new Error('Rider not found for admin registration status check'), {
@@ -142,18 +151,23 @@ async function resolveAdminRegistrationStatus(
   }
 
   try {
-    const membership = await getMembershipForRider(
+    const season = event ? (event.season ?? seasonOfEventDate(event.event_date)) : null
+    if (season === null) {
+      throw new Error('Event not found for admin registration status check')
+    }
+    const membership = await getMembershipForRider({
       riderId,
-      rider.first_name,
-      rider.last_name,
-      event?.chapter_id ?? undefined
-    )
+      firstName: rider.first_name,
+      lastName: rider.last_name,
+      season,
+      chapterId: event?.chapter_id ?? undefined,
+    })
 
     if (!membership.found) {
       return { status: 'incomplete: membership', membershipStatus: 'none' }
     }
 
-    if (membership.type === 'Trial Member' && (await isTrialUsed(riderId))) {
+    if (membership.type === 'Trial Member' && (await isTrialUsed(riderId, season))) {
       return { status: 'incomplete: membership', membershipStatus: 'trial-used' }
     }
 
@@ -678,7 +692,9 @@ export async function revalidateMembership(
 
   const { data: registration, error: fetchError } = await supabase
     .from('registrations')
-    .select('id, status, rider_id, event_id, riders (first_name, last_name), events (chapter_id)')
+    .select(
+      'id, status, rider_id, event_id, riders (first_name, last_name), events (chapter_id, season, event_date)'
+    )
     .eq('id', registrationId)
     .single()
 
@@ -696,7 +712,7 @@ export async function revalidateMembership(
     rider_id: string
     event_id: string
     riders: { first_name: string; last_name: string } | null
-    events: { chapter_id: string | null } | null
+    events: { chapter_id: string | null; season: number | null; event_date: string } | null
   }
 
   if (reg.status !== 'incomplete: membership') {
@@ -707,14 +723,20 @@ export async function revalidateMembership(
     return { success: false, error: 'Rider not found' }
   }
 
+  if (!reg.events) {
+    return { success: false, error: 'Event not found' }
+  }
+  const season = reg.events.season ?? seasonOfEventDate(reg.events.event_date)
+
   let membership: Awaited<ReturnType<typeof getMembershipForRider>>
   try {
-    membership = await getMembershipForRider(
-      reg.rider_id,
-      reg.riders.first_name,
-      reg.riders.last_name,
-      reg.events?.chapter_id ?? undefined
-    )
+    membership = await getMembershipForRider({
+      riderId: reg.rider_id,
+      firstName: reg.riders.first_name,
+      lastName: reg.riders.last_name,
+      season,
+      chapterId: reg.events.chapter_id ?? undefined,
+    })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'CCN API error'
     return { success: false, error: message }
@@ -724,7 +746,7 @@ export async function revalidateMembership(
     return { success: true, data: { membershipFound: false } }
   }
 
-  if (membership.type === 'Trial Member' && (await isTrialUsed(reg.rider_id))) {
+  if (membership.type === 'Trial Member' && (await isTrialUsed(reg.rider_id, season))) {
     return { success: true, data: { membershipFound: true, trialUsed: true } }
   }
 

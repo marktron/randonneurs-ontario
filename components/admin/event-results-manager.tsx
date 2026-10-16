@@ -899,7 +899,9 @@ export function EventResultsManager({
       if (res.success) {
         setLocalCancelled((prev) => prev.filter((c) => c.id !== registrationId))
         const membershipStatus: AdminMembershipStatus | undefined = res.data?.membershipStatus
-        const warning = membershipStatus && membershipWarningMessage(riderName, membershipStatus)
+        const warning =
+          membershipStatus &&
+          membershipWarningMessage(riderName, membershipStatus, season ?? new Date().getFullYear())
         if (warning) {
           toast.warning(warning)
         } else {
@@ -910,7 +912,7 @@ export function EventResultsManager({
         toast.error(res.error || 'Failed to restore registration')
       }
     },
-    [managerRouter]
+    [managerRouter, season]
   )
 
   // "Add Rider" revives a cancelled registration server-side, so the rider it
