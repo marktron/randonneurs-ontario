@@ -158,7 +158,7 @@ Admin add and restore (`addRegistration`, `adminRestoreRegistration`) are not bl
 During a CCN listing outage on an instance with no cached listing:
 
 - With the season seeded, discovery falls back to the seed, the season counts as open, and registration works as long as the membership search itself succeeds.
-- Without the seed, the season is `unknown`: rider registration reports "Registration failed" and nothing is written, and a next-season event stays closed.
+- Without the seed, the season is `unknown`: rider registration reports "Registration failed" and no registration is written (the rider row may still be created, as with any CCN failure), and a next-season event stays closed.
 
 ### Flip script (post-deploy, one-off)
 
