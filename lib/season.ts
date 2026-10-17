@@ -1,10 +1,14 @@
 /**
- * Current season resolution.
+ * Season helpers.
  *
- * The active competition/membership season is driven by the
- * NEXT_PUBLIC_CURRENT_SEASON env var so rolling the season is a single config
- * change rather than a code edit. NEXT_PUBLIC_ vars are inlined at build time,
- * so these helpers work in both server and client bundles.
+ * getCurrentSeason / getCurrentSeasonLabel read NEXT_PUBLIC_CURRENT_SEASON and
+ * are display-only: they pick which season admin filters, records and reports
+ * default to, so rolling the season is a config change rather than a code
+ * edit. NEXT_PUBLIC_ vars are inlined at build time, so they work in both
+ * server and client bundles.
+ *
+ * seasonOfEventDate and torontoCalendarYear do not read the env var. Membership
+ * verification and the next-season registration gate use them.
  */
 
 import { TORONTO_TZ } from '@/lib/brmTimes'

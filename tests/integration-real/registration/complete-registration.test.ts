@@ -40,8 +40,6 @@ describe('completeRegistrationWithRider (real DB)', () => {
   let searchRiderCandidates: ReturnType<typeof vi.fn>
 
   beforeAll(async () => {
-    process.env.NEXT_PUBLIC_CURRENT_SEASON = '2026'
-
     const emailMod = await import('@/lib/email/send-registration-email')
     sendEmail = vi.mocked(emailMod.sendRegistrationConfirmationEmail)
 

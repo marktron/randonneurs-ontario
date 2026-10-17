@@ -100,6 +100,7 @@ async function main() {
   const { error: updateError } = await supabase
     .from('registrations')
     .update({ status: 'incomplete: membership' })
+    .eq('status', 'registered')
     .in(
       'id',
       matches.map((m) => m.id)
