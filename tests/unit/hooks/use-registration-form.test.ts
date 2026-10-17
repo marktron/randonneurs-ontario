@@ -139,7 +139,7 @@ describe('useRegistrationForm', () => {
     expect(result.current.membershipErrorSeason).toBe(torontoCalendarYear())
   })
 
-  it('clears the membership season when the variant is cleared', () => {
+  it('keeps the membership season when the variant is cleared (modal copy must not flip while closing)', () => {
     const { result } = renderHook(() => useRegistrationForm())
 
     act(() =>
@@ -152,7 +152,7 @@ describe('useRegistrationForm', () => {
     act(() => result.current.setMembershipErrorVariant(null))
 
     expect(result.current.membershipErrorVariant).toBeNull()
-    expect(result.current.membershipErrorSeason).toBeNull()
+    expect(result.current.membershipErrorSeason).toBe(2027)
   })
 
   it('falls back to the error banner', () => {

@@ -51,15 +51,12 @@ export function useRegistrationForm(options: UseRegistrationFormOptions = {}) {
   // UI state
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
-  const [membershipErrorVariant, setMembershipErrorVariantState] =
+  const [membershipErrorVariant, setMembershipErrorVariant] =
     useState<MembershipErrorVariant | null>(null)
-  // Season the membership error refers to (the event's season); cleared with the variant.
+  // Season the membership error refers to (the event's season). Deliberately
+  // not cleared when the modal closes, so its copy cannot flip to another year
+  // during the close animation; the next membership error overwrites it.
   const [membershipErrorSeason, setMembershipErrorSeason] = useState<number | null>(null)
-
-  function setMembershipErrorVariant(variant: MembershipErrorVariant | null) {
-    setMembershipErrorVariantState(variant)
-    if (variant === null) setMembershipErrorSeason(null)
-  }
 
   // Fuzzy matching state
   const [matchDialogOpen, setMatchDialogOpen] = useState(false)
