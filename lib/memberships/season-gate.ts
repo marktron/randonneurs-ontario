@@ -2,7 +2,7 @@ import { getMembershipSeasonStatus } from '@/lib/ccn/client'
 import { torontoCalendarYear } from '@/lib/season'
 
 export function nextSeasonClosedMessage(season: number): string {
-  return `Registration for ${season} events opens once ${season} memberships are available. Check back soon.`
+  return `Registration for ${season} events opens once ${season} Randonneurs Ontario & Ontario Cycling memberships are available. Check back soon.`
 }
 
 /** null when registration may proceed; otherwise the message to show. */

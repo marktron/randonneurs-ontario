@@ -5,7 +5,7 @@ import { nextSeasonClosedMessage, registrationSeasonBlock } from '@/lib/membersh
 vi.mock('@/lib/ccn/client')
 
 const MESSAGE_2027 =
-  'Registration for 2027 events opens once 2027 memberships are available. Check back soon.'
+  'Registration for 2027 events opens once 2027 Randonneurs Ontario & Ontario Cycling memberships are available. Check back soon.'
 
 describe('registrationSeasonBlock', () => {
   beforeEach(() => {

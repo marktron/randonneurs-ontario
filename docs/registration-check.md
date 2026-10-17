@@ -141,7 +141,7 @@ The event's season is strict: `events.season`, falling back to the year of `even
 ### What riders see
 
 - `/register/[slug]` for a next-season event whose membership is not open shows an alert ("Registration opens with {season} memberships") and a short closed box ("Registration is not open yet for {season} events") instead of the form. Cancelled and draft events keep their own closed states and skip the CCN lookup.
-- If a submission reaches the server anyway, the action returns the refusal "Registration for {season} events opens once {season} memberships are available. Check back soon." No registration row is created and no email is sent.
+- If a submission reaches the server anyway, the action returns the refusal "Registration for {season} events opens once {season} Randonneurs Ontario & Ontario Cycling memberships are available. Check back soon." No registration row is created and no email is sent.
 - Once CCN opens that season's membership, registration opens within about two hours: up to one hour of listing cache plus the one-hour page cache on `/register/[slug]`.
 
 ### What admins see

@@ -85,7 +85,7 @@ const nextSeasonEvent: EventDetails = {
   status: 'scheduled',
 }
 
-const closedMessage = `Registration for ${nextSeason} events opens once ${nextSeason} memberships are available. Check back soon.`
+const closedMessage = `Registration for ${nextSeason} events opens once ${nextSeason} Randonneurs Ontario & Ontario Cycling memberships are available. Check back soon.`
 
 async function renderPage() {
   render(await RegisterPage({ params: Promise.resolve({ slug: nextSeasonEvent.slug }) }))
