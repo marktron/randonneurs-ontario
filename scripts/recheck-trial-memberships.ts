@@ -42,10 +42,6 @@ if (!supabaseUrl || !supabaseKey) {
   console.error('Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY in environment')
   process.exit(1)
 }
-if (!process.env.CCN_ENDPOINT) {
-  console.error('Missing CCN_ENDPOINT in environment')
-  process.exit(1)
-}
 
 const supabase = createClient(supabaseUrl, supabaseKey)
 
