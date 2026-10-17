@@ -77,7 +77,7 @@ async function main() {
     const rider = Array.isArray(row.riders) ? row.riders[0] : row.riders
     const name = `${rider.first_name} ${rider.last_name}`
 
-    const result = await searchCCNMembership(rider.first_name, rider.last_name)
+    const result = await searchCCNMembership(rider.first_name, rider.last_name, season)
 
     if (!result.found) {
       notFound++
