@@ -40,6 +40,11 @@ describe('registrationSeasonBlock', () => {
     expect(await registrationSeasonBlock(2027)).toBe(MESSAGE_2027)
   })
 
+  it('blocks a next-season event when the listing is unavailable', async () => {
+    vi.mocked(getMembershipSeasonStatus).mockResolvedValue({ status: 'unknown' })
+    expect(await registrationSeasonBlock(2027)).toBe(MESSAGE_2027)
+  })
+
   it('blocks when status lookup rejects', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     vi.mocked(getMembershipSeasonStatus).mockRejectedValue(new Error('ccn down'))

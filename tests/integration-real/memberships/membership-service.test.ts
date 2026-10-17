@@ -302,14 +302,6 @@ describe('membership service (real DB)', () => {
       expect(data).toEqual([])
     })
 
-    it('throws when CCN_ENDPOINT not set', async () => {
-      searchCCNMembership.mockRejectedValue(new Error('CCN_ENDPOINT environment variable not set'))
-
-      const { getMembershipForRider } = await import('@/lib/memberships/service')
-
-      await expect(getMembershipForRider(lookup())).rejects.toThrow('CCN_ENDPOINT')
-    })
-
     it('looks up and caches under the requested season, not the current one', async () => {
       const nextSeason = NEXT_SEASON
       await checked(

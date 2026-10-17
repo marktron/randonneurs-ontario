@@ -163,6 +163,33 @@ describe('searchCCNMembership', () => {
     )
   })
 
+  it('logs and returns not found when the listing has no event for the season', async () => {
+    delete process.env.CCN_MEMBERSHIP_EVENT_IDS
+    const info = vi.spyOn(console, 'info').mockImplementation(() => {})
+    const { searchCCNMembership, __resetMembershipSeasonCache } = await import('@/lib/ccn/client')
+    __resetMembershipSeasonCache()
+    mockFetch.mockResolvedValueOnce({ ok: true, json: async () => ({ results: [] }) })
+
+    expect(await searchCCNMembership('Test', 'User', 2031)).toEqual({ found: false })
+    expect(info).toHaveBeenCalledWith('CCN has no membership event for season 2031')
+    info.mockRestore()
+  })
+
+  it('throws when the listing is unavailable and the season is unseeded', async () => {
+    delete process.env.CCN_MEMBERSHIP_EVENT_IDS
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const { searchCCNMembership, __resetMembershipSeasonCache } = await import('@/lib/ccn/client')
+    __resetMembershipSeasonCache()
+    mockFetch.mockRejectedValueOnce(new Error('network down'))
+
+    await expect(searchCCNMembership('Test', 'User', 2026)).rejects.toThrow(
+      'CCN membership listing unavailable'
+    )
+    // Only the listing call: no search was attempted.
+    expect(mockFetch).toHaveBeenCalledTimes(1)
+    warn.mockRestore()
+  })
+
   describe('surname fallback (name mismatch between RO registration and CCN)', () => {
     // CCN's API doesn't expose email, so when the names diverge between what a
     // rider entered on RO and what's on file at CCN (e.g. Ludovic vs Ludo),
@@ -574,12 +601,80 @@ describe('getMembershipSeasonStatus', () => {
     expect(warn).toHaveBeenCalled()
   })
 
-  it('returns none when discovery throws and nothing is seeded', async () => {
+  it('returns unknown when discovery throws and nothing is seeded', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const { getMembershipSeasonStatus } = await load()
     mockFetch.mockRejectedValueOnce(new Error('network down'))
-    expect(await getMembershipSeasonStatus(2026)).toEqual({ status: 'none' })
+    expect(await getMembershipSeasonStatus(2026)).toEqual({ status: 'unknown' })
     expect(warn).toHaveBeenCalled()
+  })
+
+  it('returns none, not unknown, when a refetch fails but the last good listing lacks the season', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    vi.useFakeTimers()
+    try {
+      const { getMembershipSeasonStatus } = await load()
+      respond([listing()])
+      await getMembershipSeasonStatus(2026)
+      vi.advanceTimersByTime(61 * 60 * 1000)
+      mockFetch.mockRejectedValueOnce(new Error('network down'))
+      expect(await getMembershipSeasonStatus(2027)).toEqual({ status: 'none' })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('shares one listing request between concurrent cold-start callers', async () => {
+    const { getMembershipSeasonStatus } = await load()
+    let release!: () => void
+    mockFetch.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          release = () =>
+            resolve({ ok: true, json: async () => ({ count: 1, results: [listing()] }) })
+        })
+    )
+    const first = getMembershipSeasonStatus(2026)
+    const second = getMembershipSeasonStatus(2026)
+    release()
+    expect(await Promise.all([first, second])).toEqual([
+      { status: 'open', eventId: 21392 },
+      { status: 'open', eventId: 21392 },
+    ])
+    expect(mockFetch).toHaveBeenCalledTimes(1)
+  })
+
+  it('opens a cached listing once the clock passes registration_opens, without a refetch', async () => {
+    // registration_opens is Toronto local time with no offset. Midnight
+    // Toronto on 2026-12-07 is 05:00 UTC (EST, UTC-5). Run in UTC like
+    // Vercel: Date.parse reads an offset-less string in the process zone.
+    const originalTz = process.env.TZ
+    process.env.TZ = 'UTC'
+    vi.useFakeTimers({ now: new Date('2026-12-07T04:30:00Z') })
+    try {
+      const { getMembershipSeasonStatus } = await load()
+      respond([
+        listing({
+          name: 'Randonneurs Ontario Membership 2027',
+          event: {
+            id: 23000,
+            status: 'AC',
+            registration_opens: '2026-12-07T00:00:00',
+            organization: { id: 1654 },
+          },
+        }),
+      ])
+      // 23:30 Toronto on Dec 6: still closed. Date.parse would read the
+      // string as UTC midnight and call it open already.
+      expect(await getMembershipSeasonStatus(2027)).toEqual({ status: 'closed', eventId: 23000 })
+      vi.setSystemTime(new Date('2026-12-07T05:01:00Z'))
+      expect(await getMembershipSeasonStatus(2027)).toEqual({ status: 'open', eventId: 23000 })
+      expect(mockFetch).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.useRealTimers()
+      if (originalTz === undefined) delete process.env.TZ
+      else process.env.TZ = originalTz
+    }
   })
 
   it('calls the club-listings URL under CCN_API_BASE', async () => {

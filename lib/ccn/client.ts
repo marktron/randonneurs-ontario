@@ -5,6 +5,7 @@
  * @see docs/registration-check.md for API documentation
  */
 
+import { createTorontoDate } from '@/lib/brmTimes'
 import { fuzzyNameScore } from '@/lib/utils/fuzzy-match'
 
 export type CCNMembershipType =
@@ -50,12 +51,21 @@ const RO_ORGANIZATION_ID = 1654
 const LISTING_SUCCESS_TTL_MS = 60 * 60 * 1000
 const LISTING_FAILURE_TTL_MS = 10 * 60 * 1000
 
+// 'none': a good listing has no event for the season (nobody can hold that
+// membership yet). 'unknown': no good listing is available and the season is
+// not seeded, so we cannot tell; callers must not read it as "not a member".
 export type MembershipSeasonStatus =
-  { status: 'open'; eventId: number } | { status: 'closed'; eventId: number } | { status: 'none' }
+  | { status: 'open'; eventId: number }
+  | { status: 'closed'; eventId: number }
+  | { status: 'none' }
+  | { status: 'unknown' }
 
+// `open` is derived at read time from these, so a cached listing flips to open
+// when registration_opens passes without waiting for a refetch.
 interface SeasonEvent {
   eventId: number
-  open: boolean
+  active: boolean
+  opensAt: number | null
 }
 
 interface CCNListingRow {
@@ -77,6 +87,8 @@ interface ListingCache {
 }
 
 let listingCache: ListingCache | null = null
+// Concurrent cold-start callers share one listing request.
+let listingInFlight: Promise<Map<number, SeasonEvent> | null> | null = null
 
 function ccnApiBase(): string {
   return process.env.CCN_API_BASE || CCN_DEFAULT_API_BASE
@@ -85,6 +97,7 @@ function ccnApiBase(): string {
 /** Test hook: drop the in-process listing cache (successes and failures). */
 export function __resetMembershipSeasonCache(): void {
   listingCache = null
+  listingInFlight = null
 }
 
 /** Parses CCN_MEMBERSHIP_EVENT_IDS, e.g. "2026:21392,2027:23000". */
@@ -127,22 +140,28 @@ async function loadListings(): Promise<Map<number, SeasonEvent>> {
     if (event.organization?.id !== RO_ORGANIZATION_ID) continue
     const year = row.name?.match(/Membership (\d{4})/)?.[1]
     if (!year) continue
-    const opens = Date.parse(event.registration_opens ?? '')
     seasons.set(Number(year), {
       eventId: event.id,
-      open: event.status === 'AC' && opens <= Date.now(),
+      active: event.status === 'AC',
+      opensAt: parseTorontoLocal(event.registration_opens),
     })
   }
   return seasons
 }
 
-async function getListings(): Promise<Map<number, SeasonEvent> | null> {
-  if (listingCache) {
-    const ttl = listingCache.ok ? LISTING_SUCCESS_TTL_MS : LISTING_FAILURE_TTL_MS
-    if (Date.now() - listingCache.fetchedAt < ttl) {
-      return listingCache.seasons
-    }
-  }
+/**
+ * CCN's registration_opens is Toronto wall-clock time with no offset
+ * ("2025-12-07T00:00:00"). Date.parse would read it in the server's zone
+ * (UTC on Vercel), five hours early.
+ */
+function parseTorontoLocal(value: string | undefined): number | null {
+  const m = value?.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/)
+  if (!m) return null
+  const [year, month, day, hour, minute] = m.slice(1).map(Number)
+  return createTorontoDate(year, month - 1, day, hour, minute).getTime()
+}
+
+async function refreshListings(): Promise<Map<number, SeasonEvent> | null> {
   try {
     const seasons = await loadListings()
     listingCache = { ok: true, fetchedAt: Date.now(), seasons }
@@ -154,19 +173,39 @@ async function getListings(): Promise<Map<number, SeasonEvent> | null> {
   }
 }
 
+async function getListings(): Promise<Map<number, SeasonEvent> | null> {
+  if (listingCache) {
+    const ttl = listingCache.ok ? LISTING_SUCCESS_TTL_MS : LISTING_FAILURE_TTL_MS
+    if (Date.now() - listingCache.fetchedAt < ttl) {
+      return listingCache.seasons
+    }
+  }
+  if (!listingInFlight) {
+    listingInFlight = refreshListings().finally(() => {
+      listingInFlight = null
+    })
+  }
+  return listingInFlight
+}
+
 /**
  * Resolve a membership season to its CCN event. Each year is a separate CCN
- * event, discovered from the public club listings; CCN_MEMBERSHIP_EVENT_IDS
- * ("2026:21392,...") seeds seasons (treated as open) when discovery fails.
+ * event, discovered from the public club listings. CCN_MEMBERSHIP_EVENT_IDS
+ * ("2026:21392,...") seeds seasons, treated as open, whenever discovery fails
+ * or the listing does not name the season.
  */
 export async function getMembershipSeasonStatus(season: number): Promise<MembershipSeasonStatus> {
-  const found = (await getListings())?.get(season)
-  if (found) return { status: found.open ? 'open' : 'closed', eventId: found.eventId }
+  const listings = await getListings()
+  const found = listings?.get(season)
+  if (found) {
+    const open = found.active && found.opensAt !== null && found.opensAt <= Date.now()
+    return { status: open ? 'open' : 'closed', eventId: found.eventId }
+  }
 
   const seeded = parseSeedEventIds().get(season)
   if (seeded !== undefined) return { status: 'open', eventId: seeded }
 
-  return { status: 'none' }
+  return listings ? { status: 'none' } : { status: 'unknown' }
 }
 
 /**
@@ -180,8 +219,10 @@ export async function getMembershipSeasonStatus(season: number): Promise<Members
  * @param firstName - Rider's first name
  * @param lastName - Rider's last name
  * @param season - Membership season (calendar year) to search
- * @returns Membership data if found, or { found: false }
- * @throws Error if API request fails
+ * @returns Membership data if found, or { found: false } (including when CCN
+ *   has no membership event for the season)
+ * @throws Error if an API request fails or the season cannot be resolved
+ *   because the membership listing is unavailable
  */
 export async function searchCCNMembership(
   firstName: string,
@@ -189,7 +230,12 @@ export async function searchCCNMembership(
   season: number
 ): Promise<CCNSearchResult> {
   const seasonStatus = await getMembershipSeasonStatus(season)
+  if (seasonStatus.status === 'unknown') {
+    // An outage is "couldn't check", never "not a member".
+    throw new Error('CCN membership listing unavailable')
+  }
   if (seasonStatus.status === 'none') {
+    console.info(`CCN has no membership event for season ${season}`)
     return { found: false }
   }
   const endpoint = `${ccnApiBase()}/event_app/registration-search/?event_id=${seasonStatus.eventId}`
