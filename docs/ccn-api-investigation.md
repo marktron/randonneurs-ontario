@@ -77,6 +77,8 @@ GET /en/rest/v2/listing_app/club-listings/{listing_id}/
 
 This is the key to discovering historical event IDs. Each listing maps to an event via the `event_id` field in the detail response.
 
+Production now uses the list endpoint for season discovery: it finds each year's membership event and whether it is open for sale. See [Season discovery and the next-season gate](registration-check.md#season-discovery-and-the-next-season-gate).
+
 ### Reference data
 
 ```
