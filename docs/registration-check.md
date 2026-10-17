@@ -51,7 +51,7 @@ The current schema only allows `registered` and `cancelled`. Add a migration to 
 4. Check `rider_memberships` for `(rider_id, event_season)`. If found and NOT Trial Member, skip to step 7. If Trial Member, proceed to step 5 to check for upgrade. If not found, proceed to step 5.
 5. Call CCN API with registrant's full name. If CCN returns a result: upsert into `rider_memberships` (with `ccn_id`, `membership_type`, `city`, `country`, `chapter_id`), then continue. If Trial Member and CCN returns a full membership type, the row is updated (upgrade).
 6. If CCN returns no result and no existing membership: create registration with `status = 'incomplete: membership'`, send email with warning, show error modal, stop. If Trial Member and CCN returns no result: preserve existing Trial data (graceful degradation).
-7. If membership type is Trial Member: check if trial is already used (results with status in `finished`, `dnf`, `otl`, `dq` OR other registrations for events with `event_date >= today`). If used, show error modal, stop.
+7. If membership type is Trial Member: check if trial is already used (results with status in `finished`, `dnf`, `otl`, `dq` OR other registrations for upcoming events (`event_date >= today`) in the event's season). If used, show error modal, stop.
 8. Create registration with `status = 'registered'`, send confirmation email, revalidate, return success.
 
 ### Event registration
@@ -96,7 +96,7 @@ Trial Member status works differently from the other membership types. Riders ca
 If a member tries to register for an event and has Trial Member status, check whether they have already "used" their trial:
 
 1. **Results:** Any result for the event's season with status `finished`, `dnf`, `otl`, or `dq` counts as used. (`dns` does not count.)
-2. **Upcoming registrations:** Any other registration for an event with `event_date >= today` means they have already committed their trial to an upcoming event. We want to prevent them from registering for another event on the trial tier—they must upgrade first.
+2. **Upcoming registrations:** Any other registration for an upcoming event (`event_date >= today`) in the event's season means they have already committed their trial to an upcoming event. We want to prevent them from registering for another event on the trial tier—they must upgrade first.
 
 If the trial is used, show the error modal (same component as no-membership, with "trial used" content) and do not complete the registration. If they have not used their trial event yet, process the registration as normal.
 
@@ -108,11 +108,18 @@ Each membership year is its own CCN event, so the `event_id` for a season has to
 
 ### Discovery
 
-It reads `listing_app/club-listings/?search=Randonneurs+Ontario` (see `docs/ccn-api-investigation.md`) and keeps rows where `event.organization.id` is `1654` (Randonneurs Ontario) and the listing name matches `Membership (\d{4})`. Each match gives a season, a CCN event id, and an `open` flag: `open` is true when `event.status` is `AC` and `event.registration_opens` is in the past. A season that is listed but not open returns `closed`. A season that is not listed returns `none`.
+It reads `listing_app/club-listings/?search=Randonneurs+Ontario` (see `docs/ccn-api-investigation.md`) and keeps rows where `event.organization.id` is `1654` (Randonneurs Ontario) and the listing name matches `Membership (\d{4})`. Each match gives a season, a CCN event id, the event status and `registration_opens`. `registration_opens` has no offset and is Toronto local time, so it is parsed with `createTorontoDate`. Whether a season is open is worked out on every call, not when the listing is fetched, so a cached listing flips to open as soon as the clock passes `registration_opens`.
 
-The listing is cached in process: 1 hour after a success, 10 minutes after a failure. When a refetch fails, the last good listing keeps being served and the 10 minute window governs the next retry. Each serverless instance has its own cache. A timeout is 10 seconds.
+`getMembershipSeasonStatus(season)` returns one of four statuses:
 
-If discovery fails and there is no cached listing, or the season is not in the listing, `CCN_MEMBERSHIP_EVENT_IDS` is consulted. A seeded season returns `open` with the seeded id. The seed is a fallback only; a listed season always wins. With no listing and no seed, `searchCCNMembership` returns `{ found: false }`.
+- `open`: listed, `event.status` is `AC`, and `registration_opens` has passed.
+- `closed`: listed but not taking registrations (a past year, or a next year created but not yet open). Membership searches still run against it.
+- `none`: we have a good listing and it has no event for that season (and the season is not seeded). Nobody can hold that membership yet. `searchCCNMembership` logs this at info level and returns `{ found: false }`.
+- `unknown`: no good listing is available (the fetch failed and nothing was cached) and the season is not seeded. We cannot tell whether the rider is a member, so `searchCCNMembership` throws `CCN membership listing unavailable` instead of reporting "not a member". The rider-facing flow turns that into "Registration failed" with nothing written; admin add/restore lands on `check-failed`.
+
+The listing is cached in process: 1 hour after a success, 10 minutes after a failure. When a refetch fails, the last good listing keeps being served and the 10 minute window governs the next retry. Concurrent callers on a cold cache share one request. Each serverless instance has its own cache. A timeout is 10 seconds.
+
+`CCN_MEMBERSHIP_EVENT_IDS` is consulted when discovery fails with nothing cached, or when the season is not in the listing. Every seeded season returns `open` with the seeded id. A listed season always wins over the seed.
 
 `CCN_API_BASE` overrides the API base URL (used by tests).
 
@@ -135,15 +142,27 @@ The event's season is strict: `events.season`, falling back to the year of `even
 
 - `/register/[slug]` for a next-season event whose membership is not open shows an alert ("Registration opens with {season} memberships") and a short closed box ("Registration is not open yet for {season} events") instead of the form. Cancelled and draft events keep their own closed states and skip the CCN lookup.
 - If a submission reaches the server anyway, the action returns the refusal "Registration for {season} events opens once {season} memberships are available. Check back soon." No registration row is created and no email is sent.
-- Once CCN opens that season's membership, the gate lifts on its own after the cache expires (at most 1 hour).
+- Once CCN opens that season's membership, registration opens within about two hours: up to one hour of listing cache plus the one-hour page cache on `/register/[slug]`.
 
 ### What admins see
 
 Admin add and restore (`addRegistration`, `adminRestoreRegistration`) are not blocked by the gate. For a next-season event they run the normal membership check against that season, so with no membership on file the row lands as `incomplete: membership`.
 
+### Deploy and yearly steps
+
+1. Set `CCN_MEMBERSHIP_EVENT_IDS=2026:21392` in Vercel (production and preview) before the deploy reaches production.
+2. Remove `CCN_ENDPOINT` from Vercel and local env files after the deploy. The code no longer reads it.
+3. Run the flip script (below) after the deploy and before CCN opens the next membership season.
+4. Each December or January, once CCN opens the new year's membership, add `<year>:<event id>` to `CCN_MEMBERSHIP_EVENT_IDS`. Find the id in the `event.id` of the "Randonneurs Ontario Membership <year>" row from `https://ccnbikes.com/en/rest/v2/listing_app/club-listings/?search=Randonneurs+Ontario`.
+
+During a CCN listing outage on an instance with no cached listing:
+
+- With the season seeded, discovery falls back to the seed, the season counts as open, and registration works as long as the membership search itself succeeds.
+- Without the seed, the season is `unknown`: rider registration reports "Registration failed" and nothing is written, and a next-season event stays closed.
+
 ### Flip script (post-deploy, one-off)
 
-Registrations written for next-season events before this shipped were checked against the current season and marked `registered`. After the deploy, run `scripts/flip-next-season-registrations.ts`. It lists `registered` rows for events whose season is after the Toronto calendar year and, with `--apply`, sets them to `incomplete: membership`. Run the dry run first, then apply, then `POST /api/revalidate` with `{"tags":["registrations","events"]}`:
+Registrations written for next-season events before this shipped were checked against the current season and marked `registered`. After the deploy, run `scripts/flip-next-season-registrations.ts`. It lists `registered` rows on events dated after Dec 31 of the Toronto calendar year and, with `--apply`, sets them to `incomplete: membership`. A registration is skipped (and listed as skipped) when the rider already has a `rider_memberships` row for the event's season, since that row can only come from a check under the new code. Run the dry run first, then apply, then `POST /api/revalidate` with `{"tags":["registrations","events"]}`:
 
 ```bash
 npx tsx scripts/flip-next-season-registrations.ts --env-file=.env.production.local
@@ -249,7 +268,7 @@ Chapter assignment: When writing from the API, `chapter_id` is set to the event'
 ### Environment Variables
 
 - `CCN_API_BASE` - optional override of the CCN API base URL (default `https://ccnbikes.com/en/rest/v2`)
-- `CCN_MEMBERSHIP_EVENT_IDS` - seed of season to CCN event id pairs, e.g. `2026:21392,2027:23000`. Used only when discovery fails; every seeded season counts as open.
+- `CCN_MEMBERSHIP_EVENT_IDS` - seed of season to CCN event id pairs, e.g. `2026:21392,2027:23000`. Consulted when discovery fails or when a season is not in the listing; every seeded season counts as open. Set `2026:21392` in production.
 - `NEXT_PUBLIC_CURRENT_SEASON` - display default for admin filters, records and reports. Not used for membership verification or the gate.
 
 ### Testing
