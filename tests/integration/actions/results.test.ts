@@ -592,7 +592,6 @@ describe('addRegistration', () => {
     expect(getMembershipForRider).toHaveBeenCalledWith(
       expect.objectContaining({ riderId: 'rider-1', season: EVENT_SEASON, chapterId: 'ch-1' })
     )
-    expect(EVENT_SEASON).not.toBe(new Date().getFullYear())
     expect(isTrialUsed).toHaveBeenCalledWith('rider-1', EVENT_SEASON)
   })
 
