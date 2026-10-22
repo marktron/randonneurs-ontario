@@ -14,12 +14,24 @@ Sentry.init({
   // Sample 20% of traces in production to reduce costs and data volume
   tracesSampleRate: process.env.NODE_ENV === 'production' ? 0.2 : 1,
 
-  // Enable logs to be sent to Sentry
-  enableLogs: true,
-
-  // Disable sending user PII (Personally Identifiable Information) to minimize data exposure
-  // https://docs.sentry.io/platforms/javascript/guides/nextjs/configuration/options/#sendDefaultPii
-  sendDefaultPii: false,
+  // Sentry 11 collects request headers, cookies, bodies, user info and query
+  // params by default. Keep the pre-v11 baseline (the old sendDefaultPii: false)
+  // so no PII is sent. Snippet from the SDK MIGRATION.md.
+  // https://docs.sentry.io/platforms/javascript/guides/nextjs/configuration/options/#dataCollection
+  dataCollection: {
+    userInfo: false,
+    cookies: false,
+    httpHeaders: {
+      request: { deny: ['forwarded', '-ip', 'remote-', 'via', '-user'] },
+      response: { deny: ['forwarded', '-ip', 'remote-', 'via', '-user'] },
+    },
+    httpBodies: [],
+    urlQueryParams: { deny: ['forwarded', '-ip', 'remote-', 'via', '-user'] },
+    genAI: { inputs: false, outputs: false },
+    databaseQueryData: false,
+    queues: false,
+    graphQL: { document: false, variables: false },
+  },
 
   // Benign, unactionable server noise, extracted to lib/sentry-ignore.ts so it
   // can be unit tested. Sentry runs ignoreErrors in beforeSend for all events,

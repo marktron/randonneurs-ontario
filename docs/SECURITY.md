@@ -90,7 +90,7 @@ The admin login page validates redirect URLs to prevent open redirect attacks. O
 - `SUPABASE_SERVICE_ROLE_KEY` is server-side only (no `NEXT_PUBLIC_` prefix)
 - `CRON_SECRET` authenticates the cron endpoint via Bearer token
 - `.env*` files are in `.gitignore`
-- Sentry `sendDefaultPii` is disabled to prevent PII leakage
+- Sentry `dataCollection` is pinned to the pre-v11 no-PII baseline (user info, cookies, bodies, query params and identifying headers are not sent)
 
 ## Email Security
 

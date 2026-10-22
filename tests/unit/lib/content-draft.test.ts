@@ -33,7 +33,7 @@ function setupFsMocks() {
       throw new Error(`ENOENT: no such file: ${name}`)
     }
     return files[name]
-  }) as typeof fs.readFileSync)
+  }) as unknown as typeof fs.readFileSync)
   vi.mocked(fs.statSync).mockReturnValue({ mtime: new Date('2020-05-05') } as fs.Stats)
 }
 

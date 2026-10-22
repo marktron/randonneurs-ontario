@@ -29,7 +29,7 @@
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
-    "@sentry/nextjs": "^10.41.0",
+    "@sentry/nextjs": "^11.7.0",
     "@supabase/ssr": "^0.12.0",
     "@supabase/supabase-js": "^2.112.3",
     "@vercel/analytics": "^2.0.1",
@@ -77,16 +77,15 @@
     "@types/node": "^24.13.3",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "@vitejs/plugin-react": "^5.2.0",
-    "dotenv": "^17.3.1",
-    "eslint": "^9",
+    "@vitejs/plugin-react": "^6.1.2",
+    "dotenv": "^18.0.8",
+    "eslint": "^10.12.0",
     "eslint-config-next": "^16.3.4",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-jsx-a11y": "^6.10.2",
-    "happy-dom": "^20.8.9",
+    "happy-dom": "^21.0.1",
     "husky": "^9.1.7",
     "lint-staged": "^17.5.0",
-    "msw": "^2.12.7",
     "prettier": "^3.7.4",
     "secretlint": "^13.0.5",
     "shadcn": "^4.1.0",
@@ -107,5 +106,16 @@
     "*": [
       "secretlint"
     ]
+  },
+  "overrides": {
+    "eslint-plugin-jsx-a11y": {
+      "eslint": "$eslint"
+    },
+    "eslint-plugin-react": {
+      "eslint": "$eslint"
+    },
+    "eslint-plugin-import": {
+      "eslint": "$eslint"
+    }
   }
 }

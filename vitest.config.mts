@@ -19,7 +19,7 @@ export default defineConfig({
     environment: 'node',
     environmentOptions: {
       happyDOM: {
-        settings: { disableIframePageLoading: true },
+        settings: { enableIframePageLoading: false },
       },
     },
     // Timeout for each test (ms) - prevents hanging tests
