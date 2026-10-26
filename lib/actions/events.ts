@@ -8,7 +8,7 @@ import { acpSeasonWindow } from '@/lib/acp-season'
 import { isSuperAdmin } from '@/lib/auth/roles'
 import { sendEmail, fromEmail, isEmailConfigured } from '@/lib/email/ses'
 import { parseLocalDate, formatFinishTimeHm } from '@/lib/utils'
-import { buildEventSlug } from '@/lib/events/slug-rotation'
+import { buildEventSlug, planSlugRotation } from '@/lib/events/slug-rotation'
 import { getUrlSlugFromDbSlug } from '@/lib/chapter-config'
 import { createPendingResultsAndSendEmails } from '@/lib/events/complete-event'
 import { sendResultSubmissionReminders } from '@/lib/events/send-result-reminders'
@@ -251,6 +251,60 @@ export async function updateEvent(eventId: string, data: UpdateEventData): Promi
       updateData.image_url = data.imageUrl || null
     }
 
+    // The admin form sends every field, so compare against the stored row
+    // rather than inferring a change from field presence.
+    let oldSlug: string | null = null
+    let newSlug: string | null = null
+    if (data.eventDate !== undefined) {
+      const { data: stored, error: storedError } = await getSupabaseAdmin()
+        .from('events')
+        .select('slug, name, distance_km, event_date, event_type')
+        .eq('id', eventId)
+        .single()
+
+      if (storedError || !stored) {
+        return handleSupabaseError(
+          storedError ?? { code: 'PGRST116', message: 'Event not found' },
+          { operation: 'updateEvent' },
+          'Failed to update event'
+        )
+      }
+
+      newSlug = planSlugRotation(stored, {
+        name: data.name?.trim(),
+        distanceKm: data.distanceKm,
+        eventDate: data.eventDate,
+      })
+
+      if (newSlug) {
+        oldSlug = stored.slug
+        // History first: if the events update then fails, the old URL still redirects.
+        const { error: historyError } = await getSupabaseAdmin()
+          .from('event_slug_history')
+          .upsert({ slug: stored.slug, event_id: eventId }, { onConflict: 'slug' })
+        if (historyError) {
+          return handleSupabaseError(
+            historyError,
+            { operation: 'updateEvent' },
+            'Failed to update event'
+          )
+        }
+        // The new slug is live again (e.g. a date reverted), so it must not redirect.
+        const { error: clearError } = await getSupabaseAdmin()
+          .from('event_slug_history')
+          .delete()
+          .eq('slug', newSlug)
+        if (clearError) {
+          return handleSupabaseError(
+            clearError,
+            { operation: 'updateEvent' },
+            'Failed to update event'
+          )
+        }
+        updateData.slug = newSlug
+      }
+    }
+
     const typedUpdateData: EventUpdate = updateData
 
     const { error } = await getSupabaseAdmin()
@@ -260,6 +314,11 @@ export async function updateEvent(eventId: string, data: UpdateEventData): Promi
 
     if (error) {
       return handleSupabaseError(error, { operation: 'updateEvent' }, 'Failed to update event')
+    }
+
+    if (oldSlug) {
+      revalidateTag(`event-${oldSlug}`, { expire: 0 })
+      revalidateTag('slugs', { expire: 0 })
     }
 
     // Revalidate admin pages (still use revalidatePath for admin routes)
@@ -332,7 +391,9 @@ export async function updateEvent(eventId: string, data: UpdateEventData): Promi
       action: 'update',
       entityType: 'event',
       entityId: eventId,
-      description: `Updated event: ${data.name || eventId}`,
+      description: newSlug
+        ? `Updated event: ${data.name || eventId} (slug ${oldSlug} → ${newSlug})`
+        : `Updated event: ${data.name || eventId}`,
     })
 
     return createActionResult()

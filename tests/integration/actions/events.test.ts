@@ -40,6 +40,7 @@ vi.mock('@/lib/supabase-server', () => {
       'limit',
       'range',
       'insert',
+      'upsert',
       'update',
       'delete',
     ]
@@ -1067,6 +1068,136 @@ describe('updateEvent', () => {
 
     const { updateErwEvent: mockUpdateErw } = await import('@/lib/erw/client')
     expect(mockUpdateErw).not.toHaveBeenCalled()
+  })
+
+  describe('slug rotation', () => {
+    const stored = (overrides: Record<string, unknown> = {}) => ({
+      slug: 'oz-200km-2026-03-28',
+      name: 'Oz',
+      distance_km: 200,
+      event_date: '2026-03-28',
+      event_type: 'brevet',
+      ...overrides,
+    })
+    const historyCalls = (method: string) =>
+      mockModule.__calls.filter((c) => c.table === 'event_slug_history' && c.method === method)
+
+    it('rotates the slug and records history when the date changes', async () => {
+      mockModule.__mockEventFound(stored()) // pre-fetch
+      mockModule.__mockUpdateSuccess()
+      mockModule.__mockEventFound({
+        chapter_id: 'chapter-1',
+        event_type: 'brevet',
+        slug: 'oz-200km-2026-04-04',
+      }) // post-fetch
+
+      const result = await updateEvent('event-1', {
+        name: 'Oz',
+        distanceKm: 200,
+        eventDate: '2026-04-04',
+      })
+
+      expect(result.success).toBe(true)
+      const upserts = historyCalls('upsert')
+      expect(upserts).toHaveLength(1)
+      expect(upserts[0].args![0]).toEqual({ slug: 'oz-200km-2026-03-28', event_id: 'event-1' })
+      expect(upserts[0].args![1]).toEqual({ onConflict: 'slug' })
+      const deletes = historyCalls('delete')
+      expect(deletes).toHaveLength(1)
+      const historyEqs = mockModule.__calls.filter(
+        (c) => c.table === 'event_slug_history' && c.method === 'eq'
+      )
+      expect(historyEqs[0].args).toEqual(['slug', 'oz-200km-2026-04-04'])
+      const updateData = mockModule.__calls.find(
+        (c) => c.table === 'events' && c.method === 'update'
+      )!.args![0] as Record<string, unknown>
+      expect(updateData.slug).toBe('oz-200km-2026-04-04')
+      const upsertIdx = mockModule.__calls.findIndex((c) => c.method === 'upsert')
+      const deleteIdx = mockModule.__calls.findIndex(
+        (c) => c.table === 'event_slug_history' && c.method === 'delete'
+      )
+      const updateIdx = mockModule.__calls.findIndex(
+        (c) => c.table === 'events' && c.method === 'update'
+      )
+      expect(upsertIdx).toBeLessThan(deleteIdx)
+      expect(deleteIdx).toBeLessThan(updateIdx)
+      const { revalidateTag } = await import('next/cache')
+      expect(revalidateTag).toHaveBeenCalledWith('event-oz-200km-2026-03-28', { expire: 0 })
+      expect(revalidateTag).toHaveBeenCalledWith('slugs', { expire: 0 })
+      const auditInsert = mockModule.__calls.find(
+        (c) => c.table === 'audit_logs' && c.method === 'insert'
+      )
+      expect(auditInsert?.args?.[0]).toEqual(
+        expect.objectContaining({
+          description: 'Updated event: Oz (slug oz-200km-2026-03-28 → oz-200km-2026-04-04)',
+        })
+      )
+    })
+
+    it('does not touch the slug or history when only the name changes', async () => {
+      mockModule.__mockEventFound(stored()) // pre-fetch
+      mockModule.__mockUpdateSuccess()
+      mockModule.__mockEventFound({
+        chapter_id: 'chapter-1',
+        event_type: 'brevet',
+        slug: 'oz-200km-2026-03-28',
+      })
+
+      const result = await updateEvent('event-1', {
+        name: 'Oz Renamed',
+        distanceKm: 200,
+        eventDate: '2026-03-28',
+      })
+
+      expect(result.success).toBe(true)
+      expect(mockModule.__calls.filter((c) => c.table === 'event_slug_history')).toHaveLength(0)
+      const updateData = mockModule.__calls.find(
+        (c) => c.table === 'events' && c.method === 'update'
+      )!.args![0] as Record<string, unknown>
+      expect(updateData.slug).toBeUndefined()
+      expect(updateData.name).toBe('Oz Renamed')
+    })
+
+    it('does not rotate permanents', async () => {
+      mockModule.__mockEventFound(
+        stored({ event_type: 'permanent', slug: 'perm-200km-2026-03-28', name: 'Perm' })
+      )
+      mockModule.__mockUpdateSuccess()
+      mockModule.__mockEventFound({
+        chapter_id: 'chapter-1',
+        event_type: 'permanent',
+        slug: 'perm-200km-2026-03-28',
+      })
+
+      const result = await updateEvent('event-1', {
+        name: 'Perm',
+        distanceKm: 200,
+        eventDate: '2026-04-04',
+      })
+
+      expect(result.success).toBe(true)
+      expect(mockModule.__calls.filter((c) => c.table === 'event_slug_history')).toHaveLength(0)
+      const updateData = mockModule.__calls.find(
+        (c) => c.table === 'events' && c.method === 'update'
+      )!.args![0] as Record<string, unknown>
+      expect(updateData.slug).toBeUndefined()
+      expect(updateData.event_date).toBe('2026-04-04')
+    })
+
+    it('does not pre-fetch when eventDate is absent', async () => {
+      mockModule.__mockUpdateSuccess()
+      mockModule.__mockEventFound({ chapter_id: 'chapter-1', event_type: 'brevet', slug: 's' })
+
+      await updateEvent('event-1', { name: 'Only Name' })
+
+      const selectsBeforeUpdate = mockModule.__calls
+        .slice(
+          0,
+          mockModule.__calls.findIndex((c) => c.method === 'update')
+        )
+        .filter((c) => c.method === 'select')
+      expect(selectsBeforeUpdate).toHaveLength(0)
+    })
   })
 
   describe('unlinked event gains a route', () => {
