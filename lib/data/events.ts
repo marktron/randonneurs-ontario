@@ -618,7 +618,14 @@ const getEventSlugRedirectInner = cache(async (oldSlug: string): Promise<string 
     .eq('slug', oldSlug)
     .maybeSingle()
 
-  if (error || !data) return null
+  if (error) {
+    // Report through the shared path, then throw: returning a fallback null
+    // would let unstable_cache store a false "no redirect" under the slug's
+    // tags (a transient DB failure would become a sticky 404).
+    handleDataError(error, { operation: 'getEventSlugRedirect', context: { oldSlug } }, null)
+    throw error
+  }
+  if (!data) return null
 
   const event = Array.isArray(data.events) ? data.events[0] : data.events
   const currentSlug = event?.slug ?? null
