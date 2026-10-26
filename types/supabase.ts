@@ -305,6 +305,32 @@ export type Database = {
           },
         ]
       }
+      event_slug_history: {
+        Row: {
+          created_at: string
+          event_id: string
+          slug: string
+        }
+        Insert: {
+          created_at?: string
+          event_id: string
+          slug: string
+        }
+        Update: {
+          created_at?: string
+          event_id?: string
+          slug?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'event_slug_history_event_id_fkey'
+            columns: ['event_id']
+            isOneToOne: false
+            referencedRelation: 'events'
+            referencedColumns: ['id']
+          },
+        ]
+      }
       events: {
         Row: {
           chapter_id: string
