@@ -7,7 +7,8 @@ import { getCurrentSeason } from '@/lib/season'
 import { acpSeasonWindow } from '@/lib/acp-season'
 import { isSuperAdmin } from '@/lib/auth/roles'
 import { sendEmail, fromEmail, isEmailConfigured } from '@/lib/email/ses'
-import { parseLocalDate, createSlug, formatFinishTimeHm } from '@/lib/utils'
+import { parseLocalDate, formatFinishTimeHm } from '@/lib/utils'
+import { buildEventSlug } from '@/lib/events/slug-rotation'
 import { getUrlSlugFromDbSlug } from '@/lib/chapter-config'
 import { createPendingResultsAndSendEmails } from '@/lib/events/complete-event'
 import { sendResultSubmissionReminders } from '@/lib/events/send-result-reminders'
@@ -120,7 +121,7 @@ export async function createEvent(data: CreateEventData): Promise<ActionResult<{
 
     // Generate slug from name, distance, and date
     // Format: {name}-{distance}km-{date} to match the import script
-    const slug = `${createSlug(name)}-${distanceKm}km-${eventDate}`
+    const slug = buildEventSlug(name, distanceKm, eventDate)
 
     const insertData: EventInsert = {
       slug,
