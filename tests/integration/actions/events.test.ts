@@ -1184,17 +1184,32 @@ describe('updateEvent', () => {
       expect(updateData.event_date).toBe('2026-04-04')
     })
 
+    it('maps a slug unique violation on update to the slug-exists message', async () => {
+      mockModule.__mockEventFound(stored()) // pre-fetch
+      mockModule.__mockUpdateSuccess() // history upsert
+      mockModule.__mockUpdateSuccess() // history delete
+      mockModule.__mockUpdateError({ code: '23505', message: 'duplicate key' })
+
+      const result = await updateEvent('event-1', {
+        name: 'Oz',
+        distanceKm: 200,
+        eventDate: '2026-04-04',
+      })
+
+      expect(result.success).toBe(false)
+      expect(result.error).toBe('An event with this slug already exists')
+    })
+
     it('does not pre-fetch when eventDate is absent', async () => {
       mockModule.__mockUpdateSuccess()
       mockModule.__mockEventFound({ chapter_id: 'chapter-1', event_type: 'brevet', slug: 's' })
 
       await updateEvent('event-1', { name: 'Only Name' })
 
+      const updateIdx = mockModule.__calls.findIndex((c) => c.method === 'update')
+      expect(updateIdx).toBeGreaterThanOrEqual(0)
       const selectsBeforeUpdate = mockModule.__calls
-        .slice(
-          0,
-          mockModule.__calls.findIndex((c) => c.method === 'update')
-        )
+        .slice(0, updateIdx)
         .filter((c) => c.method === 'select')
       expect(selectsBeforeUpdate).toHaveLength(0)
     })

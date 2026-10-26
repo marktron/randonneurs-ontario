@@ -313,7 +313,16 @@ export async function updateEvent(eventId: string, data: UpdateEventData): Promi
       .eq('id', eventId)
 
     if (error) {
-      return handleSupabaseError(error, { operation: 'updateEvent' }, 'Failed to update event')
+      return handleSupabaseError(
+        error,
+        {
+          operation: 'updateEvent',
+          ...(error.code === '23505' && {
+            userMessage: 'An event with this slug already exists',
+          }),
+        },
+        'Failed to update event'
+      )
     }
 
     if (oldSlug) {

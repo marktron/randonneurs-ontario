@@ -15,7 +15,7 @@ vi.mock('@/lib/auth/get-admin', () => ({
 }))
 vi.mock('@/lib/audit-log', () => ({ logAuditEvent: vi.fn(async () => {}) }))
 
-import { describe, it, expect, beforeAll, afterAll } from 'vitest'
+import { describe, it, expect, beforeEach, afterAll } from 'vitest'
 import { getTestSupabase, checked } from './helpers/supabase'
 import { TORONTO_CHAPTER_ID } from './registration/helpers'
 import { updateEvent } from '@/lib/actions/events'
@@ -43,7 +43,7 @@ async function historyFor(slug: string) {
   return data ?? []
 }
 
-beforeAll(async () => {
+beforeEach(async () => {
   await cleanup()
   await checked(
     admin.from('events').insert({
@@ -85,6 +85,16 @@ describe('updateEvent slug rotation (real DB)', () => {
   })
 
   it('reverting the date removes the history row for the now-live slug', async () => {
+    // Seed the post-reschedule state: live slug B, redirect row for A.
+    await checked(
+      admin.from('events').update({ slug: SLUG_B, event_date: '2099-05-09' }).eq('id', ID).select(),
+      'seed rescheduled event'
+    )
+    await checked(
+      admin.from('event_slug_history').insert({ slug: SLUG_A, event_id: ID }).select(),
+      'seed history row'
+    )
+
     const result = await updateEvent(ID, {
       name: 'Inttest Slug Rot',
       distanceKm: 200,
