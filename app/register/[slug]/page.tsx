@@ -1,4 +1,4 @@
-import { notFound } from 'next/navigation'
+import { notFound, permanentRedirect } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
 import { PageShell } from '@/components/page-shell'
@@ -9,6 +9,7 @@ import { RwgpsCollectionEmbed } from '@/components/rwgps-collection-embed'
 import { fetchRwgpsCollection, buildRwgpsCollectionUrl } from '@/lib/rwgps'
 import {
   getEventBySlug,
+  getEventSlugRedirect,
   getRegisteredRiders,
   getFlecheTeams,
   getRegisteredRidersWithTeams,
@@ -124,6 +125,8 @@ export default async function RegisterPage({ params }: PageProps) {
   const event = await getEventBySlug(slug)
 
   if (!event) {
+    const currentSlug = await getEventSlugRedirect(slug)
+    if (currentSlug) permanentRedirect(`/register/${currentSlug}`)
     notFound()
   }
 

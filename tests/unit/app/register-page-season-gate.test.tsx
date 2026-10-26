@@ -12,6 +12,7 @@ const mockGetEventBySlug = vi.fn()
 
 vi.mock('@/lib/data/events', () => ({
   getEventBySlug: (...args: unknown[]) => mockGetEventBySlug(...args),
+  getEventSlugRedirect: vi.fn().mockResolvedValue(null),
   getRegisteredRiders: vi.fn().mockResolvedValue([]),
   getFlecheTeams: vi.fn().mockResolvedValue([]),
   getRegisteredRidersWithTeams: vi.fn().mockResolvedValue([]),

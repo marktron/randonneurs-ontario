@@ -608,3 +608,32 @@ export async function getEventBySlug(slug: string): Promise<EventDetails | null>
     }
   )()
 }
+
+const getEventSlugRedirectInner = cache(async (oldSlug: string): Promise<string | null> => {
+  // The !inner join to events makes events RLS apply, so a history row whose
+  // event is a draft resolves to nothing for anon callers.
+  const { data, error } = await publicEventsClient()
+    .from('event_slug_history')
+    .select('events!inner(slug)')
+    .eq('slug', oldSlug)
+    .maybeSingle()
+
+  if (error || !data) return null
+
+  const event = Array.isArray(data.events) ? data.events[0] : data.events
+  const currentSlug = event?.slug ?? null
+  // Defensive: never redirect a slug to itself.
+  if (!currentSlug || currentSlug === oldSlug) return null
+  return currentSlug
+})
+
+/** Current slug for an old slug recorded in event_slug_history, or null. */
+export async function getEventSlugRedirect(oldSlug: string): Promise<string | null> {
+  return unstable_cache(
+    async () => getEventSlugRedirectInner(oldSlug),
+    ['event-slug-redirect', oldSlug],
+    {
+      tags: ['events', `event-${oldSlug}`],
+    }
+  )()
+}

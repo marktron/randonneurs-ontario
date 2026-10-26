@@ -15,10 +15,11 @@ vi.mock('@/lib/auth/get-admin', () => ({
 }))
 vi.mock('@/lib/audit-log', () => ({ logAuditEvent: vi.fn(async () => {}) }))
 
-import { describe, it, expect, beforeEach, afterAll } from 'vitest'
+import { describe, it, expect, beforeEach, afterAll, afterEach } from 'vitest'
 import { getTestSupabase, checked } from './helpers/supabase'
 import { TORONTO_CHAPTER_ID } from './registration/helpers'
 import { updateEvent } from '@/lib/actions/events'
+import { getEventSlugRedirect } from '@/lib/data/events'
 
 const admin = getTestSupabase() // service role
 
@@ -104,5 +105,48 @@ describe('updateEvent slug rotation (real DB)', () => {
     expect(await currentSlug()).toBe(SLUG_A)
     expect(await historyFor(SLUG_B)).toEqual([{ slug: SLUG_B, event_id: ID }])
     expect(await historyFor(SLUG_A)).toEqual([])
+  })
+})
+
+describe('getEventSlugRedirect (real DB)', () => {
+  // .env.local sets SHOW_DRAFT_EVENTS=true; each test pins the flag itself.
+  afterEach(() => {
+    vi.unstubAllEnvs()
+  })
+
+  it('resolves an old slug to the current one and unknown slugs to null', async () => {
+    await checked(
+      admin.from('events').update({ slug: SLUG_B, event_date: '2099-05-09' }).eq('id', ID).select(),
+      'seed rescheduled event'
+    )
+    await checked(
+      admin.from('event_slug_history').insert({ slug: SLUG_A, event_id: ID }).select(),
+      'seed history row'
+    )
+
+    vi.stubEnv('SHOW_DRAFT_EVENTS', undefined)
+    expect(await getEventSlugRedirect(SLUG_A)).toBe(SLUG_B)
+    expect(await getEventSlugRedirect('inttest-slug-rot-nope')).toBeNull()
+  })
+
+  it('returns null when the event behind the old slug is a draft (RLS)', async () => {
+    await checked(
+      admin
+        .from('events')
+        .update({ slug: SLUG_B, event_date: '2099-05-09', status: 'draft' })
+        .eq('id', ID)
+        .select(),
+      'seed draft event'
+    )
+    await checked(
+      admin.from('event_slug_history').insert({ slug: SLUG_A, event_id: ID }).select(),
+      'seed history row'
+    )
+
+    vi.stubEnv('SHOW_DRAFT_EVENTS', undefined)
+    expect(await getEventSlugRedirect(SLUG_A)).toBeNull()
+
+    vi.stubEnv('SHOW_DRAFT_EVENTS', 'true')
+    expect(await getEventSlugRedirect(SLUG_A)).toBe(SLUG_B)
   })
 })

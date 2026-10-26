@@ -8,12 +8,14 @@ import RegisterPage, * as registerPageModule from '@/app/register/[slug]/page'
 import { isoDaysFromNow } from '@/tests/utils/test-helpers'
 
 const mockGetEventBySlug = vi.fn()
+const mockGetEventSlugRedirect = vi.fn()
 const mockGetRegisteredRiders = vi.fn().mockResolvedValue([])
 const mockGetFlecheTeams = vi.fn().mockResolvedValue([])
 const mockGetRegisteredRidersWithTeams = vi.fn().mockResolvedValue([])
 
 vi.mock('@/lib/data/events', () => ({
   getEventBySlug: (...args: unknown[]) => mockGetEventBySlug(...args),
+  getEventSlugRedirect: (...args: unknown[]) => mockGetEventSlugRedirect(...args),
   getRegisteredRiders: (...args: unknown[]) => mockGetRegisteredRiders(...args),
   getFlecheTeams: (...args: unknown[]) => mockGetFlecheTeams(...args),
   getRegisteredRidersWithTeams: (...args: unknown[]) => mockGetRegisteredRidersWithTeams(...args),
@@ -22,6 +24,9 @@ vi.mock('@/lib/data/events', () => ({
 vi.mock('next/navigation', () => ({
   notFound: () => {
     throw new Error('notFound')
+  },
+  permanentRedirect: (path: string) => {
+    throw new Error(`redirect:${path}`)
   },
 }))
 
@@ -115,6 +120,55 @@ describe('RegisterPage /register/[slug] — cancelled event', () => {
     expect(screen.getByRole('alert')).toBeInTheDocument()
     expect(screen.queryByTestId('register-cta')).not.toBeInTheDocument()
     expect(screen.getByTestId('markdown-content')).toHaveTextContent(/CANCELLED: weather forecast/)
+  })
+})
+
+describe('RegisterPage /register/[slug] — old slug redirects', () => {
+  beforeEach(() => {
+    mockGetEventBySlug.mockReset()
+    mockGetEventSlugRedirect.mockReset()
+  })
+
+  it('permanently redirects an old slug to the current one', async () => {
+    mockGetEventBySlug.mockResolvedValue(null)
+    mockGetEventSlugRedirect.mockResolvedValue('oz-200km-2026-04-04')
+    await expect(
+      RegisterPage({ params: Promise.resolve({ slug: 'oz-200km-2026-03-28' }) })
+    ).rejects.toThrow('redirect:/register/oz-200km-2026-04-04')
+    expect(mockGetEventSlugRedirect).toHaveBeenCalledWith('oz-200km-2026-03-28')
+  })
+
+  it('404s when neither the slug nor history matches', async () => {
+    mockGetEventBySlug.mockResolvedValue(null)
+    mockGetEventSlugRedirect.mockResolvedValue(null)
+    await expect(RegisterPage({ params: Promise.resolve({ slug: 'nope' }) })).rejects.toThrow(
+      'notFound'
+    )
+  })
+
+  it('never consults history when the slug resolves directly', async () => {
+    mockGetEventBySlug.mockResolvedValue({
+      id: 'evt-3',
+      slug: 'live-200',
+      name: 'Live 200',
+      date: isoDaysFromNow(30),
+      startTime: '08:00',
+      startLocation: 'City Hall',
+      distance: 200,
+      type: 'Brevet',
+      chapterName: 'Toronto',
+      chapterSlug: 'toronto',
+      rwgpsId: null,
+      routeSlug: null,
+      cueSheetUrl: null,
+      description: null,
+      imageUrl: null,
+      erwCanonicalUrl: null,
+      status: 'scheduled',
+    })
+    const Page = await RegisterPage({ params: Promise.resolve({ slug: 'live-200' }) })
+    render(Page)
+    expect(mockGetEventSlugRedirect).not.toHaveBeenCalled()
   })
 })
 
