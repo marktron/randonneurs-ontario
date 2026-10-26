@@ -1119,9 +1119,10 @@ describe('updateEvent', () => {
       const updateIdx = mockModule.__calls.findIndex(
         (c) => c.table === 'events' && c.method === 'update'
       )
-      expect(upsertIdx).toBeLessThan(deleteIdx)
-      expect(deleteIdx).toBeLessThan(updateIdx)
+      expect(upsertIdx).toBeLessThan(updateIdx)
+      expect(updateIdx).toBeLessThan(deleteIdx)
       const { revalidateTag } = await import('next/cache')
+      expect(revalidateTag).toHaveBeenCalledWith('event-oz-200km-2026-04-04', { expire: 0 })
       expect(revalidateTag).toHaveBeenCalledWith('event-oz-200km-2026-03-28', { expire: 0 })
       expect(revalidateTag).toHaveBeenCalledWith('slugs', { expire: 0 })
       const auditInsert = mockModule.__calls.find(
@@ -1131,6 +1132,39 @@ describe('updateEvent', () => {
         expect.objectContaining({
           description: 'Updated event: Oz (slug oz-200km-2026-03-28 → oz-200km-2026-04-04)',
         })
+      )
+    })
+
+    it('passes the rotated slug to ERW updateErwEvent', async () => {
+      mockModule.__mockEventFound(stored()) // pre-fetch
+      mockModule.__mockUpdateSuccess()
+      mockModule.__mockEventFound({
+        chapter_id: 'chapter-1',
+        event_type: 'brevet',
+        slug: 'oz-200km-2026-04-04',
+        erw_event_id: 'erw-existing-123',
+        route_id: 'route-1',
+        name: 'Oz',
+        description: null,
+        distance_km: 200,
+        event_date: '2026-04-04',
+        start_time: '08:00',
+      }) // post-fetch
+      mockModule.__mockEventFound({ rwgps_id: '99999' }) // Route lookup
+      mockModule.__mockUpdateSuccess() // ERW canonical URL update
+      mockModule.__mockEventFound({ slug: 'toronto' }) // Chapter revalidation
+
+      const result = await updateEvent('event-1', {
+        name: 'Oz',
+        distanceKm: 200,
+        eventDate: '2026-04-04',
+      })
+
+      expect(result.success).toBe(true)
+      const { updateErwEvent: mockUpdateErw } = await import('@/lib/erw/client')
+      expect(mockUpdateErw).toHaveBeenCalledWith(
+        'erw-existing-123',
+        expect.objectContaining({ slug: 'oz-200km-2026-04-04' })
       )
     })
 
@@ -1187,7 +1221,6 @@ describe('updateEvent', () => {
     it('maps a slug unique violation on update to the slug-exists message', async () => {
       mockModule.__mockEventFound(stored()) // pre-fetch
       mockModule.__mockUpdateSuccess() // history upsert
-      mockModule.__mockUpdateSuccess() // history delete
       mockModule.__mockUpdateError({ code: '23505', message: 'duplicate key' })
 
       const result = await updateEvent('event-1', {

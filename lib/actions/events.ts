@@ -289,18 +289,6 @@ export async function updateEvent(eventId: string, data: UpdateEventData): Promi
             'Failed to update event'
           )
         }
-        // The new slug is live again (e.g. a date reverted), so it must not redirect.
-        const { error: clearError } = await getSupabaseAdmin()
-          .from('event_slug_history')
-          .delete()
-          .eq('slug', newSlug)
-        if (clearError) {
-          return handleSupabaseError(
-            clearError,
-            { operation: 'updateEvent' },
-            'Failed to update event'
-          )
-        }
         updateData.slug = newSlug
       }
     }
@@ -323,6 +311,21 @@ export async function updateEvent(eventId: string, data: UpdateEventData): Promi
         },
         'Failed to update event'
       )
+    }
+
+    if (newSlug && oldSlug) {
+      // The new slug is live again (e.g. a date reverted), so it must not redirect.
+      const { error: clearError } = await getSupabaseAdmin()
+        .from('event_slug_history')
+        .delete()
+        .eq('slug', newSlug)
+      if (clearError) {
+        return handleSupabaseError(
+          clearError,
+          { operation: 'updateEvent' },
+          'Failed to update event'
+        )
+      }
     }
 
     if (oldSlug) {

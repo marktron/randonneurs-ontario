@@ -126,14 +126,9 @@ export async function getRegisteredRidersWithTeams(eventId: string): Promise<Reg
 
 ### Event slug rotation
 
-Event slugs are `${createSlug(name)}-${distanceKm}km-${eventDate}`, built by `buildEventSlug` in `lib/events/slug-rotation.ts`. `updateEvent` regenerates the slug only when the event date changes, compared against the stored row. Name and distance edits do not rotate, and permanent events never rotate. The old slug is upserted into `event_slug_history` (`slug` primary key, `event_id` foreign key to `events` with `ON DELETE CASCADE`) before the events row is updated, and any history row equal to the new slug is deleted, so reverting a date never loops. Rescheduling onto a slug another event already uses fails with "An event with this slug already exists".
+Event slugs are `${createSlug(name)}-${distanceKm}km-${eventDate}`, built by `buildEventSlug` in `lib/events/slug-rotation.ts`. `updateEvent` regenerates the slug only when the event date changes, compared against the stored row. Name and distance edits do not rotate, and permanent events never rotate. The old slug is upserted into `event_slug_history` (`slug` primary key, `event_id` foreign key to `events` with `ON DELETE CASCADE`) before the events row is updated, and any history row equal to the new slug is deleted once the update succeeds, so reverting a date never loops. Rescheduling onto a slug another event in the same chapter already uses fails with "An event with this slug already exists".
 
 `/register/[slug]` tries the direct lookup first. On a miss it calls `getEventSlugRedirect`, which joins `events!inner(slug)` so RLS hides drafts from anon, and issues `permanentRedirect('/register/<currentSlug>')` (308). Only when both miss does it call `notFound()`. A query error is logged and rethrown, so a transient failure is never cached as a null.
-
-```typescript
-// Current slug for an event whose slug was rotated (see Event slug rotation)
-export async function getEventSlugRedirect(oldSlug: string): Promise<string | null>
-```
 
 ### lib/data/results.ts
 
@@ -523,7 +518,7 @@ Top-level cache tags used across the codebase:
 
 Dynamic tags like `event-${slug}`, `chapter-${urlSlug}`, `rider-${slug}`, and `year-${year}` provide fine-grained invalidation.
 
-Slug rotation (`updateEvent` when the date changes) busts `event-<oldSlug>`, `event-<newSlug>`, the calendar tags through the existing calendar revalidation, and `slugs`. `getEventSlugRedirect` is cached under `['event-slug-redirect', oldSlug]` with tags `events` and `event-<oldSlug>`, so the rotation's bust of `event-<oldSlug>` clears a stale redirect.
+Slug rotation (`updateEvent` when the date changes) busts `event-<oldSlug>`, `event-<newSlug>`, the calendar tags through the existing calendar revalidation, and `slugs`. `getEventSlugRedirect` is cached under `['event-slug-redirect', oldSlug, draftCacheKey()]` (the draft-preview flag is part of the key) with tags `events` and `event-<oldSlug>`, so the rotation's bust of `event-<oldSlug>` clears a stale redirect.
 
 **Cross-entity invalidation:** a mutation must bust every tag under which its
 data is cached, including caches owned by _other_ entities that embed it. For

@@ -638,7 +638,7 @@ const getEventSlugRedirectInner = cache(async (oldSlug: string): Promise<string 
 export async function getEventSlugRedirect(oldSlug: string): Promise<string | null> {
   return unstable_cache(
     async () => getEventSlugRedirectInner(oldSlug),
-    ['event-slug-redirect', oldSlug],
+    ['event-slug-redirect', oldSlug, draftCacheKey()],
     {
       tags: ['events', `event-${oldSlug}`],
     }
