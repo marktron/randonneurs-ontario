@@ -571,7 +571,12 @@ the trigger fires on `results` changes only.
 ## Slack announcements
 
 Every season-scoped award (`rider_awards`), manual or automatic, is posted
-once to a Slack channel through an Incoming Webhook. Result-scoped awards
+once to a Slack channel through a Slack Workflow Builder webhook trigger
+(`hooks.slack.com/triggers/...`). The request body is `{ token, text }`: `token`
+is a shared secret the club admin's workflow checks, and `text` is relayed to
+the channel verbatim. Link unfurling is controlled on the workflow side, not by
+the app. Two env vars configure it: `SLACK_AWARDS_WEBHOOK_URL` and
+`SLACK_AWARDS_WEBHOOK_TOKEN`. Result-scoped awards
 (`result_awards`) only post when their slug is in the
 `ANNOUNCED_RESULT_AWARD_SLUGS` allowlist in `lib/awards/announce-awards.ts` —
 today just `o-12`. Course Record is computed rather than stored, so it is
@@ -589,7 +594,8 @@ on `announced_at IS NULL`.
 `announceNewAwards()` in `lib/awards/announce-awards.ts`, which:
 
 1. Returns `configured: false` without touching the database when
-   `SLACK_AWARDS_WEBHOOK_URL` is unset (dev, preview).
+   `SLACK_AWARDS_WEBHOOK_URL` or `SLACK_AWARDS_WEBHOOK_TOKEN` is unset (dev,
+   preview).
 2. Fetches up to `ANNOUNCE_BATCH_LIMIT` (200) unannounced rows from each table.
    Anything past the cap waits for the next hour.
 3. Drops rows for hidden riders and for result awards outside

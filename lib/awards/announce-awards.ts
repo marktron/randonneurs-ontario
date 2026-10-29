@@ -317,22 +317,30 @@ export function buildAwardsMessages(items: AwardAnnouncement[]): string[] {
 }
 
 export function isSlackAwardsConfigured(): boolean {
-  return Boolean(process.env.SLACK_AWARDS_WEBHOOK_URL)
+  return Boolean(process.env.SLACK_AWARDS_WEBHOOK_URL && process.env.SLACK_AWARDS_WEBHOOK_TOKEN)
 }
 
 /**
- * POSTs a message to a Slack Incoming Webhook. Throws on non-2xx. Unfurling is
- * off so each rider link doesn't drag a profile-page preview into the channel.
+ * POSTs a message to a Slack Workflow Builder webhook trigger (hooks.slack.com/
+ * triggers/...). The trigger accepts exactly two keys: `token`, a shared secret
+ * the club admin's workflow checks, and `text`, which the workflow relays to the
+ * channel verbatim. Link unfurling is controlled on the workflow side, so no
+ * unfurl flags are sent. Throws on non-2xx. Error messages never include the URL
+ * or the token: both are secrets.
  */
-export async function postSlackMessage(webhookUrl: string, text: string): Promise<void> {
+export async function postSlackMessage(
+  webhookUrl: string,
+  token: string,
+  text: string
+): Promise<void> {
   const response = await fetch(webhookUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ text, unfurl_links: false, unfurl_media: false }),
+    body: JSON.stringify({ token, text }),
   })
   if (!response.ok) {
     const body = await response.text().catch(() => '')
-    // Never include the webhook URL: it is the secret.
+    // Never include the webhook URL or token: they are secrets.
     throw new Error(`Slack webhook responded ${response.status}: ${body}`)
   }
 }
@@ -394,7 +402,8 @@ export async function announceNewAwards(): Promise<AnnounceResult> {
   }
 
   const webhookUrl = process.env.SLACK_AWARDS_WEBHOOK_URL
-  if (!webhookUrl) return result
+  const webhookToken = process.env.SLACK_AWARDS_WEBHOOK_TOKEN
+  if (!webhookUrl || !webhookToken) return result
   result.configured = true
 
   const supabase = getSupabaseAdmin()
@@ -426,7 +435,7 @@ export async function announceNewAwards(): Promise<AnnounceResult> {
   const messages = buildAwardsMessages(items)
   for (const text of messages) {
     try {
-      await postSlackMessage(webhookUrl, text)
+      await postSlackMessage(webhookUrl, webhookToken, text)
     } catch (error) {
       // Nothing stamped yet: every row retries next hour. If an earlier
       // message in this run already went out, it will be posted again.

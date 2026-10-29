@@ -9,7 +9,7 @@ import { logError } from '@/lib/errors'
  *
  * This endpoint is called by GitHub Actions (see .github/workflows/announce-awards.yml).
  * It requires the CRON_SECRET environment variable for authentication. When
- * SLACK_AWARDS_WEBHOOK_URL is unset the sweep is a no-op that reports
+ * SLACK_AWARDS_WEBHOOK_URL or SLACK_AWARDS_WEBHOOK_TOKEN is unset the sweep is a no-op that reports
  * `configured: false`.
  */
 

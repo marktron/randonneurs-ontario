@@ -289,30 +289,36 @@ describe('postSlackMessage', () => {
     vi.unstubAllGlobals()
   })
 
-  it('POSTs JSON { text } to the webhook', async () => {
+  it('POSTs JSON { token, text } and nothing else to the webhook', async () => {
     vi.mocked(global.fetch).mockResolvedValueOnce(new Response('ok', { status: 200 }))
-    await postSlackMessage(WEBHOOK, 'hello')
+    await postSlackMessage(WEBHOOK, 'tok', 'hello')
     expect(global.fetch).toHaveBeenCalledWith(
       WEBHOOK,
       expect.objectContaining({
         method: 'POST',
         headers: expect.objectContaining({ 'Content-Type': 'application/json' }),
-        body: JSON.stringify({ text: 'hello', unfurl_links: false, unfurl_media: false }),
+        body: JSON.stringify({ token: 'tok', text: 'hello' }),
       })
     )
   })
 
   it('throws with status and body on non-2xx', async () => {
     vi.mocked(global.fetch).mockResolvedValueOnce(new Response('invalid_payload', { status: 400 }))
-    await expect(postSlackMessage(WEBHOOK, 'x')).rejects.toThrow(/400.*invalid_payload/)
+    await expect(postSlackMessage(WEBHOOK, 'tok', 'x')).rejects.toThrow(/400.*invalid_payload/)
   })
 })
 
 describe('isSlackAwardsConfigured', () => {
   afterEach(() => vi.unstubAllEnvs())
 
-  it('reflects SLACK_AWARDS_WEBHOOK_URL', () => {
+  it('requires both SLACK_AWARDS_WEBHOOK_URL and SLACK_AWARDS_WEBHOOK_TOKEN', () => {
     vi.stubEnv('SLACK_AWARDS_WEBHOOK_URL', '')
+    vi.stubEnv('SLACK_AWARDS_WEBHOOK_TOKEN', '')
+    expect(isSlackAwardsConfigured()).toBe(false)
+    vi.stubEnv('SLACK_AWARDS_WEBHOOK_URL', WEBHOOK)
+    expect(isSlackAwardsConfigured()).toBe(false)
+    vi.stubEnv('SLACK_AWARDS_WEBHOOK_URL', '')
+    vi.stubEnv('SLACK_AWARDS_WEBHOOK_TOKEN', 'tok')
     expect(isSlackAwardsConfigured()).toBe(false)
     vi.stubEnv('SLACK_AWARDS_WEBHOOK_URL', WEBHOOK)
     expect(isSlackAwardsConfigured()).toBe(true)
@@ -326,6 +332,7 @@ describe('announceNewAwards', () => {
     db.resultRows = []
     db.calls = []
     vi.stubEnv('SLACK_AWARDS_WEBHOOK_URL', WEBHOOK)
+    vi.stubEnv('SLACK_AWARDS_WEBHOOK_TOKEN', 'tok')
     vi.stubGlobal(
       'fetch',
       vi.fn(async () => new Response('ok', { status: 200 }))
@@ -342,6 +349,14 @@ describe('announceNewAwards', () => {
       .mocked(global.fetch)
       .mock.calls.map((c) => JSON.parse((c[1] as RequestInit).body as string).text as string)
       .join('\n')
+
+  it('short-circuits when the URL is set but the token is missing', async () => {
+    vi.stubEnv('SLACK_AWARDS_WEBHOOK_TOKEN', '')
+    const result = await announceNewAwards()
+    expect(result.configured).toBe(false)
+    expect(mockFrom).not.toHaveBeenCalled()
+    expect(global.fetch).not.toHaveBeenCalled()
+  })
 
   it('short-circuits without touching the DB when not configured', async () => {
     vi.stubEnv('SLACK_AWARDS_WEBHOOK_URL', '')

@@ -251,6 +251,7 @@ describe('award announcements outbox (real DB)', () => {
 
   it('posts only the visible rider, stamps every seeded row, and does not repeat', async () => {
     vi.stubEnv('SLACK_AWARDS_WEBHOOK_URL', WEBHOOK)
+    vi.stubEnv('SLACK_AWARDS_WEBHOOK_TOKEN', 'tok')
     const realFetch = globalThis.fetch
     const posted: string[] = []
     // Pass everything but the webhook through: supabase-js uses fetch too.
