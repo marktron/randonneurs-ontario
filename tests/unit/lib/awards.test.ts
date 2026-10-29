@@ -21,29 +21,53 @@ const mockAwardRecipientsWithDistance = [
   { rider_slug: 'jane-smith', rider_name: 'Jane Smith', award_year: 2023, season_distance: 5200 },
 ]
 
+const mockHonourRecipients = [
+  { rider_slug: 'john-doe', rider_name: 'John Doe', award_year: 2024 },
+  { rider_slug: null, rider_name: 'Granite Anvil Organizing Committee', award_year: 2017 },
+]
+
+let rpcError: { message: string } | null = null
+
 const rpcResponses: Record<string, unknown[]> = {
   get_award_recipients: mockAwardRecipients,
   get_award_recipients_with_distance: mockAwardRecipientsWithDistance,
 }
+
+const honourSlugs = [
+  'mike-barry-jock-wadley',
+  'beryl-burton',
+  'coronation-cup',
+  'jim-griffin-rookie-of-the-year',
+  'organiser-of-the-year',
+  'outstanding-performance',
+  'dan-herbert',
+  'half-wheel',
+  'special-recognition',
+]
 
 // Mock supabase module
 vi.mock('@/lib/supabase', () => ({
   getSupabase: vi.fn(() => ({
     rpc: vi.fn((functionName: string, params: unknown) => {
       rpcCalls.push({ functionName, params })
-      const data = rpcResponses[functionName] ?? []
+      if (rpcError) return Promise.resolve({ data: null, error: rpcError })
+      const slug = (params as { p_award_slug?: string })?.p_award_slug ?? ''
+      const data = honourSlugs.includes(slug)
+        ? mockHonourRecipients
+        : (rpcResponses[functionName] ?? [])
       return Promise.resolve({ data, error: null })
     }),
   })),
 }))
 
 // Import after mocks
-import { getOntarioAwards, getAcpAwards } from '@/lib/data/awards'
+import { getOntarioAwards, getAcpAwards, getClubHonours } from '@/lib/data/awards'
 
 describe('Awards Data Module', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     rpcCalls.length = 0
+    rpcError = null
   })
 
   describe('getOntarioAwards', () => {
@@ -124,6 +148,60 @@ describe('Awards Data Module', () => {
       const slugs = calledFunctions.map((c) => (c.params as { p_award_slug: string }).p_award_slug)
       expect(slugs).toContain('r-10000')
       expect(slugs).toContain('r-5000')
+    })
+  })
+
+  describe('getClubHonours', () => {
+    it('returns all nine club honours', async () => {
+      const result = await getClubHonours()
+
+      expect(Object.keys(result)).toEqual([
+        'mikeBarryJockWadley',
+        'berylBurton',
+        'coronationCup',
+        'jimGriffinRookieOfTheYear',
+        'organiserOfTheYear',
+        'outstandingPerformance',
+        'danHerbert',
+        'halfWheel',
+        'specialRecognition',
+      ])
+    })
+
+    it('calls RPC once per club honour slug', async () => {
+      await getClubHonours()
+
+      const calls = rpcCalls.filter((c) => c.functionName === 'get_award_recipients')
+      expect(calls).toHaveLength(9)
+      const slugs = calls.map((c) => (c.params as { p_award_slug: string }).p_award_slug)
+      expect(slugs.sort()).toEqual([...honourSlugs].sort())
+    })
+
+    it('transforms recipients, keeping a null rider slug for name-only recipients', async () => {
+      const result = await getClubHonours()
+
+      expect(result.organiserOfTheYear[0]).toEqual({
+        riderSlug: 'john-doe',
+        riderName: 'John Doe',
+        awardYear: 2024,
+      })
+      expect(result.organiserOfTheYear[1]).toEqual({
+        riderSlug: null,
+        riderName: 'Granite Anvil Organizing Committee',
+        awardYear: 2017,
+      })
+    })
+
+    it('returns empty arrays when the RPC errors', async () => {
+      rpcError = { message: 'boom' }
+      vi.spyOn(console, 'error').mockImplementation(() => {})
+
+      const result = await getClubHonours()
+
+      expect(Object.keys(result)).toHaveLength(9)
+      for (const recipients of Object.values(result)) {
+        expect(recipients).toEqual([])
+      }
     })
   })
 })

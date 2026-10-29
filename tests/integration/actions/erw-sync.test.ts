@@ -70,6 +70,7 @@ vi.mock('@/lib/erw/client', () => ({
 }))
 
 import { syncEventToErw } from '@/lib/actions/erw-sync'
+import { syncNewEventToErw } from '@/lib/events/erw-sync'
 import { createErwEvent, updateErwEvent } from '@/lib/erw/client'
 
 const mockModule = await vi.importMock<{
@@ -119,14 +120,56 @@ describe('syncEventToErw', () => {
   })
 
   it('syncs a published event', async () => {
-    mockModule.__mockRowFound(eventRow())
+    mockModule.__mockRowFound(eventRow({ route_id: 'route-1' }))
+    mockModule.__mockRowFound({ rwgps_id: '12345678' }) // route lookup
 
     const result = await syncEventToErw('event-1')
 
     expect(result.success).toBe(true)
     expect(createErwEvent).toHaveBeenCalledWith(
-      expect.objectContaining({ slug: 'next-season-200-200km' })
+      expect.objectContaining({ slug: 'next-season-200-200km', rwgpsId: '12345678' })
     )
+  })
+
+  // A routeless ERW event can never be published, so it sits as a draft and
+  // permanently burns one of the account's 10 draft slots.
+  it('refuses to create an ERW event for an unlinked event with no route', async () => {
+    mockModule.__mockRowFound(eventRow({ route_id: null }))
+
+    const result = await syncEventToErw('event-1')
+
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(result.error).toBe('Add a Ride with GPS route before syncing to Epic Ride Weather')
+    }
+    expect(createErwEvent).not.toHaveBeenCalled()
+    expect(mockModule.__calls.filter((c) => c.method === 'update')).toHaveLength(0)
+  })
+
+  it('refuses to create an ERW event when the route has no rwgps_id', async () => {
+    mockModule.__mockRowFound(eventRow({ route_id: 'route-1' }))
+    mockModule.__mockRowFound({ rwgps_id: null }) // route lookup
+
+    const result = await syncEventToErw('event-1')
+
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(result.error).toBe('Add a Ride with GPS route before syncing to Epic Ride Weather')
+    }
+    expect(createErwEvent).not.toHaveBeenCalled()
+  })
+
+  it('still updates an already-linked event that has no route', async () => {
+    mockModule.__mockRowFound(eventRow({ route_id: null, erw_event_id: 'erw-existing' }))
+
+    const result = await syncEventToErw('event-1')
+
+    expect(result.success).toBe(true)
+    expect(updateErwEvent).toHaveBeenCalledWith(
+      'erw-existing',
+      expect.objectContaining({ rwgpsId: null })
+    )
+    expect(createErwEvent).not.toHaveBeenCalled()
   })
 
   it('selects the status column so the draft check can run', async () => {
@@ -136,5 +179,69 @@ describe('syncEventToErw', () => {
 
     const select = mockModule.__calls.find((c) => c.table === 'events' && c.method === 'select')
     expect(String(select?.args?.[0])).toContain('status')
+  })
+})
+
+describe('syncNewEventToErw', () => {
+  beforeEach(() => {
+    mockModule.__reset()
+    vi.clearAllMocks()
+  })
+
+  function syncable(overrides: Record<string, unknown> = {}) {
+    return {
+      id: 'event-1',
+      name: 'Next Season 200',
+      description: null,
+      distance_km: 200,
+      event_date: `${NEXT_SEASON}-06-15`,
+      start_time: '07:00',
+      slug: 'next-season-200-200km',
+      route_id: 'route-1',
+      event_type: 'brevet',
+      ...overrides,
+    }
+  }
+
+  it('skips an event with no route without calling ERW', async () => {
+    const outcome = await syncNewEventToErw(syncable({ route_id: null }))
+
+    expect(outcome).toBe('skipped')
+    expect(createErwEvent).not.toHaveBeenCalled()
+    expect(mockModule.__calls.filter((c) => c.method === 'update')).toHaveLength(0)
+  })
+
+  it('skips an event whose route has no rwgps_id (e.g. a collection route)', async () => {
+    mockModule.__mockRowFound({ rwgps_id: null }) // route lookup
+
+    const outcome = await syncNewEventToErw(syncable())
+
+    expect(outcome).toBe('skipped')
+    expect(createErwEvent).not.toHaveBeenCalled()
+    expect(mockModule.__calls.filter((c) => c.method === 'update')).toHaveLength(0)
+  })
+
+  it('creates the ERW event and stores the ids for a routed event', async () => {
+    mockModule.__mockRowFound({ rwgps_id: '12345678' }) // route lookup
+
+    const outcome = await syncNewEventToErw(syncable())
+
+    expect(outcome).toBe('synced')
+    expect(createErwEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ slug: 'next-season-200-200km', rwgpsId: '12345678' })
+    )
+    const update = mockModule.__calls.find((c) => c.table === 'events' && c.method === 'update')
+    expect(update?.args?.[0]).toEqual({
+      erw_event_id: 'erw-test-123',
+      erw_canonical_url: 'https://events.epicrideweather.com/events/erw-test-123',
+    })
+  })
+
+  it('skips a permanent without looking up the route', async () => {
+    const outcome = await syncNewEventToErw(syncable({ event_type: 'permanent' }))
+
+    expect(outcome).toBe('skipped')
+    expect(createErwEvent).not.toHaveBeenCalled()
+    expect(mockModule.__calls).toHaveLength(0)
   })
 })

@@ -43,6 +43,7 @@ import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { getCurrentSeason, getCurrentSeasonLabel } from '@/lib/season'
+import { acpSeasonOf, acpSeasonOfParts } from '@/lib/acp-season'
 import type { ChapterOption } from '@/types/ui'
 import type { ActiveRoute } from '@/lib/data/routes'
 import { ImageUpload } from '@/components/admin/image-upload'
@@ -83,15 +84,14 @@ const EVENT_TYPES: { value: EventType; label: string }[] = [
 
 type Visibility = 'draft' | 'published'
 
-/** Events dated in a season after the current one start hidden. */
-function defaultVisibilityFor(year: number | undefined): Visibility {
-  if (year === undefined) return 'published'
-  return year > getCurrentSeason() ? 'draft' : 'published'
-}
-
-/** Year from an ISO `YYYY-MM-DD` date string, without going through `Date`. */
-function yearFromIsoDate(isoDate: string): number {
-  return parseInt(isoDate.slice(0, 4), 10)
+/**
+ * Events dated in an ACP season after the current one start hidden. The ACP
+ * season runs Nov 1 to Oct 31, so November and December dates count as next
+ * season and default to Draft.
+ */
+function defaultVisibilityFor(acpSeason: number | undefined): Visibility {
+  if (acpSeason === undefined) return 'published'
+  return acpSeason > getCurrentSeason() ? 'draft' : 'published'
 }
 
 export function EventForm({
@@ -123,7 +123,7 @@ export function EventForm({
   )
   const [datePickerOpen, setDatePickerOpen] = useState(false)
   const [visibility, setVisibility] = useState<Visibility>(() =>
-    defaultVisibilityFor(event?.eventDate ? yearFromIsoDate(event.eventDate) : undefined)
+    defaultVisibilityFor(event?.eventDate ? acpSeasonOf(event.eventDate) : undefined)
   )
   const [visibilityTouched, setVisibilityTouched] = useState(false)
   const [startTime, setStartTime] = useState(event?.startTime || '')
@@ -509,7 +509,13 @@ export function EventForm({
                         setEventDate(date)
                         setDatePickerOpen(false)
                         if (!visibilityTouched)
-                          setVisibility(defaultVisibilityFor(date?.getFullYear()))
+                          setVisibility(
+                            defaultVisibilityFor(
+                              date
+                                ? acpSeasonOfParts(date.getFullYear(), date.getMonth() + 1)
+                                : undefined
+                            )
+                          )
                       }}
                     />
                   </PopoverContent>

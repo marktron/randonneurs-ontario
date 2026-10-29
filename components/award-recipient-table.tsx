@@ -58,7 +58,9 @@ export function AwardRecipientTable({ title, recipients }: AwardRecipientTablePr
           </TableHeader>
           <TableBody>
             {displayed.map((recipient) => (
-              <TableRow key={`${recipient.riderSlug}-${recipient.awardYear}`}>
+              <TableRow
+                key={`${recipient.riderSlug ?? recipient.riderName}-${recipient.awardYear}`}
+              >
                 <TableCell>
                   {recipient.riderSlug ? (
                     <Link href={`/riders/${recipient.riderSlug}`} className="hover:underline">
@@ -79,7 +81,7 @@ export function AwardRecipientTable({ title, recipients }: AwardRecipientTablePr
       <div className="md:hidden">
         {displayed.map((recipient) => (
           <div
-            key={`${recipient.riderSlug}-${recipient.awardYear}`}
+            key={`${recipient.riderSlug ?? recipient.riderName}-${recipient.awardYear}`}
             className="flex items-start gap-4 py-4 border-b border-border last:border-b-0"
           >
             <div className="flex-1 min-w-0">

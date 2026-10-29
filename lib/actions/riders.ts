@@ -277,6 +277,23 @@ export async function mergeRiders(data: MergeRidersData): Promise<MergeRidersRes
   const ridersToDelete = sourceRiderIds.filter((id) => id !== targetRiderId)
 
   try {
+    // Rider numbers are permanent: the merged rider keeps the lowest number held
+    // by any of the merged riders (including the target).
+    const { data: numberedRiders, error: numbersError } = await getSupabaseAdmin()
+      .from('riders')
+      .select('id, rider_number')
+      .in('id', sourceRiderIds)
+
+    if (numbersError) {
+      console.error('Error loading rider numbers for merge:', numbersError)
+      return { success: false, error: 'Failed to load rider numbers' }
+    }
+
+    const heldNumbers = (numberedRiders ?? [])
+      .map((r) => r.rider_number)
+      .filter((n): n is number => typeof n === 'number')
+    const lowestRiderNumber = heldNumbers.length > 0 ? Math.min(...heldNumbers) : null
+
     // Step 1: Move registrations to target rider, deleting duplicates first
     const { data: targetRegs } = await getSupabaseAdmin()
       .from('registrations')
@@ -421,6 +438,11 @@ export async function mergeRiders(data: MergeRidersData): Promise<MergeRidersRes
       last_name: riderData.lastName.trim(),
       email: riderData.email?.trim().toLowerCase() || null,
       gender: parsedGender,
+    }
+
+    // Safe now: the other riders (and their UNIQUE numbers) are already deleted.
+    if (lowestRiderNumber !== null) {
+      riderUpdateData.rider_number = lowestRiderNumber
     }
 
     const { error: updateRiderError } = await getSupabaseAdmin()

@@ -111,6 +111,9 @@ export async function getPermanentEvents(): Promise<Event[]>
 // Get event details by slug
 export async function getEventBySlug(slug: string): Promise<EventDetails | null>
 
+// Current slug for an event whose slug was rotated (see Event slug rotation)
+export async function getEventSlugRedirect(oldSlug: string): Promise<string | null>
+
 // Get registered riders for an event
 export async function getRegisteredRiders(eventId: string): Promise<RegisteredRider[]>
 
@@ -120,6 +123,12 @@ export async function getFlecheTeams(eventId: string): Promise<FlecheTeam[]>
 // Get registered riders with team info for fleche events
 export async function getRegisteredRidersWithTeams(eventId: string): Promise<RegisteredRider[]>
 ```
+
+### Event slug rotation
+
+Event slugs are `${createSlug(name)}-${distanceKm}km-${eventDate}`, built by `buildEventSlug` in `lib/events/slug-rotation.ts`. `updateEvent` regenerates the slug only when the event date changes, compared against the stored row. Name and distance edits do not rotate, and permanent events never rotate. The old slug is upserted into `event_slug_history` (`slug` primary key, `event_id` foreign key to `events` with `ON DELETE CASCADE`) before the events row is updated, and any history row equal to the new slug is deleted once the update succeeds, so reverting a date never loops. Rescheduling onto a slug another event in the same chapter already uses fails with "An event with this slug already exists".
+
+`/register/[slug]` tries the direct lookup first. On a miss it calls `getEventSlugRedirect`, which joins `events!inner(slug)` so RLS hides drafts from anon, and issues `permanentRedirect('/register/<currentSlug>')` (308). Only when both miss does it call `notFound()`. A query error is logged and rethrown, so a transient failure is never cached as a null.
 
 ### lib/data/results.ts
 
@@ -224,10 +233,48 @@ All write operations live in `lib/actions/`. These are [Server Actions](https://
 // Register for a scheduled event
 export async function registerForEvent(data: RegistrationData): Promise<RegistrationResult>
 
-// Register for a permanent ride
+// Register for a permanent ride. `startOffsetKm` (with `startLocation` as the
+// place name) is the rider's start in km along the route as posted; the server
+// derives the coordinates from the cached track and rejects it on non-loop routes.
+// Joining a ride someone is already on compares only start time and offset.
+// A `needsRiderMatch` result carries `pendingData.rideStart`, which the form
+// echoes to `completeRegistrationWithRider` so it can refuse a ride whose
+// start changed in the meantime.
 export async function registerForPermanent(
   data: PermanentRegistrationData
 ): Promise<RegistrationResult>
+```
+
+### lib/actions/permanent-start.ts
+
+Read-only lookups for the permanent registration form (Server Actions, not rate limited).
+
+```typescript
+// The route's track and controls for the start picker, or { available: false }.
+// Each control is only { name, km, lat, lng }; a route without controls has [].
+export async function getPermanentRouteTrack(routeId: string): Promise<PermanentRouteTrackResult>
+
+// The ride already registered for a route, date and direction, or null. Also null
+// for a ride nobody is on that a new registrant could take over.
+export async function getExistingPermanentRide(
+  routeId: string,
+  eventDate: string,
+  direction: 'as_posted' | 'reversed'
+): Promise<ExistingPermanentRide | null>
+```
+
+### lib/data/route-track.ts
+
+```typescript
+// Cached RWGPS track and controls for a route (24 hours, tag `routes`, cache key
+// `route-map-v2`). Both come from one v1 response (`fetchRwgpsRouteMap` in
+// lib/rwgps.ts); controls use the same parser as the event control import, and
+// ones without coordinates are dropped. A route with no controls still loads,
+// with `controls: []`. Null when the track cannot be loaded; failures are not cached.
+export async function loadRouteMap(rwgpsId: string): Promise<RouteMap | null>
+
+// The track alone, from loadRouteMap (used by registerForPermanent).
+export async function loadRouteTrack(rwgpsId: string): Promise<RouteTrack | null>
 ```
 
 ### lib/actions/events.ts (Admin)
@@ -237,11 +284,13 @@ export async function createEvent(data: EventFormData)
 export async function updateEvent(id: string, data: EventFormData)
 export async function deleteEvent(id: string)
 
-// Super-admin only: flips every draft event in a season to scheduled, syncs
-// Epic Ride Weather via lib/events/erw-sync.ts for each, audit-logs, and
-// busts `chapter-<slug>`, `events`, `event-<slug>` per event, `permanents`
-// (if any), `slugs`, and the admin event paths.
-export async function publishSeasonDrafts(season: number)
+// Any admin (chapter admins only for their own chapter): flips one chapter's
+// draft events dated in the ACP season (Nov 1 of acpSeason - 1 to Oct 31 of
+// acpSeason, see lib/acp-season.ts) to scheduled, syncs Epic Ride Weather
+// via lib/events/erw-sync.ts for each, audit-logs, and busts
+// `chapter-<slug>`, `events`, `event-<slug>` per event, `permanents` (if
+// any), `slugs`, and the admin event paths.
+export async function publishSeasonDrafts(acpSeason: number, chapterId: string)
 ```
 
 ### lib/actions/routes.ts (Admin)
@@ -468,6 +517,8 @@ Top-level cache tags used across the codebase:
 | `slugs`         | Event slug index          |
 
 Dynamic tags like `event-${slug}`, `chapter-${urlSlug}`, `rider-${slug}`, and `year-${year}` provide fine-grained invalidation.
+
+Slug rotation (`updateEvent` when the date changes) busts `event-<oldSlug>`, `event-<newSlug>`, the calendar tags through the existing calendar revalidation, and `slugs`. `getEventSlugRedirect` is cached under `['event-slug-redirect', oldSlug, draftCacheKey()]` (the draft-preview flag is part of the key) with tags `events` and `event-<oldSlug>`, so the rotation's bust of `event-<oldSlug>` clears a stale redirect.
 
 **Cross-entity invalidation:** a mutation must bust every tag under which its
 data is cached, including caches owned by _other_ entities that embed it. For

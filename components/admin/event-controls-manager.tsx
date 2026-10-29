@@ -35,7 +35,7 @@ import { saveEventOrganizer, type OrganizerContact } from '@/lib/actions/event-o
 import { DEFAULT_CONTROL_RADIUS_M } from '@/lib/brevet-card'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
-import { Download, Loader2, Plus, Save, Trash2 } from 'lucide-react'
+import { Download, Info, Loader2, Plus, Save, Trash2 } from 'lucide-react'
 
 interface ControlRow {
   /** DB id when the row already exists; undefined for new rows. */
@@ -58,6 +58,8 @@ interface EventControlsManagerProps {
   hasRwgpsRoute: boolean
   hasRwgpsCollection: boolean
   initialOrganizer: OrganizerContact
+  /** One-line description of direction and alternate start, shown above the controls. */
+  rideStartNote?: string | null
 }
 
 interface RowGroup {
@@ -113,11 +115,13 @@ export function EventControlsManager({
   hasRwgpsRoute,
   hasRwgpsCollection,
   initialOrganizer,
+  rideStartNote,
 }: EventControlsManagerProps) {
   const router = useRouter()
   const [rows, setRows] = useState<ControlRow[]>(() => initialControls.map(toRow))
   const [isPending, startTransition] = useTransition()
   const [isImporting, setIsImporting] = useState(false)
+  const [importWarning, setImportWarning] = useState<string | null>(null)
   const [confirmSaveOpen, setConfirmSaveOpen] = useState(false)
   const [organizer, setOrganizer] = useState<OrganizerContact>(initialOrganizer)
   const [isSavingOrganizer, setIsSavingOrganizer] = useState(false)
@@ -182,6 +186,7 @@ export function EventControlsManager({
         toast.error(result.error || 'Failed to import controls')
         return
       }
+      setImportWarning(result.warning ?? null)
       // Imported rows replace the current unsaved list; existing DB rows are
       // only deleted if the admin then hits Save (with a warning when
       // check-ins would be lost).
@@ -430,6 +435,21 @@ export function EventControlsManager({
           </>
         }
       >
+        {rideStartNote && (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
+            <Info className="h-4 w-4 shrink-0" />
+            <span>{rideStartNote}</span>
+          </div>
+        )}
+        {importWarning && (
+          <div
+            role="alert"
+            className="flex items-center gap-2 text-sm text-amber-700 dark:text-amber-400 mb-2"
+          >
+            <Info className="h-4 w-4 shrink-0" />
+            <span>{importWarning}</span>
+          </div>
+        )}
         {rows.length === 0 ? (
           <p className="text-sm text-muted-foreground border rounded-md p-6 text-center">
             No controls yet. Import them from the route&apos;s RideWithGPS data or add them

@@ -23,10 +23,10 @@ export default async function AdminAwardsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold">Assign Award</h1>
+        <h1 className="text-3xl font-bold">Awards</h1>
         <p className="text-muted-foreground">
-          Attach a single award to a single rider. Pick the award first — the form adapts based on
-          whether it is result-scoped or season-scoped.
+          Assign an award to a member. Contact the site admin if you need to remove an award from a
+          member.
         </p>
       </div>
 

@@ -56,16 +56,16 @@ Click "New Event" in the top right of the Events page. The form asks for:
 7. **Start time and location**: optional but helpful for riders.
 8. **Description**: optional, supports Markdown formatting.
 9. **Event image**: optional photo to display with the event.
-10. **Visibility**: Draft or Published. Events dated in a season after the current one default to Draft so next season can be planned without anything appearing publicly. Current-season events default to Published.
+10. **Visibility**: Draft or Published. Events dated in an ACP season after the current one default to Draft so next season can be planned without anything appearing publicly. The ACP season starts Nov 1, so November and December dates count as next season. Current-season events default to Published.
 
 One thing to know: you can't create new brevets for the current season. This is by design. The brevet schedule is set at the start of the year and approved by ACP. You can still edit existing brevets, and you can create populaires, permanents, and fleches for any season. If you need to add a new brevet during the season, contact Mark Allen.
 
 ### Planning next season with drafts
 
-Create next season's events as drafts (the default when the date is in a future season). Drafts are only visible in the admin site. To make them live:
+Create next season's events as drafts (the default when the date is Nov 1 or later, or in a future year). Drafts are only visible in the admin site. To make them live:
 
-- **One at a time**: open the event and change its status from Draft to Scheduled. This also creates the Epic Ride Weather page.
-- **Whole season** (super admins only): on the Events page, select the season and click **Publish <year> season (N drafts)**. A confirmation lists the draft count per chapter. Every draft in that season becomes Scheduled.
+- **One at a time**: open the event and change its status from Draft to Scheduled. This also creates the Epic Ride Weather page, but only if the event has a Ride with GPS route. Epic Ride Weather holds at most 10 unpublished events per account and can't publish one without a route, so routeless events are left off until you add the route and save.
+- **Whole season** (one chapter at a time): on the Events page, pick a chapter in the chapter filter (the button doesn't appear on All Chapters) and click **Publish <year> season (N drafts)**. The batch follows the ACP season, Nov 1 to Oct 31, labelled by the year it ends in: the 2027 season runs Nov 1, 2026 to Oct 31, 2027, so a chapter's November and December rides go out with the following season. If the chapter has drafts in more than one ACP season you'll see one button per season. The confirmation lists every event it will publish, and each of those drafts becomes Scheduled. Any admin can do this; chapter admins can only publish their own chapter. The season filter doesn't affect the button.
 
 Scheduled is a draft's only status move — the dropdown offers nothing else, and Cancelled and Completed are refused. To discard a draft, delete it.
 
@@ -249,13 +249,15 @@ Rider data (name, email, cell phone, emergency contact) is saved to localStorage
 Permanents work differently from scheduled events. Instead of registering for a specific event, riders go to [/register/permanent](/register/permanent) and configure their own ride:
 
 1. **Pick a route** from the list of active permanent routes (grouped by chapter, searchable).
-2. **Choose a date** (must be at least two weeks in the future per RO rules, but we can change this if we want).
-3. **Set a start time, location and direction** - Alternate start location and ride direction (as posted or reversed) are optional, and default to the route start point and direction.
+2. **Choose a date.** Registration closes at 8 p.m. Eastern the day before the ride.
+3. **Set a start time, direction and, on loops, a start point.** Direction (as posted or reversed) defaults to as posted. On loop routes a rider can also start somewhere else on the route by tapping a map or typing a distance, and naming the place. Alternate starts are for loops only.
 4. Fill in the same rider info as a brevet registration.
 
-Behind the scenes, the system creates an event record for that route and date combination. If another rider has already registered for the same route on the same day, they share the same event record. Membership verification and confirmation emails work the same way as brevets.
+Behind the scenes, the system creates an event record for that route, date and direction. If another rider has already registered for the same route, date and direction, they share the same event record, so the first rider to register sets the start time and start point. Later riders see that start and join it; to start somewhere else or at another time they have to pick another date. If everyone on a ride has cancelled, or nobody has registered for it within 15 minutes of its start being set, the next rider can set a new start. Membership verification and confirmation emails work the same way as brevets, and the email names the start point.
 
-**A note about permanent control cards:** Currently, you still have to generate and email the control card to permanent riders. Making that more self-service is an upcoming future enhancement. The tool _does not_ recalculate distances based on a custom starting location; it will produce a standard control card with distances calculated from the original starting point. If the route is being ridden in reverse direction from the starting point, the tool _will_ reverse the listed control points and update the control point distances.
+**A note about permanent control cards:** Currently, you still have to generate and email the control card to permanent riders. Making that more self-service is an upcoming future enhancement. When you import controls for a permanent, the tool recalculates the control points and distances for the way the rider is riding it: reversed, from an alternate start, or both. On the control pages, a line above the control list says what the rider chose, for example "Starts at Tim Hortons, Uxbridge, 100.0 km into the posted route." The rider's start becomes the first and last control.
+
+Two warnings can appear above the control list after an import. One says the route has changed since the rider chose their start, so check the start control's distance and location. The other says the start is past the end of the current route and was not applied, so set the start control by hand. If a rider's pin turns out to be wrong, edit the control rows by hand and save. If a ride had controls saved for a start and a new rider changes the start after everyone cancelled, the saved controls are removed and you import them again.
 
 ## Common workflows
 

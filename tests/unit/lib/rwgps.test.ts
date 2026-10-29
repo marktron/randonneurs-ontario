@@ -7,7 +7,11 @@ import {
   extractRwgpsRefs,
   fetchRwgpsCollection,
   fetchRwgpsControls,
+  fetchRwgpsControlsWithCoords,
   fetchRwgpsRoute,
+  fetchRwgpsRouteElevationGain,
+  fetchRwgpsRouteForImport,
+  fetchRwgpsRouteMap,
   parseRwgpsRouteRef,
 } from '@/lib/rwgps'
 
@@ -34,6 +38,27 @@ describe('cleanControlName', () => {
   it('strips "CTRL-" and "CONTROL " prefixes (case-insensitive)', () => {
     expect(cleanControlName('ctrl-Foo')).toBe('Foo')
     expect(cleanControlName('Control Bar')).toBe('Bar')
+  })
+
+  it('strips colon-separated prefixes (case-insensitive)', () => {
+    expect(cleanControlName('CTL: Paris')).toBe('Paris')
+    expect(cleanControlName('CTL:Paris')).toBe('Paris')
+    expect(cleanControlName('CONTROL: Paris')).toBe('Paris')
+    expect(cleanControlName('Ctrl: Paris')).toBe('Paris')
+    expect(cleanControlName('ctl : Paris')).toBe('Paris')
+  })
+
+  it('keeps the existing spaced and dashed forms', () => {
+    expect(cleanControlName('CTL-Foo')).toBe('Foo')
+    expect(cleanControlName('CTRL - Foo')).toBe('Foo')
+    expect(cleanControlName('CONTROL-Foo')).toBe('Foo')
+    expect(cleanControlName('CTL -Foo')).toBe('Foo')
+  })
+
+  it('does not strip a word that merely begins with the letters', () => {
+    expect(cleanControlName('CTLA Store')).toBe('CTLA Store')
+    expect(cleanControlName('Controller Cafe')).toBe('Controller Cafe')
+    expect(cleanControlName('CTL')).toBe('CTL')
   })
 
   it('strips a single leading dash on a non-prefixed name', () => {
@@ -983,5 +1008,171 @@ describe('fetchRwgpsCollection', () => {
 describe('buildRwgpsCollectionUrl', () => {
   it('builds the collection page URL', () => {
     expect(buildRwgpsCollectionUrl('8387874')).toBe('https://ridewithgps.com/collections/8387874')
+  })
+})
+
+function stubRouteResponse(body: unknown) {
+  vi.mocked(global.fetch).mockResolvedValueOnce({ ok: true, json: async () => body } as Response)
+}
+
+describe('route import and track fetchers', () => {
+  beforeEach(() => {
+    vi.stubEnv('RWGPS_API_KEY', 'test-key')
+    vi.stubEnv('RWGPS_AUTH_TOKEN', 'test-token')
+    vi.stubGlobal('fetch', vi.fn())
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.unstubAllEnvs()
+  })
+
+  describe('fetchRwgpsRouteForImport', () => {
+    const route = {
+      name: 'Loop 200',
+      distance: 204540,
+      course_points: [{ n: 'Control: Cafe', d: 97700, t: 'Control', x: -79.2, y: 44.2 }],
+      track_points: [
+        { x: -79, y: 44, d: 0 },
+        { x: -79.1, y: 44.1, d: 50000 },
+        { x: -79, y: 44, d: 204540 },
+        { x: -79, d: 1 }, // unusable: no latitude
+      ],
+    }
+
+    it('returns controls, the unrounded length and usable track points', async () => {
+      stubRouteResponse({ route })
+      const result = await fetchRwgpsRouteForImport('123')
+      expect(result.controls.map((c) => c.distance)).toEqual(['97.7'])
+      expect(result.totalKm).toBeCloseTo(204.54, 5)
+      expect(result.points).toEqual([
+        { lat: 44, lng: -79, km: 0 },
+        { lat: 44.1, lng: -79.1, km: 50 },
+        { lat: 44, lng: -79, km: 204.54 },
+      ])
+    })
+
+    it('reports a zero length when RWGPS omits the distance', async () => {
+      stubRouteResponse({ route: { ...route, distance: undefined } })
+      expect((await fetchRwgpsRouteForImport('123')).totalKm).toBe(0)
+    })
+
+    it('throws the no-controls message', async () => {
+      stubRouteResponse({ route: { ...route, course_points: [] } })
+      await expect(fetchRwgpsRouteForImport('123')).rejects.toThrow('No control points found')
+    })
+  })
+
+  describe('fetchRwgpsRouteElevationGain', () => {
+    beforeEach(() => {
+      vi.spyOn(console, 'warn').mockImplementation(() => {})
+    })
+
+    it('returns the numeric elevation gain', async () => {
+      stubRouteResponse({ route: { elevation_gain: 1964.5 } })
+      expect(await fetchRwgpsRouteElevationGain('123')).toBe(1964.5)
+    })
+
+    it('returns null and warns on an HTTP error', async () => {
+      vi.mocked(global.fetch).mockResolvedValueOnce({
+        ok: false,
+        status: 404,
+        statusText: 'Not Found',
+      } as Response)
+      expect(await fetchRwgpsRouteElevationGain('123')).toBeNull()
+      expect(console.warn).toHaveBeenCalled()
+    })
+
+    it('returns null when the gain is missing or non-numeric', async () => {
+      stubRouteResponse({ route: {} })
+      expect(await fetchRwgpsRouteElevationGain('123')).toBeNull()
+      stubRouteResponse({ route: { elevation_gain: '1964' } })
+      expect(await fetchRwgpsRouteElevationGain('123')).toBeNull()
+      expect(console.warn).toHaveBeenCalledTimes(2)
+    })
+
+    it('returns null and warns when credentials are missing', async () => {
+      vi.stubEnv('RWGPS_API_KEY', '')
+      expect(await fetchRwgpsRouteElevationGain('123')).toBeNull()
+      expect(console.warn).toHaveBeenCalled()
+      expect(global.fetch).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('fetchRwgpsRouteMap', () => {
+    it('returns the track for a route with no controls, and no controls', async () => {
+      stubRouteResponse({
+        route: {
+          distance: 1000,
+          track_points: [
+            { x: -79, y: 44, d: 0 },
+            { x: -79, y: 44.009, d: 1000 },
+          ],
+        },
+      })
+      const result = await fetchRwgpsRouteMap('123')
+      expect(result.totalKm).toBe(1)
+      expect(result.points).toHaveLength(2)
+      expect(result.controls).toEqual([])
+    })
+
+    it('returns the controls the import parser finds, as name, km and coordinates', async () => {
+      stubRouteResponse({
+        route: {
+          distance: 204540,
+          course_points: [
+            { n: 'CTL - Cafe', d: 97700, t: 'Control', x: -79.2, y: 44.2 },
+            { n: 'Not a control', d: 50000, t: 'Left', x: -79.1, y: 44.1 },
+          ],
+          points_of_interest: [
+            {
+              type: 'control',
+              name: 'Control Bakery',
+              lat: 44.3,
+              lng: -79.3,
+              distances: [30000, 150000],
+              description: 'Ask for a stamp',
+            },
+          ],
+          track_points: [
+            { x: -79, y: 44, d: 0 },
+            { x: -79, y: 44, d: 204540 },
+          ],
+        },
+      })
+      const result = await fetchRwgpsRouteMap('123')
+      expect(result.controls).toEqual([
+        { name: 'Bakery', km: 30, lat: 44.3, lng: -79.3 },
+        { name: 'Cafe', km: 97.7, lat: 44.2, lng: -79.2 },
+        { name: 'Bakery', km: 150, lat: 44.3, lng: -79.3 },
+      ])
+    })
+
+    it('skips controls without coordinates', async () => {
+      stubRouteResponse({
+        route: {
+          distance: 1000,
+          // No usable track points, so the course point cannot be placed.
+          course_points: [{ n: 'Control: Cafe', d: 500, t: 'Control' }],
+          track_points: [],
+        },
+      })
+      const result = await fetchRwgpsRouteMap('123')
+      expect(result.controls).toEqual([])
+      expect(result.points).toEqual([])
+    })
+  })
+
+  describe('fetchRwgpsControlsWithCoords', () => {
+    it('still returns just the controls (collection import depends on this shape)', async () => {
+      stubRouteResponse({
+        route: {
+          course_points: [{ n: 'Control: Cafe', d: 97700, t: 'Control', x: -79.2, y: 44.2 }],
+        },
+      })
+      const result = await fetchRwgpsControlsWithCoords('123')
+      expect(Array.isArray(result)).toBe(true)
+      expect(result[0]).toMatchObject({ distance: '97.7', lat: 44.2, lng: -79.2 })
+    })
   })
 })

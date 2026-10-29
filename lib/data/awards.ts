@@ -2,7 +2,8 @@
  * Awards Data Fetching Module
  *
  * This module contains all READ operations for club awards.
- * It provides award recipient data for the /awards page.
+ * It provides award recipient data for the /awards page: Ontario achievement
+ * awards, ACP distance awards, and the club honours voted on by members.
  *
  * CACHING STRATEGY:
  * - All award data: 24 hours (86400 seconds) - historical data
@@ -19,7 +20,7 @@ const CACHE_TTL_HISTORICAL = 86400 // 24 hours
 
 // Helper to convert RPC result to AwardRecipient array
 function toAwardRecipients(
-  data: Array<{ rider_slug: string; rider_name: string; award_year: number }> | null
+  data: Array<{ rider_slug: string | null; rider_name: string; award_year: number }> | null
 ): AwardRecipient[] {
   if (!data) return []
   return data.map((row) => ({
@@ -32,7 +33,7 @@ function toAwardRecipients(
 // Helper to convert RPC result to AwardRecipientWithDistance array
 function toAwardRecipientsWithDistance(
   data: Array<{
-    rider_slug: string
+    rider_slug: string | null
     rider_name: string
     award_year: number
     season_distance: number
@@ -132,6 +133,86 @@ const getAcpAwardsInner = cache(async (): Promise<AcpAwards> => {
 export async function getAcpAwards(): Promise<AcpAwards> {
   return unstable_cache(async () => getAcpAwardsInner(), ['awards-acp'], {
     tags: ['awards', 'awards-acp'],
+    revalidate: CACHE_TTL_HISTORICAL,
+  })()
+}
+
+// ============================================================================
+// CLUB HONOURS (voted on by members, presented at the annual banquet)
+// ============================================================================
+
+// Keys are in display order. Recipients may be name-only (riderSlug: null).
+export interface ClubHonours {
+  mikeBarryJockWadley: AwardRecipient[]
+  berylBurton: AwardRecipient[]
+  coronationCup: AwardRecipient[]
+  jimGriffinRookieOfTheYear: AwardRecipient[]
+  organiserOfTheYear: AwardRecipient[]
+  outstandingPerformance: AwardRecipient[]
+  danHerbert: AwardRecipient[]
+  halfWheel: AwardRecipient[]
+  specialRecognition: AwardRecipient[]
+}
+
+const getClubHonoursInner = cache(async (): Promise<ClubHonours> => {
+  const supabase = getSupabase()
+
+  const [
+    mikeBarryResult,
+    berylBurtonResult,
+    coronationCupResult,
+    rookieResult,
+    organiserResult,
+    performanceResult,
+    danHerbertResult,
+    halfWheelResult,
+    specialResult,
+  ] = await Promise.all([
+    supabase.rpc('get_award_recipients', { p_award_slug: 'mike-barry-jock-wadley' }),
+    supabase.rpc('get_award_recipients', { p_award_slug: 'beryl-burton' }),
+    supabase.rpc('get_award_recipients', { p_award_slug: 'coronation-cup' }),
+    supabase.rpc('get_award_recipients', { p_award_slug: 'jim-griffin-rookie-of-the-year' }),
+    supabase.rpc('get_award_recipients', { p_award_slug: 'organiser-of-the-year' }),
+    supabase.rpc('get_award_recipients', { p_award_slug: 'outstanding-performance' }),
+    supabase.rpc('get_award_recipients', { p_award_slug: 'dan-herbert' }),
+    supabase.rpc('get_award_recipients', { p_award_slug: 'half-wheel' }),
+    supabase.rpc('get_award_recipients', { p_award_slug: 'special-recognition' }),
+  ])
+
+  if (mikeBarryResult.error) {
+    return handleDataError(
+      mikeBarryResult.error,
+      { operation: 'getClubHonours' },
+      {
+        mikeBarryJockWadley: [],
+        berylBurton: [],
+        coronationCup: [],
+        jimGriffinRookieOfTheYear: [],
+        organiserOfTheYear: [],
+        outstandingPerformance: [],
+        danHerbert: [],
+        halfWheel: [],
+        specialRecognition: [],
+      }
+    )
+  }
+
+  return {
+    mikeBarryJockWadley: toAwardRecipients(mikeBarryResult.data),
+    berylBurton: toAwardRecipients(berylBurtonResult.data),
+    coronationCup: toAwardRecipients(coronationCupResult.data),
+    jimGriffinRookieOfTheYear: toAwardRecipients(rookieResult.data),
+    organiserOfTheYear: toAwardRecipients(organiserResult.data),
+    outstandingPerformance: toAwardRecipients(performanceResult.data),
+    danHerbert: toAwardRecipients(danHerbertResult.data),
+    halfWheel: toAwardRecipients(halfWheelResult.data),
+    specialRecognition: toAwardRecipients(specialResult.data),
+  }
+})
+
+export async function getClubHonours(): Promise<ClubHonours> {
+  return unstable_cache(async () => getClubHonoursInner(), ['awards-club-honours'], {
+    tags: ['awards', 'awards-club-honours'],
     revalidate: CACHE_TTL_HISTORICAL,
   })()
 }

@@ -42,10 +42,6 @@ if (!supabaseUrl || !supabaseKey) {
   console.error('Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY in environment')
   process.exit(1)
 }
-if (!process.env.CCN_ENDPOINT) {
-  console.error('Missing CCN_ENDPOINT in environment')
-  process.exit(1)
-}
 
 const supabase = createClient(supabaseUrl, supabaseKey)
 
@@ -77,7 +73,7 @@ async function main() {
     const rider = Array.isArray(row.riders) ? row.riders[0] : row.riders
     const name = `${rider.first_name} ${rider.last_name}`
 
-    const result = await searchCCNMembership(rider.first_name, rider.last_name)
+    const result = await searchCCNMembership(rider.first_name, rider.last_name, season)
 
     if (!result.found) {
       notFound++

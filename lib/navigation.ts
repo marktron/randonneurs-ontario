@@ -36,6 +36,7 @@ export function getTemplateVariables(): Record<string, string> {
     season: currentSeason,
     pbpYear: String(pbpYear),
     graniteAnvilYear: String(graniteAnvilYear),
+    slackInvite: process.env.NEXT_PUBLIC_SLACK_INVITE_URL ?? '',
   }
 }
 
@@ -62,8 +63,15 @@ export function expandItem(item: NavItemRaw, variables: Record<string, string>):
   }
 
   const resolved: NavItem = { label: item.label ?? '' }
-  if (item.href) resolved.href = resolveHref(item.href, variables)
-  if (item.external) resolved.external = true
+  if (item.href) {
+    resolved.href = resolveHref(item.href, variables)
+    // A link whose variable resolved to nothing (e.g. {{slackInvite}} with the
+    // env var unset) would render as a dead link, so hide it instead.
+    if (resolved.href.trim() === '') return []
+  }
+  // Also derive `external` from the resolved href: the admin editor recomputes
+  // the flag from the raw href on save, which drops it for templated links.
+  if (item.external || /^https?:\/\//.test(resolved.href ?? '')) resolved.external = true
   if (item.style) resolved.style = item.style
   if (item.children) {
     resolved.children = item.children.flatMap((child) => expandItem(child, variables))

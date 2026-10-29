@@ -32,7 +32,7 @@ import './load-env'
 
 import { createClient } from '@supabase/supabase-js'
 import { formatEventType } from '../lib/utils'
-import { getCurrentSeason } from '../lib/season'
+import { seasonOfEventDate } from '../lib/season'
 import {
   formatEventDate,
   formatEventTime,
@@ -121,7 +121,7 @@ async function main() {
   const { data: event, error: eventError } = await supabase
     .from('events')
     .select(
-      'name, event_date, start_time, start_location, distance_km, event_type, chapters(slug, name), routes(rwgps_id, rwgps_collection_id)'
+      'name, event_date, season, start_time, start_location, distance_km, event_type, chapters(slug, name), routes(rwgps_id, rwgps_collection_id)'
     )
     .eq('id', registration.event_id)
     .maybeSingle()
@@ -143,13 +143,14 @@ async function main() {
   // Derive membership fields from current DB state (no CCN re-check).
   let membershipStatus: 'valid' | 'none' | 'trial-used' = 'none'
   let membershipType: string | undefined
+  const membershipSeason = event.season ?? seasonOfEventDate(event.event_date)
   if (registration.status === 'registered') {
     membershipStatus = 'valid'
     const { data: membership } = await supabase
       .from('rider_memberships')
       .select('membership_type')
       .eq('rider_id', registration.rider_id)
-      .eq('season', getCurrentSeason())
+      .eq('season', membershipSeason)
       .maybeSingle()
     membershipType = membership?.membership_type ?? undefined
   }
@@ -169,6 +170,7 @@ async function main() {
     notes: registration.notes || undefined,
     membershipStatus,
     membershipType,
+    membershipSeason,
     managementUrl: buildManagementUrl(registration.management_token),
   }
 

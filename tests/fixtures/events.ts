@@ -31,6 +31,10 @@ export const mockEvents: Event[] = [
     organizer_name: null,
     organizer_phone: null,
     organizer_email: null,
+    direction: 'as_posted',
+    start_offset_km: null,
+    start_lat: null,
+    start_lng: null,
   },
   {
     id: 'event-2',
@@ -58,6 +62,10 @@ export const mockEvents: Event[] = [
     organizer_name: null,
     organizer_phone: null,
     organizer_email: null,
+    direction: 'as_posted',
+    start_offset_km: null,
+    start_lat: null,
+    start_lng: null,
   },
 ]
 
@@ -87,4 +95,8 @@ export const mockPermanentEvent: Event = {
   organizer_name: null,
   organizer_phone: null,
   organizer_email: null,
+  direction: 'as_posted',
+  start_offset_km: null,
+  start_lat: null,
+  start_lng: null,
 }

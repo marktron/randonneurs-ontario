@@ -11,6 +11,7 @@ import {
   normalizeBrevetCardType,
   type BrevetCardType,
 } from '@/lib/brevet-card'
+import { torontoCalendarYear } from '@/lib/season'
 
 export type MembershipErrorVariant = 'no-membership' | 'trial-used'
 
@@ -52,6 +53,10 @@ export function useRegistrationForm(options: UseRegistrationFormOptions = {}) {
   const [success, setSuccess] = useState(false)
   const [membershipErrorVariant, setMembershipErrorVariant] =
     useState<MembershipErrorVariant | null>(null)
+  // Season the membership error refers to (the event's season). Deliberately
+  // not cleared when the modal closes, so its copy cannot flip to another year
+  // during the close animation; the next membership error overwrites it.
+  const [membershipErrorSeason, setMembershipErrorSeason] = useState<number | null>(null)
 
   // Fuzzy matching state
   const [matchDialogOpen, setMatchDialogOpen] = useState(false)
@@ -182,6 +187,7 @@ export function useRegistrationForm(options: UseRegistrationFormOptions = {}) {
       setMatchDialogOpen(true)
     } else if (result.membershipError) {
       setMatchDialogOpen(false)
+      setMembershipErrorSeason(result.membershipSeason ?? torontoCalendarYear())
       setMembershipErrorVariant(result.membershipError)
     } else {
       setMatchDialogOpen(false)
@@ -226,6 +232,7 @@ export function useRegistrationForm(options: UseRegistrationFormOptions = {}) {
     success,
     membershipErrorVariant,
     setMembershipErrorVariant,
+    membershipErrorSeason,
     matchDialogOpen,
     setMatchDialogOpen,
     matchCandidates,

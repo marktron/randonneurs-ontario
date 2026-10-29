@@ -1,4 +1,5 @@
 import { haversineMeters } from '@/lib/geo'
+import type { RouteControl, TrackPoint } from '@/lib/routeTrack'
 
 export interface ParsedControl {
   name: string
@@ -89,22 +90,16 @@ interface RwgpsTrackPoint {
 interface RwgpsRoute {
   name?: string
   distance?: number // meters
+  elevation_gain?: number // meters
   course_points?: RwgpsCoursePoint[]
   points_of_interest?: RwgpsPoi[]
   track_points?: RwgpsTrackPoint[]
 }
 
-const CONTROL_NAME_PREFIXES = [
-  'CTL - ',
-  'CTL-',
-  'CTL ',
-  'CTRL - ',
-  'CTRL-',
-  'CTRL ',
-  'CONTROL - ',
-  'CONTROL-',
-  'CONTROL ',
-]
+// "CTL", "CTRL" or "CONTROL" (any case) followed by a separator: a hyphen or
+// colon with optional spaces around it, or just spaces. "CTL - X", "CTL-X",
+// "CTL: X", "CTL:X" and "CTL X" all match; "CTLA Store" does not.
+const CONTROL_NAME_PREFIX = /^(?:CTL|CTRL|CONTROL)(?:\s*[-:]\s*|\s+)/i
 
 /**
  * Parse a RideWithGPS route reference from a URL, share link, or bare ID.
@@ -176,17 +171,12 @@ export function extractRwgpsRefs(input: string | null | undefined): RwgpsRefs {
 }
 
 /**
- * Strip common control-name prefixes ("CTL -", "CTRL ", "CONTROL-", etc.)
- * used by organizers when tagging RWGPS waypoints and course points.
+ * Strip common control-name prefixes ("CTL -", "CTRL ", "CONTROL-", "CTL:",
+ * etc.) used by organizers when tagging RWGPS waypoints and course points.
  */
 export function cleanControlName(raw: string | undefined): string {
   let name = raw || 'Control'
-  for (const prefix of CONTROL_NAME_PREFIXES) {
-    if (name.toUpperCase().startsWith(prefix)) {
-      name = name.substring(prefix.length).trim()
-      break
-    }
-  }
+  name = name.replace(CONTROL_NAME_PREFIX, '').trim()
   if (name.startsWith('- ')) name = name.substring(2).trim()
   else if (name.startsWith('-')) name = name.substring(1).trim()
   return name
@@ -207,8 +197,7 @@ const POI_PHYSICAL_DEDUPE_METERS = 200
 
 function hasControlNamePrefix(name: string | undefined): boolean {
   if (!name) return false
-  const upper = name.toUpperCase()
-  return CONTROL_NAME_PREFIXES.some((p) => upper.startsWith(p))
+  return CONTROL_NAME_PREFIX.test(name)
 }
 
 function parseCoursePointControls(route: RwgpsRoute): InternalControl[] {
@@ -450,14 +439,8 @@ export async function fetchRwgpsControls(rwgpsId: string): Promise<ParsedControl
   return controls.map(({ name, distance }) => ({ name, distance }))
 }
 
-/**
- * fetchRwgpsControls, but preserving coordinates (digital brevet card
- * import). Uses the authenticated v1 API for the POI `distances` array.
- * Throws Error with a user-facing message on any failure.
- */
-export async function fetchRwgpsControlsWithCoords(
-  rwgpsId: string
-): Promise<ParsedControlWithCoords[]> {
+/** Fetch the v1 route JSON. Throws Error with a user-facing message on failure. */
+async function fetchRouteJson(rwgpsId: string): Promise<RwgpsRoute> {
   const headers = rwgpsApiHeaders()
   const url = `https://ridewithgps.com/api/v1/routes/${rwgpsId}.json`
   const response = await fetch(url, { headers })
@@ -466,14 +449,88 @@ export async function fetchRwgpsControlsWithCoords(
   }
   const data: unknown = await response.json()
   // The v1 API nests the route under a `route` key; tolerate a bare body too.
-  const route = (data as { route?: RwgpsRoute }).route ?? (data as RwgpsRoute)
+  return (data as { route?: RwgpsRoute }).route ?? (data as RwgpsRoute)
+}
+
+/**
+ * A route's total elevation gain in metres, or null (with a warning) on any
+ * failure: missing credentials, HTTP error or a non-numeric value.
+ */
+export async function fetchRwgpsRouteElevationGain(rwgpsId: string): Promise<number | null> {
+  try {
+    const route = await fetchRouteJson(rwgpsId)
+    const gain = route.elevation_gain
+    if (typeof gain !== 'number' || !Number.isFinite(gain)) {
+      console.warn(`RWGPS route ${rwgpsId}: no numeric elevation gain`)
+      return null
+    }
+    return gain
+  } catch (err) {
+    console.warn(`RWGPS route ${rwgpsId}: elevation fetch failed`, err)
+    return null
+  }
+}
+
+function trackOf(route: RwgpsRoute): { totalKm: number; points: TrackPoint[] } {
+  const points: TrackPoint[] = []
+  for (const tp of route.track_points ?? []) {
+    if (tp.x == null || tp.y == null || tp.d == null) continue
+    points.push({ lat: tp.y, lng: tp.x, km: tp.d / 1000 })
+  }
+  return {
+    totalKm: typeof route.distance === 'number' ? route.distance / 1000 : 0,
+    points,
+  }
+}
+
+/**
+ * A route's GPS track, length and controls, for the permanent start picker.
+ * Controls come from the same parser as the event control import; ones with
+ * no coordinates are left out. Unlike the control fetchers this does not
+ * require the route to have controls: a route without any has `controls: []`.
+ */
+export async function fetchRwgpsRouteMap(
+  rwgpsId: string
+): Promise<{ totalKm: number; points: TrackPoint[]; controls: RouteControl[] }> {
+  const route = await fetchRouteJson(rwgpsId)
+  const controls: RouteControl[] = []
+  for (const c of extractControlsWithCoords(route)) {
+    if (c.lat == null || c.lng == null) continue
+    controls.push({ name: c.name, km: Number(c.distance), lat: c.lat, lng: c.lng })
+  }
+  return { ...trackOf(route), controls }
+}
+
+/**
+ * Everything the event control import needs from one v1 response: controls
+ * with coordinates, the route length (unrounded; 0 when RWGPS omits it) and
+ * the track, used to re-check a rider's stored start point.
+ * Throws Error with a user-facing message on any failure.
+ */
+export async function fetchRwgpsRouteForImport(rwgpsId: string): Promise<{
+  controls: ParsedControlWithCoords[]
+  totalKm: number
+  points: TrackPoint[]
+}> {
+  const route = await fetchRouteJson(rwgpsId)
   const controls = extractControlsWithCoords(route)
   if (controls.length === 0) {
     throw new Error(
       'No control points found in the RWGPS route. Add controls as course points (type "Control") or waypoints (comment "control") in the RideWithGPS route editor.'
     )
   }
-  return controls
+  return { controls, ...trackOf(route) }
+}
+
+/**
+ * fetchRwgpsControls, but preserving coordinates (digital brevet card
+ * import). Uses the authenticated v1 API for the POI `distances` array.
+ * Throws Error with a user-facing message on any failure.
+ */
+export async function fetchRwgpsControlsWithCoords(
+  rwgpsId: string
+): Promise<ParsedControlWithCoords[]> {
+  return (await fetchRwgpsRouteForImport(rwgpsId)).controls
 }
 
 export interface RwgpsCollectionRoute {

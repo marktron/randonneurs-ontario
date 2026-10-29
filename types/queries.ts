@@ -416,7 +416,15 @@ export type AdminUser = Database['public']['Tables']['admins']['Row']
  */
 export type EventForControlCards = Pick<
   Event,
-  'id' | 'name' | 'event_date' | 'start_time' | 'start_location' | 'distance_km' | 'event_type'
+  | 'id'
+  | 'name'
+  | 'event_date'
+  | 'start_time'
+  | 'start_location'
+  | 'distance_km'
+  | 'event_type'
+  | 'direction'
+  | 'start_offset_km'
 > & {
   chapters: Pick<Chapter, 'id' | 'name'> | null
   routes: Pick<Route, 'id' | 'name' | 'rwgps_id' | 'rwgps_collection_id'> | null

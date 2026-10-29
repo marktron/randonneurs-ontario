@@ -4,9 +4,11 @@ import { revalidatePath, revalidateTag } from 'next/cache'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { requireAdmin } from '@/lib/auth/get-admin'
 import { getCurrentSeason } from '@/lib/season'
+import { acpSeasonWindow } from '@/lib/acp-season'
 import { isSuperAdmin } from '@/lib/auth/roles'
 import { sendEmail, fromEmail, isEmailConfigured } from '@/lib/email/ses'
-import { parseLocalDate, createSlug, formatFinishTimeHm } from '@/lib/utils'
+import { parseLocalDate, formatFinishTimeHm } from '@/lib/utils'
+import { buildEventSlug, planSlugRotation } from '@/lib/events/slug-rotation'
 import { getUrlSlugFromDbSlug } from '@/lib/chapter-config'
 import { createPendingResultsAndSendEmails } from '@/lib/events/complete-event'
 import { sendResultSubmissionReminders } from '@/lib/events/send-result-reminders'
@@ -119,7 +121,7 @@ export async function createEvent(data: CreateEventData): Promise<ActionResult<{
 
     // Generate slug from name, distance, and date
     // Format: {name}-{distance}km-{date} to match the import script
-    const slug = `${createSlug(name)}-${distanceKm}km-${eventDate}`
+    const slug = buildEventSlug(name, distanceKm, eventDate)
 
     const insertData: EventInsert = {
       slug,
@@ -249,6 +251,48 @@ export async function updateEvent(eventId: string, data: UpdateEventData): Promi
       updateData.image_url = data.imageUrl || null
     }
 
+    // The admin form sends every field, so compare against the stored row
+    // rather than inferring a change from field presence.
+    let oldSlug: string | null = null
+    let newSlug: string | null = null
+    if (data.eventDate !== undefined) {
+      const { data: stored, error: storedError } = await getSupabaseAdmin()
+        .from('events')
+        .select('slug, name, distance_km, event_date, event_type')
+        .eq('id', eventId)
+        .single()
+
+      if (storedError || !stored) {
+        return handleSupabaseError(
+          storedError ?? { code: 'PGRST116', message: 'Event not found' },
+          { operation: 'updateEvent' },
+          'Failed to update event'
+        )
+      }
+
+      newSlug = planSlugRotation(stored, {
+        name: data.name?.trim(),
+        distanceKm: data.distanceKm,
+        eventDate: data.eventDate,
+      })
+
+      if (newSlug) {
+        oldSlug = stored.slug
+        // History first: if the events update then fails, the old URL still redirects.
+        const { error: historyError } = await getSupabaseAdmin()
+          .from('event_slug_history')
+          .upsert({ slug: stored.slug, event_id: eventId }, { onConflict: 'slug' })
+        if (historyError) {
+          return handleSupabaseError(
+            historyError,
+            { operation: 'updateEvent' },
+            'Failed to update event'
+          )
+        }
+        updateData.slug = newSlug
+      }
+    }
+
     const typedUpdateData: EventUpdate = updateData
 
     const { error } = await getSupabaseAdmin()
@@ -257,7 +301,36 @@ export async function updateEvent(eventId: string, data: UpdateEventData): Promi
       .eq('id', eventId)
 
     if (error) {
-      return handleSupabaseError(error, { operation: 'updateEvent' }, 'Failed to update event')
+      return handleSupabaseError(
+        error,
+        {
+          operation: 'updateEvent',
+          ...(error.code === '23505' && {
+            userMessage: 'An event with this slug already exists',
+          }),
+        },
+        'Failed to update event'
+      )
+    }
+
+    if (newSlug && oldSlug) {
+      // The new slug is live again (e.g. a date reverted), so it must not redirect.
+      const { error: clearError } = await getSupabaseAdmin()
+        .from('event_slug_history')
+        .delete()
+        .eq('slug', newSlug)
+      if (clearError) {
+        return handleSupabaseError(
+          clearError,
+          { operation: 'updateEvent' },
+          'Failed to update event'
+        )
+      }
+    }
+
+    if (oldSlug) {
+      revalidateTag(`event-${oldSlug}`, { expire: 0 })
+      revalidateTag('slugs', { expire: 0 })
     }
 
     // Revalidate admin pages (still use revalidatePath for admin routes)
@@ -269,13 +342,30 @@ export async function updateEvent(eventId: string, data: UpdateEventData): Promi
     const { data: event } = await getSupabaseAdmin()
       .from('events')
       .select(
-        'chapter_id, event_type, slug, erw_event_id, route_id, name, description, distance_km, event_date, start_time'
+        'chapter_id, event_type, slug, erw_event_id, route_id, name, description, distance_km, event_date, start_time, status'
       )
       .eq('id', eventId)
       .single()
 
     if (event) {
       await revalidateCalendarTags(event.chapter_id, event.event_type, event.slug)
+    }
+
+    // An unlinked scheduled event has no ERW event yet, usually because it had
+    // no RWGPS route when it was published. Create it now; syncNewEventToErw
+    // skips permanents, non-production, and events that still have no route.
+    if (event && !event.erw_event_id && event.status === 'scheduled') {
+      await syncNewEventToErw({
+        id: eventId,
+        name: event.name,
+        description: event.description,
+        distance_km: event.distance_km,
+        event_date: event.event_date,
+        start_time: event.start_time,
+        slug: event.slug,
+        route_id: event.route_id,
+        event_type: event.event_type,
+      })
     }
 
     // Sync to Epic Ride Weather if event is linked (skip outside Vercel production)
@@ -313,7 +403,9 @@ export async function updateEvent(eventId: string, data: UpdateEventData): Promi
       action: 'update',
       entityType: 'event',
       entityId: eventId,
-      description: `Updated event: ${data.name || eventId}`,
+      description: newSlug
+        ? `Updated event: ${data.name || eventId} (slug ${oldSlug} → ${newSlug})`
+        : `Updated event: ${data.name || eventId}`,
     })
 
     return createActionResult()
@@ -541,34 +633,50 @@ interface PublishedDraftRow {
   route_id: string | null
   event_type: string
   chapter_id: string
+  chapters: { name: string } | null
 }
 
 /**
- * Publish every draft event in a season at once (super-admin only).
- * Flips status draft -> scheduled, syncs each non-permanent to ERW, and
- * busts the public calendar caches for every affected chapter.
+ * Publish every draft event of one chapter in an ACP season at once.
+ *
+ * The batch is the ACP season (Nov 1 of the prior year to Oct 31 of
+ * `acpSeason`), not the calendar-year `events.season` column, so a chapter's
+ * November and December rides go out with the following season.
+ *
+ * Any admin may call it; a chapter admin may only publish their own chapter.
+ * Flips status draft -> scheduled, syncs each non-permanent to ERW, and busts
+ * the public calendar caches for the chapter.
  */
 export async function publishSeasonDrafts(
-  season: number
+  acpSeason: number,
+  chapterId: string
 ): Promise<ActionResult<PublishSeasonResult>> {
   try {
     const admin = await requireAdmin()
 
-    if (!isSuperAdmin(admin.role)) {
-      return { success: false, error: 'Only super admins can publish a season' }
+    if (admin.role === 'chapter_admin' && admin.chapter_id !== chapterId) {
+      return { success: false, error: 'You can only publish your own chapter' }
     }
 
-    if (!Number.isInteger(season)) {
+    if (!Number.isInteger(acpSeason)) {
       return { success: false, error: 'Invalid season' }
     }
+
+    if (typeof chapterId !== 'string' || chapterId.trim() === '') {
+      return { success: false, error: 'Invalid chapter' }
+    }
+
+    const { start, end } = acpSeasonWindow(acpSeason)
 
     const { data, error } = await getSupabaseAdmin()
       .from('events')
       .update({ status: 'scheduled' })
-      .eq('season', season)
       .eq('status', 'draft')
+      .eq('chapter_id', chapterId)
+      .gte('event_date', start)
+      .lte('event_date', end)
       .select(
-        'id, name, description, distance_km, event_date, start_time, slug, route_id, event_type, chapter_id'
+        'id, name, description, distance_km, event_date, start_time, slug, route_id, event_type, chapter_id, chapters(name)'
       )
 
     if (error) {
@@ -592,8 +700,8 @@ export async function publishSeasonDrafts(
     for (const row of published) {
       if (!chapterTypes.has(row.chapter_id)) chapterTypes.set(row.chapter_id, row.event_type)
     }
-    for (const [chapterId, eventType] of chapterTypes) {
-      await revalidateCalendarTags(chapterId, eventType)
+    for (const [rowChapterId, eventType] of chapterTypes) {
+      await revalidateCalendarTags(rowChapterId, eventType)
     }
     for (const row of published) {
       revalidateTag(`event-${row.slug}`, { expire: 0 })
@@ -605,12 +713,13 @@ export async function publishSeasonDrafts(
     revalidatePath('/admin/events')
     revalidatePath('/admin')
 
+    const chapterName = published[0]?.chapters?.name ?? chapterId
     await logAuditEvent({
       adminId: admin.id,
       action: 'status_change',
       entityType: 'event',
-      entityId: String(season),
-      description: `Published ${published.length} draft event${published.length === 1 ? '' : 's'} for the ${season} season`,
+      entityId: `${acpSeason}:${chapterId}`,
+      description: `Published ${published.length} draft event${published.length === 1 ? '' : 's'} for the ${acpSeason} season (${chapterName})`,
     })
 
     return createActionResult({ published: published.length, erwFailures })

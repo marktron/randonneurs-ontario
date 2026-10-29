@@ -68,7 +68,7 @@ Event registration (`/register/[slug]`, `/register/permanent`) is publicly acces
 
 - **Honeypot field** — `HoneypotField` renders a hidden `ro_check` input in each registration form. The field name avoids tokens password managers recognize (`url`, `website`, `homepage`, `email`, `name`) and carries `data-1p-ignore`, `data-lpignore`, `data-bwignore`, and `data-form-type="other"` so 1Password, LastPass, and Bitwarden skip it. Real users can't see or tab to it; bots that fill every field trip the guard. Checked at the top of `registerForEvent`, `registerForPermanent`, and `completeRegistrationWithRider`.
 
-Rate limiting by email (`isRateLimited`) applies as a second layer.
+Rate limiting by email applies as a second layer: `isRegistrationRateLimited` in `lib/actions/registration/validation.ts` allows 10 attempts per email per 15 minutes and is called by `registerForEvent`, `registerForPermanent`, and `completeRegistrationWithRider` right after contact validation. Free-text fields are capped server-side too (team name 100 characters, permanent-ride start location 200).
 
 `initBotId` (in `instrumentation-client.ts`) still runs client-side on `POST /register/*` so signals stream into the Vercel BotID dashboard for observability. The server-side `checkBotId()` check was removed: in basic mode (the only mode available on the Hobby plan) it produced false positives on confirmed real users, silently dropping their registrations. Deep analysis would likely fix that but is Pro/Enterprise-only — revisit if the honeypot stops being sufficient.
 
@@ -90,7 +90,7 @@ The admin login page validates redirect URLs to prevent open redirect attacks. O
 - `SUPABASE_SERVICE_ROLE_KEY` is server-side only (no `NEXT_PUBLIC_` prefix)
 - `CRON_SECRET` authenticates the cron endpoint via Bearer token
 - `.env*` files are in `.gitignore`
-- Sentry `sendDefaultPii` is disabled to prevent PII leakage
+- Sentry `dataCollection` is pinned to the pre-v11 no-PII baseline (user info, cookies, bodies, query params and identifying headers are not sent)
 
 ## Email Security
 

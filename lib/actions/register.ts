@@ -36,8 +36,9 @@ import { revalidatePath, revalidateTag } from 'next/cache'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { formatEventType } from '@/lib/utils'
 import { fuzzyNameScore } from '@/lib/utils/fuzzy-match'
-import { isRateLimited } from '@/lib/rate-limit'
 import { createTorontoDate } from '@/lib/brmTimes'
+import { seasonOfEventDate } from '@/lib/season'
+import { registrationSeasonBlock } from '@/lib/memberships/season-gate'
 import { isRealChapterDbSlug } from '@/lib/chapter-config'
 import { handleActionError, handleSupabaseError, logError } from '@/lib/errors'
 import type {
@@ -45,7 +46,6 @@ import type {
   EventInsert,
   EventWithRelations,
   RouteWithChapter,
-  EventIdOnly,
   RiderMergeInsert,
 } from '@/types/queries'
 import type { RiderMatchCandidate } from './rider-match'
@@ -56,15 +56,30 @@ import {
   formatEventTime,
   buildRouteUrl,
 } from './registration/helpers'
-import { validateContactFields } from './registration/validation'
+import {
+  validateContactFields,
+  isRegistrationRateLimited,
+  REGISTRATION_RATE_LIMIT_ERROR,
+  validateTeamNameLength,
+  validateStartLocationLength,
+  validateStartTime,
+} from './registration/validation'
 import {
   insertNewRider,
   findOrCreateRider,
   type FindOrCreateRiderMatchResult,
 } from './registration/rider'
 import { finalizeRegistration } from './registration/finalize'
+import { createOrJoinPermanentEvent, type ResolveRideStart } from './registration/permanent-event'
 import type { BaseEmailPayload } from './registration/types'
 import { normalizeBrevetCardType, type BrevetCardType } from '@/lib/brevet-card'
+import { loadRouteTrack } from '@/lib/data/route-track'
+import { canonicalStart } from '@/lib/routeTrack'
+import {
+  permanentEventSlug,
+  formatPermanentStartLocation,
+  permanentStartMismatch,
+} from '@/lib/permanent-start'
 
 export interface RegistrationData {
   eventId: string
@@ -87,6 +102,16 @@ export interface RegistrationData {
   brevetCardType?: BrevetCardType
 }
 
+/**
+ * A permanent ride's start as stored when the rider-match dialog opened.
+ * The form echoes it back unchanged so completion can refuse a ride whose
+ * start has changed since.
+ */
+export interface PermanentRideStart {
+  startTime: string | null
+  offsetKm: number | null
+}
+
 export interface RegistrationResult {
   success: boolean
   error?: string
@@ -95,9 +120,11 @@ export interface RegistrationResult {
   /** Potential rider matches for user to select from */
   matchCandidates?: RiderMatchCandidate[]
   /** Original form data to resubmit after selection */
-  pendingData?: RegistrationData
+  pendingData?: RegistrationData & { rideStart?: PermanentRideStart }
   /** Set when membership verification fails */
   membershipError?: 'no-membership' | 'trial-used'
+  /** Season the membership was checked for; set whenever `membershipError` is. */
+  membershipSeason?: number
   /**
    * Set when the submitted email looks like a typo of a common provider. The
    * form asks the rider to confirm and resubmits with `emailConfirmed: true`.
@@ -118,7 +145,10 @@ function eventEmailBase(
     eventName: event.name,
     eventDate: formatEventDate(event.event_date),
     eventTime: formatEventTime(event.start_time),
-    eventLocation: event.start_location || 'TBD',
+    eventLocation:
+      event.event_type === 'permanent'
+        ? formatPermanentStartLocation(event)
+        : event.start_location || 'TBD',
     eventDistance: event.distance_km,
     eventType: formatEventType(event.event_type),
     chapterName: event.chapters?.name || '',
@@ -139,8 +169,9 @@ function realChapterIdFor(
 
 // Shared event SELECT for the scheduled-event entry points.
 const EVENT_SELECT = `
-  id, slug, status, name, event_date, start_time,
+  id, slug, status, name, event_date, season, start_time,
   start_location, distance_km, event_type, chapter_id,
+  direction, start_offset_km,
   chapters (slug, name),
   routes (slug, rwgps_id, rwgps_collection_id)
 `
@@ -190,9 +221,14 @@ export async function registerForEvent(data: RegistrationData): Promise<Registra
   } = validation.value
   const trimmedTeamName = teamName?.trim() || undefined
 
+  const teamNameError = validateTeamNameLength(trimmedTeamName)
+  if (teamNameError) {
+    return { success: false, error: teamNameError }
+  }
+
   // Rate limit: 10 registration attempts per email per 15 minutes
-  if (isRateLimited('registration', normalizedEmail, 10, 15 * 60 * 1000)) {
-    return { success: false, error: 'Too many registration attempts. Please try again later.' }
+  if (isRegistrationRateLimited(normalizedEmail)) {
+    return { success: false, error: REGISTRATION_RATE_LIMIT_ERROR }
   }
 
   // Block duplicate team names with a helpful message
@@ -235,6 +271,14 @@ export async function registerForEvent(data: RegistrationData): Promise<Registra
     return { success: false, error: 'Registration is not open for this event' }
   }
 
+  // Membership is verified for the event's own season; next-season events
+  // stay closed until CCN is selling that season's memberships.
+  const season = event.season ?? seasonOfEventDate(event.event_date)
+  const seasonBlock = await registrationSeasonBlock(season)
+  if (seasonBlock) {
+    return { success: false, error: seasonBlock }
+  }
+
   // Find or create rider, then run the shared finalization flow
   try {
     const riderResult = await findOrCreateRider(
@@ -262,6 +306,7 @@ export async function registerForEvent(data: RegistrationData): Promise<Registra
       riderId: riderResult.riderId,
       firstName: trimmedFirstName,
       lastName: trimmedLastName,
+      season,
       realChapterId: realChapterIdFor(event.chapters?.slug, event.chapter_id),
       shareRegistration,
       notes,
@@ -294,6 +339,8 @@ export interface PermanentRegistrationData {
   eventDate: string // YYYY-MM-DD
   startTime: string // HH:MM
   startLocation?: string // Optional - only if different from route start
+  /** Km along the posted route where the rider starts; requires startLocation as the place name. */
+  startOffsetKm?: number | null
   direction: 'as_posted' | 'reversed'
   firstName: string
   lastName: string
@@ -329,6 +376,7 @@ export async function registerForPermanent(
     eventDate,
     startTime,
     startLocation,
+    startOffsetKm,
     direction,
     gender,
     shareRegistration,
@@ -338,6 +386,11 @@ export async function registerForPermanent(
   // Validate required fields
   if (!routeId || !eventDate || !startTime) {
     return { success: false, error: 'Missing required fields' }
+  }
+
+  const startTimeError = validateStartTime(startTime)
+  if (startTimeError) {
+    return { success: false, error: startTimeError }
   }
 
   const validation = validateContactFields(data)
@@ -352,9 +405,14 @@ export async function registerForPermanent(
     normalizedEmergencyPhone,
   } = validation.value
 
+  const startLocationError = validateStartLocationLength(startLocation?.trim())
+  if (startLocationError) {
+    return { success: false, error: startLocationError }
+  }
+
   // Rate limit: 10 registration attempts per email per 15 minutes
-  if (isRateLimited('registration', normalizedEmail, 10, 15 * 60 * 1000)) {
-    return { success: false, error: 'Too many registration attempts. Please try again later.' }
+  if (isRegistrationRateLimited(normalizedEmail)) {
+    return { success: false, error: REGISTRATION_RATE_LIMIT_ERROR }
   }
 
   // Validate registration deadline: 8 p.m. Eastern the day before the ride
@@ -366,6 +424,14 @@ export async function registerForPermanent(
       success: false,
       error: 'Registration for permanent rides closes at 8 p.m. Eastern the day before the ride',
     }
+  }
+
+  // Next-season gate, before the route lookup so a blocked date never
+  // creates an event row.
+  const season = seasonOfEventDate(eventDate)
+  const seasonBlock = await registrationSeasonBlock(season)
+  if (seasonBlock) {
+    return { success: false, error: seasonBlock }
   }
 
   // Fetch route details
@@ -397,54 +463,77 @@ export async function registerForPermanent(
 
   // Generate event name and slug (reversed rides get a distinct slug)
   const eventName = direction === 'reversed' ? `${route.name} (Reversed)` : route.name
-  const eventSlug =
-    direction === 'reversed'
-      ? `permanent-${route.slug}-${eventDate}-reverse`
-      : `permanent-${route.slug}-${eventDate}`
+  const eventSlug = permanentEventSlug(route.slug, eventDate, direction)
 
-  // Check if an event with this slug already exists
-  const { data: existingEvent } = await getSupabaseAdmin()
-    .from('events')
-    .select('id')
-    .eq('slug', eventSlug)
-    .single()
+  const baseEvent: EventInsert = {
+    slug: eventSlug,
+    name: eventName,
+    event_type: 'permanent',
+    status: 'scheduled',
+    route_id: route.id,
+    chapter_id: route.chapter_id,
+    distance_km: route.distance_km || 0,
+    event_date: eventDate,
+    direction: direction === 'reversed' ? 'reversed' : 'as_posted',
+  }
 
-  let eventId: string
-
-  if (existingEvent) {
-    // Use existing event (another rider might have created it for the same route/date)
-    eventId = (existingEvent as EventIdOnly).id
-  } else {
-    // Create new event
-    const insertEvent: EventInsert = {
-      slug: eventSlug,
-      name: eventName,
-      event_type: 'permanent',
-      status: 'scheduled',
-      route_id: route.id,
-      chapter_id: route.chapter_id,
-      distance_km: route.distance_km || 0,
-      event_date: eventDate,
-      start_time: startTime,
-      start_location: startLocation?.trim() || null,
+  // Place the alternate start on the route's track. Only needed to create a
+  // ride or take one over; joining compares the stored start. The client
+  // sends only a distance; coordinates always come from the track.
+  const resolveStart: ResolveRideStart = async () => {
+    const posted = { start_location: null, start_offset_km: null, start_lat: null, start_lng: null }
+    if (startOffsetKm == null) return { ok: true, start: posted }
+    const track = route.rwgps_id ? await loadRouteTrack(route.rwgps_id) : null
+    if (!track) {
+      return {
+        ok: false,
+        error:
+          'We could not load the route map to place your start. Try again, or register from the posted start.',
+      }
     }
+    if (!track.isLoop) {
+      return { ok: false, error: 'An alternate start is only available on loop routes' }
+    }
+    // Null when the point is the posted start itself: no alternate start.
+    const start = canonicalStart(track, startOffsetKm)
+    if (!start) return { ok: true, start: posted }
+    const name = startLocation?.trim()
+    if (!name) return { ok: false, error: 'Please name your start location' }
+    return {
+      ok: true,
+      start: {
+        start_location: name,
+        start_offset_km: start.offsetKm,
+        start_lat: start.lat,
+        start_lng: start.lng,
+      },
+    }
+  }
 
-    const { data: newEvent, error: createError } = await getSupabaseAdmin()
-      .from('events')
-      .insert(insertEvent)
-      .select('id')
-      .single()
+  // An offset under 0.1 km is the posted start, as on the track.
+  const requestedOffsetKm =
+    startOffsetKm != null && Number.isFinite(startOffsetKm) && Math.round(startOffsetKm * 10) >= 1
+      ? startOffsetKm
+      : null
 
-    if (createError || !newEvent) {
+  // One ride per route, date and direction: join it only on the same start.
+  const rideResult = await createOrJoinPermanentEvent(
+    baseEvent,
+    { startTime, offsetKm: requestedOffsetKm },
+    resolveStart
+  )
+  if (!rideResult.ok) {
+    if (rideResult.cause) {
       return handleSupabaseError(
-        createError,
+        rideResult.cause as Parameters<typeof handleSupabaseError>[0],
         { operation: 'registerForPermanent.createEvent', context: { routeId, eventSlug } },
-        'Failed to create permanent ride event'
+        rideResult.error
       )
     }
-
-    eventId = (newEvent as EventIdOnly).id
+    return { success: false, error: rideResult.error }
   }
+  const ride = rideResult.event
+  const eventId = ride.id
 
   // Find or create rider, then run the shared finalization flow
   try {
@@ -476,6 +565,7 @@ export async function registerForPermanent(
           emergencyContactName: data.emergencyContactName,
           emergencyContactPhone: data.emergencyContactPhone,
           brevetCardType: data.brevetCardType,
+          rideStart: { startTime: ride.start_time, offsetKm: ride.start_offset_km },
         },
       }
     }
@@ -485,6 +575,7 @@ export async function registerForPermanent(
       riderId: riderResult.riderId,
       firstName: trimmedFirstName,
       lastName: trimmedLastName,
+      season,
       // Permanent rides use the route's chapter — only pass if it's a real chapter
       realChapterId: realChapterIdFor(route.chapters?.slug, route.chapter_id),
       shareRegistration,
@@ -496,8 +587,8 @@ export async function registerForPermanent(
         registrantEmail: normalizedEmail,
         eventName,
         eventDate: formatEventDate(eventDate),
-        eventTime: formatEventTime(startTime),
-        eventLocation: startLocation?.trim() || 'Start control per route',
+        eventTime: formatEventTime(ride.start_time),
+        eventLocation: formatPermanentStartLocation(ride),
         eventDistance: route.distance_km || 0,
         eventType: 'Permanent',
         chapterName: route.chapters?.name || '',
@@ -546,6 +637,8 @@ export interface CompleteRegistrationData {
   homepageUrl?: string
   /** Paper (default) or digital brevet card. Unrecognised values fall back to paper server-side. */
   brevetCardType?: BrevetCardType
+  /** Echoed from `pendingData` for a permanent; the start the rider agreed to. */
+  rideStart?: PermanentRideStart
 }
 
 /**
@@ -593,6 +686,17 @@ export async function completeRegistrationWithRider(
   const parsedGender = gender === 'M' || gender === 'F' || gender === 'X' ? gender : null
   const trimmedTeamName = teamName?.trim() || undefined
 
+  const teamNameError = validateTeamNameLength(trimmedTeamName)
+  if (teamNameError) {
+    return { success: false, error: teamNameError }
+  }
+
+  // Rate limit: shared with the other entry points so this path can't be used
+  // to get around the per-email cap.
+  if (isRegistrationRateLimited(normalizedEmail)) {
+    return { success: false, error: REGISTRATION_RATE_LIMIT_ERROR }
+  }
+
   // All DB work is wrapped so any helper throw (insertNewRider,
   // createRegistrationRecord) becomes a clean ActionResult with Sentry logging,
   // matching registerForEvent / registerForPermanent.
@@ -612,6 +716,19 @@ export async function completeRegistrationWithRider(
 
     if (event.status !== 'scheduled') {
       return { success: false, error: 'Registration is not open for this event' }
+    }
+
+    // Same next-season gate as registerForEvent, before any rider write.
+    const season = event.season ?? seasonOfEventDate(event.event_date)
+    const seasonBlock = await registrationSeasonBlock(season)
+    if (seasonBlock) {
+      return { success: false, error: seasonBlock }
+    }
+
+    // The ride may have been taken over while the rider was choosing a match.
+    if (event.event_type === 'permanent' && data.rideStart) {
+      const mismatch = permanentStartMismatch(event, data.rideStart)
+      if (mismatch) return { success: false, error: mismatch }
     }
 
     let riderId: string
@@ -706,6 +823,7 @@ export async function completeRegistrationWithRider(
       riderId,
       firstName: trimmedFirstName,
       lastName: trimmedLastName,
+      season,
       realChapterId: realChapterIdFor(event.chapters?.slug, event.chapter_id),
       shareRegistration,
       notes,

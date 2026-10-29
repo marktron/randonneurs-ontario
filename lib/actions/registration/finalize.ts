@@ -137,6 +137,8 @@ export interface FinalizeRegistrationParams {
   firstName: string
   /** Submitted last name, used for the membership lookup. */
   lastName: string
+  /** Event season (calendar year of the ride) to verify membership for. */
+  season: number
   /** Chapter id for the membership lookup, or undefined for non-geographic chapters. */
   realChapterId: string | undefined
   shareRegistration: boolean
@@ -172,6 +174,7 @@ export async function finalizeRegistration(
     riderId,
     firstName,
     lastName,
+    season,
     realChapterId,
     shareRegistration,
     notes,
@@ -185,7 +188,13 @@ export async function finalizeRegistration(
     revalidate,
   } = params
 
-  const membershipResult = await getMembershipForRider(riderId, firstName, lastName, realChapterId)
+  const membershipResult = await getMembershipForRider({
+    riderId,
+    firstName,
+    lastName,
+    season,
+    chapterId: realChapterId,
+  })
 
   // Compose + send the confirmation email (fire-and-forget — never block
   // registration on email delivery). membershipStatus/type vary per branch.
@@ -193,6 +202,7 @@ export async function finalizeRegistration(
     membershipFields: {
       membershipStatus: 'valid' | 'none' | 'trial-used'
       membershipType?: string
+      membershipSeason?: number
     },
     managementToken: string
   ): void => {
@@ -222,17 +232,18 @@ export async function finalizeRegistration(
     if (mgmtToken === 'duplicate') {
       return { success: false, error: duplicateMessage }
     }
-    sendEmail({ membershipStatus: 'none' }, mgmtToken)
+    sendEmail({ membershipStatus: 'none', membershipSeason: season }, mgmtToken)
     return {
       success: false,
       membershipError: 'no-membership',
+      membershipSeason: season,
       error: 'Membership verification failed',
     }
   }
 
   // Trial members get exactly one ride — a used trial is also incomplete.
   if (membershipResult.type === 'Trial Member') {
-    const trialUsed = await isTrialUsed(riderId)
+    const trialUsed = await isTrialUsed(riderId, season)
     if (trialUsed) {
       const mgmtToken = await createRegistrationRecord(
         eventId,
@@ -247,10 +258,11 @@ export async function finalizeRegistration(
       if (mgmtToken === 'duplicate') {
         return { success: false, error: duplicateMessage }
       }
-      sendEmail({ membershipStatus: 'trial-used' }, mgmtToken)
+      sendEmail({ membershipStatus: 'trial-used', membershipSeason: season }, mgmtToken)
       return {
         success: false,
         membershipError: 'trial-used',
+        membershipSeason: season,
         error: 'Trial membership already used',
       }
     }

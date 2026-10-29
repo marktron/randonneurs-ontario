@@ -5,6 +5,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { renderHook, act, waitFor } from '@testing-library/react'
 import { useRegistrationForm } from '@/hooks/use-registration-form'
+import { torontoCalendarYear } from '@/lib/season'
 
 const mockRefresh = vi.fn()
 vi.mock('next/navigation', () => ({
@@ -111,6 +112,47 @@ describe('useRegistrationForm', () => {
 
     expect(result.current.membershipErrorVariant).toBe('trial-used')
     expect(result.current.matchDialogOpen).toBe(false)
+  })
+
+  it('stores the membership season from the result', () => {
+    const { result } = renderHook(() => useRegistrationForm())
+
+    act(() =>
+      result.current.handleRegistrationResult({
+        success: false,
+        membershipError: 'no-membership',
+        membershipSeason: 2027,
+      })
+    )
+
+    expect(result.current.membershipErrorVariant).toBe('no-membership')
+    expect(result.current.membershipErrorSeason).toBe(2027)
+  })
+
+  it('falls back to the Toronto calendar year when the result omits the season', () => {
+    const { result } = renderHook(() => useRegistrationForm())
+
+    act(() =>
+      result.current.handleRegistrationResult({ success: false, membershipError: 'no-membership' })
+    )
+
+    expect(result.current.membershipErrorSeason).toBe(torontoCalendarYear())
+  })
+
+  it('keeps the membership season when the variant is cleared (modal copy must not flip while closing)', () => {
+    const { result } = renderHook(() => useRegistrationForm())
+
+    act(() =>
+      result.current.handleRegistrationResult({
+        success: false,
+        membershipError: 'no-membership',
+        membershipSeason: 2027,
+      })
+    )
+    act(() => result.current.setMembershipErrorVariant(null))
+
+    expect(result.current.membershipErrorVariant).toBeNull()
+    expect(result.current.membershipErrorSeason).toBe(2027)
   })
 
   it('falls back to the error banner', () => {

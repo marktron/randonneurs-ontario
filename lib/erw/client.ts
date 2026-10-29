@@ -290,18 +290,30 @@ function formatErwError(status: number, data: unknown): string {
   return body?.message || `HTTP ${status}`
 }
 
-// Carry the existing routeId onto each incoming route so ERW updates routes in
-// place. Sending a route without a routeId tells ERW to delete the existing
-// route and re-create it — which triggers a sourceRouteUrl re-import and fails
-// validation on published events whose old routes already have path data.
+// Numeric RWGPS route id from a route URL, ignoring slashes and query strings.
+function rwgpsRouteId(url: unknown): string | undefined {
+  return typeof url === 'string' ? url.match(/\/routes\/(\d+)/)?.[1] : undefined
+}
+
+// Carry the existing routeId onto an incoming route so ERW updates it in place.
+// Sending a route without a routeId tells ERW to delete the existing route and
+// re-create it — which triggers a sourceRouteUrl re-import and fails validation
+// on published events whose old routes already have path data. But a routeId
+// also pins the route's geometry: ERW ignores the incoming sourceRouteUrl when
+// it is present. So carry it only when the existing route was imported from the
+// same RWGPS route (compared by numeric id, ignoring URL formatting); a changed
+// route must drop it so ERW re-imports from the new URL.
 function mergeRouteIds(
   incoming: unknown,
   existing: Array<Record<string, unknown>> | undefined
 ): unknown {
   if (!Array.isArray(incoming)) return incoming
   return incoming.map((route, i) => {
+    if (typeof route !== 'object' || route === null) return route
     const existingRouteId = existing?.[i]?.routeId
-    return existingRouteId && typeof route === 'object' && route !== null
+    const incomingRwgpsId = rwgpsRouteId((route as { sourceRouteUrl?: unknown }).sourceRouteUrl)
+    const existingRwgpsId = rwgpsRouteId(existing?.[i]?.sourceRouteUrl)
+    return existingRouteId && incomingRwgpsId && incomingRwgpsId === existingRwgpsId
       ? { ...route, routeId: existingRouteId }
       : route
   })

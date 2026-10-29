@@ -46,6 +46,13 @@ import {
   registerForPermanent,
   completeRegistrationWithRider,
 } from '@/lib/actions/register'
+import { resetRateLimitStores } from '@/lib/rate-limit'
+
+// The per-email limiter is module-level state; reset it so tests that share an
+// email address stay order-independent.
+beforeEach(() => {
+  resetRateLimitStores()
+})
 
 describe('registerForEvent', () => {
   describe('validation', () => {
@@ -596,7 +603,7 @@ describe('email typo confirmation guard', () => {
     it('refuses a likely typo and returns the suggested address', async () => {
       const result = await registerForPermanent({
         routeId: 'route-1',
-        eventDate: '2099-01-01',
+        eventDate: new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10),
         startTime: '07:00',
         direction: 'as_posted',
         ...contact,
@@ -620,5 +627,118 @@ describe('email typo confirmation guard', () => {
       expect(result.success).toBe(false)
       expect(result.emailSuggestion).toBe('rider.e@rogers.com')
     })
+  })
+})
+
+/**
+ * Every public registration entry point shares one per-email limiter
+ * (10 attempts per 15 minutes), so the rider-match completion path cannot be
+ * used to bypass it.
+ */
+describe('registration rate limit', () => {
+  const contact = {
+    firstName: 'Test',
+    lastName: 'Rider',
+    shareRegistration: false,
+    phone: '416-555-0000',
+    emergencyContactName: 'Emergency Contact',
+    emergencyContactPhone: '555-1234',
+  }
+  const TOO_MANY = 'Too many registration attempts. Please try again later.'
+
+  it('completeRegistrationWithRider is rate limited on the 11th attempt for one email', async () => {
+    const attempt = () =>
+      completeRegistrationWithRider({
+        eventId: 'event-rate-limit',
+        selectedRiderId: null,
+        ...contact,
+        email: 'rate.limit.complete@example.com',
+      })
+
+    for (let i = 0; i < 10; i++) {
+      const result = await attempt()
+      expect(result.error).not.toBe(TOO_MANY)
+    }
+
+    const result = await attempt()
+    expect(result.success).toBe(false)
+    expect(result.error).toBe(TOO_MANY)
+  })
+
+  it('registerForEvent is rate limited on the 11th attempt for one email', async () => {
+    const attempt = () =>
+      registerForEvent({
+        eventId: 'event-rate-limit',
+        ...contact,
+        email: 'rate.limit.event@example.com',
+      })
+
+    for (let i = 0; i < 10; i++) {
+      expect((await attempt()).error).not.toBe(TOO_MANY)
+    }
+    expect((await attempt()).error).toBe(TOO_MANY)
+  })
+
+  it('shares one budget across entry points for the same email', async () => {
+    const email = 'rate.limit.shared@example.com'
+    for (let i = 0; i < 10; i++) {
+      await registerForEvent({ eventId: 'event-rate-limit', ...contact, email })
+    }
+    const result = await completeRegistrationWithRider({
+      eventId: 'event-rate-limit',
+      selectedRiderId: null,
+      ...contact,
+      email,
+    })
+    expect(result.error).toBe(TOO_MANY)
+  })
+})
+
+describe('free-text length caps', () => {
+  const contact = {
+    firstName: 'Test',
+    lastName: 'Rider',
+    shareRegistration: false,
+    phone: '416-555-0000',
+    emergencyContactName: 'Emergency Contact',
+    emergencyContactPhone: '555-1234',
+  }
+
+  it('registerForEvent rejects a team name over 100 characters', async () => {
+    const result = await registerForEvent({
+      eventId: 'event-cap-1',
+      ...contact,
+      email: 'cap.event@example.com',
+      teamName: 't'.repeat(101),
+      isTeamCaptain: true,
+    })
+    expect(result.success).toBe(false)
+    expect(result.error).toBe('Team name is too long')
+  })
+
+  it('completeRegistrationWithRider rejects a team name over 100 characters', async () => {
+    const result = await completeRegistrationWithRider({
+      eventId: 'event-cap-2',
+      selectedRiderId: null,
+      ...contact,
+      email: 'cap.complete@example.com',
+      teamName: 't'.repeat(101),
+    })
+    expect(result.success).toBe(false)
+    expect(result.error).toBe('Team name is too long')
+  })
+
+  it('registerForPermanent rejects a start location over 200 characters', async () => {
+    const result = await registerForPermanent({
+      routeId: 'route-cap',
+      eventDate: new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10),
+      startTime: '07:00',
+      direction: 'as_posted',
+      ...contact,
+      email: 'cap.permanent@example.com',
+      startLocation: 's'.repeat(201),
+    })
+    expect(result.success).toBe(false)
+    expect(result.error).toBe('Start location is too long')
   })
 })

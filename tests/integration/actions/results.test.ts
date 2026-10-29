@@ -137,6 +137,11 @@ import {
 } from '@/lib/actions/results'
 import { getMembershipForRider, isTrialUsed } from '@/lib/memberships/service'
 
+// Event fixtures sit in next year so the tests can tell the event season apart
+// from the current one.
+const EVENT_SEASON = new Date().getFullYear() + 1
+const EVENT_DATE = `${EVENT_SEASON}-05-10`
+
 const mockModule = await vi.importMock<{
   __calls: Array<{ table: string; method: string; args?: unknown[] }>
   __queryBuilder: Record<string, ReturnType<typeof vi.fn>>
@@ -492,9 +497,21 @@ describe('addRegistration', () => {
   // re-adding them has to update that row — inserting would hit the constraint
   // and the organizer would be told they are "already registered".
   it.each(['cancelled', 'incomplete: membership'])(
-    'revives an existing %s registration instead of inserting',
+    'revives an existing %s registration as registered when membership is found',
     async (status) => {
       mockModule.__mockExistingResult({ id: 'reg-1', status, management_token: 'tok' })
+      // resolveAdminRegistrationStatus: rider lookup, then event lookup.
+      mockModule.__mockResultFound({ first_name: 'Rider', last_name: 'One' })
+      mockModule.__mockResultFound({
+        chapter_id: 'ch-1',
+        season: EVENT_SEASON,
+        event_date: EVENT_DATE,
+      })
+      vi.mocked(getMembershipForRider).mockResolvedValueOnce({
+        found: true,
+        membershipId: 1,
+        type: 'Individual Membership',
+      })
       mockModule.__mockUpdateSuccess()
 
       const result = await addRegistration({
@@ -503,6 +520,7 @@ describe('addRegistration', () => {
       })
 
       expect(result.success).toBe(true)
+      expect(result.data?.membershipStatus).toBe('valid')
 
       const insertCalls = mockModule.__calls.filter(
         (c) => c.table === 'registrations' && c.method === 'insert'
@@ -519,6 +537,63 @@ describe('addRegistration', () => {
       })
     }
   )
+
+  it('revives an existing incomplete: membership registration and keeps it incomplete when membership is still missing', async () => {
+    mockModule.__mockExistingResult({
+      id: 'reg-1',
+      status: 'incomplete: membership',
+      management_token: 'tok',
+    })
+    mockModule.__mockResultFound({ first_name: 'Rider', last_name: 'One' })
+    mockModule.__mockResultFound({
+      chapter_id: 'ch-1',
+      season: EVENT_SEASON,
+      event_date: EVENT_DATE,
+    })
+    vi.mocked(getMembershipForRider).mockResolvedValueOnce({ found: false })
+    mockModule.__mockUpdateSuccess()
+
+    const result = await addRegistration({
+      eventId: 'event-1',
+      riderId: 'rider-1',
+    })
+
+    expect(result.success).toBe(true)
+    expect(result.data?.membershipStatus).toBe('none')
+
+    const updateCalls = mockModule.__calls.filter(
+      (c) => c.table === 'registrations' && c.method === 'update'
+    )
+    expect(updateCalls).toHaveLength(1)
+    expect(updateCalls[0].args?.[0]).toMatchObject({
+      status: 'incomplete: membership',
+      cancelled_at: null,
+    })
+  })
+
+  it('verifies membership against the event season, not the current one', async () => {
+    mockModule.__mockNoExistingResult()
+    mockModule.__mockResultFound({ first_name: 'Trey', last_name: 'Trial' })
+    mockModule.__mockResultFound({
+      chapter_id: 'ch-1',
+      season: EVENT_SEASON,
+      event_date: EVENT_DATE,
+    })
+    vi.mocked(getMembershipForRider).mockResolvedValueOnce({
+      found: true,
+      membershipId: 7,
+      type: 'Trial Member',
+    })
+    vi.mocked(isTrialUsed).mockResolvedValueOnce(false)
+    mockModule.__mockInsertSuccess()
+
+    await addRegistration({ eventId: 'event-1', riderId: 'rider-1' })
+
+    expect(getMembershipForRider).toHaveBeenCalledWith(
+      expect.objectContaining({ riderId: 'rider-1', season: EVENT_SEASON, chapterId: 'ch-1' })
+    )
+    expect(isTrialUsed).toHaveBeenCalledWith('rider-1', EVENT_SEASON)
+  })
 
   it('creates registration successfully when no duplicate', async () => {
     mockModule.__mockNoExistingResult()
@@ -559,6 +634,18 @@ describe('addRegistration', () => {
   // never shows up in the "Registered" list until the hourly revalidate.
   it('busts the registration and event caches so the public event page updates', async () => {
     mockModule.__mockNoExistingResult()
+    // resolveAdminRegistrationStatus: rider lookup, then event (chapter_id) lookup.
+    mockModule.__mockResultFound({ first_name: 'Ada', last_name: 'Lovelace' })
+    mockModule.__mockResultFound({
+      chapter_id: 'ch-1',
+      season: EVENT_SEASON,
+      event_date: EVENT_DATE,
+    })
+    vi.mocked(getMembershipForRider).mockResolvedValueOnce({
+      found: true,
+      membershipId: 1,
+      type: 'Individual Membership',
+    })
     mockModule.__mockInsertSuccess()
     // Post-insert lookups: event first, then rider (for the audit log).
     mockModule.__mockResultFound({ name: 'Spring 200', slug: 'spring-200' })
@@ -678,7 +765,7 @@ describe('revalidateMembership', () => {
       rider_id: 'rider-1',
       event_id: 'event-1',
       riders: { first_name: 'Frank', last_name: 'Fake' },
-      events: { chapter_id: 'ch-1' },
+      events: { chapter_id: 'ch-1', season: EVENT_SEASON, event_date: EVENT_DATE },
     })
 
     const result = await revalidateMembership('reg-1')
@@ -694,7 +781,7 @@ describe('revalidateMembership', () => {
       rider_id: 'rider-1',
       event_id: 'event-1',
       riders: { first_name: 'Frank', last_name: 'Fake' },
-      events: { chapter_id: 'ch-1' },
+      events: { chapter_id: 'ch-1', season: EVENT_SEASON, event_date: EVENT_DATE },
     })
     mockGetMembership.mockResolvedValueOnce({ found: false })
 
@@ -702,7 +789,33 @@ describe('revalidateMembership', () => {
 
     expect(result.success).toBe(true)
     expect(result.data?.membershipFound).toBe(false)
-    expect(mockGetMembership).toHaveBeenCalledWith('rider-1', 'Frank', 'Fake', 'ch-1')
+    expect(mockGetMembership).toHaveBeenCalledWith({
+      riderId: 'rider-1',
+      firstName: 'Frank',
+      lastName: 'Fake',
+      season: EVENT_SEASON,
+      chapterId: 'ch-1',
+    })
+  })
+
+  it('uses the registration event season', async () => {
+    mockModule.__mockResultFound({
+      id: 'reg-1',
+      status: 'incomplete: membership',
+      rider_id: 'rider-1',
+      event_id: 'event-1',
+      riders: { first_name: 'Trey', last_name: 'Trial' },
+      events: { chapter_id: 'ch-1', season: EVENT_SEASON, event_date: EVENT_DATE },
+    })
+    mockGetMembership.mockResolvedValueOnce({ found: true, membershipId: 9, type: 'Trial Member' })
+    mockIsTrialUsed.mockResolvedValueOnce(true)
+
+    await revalidateMembership('reg-1')
+
+    expect(mockGetMembership).toHaveBeenCalledWith(
+      expect.objectContaining({ riderId: 'rider-1', season: EVENT_SEASON })
+    )
+    expect(mockIsTrialUsed).toHaveBeenCalledWith('rider-1', EVENT_SEASON)
   })
 
   it('updates registration status when membership found', async () => {
@@ -712,7 +825,7 @@ describe('revalidateMembership', () => {
       rider_id: 'rider-1',
       event_id: 'event-1',
       riders: { first_name: 'Frank', last_name: 'Fake' },
-      events: { chapter_id: 'ch-1' },
+      events: { chapter_id: 'ch-1', season: EVENT_SEASON, event_date: EVENT_DATE },
     })
     mockGetMembership.mockResolvedValueOnce({
       found: true,
@@ -740,7 +853,7 @@ describe('revalidateMembership', () => {
       rider_id: 'rider-1',
       event_id: 'event-1',
       riders: { first_name: 'Tara', last_name: 'Trial' },
-      events: { chapter_id: 'ch-1' },
+      events: { chapter_id: 'ch-1', season: EVENT_SEASON, event_date: EVENT_DATE },
     })
     mockGetMembership.mockResolvedValueOnce({
       found: true,
@@ -768,7 +881,7 @@ describe('revalidateMembership', () => {
       rider_id: 'rider-1',
       event_id: 'event-1',
       riders: { first_name: 'Uri', last_name: 'Upgrade' },
-      events: { chapter_id: 'ch-1' },
+      events: { chapter_id: 'ch-1', season: EVENT_SEASON, event_date: EVENT_DATE },
     })
     mockGetMembership.mockResolvedValueOnce({
       found: true,
@@ -798,7 +911,7 @@ describe('revalidateMembership', () => {
       rider_id: 'rider-1',
       event_id: 'event-1',
       riders: { first_name: 'Tara', last_name: 'Trial' },
-      events: { chapter_id: 'ch-1' },
+      events: { chapter_id: 'ch-1', season: EVENT_SEASON, event_date: EVENT_DATE },
     })
     mockGetMembership.mockResolvedValueOnce({
       found: true,
@@ -828,7 +941,7 @@ describe('revalidateMembership', () => {
       rider_id: 'rider-1',
       event_id: 'event-1',
       riders: { first_name: 'Frank', last_name: 'Fake' },
-      events: { chapter_id: null },
+      events: { chapter_id: null, season: EVENT_SEASON, event_date: EVENT_DATE },
     })
     mockGetMembership.mockRejectedValueOnce(new Error('CCN API timed out after 10s'))
 

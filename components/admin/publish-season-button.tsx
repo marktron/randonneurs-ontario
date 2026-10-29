@@ -15,21 +15,37 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
 import { publishSeasonDrafts } from '@/lib/actions/events'
+import { formatLongDate } from '@/lib/utils'
 import { toast } from 'sonner'
 import { Loader2, Megaphone } from 'lucide-react'
 
-export interface PublishSeasonButtonProps {
-  season: number
-  /** One row per chapter that has at least one draft in this season. */
-  draftCounts: { chapterName: string; count: number }[]
+export interface PublishSeasonDraft {
+  id: string
+  name: string
+  /** YYYY-MM-DD */
+  eventDate: string
 }
 
-export function PublishSeasonButton({ season, draftCounts }: PublishSeasonButtonProps) {
+export interface PublishSeasonButtonProps {
+  /** ACP season label: Nov 1 of the prior year to Oct 31 of this year. */
+  acpSeason: number
+  chapterId: string
+  chapterName: string
+  /** The chapter's drafts dated inside the ACP season. */
+  events: PublishSeasonDraft[]
+}
+
+export function PublishSeasonButton({
+  acpSeason,
+  chapterId,
+  chapterName,
+  events,
+}: PublishSeasonButtonProps) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [isPending, startTransition] = useTransition()
 
-  const total = draftCounts.reduce((sum, row) => sum + row.count, 0)
+  const total = events.length
   if (total === 0) return null
 
   const noun = total === 1 ? 'draft' : 'drafts'
@@ -37,7 +53,7 @@ export function PublishSeasonButton({ season, draftCounts }: PublishSeasonButton
 
   const handleConfirm = () => {
     startTransition(async () => {
-      const result = await publishSeasonDrafts(season)
+      const result = await publishSeasonDrafts(acpSeason, chapterId)
       if (!result.success) {
         toast.error(result.error || 'Failed to publish season')
         return
@@ -50,7 +66,7 @@ export function PublishSeasonButton({ season, draftCounts }: PublishSeasonButton
           `Published ${published} ${publishedNoun}; ${erwFailures} could not be synced to Epic Ride Weather`
         )
       } else {
-        toast.success(`Published ${published} ${publishedNoun} for the ${season} season`)
+        toast.success(`Published ${published} ${publishedNoun} for the ${acpSeason} season`)
       }
       setOpen(false)
       router.refresh()
@@ -62,23 +78,27 @@ export function PublishSeasonButton({ season, draftCounts }: PublishSeasonButton
       <AlertDialogTrigger asChild>
         <Button variant="outline">
           <Megaphone className="h-4 w-4 mr-2" />
-          Publish {season} season ({total} {noun})
+          Publish {acpSeason} season ({total} {noun})
         </Button>
       </AlertDialogTrigger>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Publish the {season} season?</AlertDialogTitle>
+          <AlertDialogTitle>
+            Publish the {acpSeason} season for {chapterName}?
+          </AlertDialogTitle>
           <AlertDialogDescription>
-            Every draft dated in {season} becomes visible on the public calendar, the iCal feed, and
-            Epic Ride Weather. This cannot be undone from the site (you would have to cancel events
-            individually).
+            Every {chapterName} draft dated Nov 1, {acpSeason - 1} to Oct 31, {acpSeason} becomes
+            visible on the public calendar, the iCal feed, and Epic Ride Weather. This cannot be
+            undone from the site (you would have to cancel events individually).
           </AlertDialogDescription>
         </AlertDialogHeader>
-        <ul className="text-sm space-y-1">
-          {draftCounts.map((row) => (
-            <li key={row.chapterName} className="flex justify-between">
-              <span>{row.chapterName}</span>
-              <span className="tabular-nums">{row.count}</span>
+        <ul className="text-sm space-y-1 max-h-64 overflow-y-auto">
+          {events.map((event) => (
+            <li key={event.id} className="flex justify-between gap-4">
+              <span>{event.name}</span>
+              <span className="tabular-nums text-muted-foreground shrink-0">
+                {formatLongDate(event.eventDate)}
+              </span>
             </li>
           ))}
         </ul>

@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { PermanentRegistrationForm } from '@/components/permanent-registration-form'
 import type { ActiveRoute } from '@/lib/data/routes'
@@ -16,6 +16,72 @@ vi.mock('@/lib/actions/register', () => ({
   registerForPermanent: (...args: unknown[]) => mockRegisterForPermanent(...args),
   completeRegistrationWithRider: (...args: unknown[]) => mockCompleteRegistrationWithRider(...args),
 }))
+
+const mockGetPermanentRouteTrack = vi.fn()
+const mockGetExistingPermanentRide = vi.fn()
+vi.mock('@/lib/actions/permanent-start', () => ({
+  getPermanentRouteTrack: (...args: unknown[]) => mockGetPermanentRouteTrack(...args),
+  getExistingPermanentRide: (...args: unknown[]) => mockGetExistingPermanentRide(...args),
+}))
+
+// Leaflet does not run in happy-dom; stand in for the map with buttons.
+vi.mock('@/components/route-start-picker', () => ({
+  RouteStartPicker: ({
+    valueKm,
+    onChange,
+    onPickControl,
+    controls,
+    disabled,
+  }: {
+    valueKm: number | null
+    onChange: (km: number | null) => void
+    onPickControl?: (name: string, passesKm: number[]) => void
+    controls?: { name: string }[]
+    disabled?: boolean
+  }) => (
+    <div data-testid="route-start-picker" data-disabled={disabled ? 'true' : 'false'}>
+      <span data-testid="picker-value">{valueKm ?? 'none'}</span>
+      <span data-testid="picker-controls">{(controls ?? []).map((c) => c.name).join('|')}</span>
+      <button type="button" onClick={() => onChange(42.3)}>
+        Drop pin
+      </button>
+      <button type="button" onClick={() => onChange(null)}>
+        Clear pin
+      </button>
+      <button
+        type="button"
+        onClick={() => {
+          onChange(30)
+          onPickControl?.('Cafe', [30, 150])
+        }}
+      >
+        Pick control
+      </button>
+      {/* The pass chooser only moves the start; it suggests no name. */}
+      <button type="button" onClick={() => onChange(150)}>
+        Choose other pass
+      </button>
+      <button type="button" onClick={() => onChange(77.7)}>
+        Type km
+      </button>
+      <button
+        type="button"
+        onClick={() => {
+          onChange(120.5)
+          onPickControl?.('Georgetown', [120.5])
+        }}
+      >
+        Pick other control
+      </button>
+    </div>
+  ),
+}))
+
+const loopTrack = { points: [], totalKm: 204.5, isLoop: true }
+const routeControls = [
+  { name: 'Cafe', km: 30, lat: 44.1, lng: -79.1 },
+  { name: 'Georgetown', km: 120.5, lat: 43.6, lng: -79.9 },
+]
 
 // Mock router
 const mockRefresh = vi.fn()
@@ -30,16 +96,18 @@ vi.mock('next/navigation', () => ({
 vi.mock('@/components/rider-match-dialog', () => ({
   RiderMatchDialog: ({
     open,
-    onSelect,
+    onSelectRider,
+    onCreateNew,
   }: {
     open: boolean
-    onSelect: (id: string | null) => void
+    onSelectRider: (id: string) => void
+    onCreateNew: () => void
   }) => {
     if (!open) return null
     return (
       <div data-testid="rider-match-dialog">
-        <button onClick={() => onSelect('rider-1')}>Select Rider</button>
-        <button onClick={() => onSelect(null)}>Create New</button>
+        <button onClick={() => onSelectRider('rider-1')}>Select Rider</button>
+        <button onClick={() => onCreateNew()}>Create New</button>
       </div>
     )
   },
@@ -119,10 +187,680 @@ describe('PermanentRegistrationForm', () => {
     vi.clearAllMocks()
     localStorage.clear()
     mockRegisterForPermanent.mockResolvedValue({ success: true })
+    mockGetPermanentRouteTrack.mockResolvedValue({ available: false })
+    mockGetExistingPermanentRide.mockResolvedValue(null)
   })
 
   afterEach(() => {
     vi.clearAllMocks()
+  })
+
+  type User = ReturnType<typeof userEvent.setup>
+
+  async function selectRoute(user: User, route: ActiveRoute) {
+    await user.click(screen.getByRole('combobox', { name: 'Route' }))
+    await user.click(await screen.findByRole('option', { name: new RegExp(route.name) }))
+  }
+
+  /** Picks a day next month, which is always on or after the earliest allowed date. */
+  async function selectDate(user: User) {
+    await user.click(screen.getByRole('button', { name: 'Ride Date' }))
+    await user.click(screen.getByRole('button', { name: 'Go to the Next Month' }))
+    const dayButtons = screen
+      .getAllByRole('button')
+      .filter((b) => /^\d+$/.test(b.textContent || ''))
+    await user.click(dayButtons[15])
+  }
+
+  async function selectDirection(user: User, label: 'As Posted' | 'Reversed') {
+    await user.click(screen.getByRole('combobox', { name: 'Direction' }))
+    await user.click(await screen.findByRole('option', { name: label }))
+  }
+
+  async function fillRiderFieldsAndSubmit(user: User) {
+    await user.type(screen.getByLabelText(/first name/i), 'John')
+    await user.type(screen.getByLabelText(/last name/i), 'Doe')
+    await user.type(screen.getByLabelText(/email/i), 'john@example.com')
+    await user.type(document.querySelector('#emergencyContactName')!, 'Jane Doe')
+    await user.type(document.querySelector('#emergencyContactPhone')!, '555-1234')
+    await user.type(document.querySelector('#phone')!, '416-555-9999')
+    await user.click(screen.getByRole('button', { name: /schedule permanent/i }))
+  }
+
+  /** Opens the start dialog from the form ("Start somewhere else" or "Change"). */
+  async function openStartDialog(user: User) {
+    const opener =
+      screen.queryByRole('button', { name: /^change/i }) ??
+      (await screen.findByRole('button', { name: /start somewhere else/i }))
+    await user.click(opener)
+    return screen.findByRole('dialog', { name: /choose where you start/i })
+  }
+
+  /** Clicks one of the mocked picker's buttons, inside the open dialog. */
+  async function pick(user: User, button: string) {
+    await user.click(screen.getByRole('button', { name: button }))
+  }
+
+  /** Done, expecting the dialog to close. */
+  async function done(user: User) {
+    await user.click(screen.getByRole('button', { name: 'Done' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+  }
+
+  async function escape(user: User) {
+    await user.keyboard('{Escape}')
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+  }
+
+  /** The name field lives in the dialog, so it exists only while the dialog is open. */
+  const nameField = () => screen.getByLabelText(/name of your start location/i)
+  const queryNameField = () => screen.queryByLabelText(/name of your start location/i)
+
+  /** Opens the dialog, makes one pick, names the start if asked, and closes with Done. */
+  async function chooseStart(user: User, button: string, name?: string) {
+    await openStartDialog(user)
+    await pick(user, button)
+    if (name !== undefined) {
+      await user.clear(nameField())
+      await user.type(nameField(), name)
+    }
+    await done(user)
+  }
+
+  describe('start location field', () => {
+    const startGroup = () => screen.queryByRole('group', { name: 'Start location' })
+    const atStart = { name: 'Tim Horton’s, Lambeth', km: 0, lat: 42.9, lng: -81.3 }
+
+    it('shows nothing before a route is chosen', () => {
+      render(<PermanentRegistrationForm routes={mockRoutes} />)
+      expect(startGroup()).not.toBeInTheDocument()
+    })
+
+    it("names the posted start from the route's start control, above the button", async () => {
+      const user = userEvent.setup()
+      mockGetPermanentRouteTrack.mockResolvedValue({
+        available: true,
+        track: loopTrack,
+        controls: [atStart, ...routeControls],
+      })
+      render(<PermanentRegistrationForm routes={mockRoutes} />)
+      await selectRoute(user, mockRoutes[0])
+      const group = await screen.findByRole('group', { name: 'Start location' })
+      expect(
+        await within(group).findByText('Posted start: Tim Horton’s, Lambeth')
+      ).toBeInTheDocument()
+      const text = within(group).getByText('Posted start: Tim Horton’s, Lambeth')
+      const button = within(group).getByRole('button', { name: /start somewhere else/i })
+      // The value line comes before the button.
+      expect(text.compareDocumentPosition(button) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    })
+
+    it('says "The route\'s posted start" when no control sits at the start', async () => {
+      const user = userEvent.setup()
+      mockGetPermanentRouteTrack.mockResolvedValue({
+        available: true,
+        track: loopTrack,
+        controls: routeControls,
+      })
+      render(<PermanentRegistrationForm routes={mockRoutes} />)
+      await selectRoute(user, mockRoutes[0])
+      await screen.findByRole('button', { name: /start somewhere else/i })
+      expect(within(startGroup()!).getByText("The route's posted start")).toBeInTheDocument()
+    })
+
+    it('shows the posted start without the button on a point-to-point route', async () => {
+      const user = userEvent.setup()
+      mockGetPermanentRouteTrack.mockResolvedValue({
+        available: true,
+        track: { ...loopTrack, isLoop: false },
+        controls: [atStart],
+      })
+      render(<PermanentRegistrationForm routes={mockRoutes} />)
+      await selectRoute(user, mockRoutes[0])
+      expect(await screen.findByText('Posted start: Tim Horton’s, Lambeth')).toBeInTheDocument()
+      expect(
+        screen.queryByRole('button', { name: /start somewhere else/i })
+      ).not.toBeInTheDocument()
+    })
+
+    it('shows the posted start without the button when the track is unavailable', async () => {
+      const user = userEvent.setup()
+      render(<PermanentRegistrationForm routes={mockRoutes} />)
+      await selectRoute(user, mockRoutes[0])
+      await waitFor(() => expect(mockGetPermanentRouteTrack).toHaveBeenCalled())
+      expect(within(startGroup()!).getByText("The route's posted start")).toBeInTheDocument()
+      expect(
+        screen.queryByRole('button', { name: /start somewhere else/i })
+      ).not.toBeInTheDocument()
+    })
+
+    it('shows nothing while an existing ride locks the start', async () => {
+      const user = userEvent.setup()
+      mockGetPermanentRouteTrack.mockResolvedValue({ available: true, track: loopTrack })
+      mockGetExistingPermanentRide.mockResolvedValue({
+        startTime: '06:30',
+        startLocation: null,
+        startOffsetKm: null,
+      })
+      render(<PermanentRegistrationForm routes={mockRoutes} />)
+      await selectRoute(user, mockRoutes[0])
+      await selectDate(user)
+      await screen.findByText(/already registered for this date/)
+      expect(startGroup()).not.toBeInTheDocument()
+    })
+
+    it('puts the label above the summary once a start is chosen', async () => {
+      const user = userEvent.setup()
+      mockGetPermanentRouteTrack.mockResolvedValue({ available: true, track: loopTrack })
+      render(<PermanentRegistrationForm routes={mockRoutes} />)
+      await selectRoute(user, mockRoutes[0])
+      await chooseStart(user, 'Drop pin', 'Tim Hortons')
+      const group = startGroup()!
+      expect(
+        within(group).getByText('Starts 42.3 km into the posted route from Tim Hortons')
+      ).toBeInTheDocument()
+      expect(within(group).getByRole('button', { name: /^change/i })).toBeInTheDocument()
+      expect(within(group).queryByText(/posted start:/i)).not.toBeInTheDocument()
+    })
+  })
+
+  describe('alternate start', () => {
+    async function setUp(user: User) {
+      mockGetPermanentRouteTrack.mockResolvedValue({ available: true, track: loopTrack })
+      render(<PermanentRegistrationForm routes={mockRoutes} />)
+      await selectRoute(user, mockRoutes[0])
+    }
+
+    it('hides the start option when the route has no usable track', async () => {
+      const user = userEvent.setup()
+      render(<PermanentRegistrationForm routes={mockRoutes} />)
+      await selectRoute(user, mockRoutes[0])
+      await waitFor(() => expect(mockGetPermanentRouteTrack).toHaveBeenCalledWith(mockRoutes[0].id))
+      expect(
+        screen.queryByRole('button', { name: /start somewhere else/i })
+      ).not.toBeInTheDocument()
+      expect(queryNameField()).not.toBeInTheDocument()
+    })
+
+    it('hides the start option for a point-to-point route', async () => {
+      const user = userEvent.setup()
+      mockGetPermanentRouteTrack.mockResolvedValue({
+        available: true,
+        track: { ...loopTrack, isLoop: false },
+      })
+      render(<PermanentRegistrationForm routes={mockRoutes} />)
+      await selectRoute(user, mockRoutes[0])
+      await waitFor(() => expect(mockGetPermanentRouteTrack).toHaveBeenCalled())
+      expect(
+        screen.queryByRole('button', { name: /start somewhere else/i })
+      ).not.toBeInTheDocument()
+    })
+
+    it('keeps the map out of the form until the rider opens the dialog', async () => {
+      const user = userEvent.setup()
+      await setUp(user)
+      await screen.findByRole('button', { name: /start somewhere else/i })
+      expect(screen.queryByTestId('route-start-picker')).not.toBeInTheDocument()
+      const dialog = await openStartDialog(user)
+      expect(dialog).toContainElement(screen.getByTestId('route-start-picker'))
+    })
+
+    it('asks for the name inside the dialog, never in the form', async () => {
+      const user = userEvent.setup()
+      await setUp(user)
+      const dialog = await openStartDialog(user)
+      expect(queryNameField()).not.toBeInTheDocument()
+      await pick(user, 'Drop pin')
+      expect(dialog).toContainElement(nameField())
+      await user.type(nameField(), 'Tim Hortons')
+      await done(user)
+      expect(queryNameField()).not.toBeInTheDocument()
+    })
+
+    it('keeps the dialog open on Done until the start is named', async () => {
+      const user = userEvent.setup()
+      await setUp(user)
+      await openStartDialog(user)
+      await pick(user, 'Drop pin')
+      await user.click(screen.getByRole('button', { name: 'Done' }))
+      expect(screen.getByRole('dialog')).toBeInTheDocument()
+      expect(screen.getByText('Please name your start location')).toBeInTheDocument()
+      expect(nameField()).toHaveFocus()
+      await user.type(nameField(), 'Tim Hortons')
+      await done(user)
+    })
+
+    it('shows the start and its name in the form after Done', async () => {
+      const user = userEvent.setup()
+      await setUp(user)
+      await chooseStart(user, 'Drop pin', 'Tim Hortons, Uxbridge')
+      expect(screen.queryByTestId('route-start-picker')).not.toBeInTheDocument()
+      expect(
+        screen.getByText('Starts 42.3 km into the posted route from Tim Hortons, Uxbridge')
+      ).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /^change/i })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /use the posted start/i })).toBeInTheDocument()
+      expect(
+        screen.queryByRole('button', { name: /start somewhere else/i })
+      ).not.toBeInTheDocument()
+      expect(screen.queryByText(/still needs a name/i)).not.toBeInTheDocument()
+    })
+
+    it('lets the rider back out without a name, notes it, and Change goes to the field', async () => {
+      const user = userEvent.setup()
+      await setUp(user)
+      await openStartDialog(user)
+      await pick(user, 'Drop pin')
+      await escape(user)
+      expect(screen.getByText('Starts 42.3 km into the posted route')).toBeInTheDocument()
+      expect(screen.getByText(/still needs a name/i)).toBeInTheDocument()
+      await openStartDialog(user)
+      await waitFor(() => expect(nameField()).toHaveFocus())
+    })
+
+    it('reopens on Change with the same start and name', async () => {
+      const user = userEvent.setup()
+      await setUp(user)
+      await chooseStart(user, 'Drop pin', 'Tim Hortons')
+      await openStartDialog(user)
+      expect(screen.getByTestId('picker-value')).toHaveTextContent('42.3')
+      expect(nameField()).toHaveValue('Tim Hortons')
+    })
+
+    it('goes back to the start button when closed with nothing chosen', async () => {
+      const user = userEvent.setup()
+      await setUp(user)
+      await openStartDialog(user)
+      await done(user)
+      expect(screen.getByRole('button', { name: /start somewhere else/i })).toBeInTheDocument()
+      await openStartDialog(user)
+      await escape(user)
+      expect(screen.getByRole('button', { name: /start somewhere else/i })).toBeInTheDocument()
+    })
+
+    it('returns focus to the button that now opens the dialog', async () => {
+      const user = userEvent.setup()
+      await setUp(user)
+      await openStartDialog(user)
+      await done(user)
+      await waitFor(() =>
+        expect(screen.getByRole('button', { name: /start somewhere else/i })).toHaveFocus()
+      )
+      await chooseStart(user, 'Drop pin', 'Tim Hortons')
+      await waitFor(() => expect(screen.getByRole('button', { name: /^change/i })).toHaveFocus())
+    })
+
+    it('submits the offset and place name', async () => {
+      const user = userEvent.setup()
+      await setUp(user)
+      await chooseStart(user, 'Drop pin', 'Tim Hortons, Uxbridge')
+      await selectDate(user)
+      await fillRiderFieldsAndSubmit(user)
+      await waitFor(() =>
+        expect(mockRegisterForPermanent).toHaveBeenCalledWith(
+          expect.objectContaining({ startOffsetKm: 42.3, startLocation: 'Tim Hortons, Uxbridge' })
+        )
+      )
+    })
+
+    it('still refuses to submit a start with no name', async () => {
+      const user = userEvent.setup()
+      await setUp(user)
+      await openStartDialog(user)
+      await pick(user, 'Drop pin')
+      await escape(user)
+      await selectDate(user)
+      await fillRiderFieldsAndSubmit(user)
+      expect(await screen.findByText('Please name your start location')).toBeInTheDocument()
+      expect(mockRegisterForPermanent).not.toHaveBeenCalled()
+    })
+
+    it('sends no start when the pin is cleared in the dialog', async () => {
+      const user = userEvent.setup()
+      await setUp(user)
+      await openStartDialog(user)
+      await pick(user, 'Drop pin')
+      await pick(user, 'Clear pin')
+      expect(queryNameField()).not.toBeInTheDocument()
+      await done(user)
+      expect(screen.getByRole('button', { name: /start somewhere else/i })).toBeInTheDocument()
+      await selectDate(user)
+      await fillRiderFieldsAndSubmit(user)
+      await waitFor(() => expect(mockRegisterForPermanent).toHaveBeenCalled())
+      const payload = mockRegisterForPermanent.mock.calls[0][0]
+      expect(payload.startOffsetKm).toBeNull()
+      expect(payload.startLocation).toBe('')
+    })
+
+    it('"Use the posted start" clears the start and the name', async () => {
+      const user = userEvent.setup()
+      await setUp(user)
+      await chooseStart(user, 'Drop pin', 'Tim Hortons')
+      await user.click(screen.getByRole('button', { name: /use the posted start/i }))
+      expect(screen.getByRole('button', { name: /start somewhere else/i })).toBeInTheDocument()
+      await openStartDialog(user)
+      await pick(user, 'Drop pin')
+      expect(nameField()).toHaveValue('')
+      await escape(user)
+      await user.click(screen.getByRole('button', { name: /use the posted start/i }))
+      await selectDate(user)
+      await fillRiderFieldsAndSubmit(user)
+      await waitFor(() => expect(mockRegisterForPermanent).toHaveBeenCalled())
+      const payload = mockRegisterForPermanent.mock.calls[0][0]
+      expect(payload.startOffsetKm).toBeNull()
+      expect(payload.startLocation).toBe('')
+    })
+
+    it('clears the start and place name when the route changes', async () => {
+      const user = userEvent.setup()
+      await setUp(user)
+      await chooseStart(user, 'Drop pin', 'Tim Hortons')
+      await selectRoute(user, mockRoutes[1])
+      await waitFor(() =>
+        expect(mockGetPermanentRouteTrack).toHaveBeenLastCalledWith(mockRoutes[1].id)
+      )
+      expect(
+        await screen.findByRole('button', { name: /start somewhere else/i })
+      ).toBeInTheDocument()
+      await openStartDialog(user)
+      expect(screen.getByTestId('picker-value')).toHaveTextContent('none')
+      await pick(user, 'Drop pin')
+      expect(nameField()).toHaveValue('')
+    })
+  })
+
+  describe('starting at a control', () => {
+    async function setUp(user: User) {
+      mockGetPermanentRouteTrack.mockResolvedValue({
+        available: true,
+        track: loopTrack,
+        controls: routeControls,
+      })
+      render(<PermanentRegistrationForm routes={mockRoutes} />)
+      await selectRoute(user, mockRoutes[0])
+      await openStartDialog(user)
+    }
+
+    it("passes the route's controls to the picker", async () => {
+      const user = userEvent.setup()
+      await setUp(user)
+      expect(screen.getByTestId('picker-controls')).toHaveTextContent('Cafe|Georgetown')
+    })
+
+    it("submits the control's exact offset and its suggested name", async () => {
+      const user = userEvent.setup()
+      await setUp(user)
+      await pick(user, 'Pick control')
+      expect(nameField()).toHaveValue('Cafe')
+      expect(nameField()).toBeEnabled()
+      await done(user)
+      expect(screen.getByText('Starts 30.0 km into the posted route from Cafe')).toBeInTheDocument()
+      await selectDate(user)
+      await fillRiderFieldsAndSubmit(user)
+      await waitFor(() =>
+        expect(mockRegisterForPermanent).toHaveBeenCalledWith(
+          expect.objectContaining({ startOffsetKm: 30, startLocation: 'Cafe' })
+        )
+      )
+    })
+
+    it('never overwrites a name the rider typed', async () => {
+      const user = userEvent.setup()
+      await setUp(user)
+      await pick(user, 'Drop pin')
+      await user.type(nameField(), 'My sister’s house')
+      await pick(user, 'Pick control')
+      expect(nameField()).toHaveValue('My sister’s house')
+    })
+
+    it('never overwrites a suggestion the rider edited', async () => {
+      const user = userEvent.setup()
+      await setUp(user)
+      await pick(user, 'Pick control')
+      await user.type(nameField(), ', Uxbridge')
+      await pick(user, 'Pick other control')
+      expect(nameField()).toHaveValue('Cafe, Uxbridge')
+    })
+
+    it("replaces an unedited suggestion with the next control's name", async () => {
+      const user = userEvent.setup()
+      await setUp(user)
+      await pick(user, 'Pick control')
+      await pick(user, 'Pick other control')
+      expect(nameField()).toHaveValue('Georgetown')
+    })
+
+    it('clears an unedited suggestion when a map tap moves the start off the control', async () => {
+      const user = userEvent.setup()
+      await setUp(user)
+      await pick(user, 'Pick control')
+      await pick(user, 'Drop pin')
+      expect(nameField()).toHaveValue('')
+      await pick(user, 'Pick other control')
+      expect(nameField()).toHaveValue('Georgetown')
+    })
+
+    it('clears an unedited suggestion when a typed distance moves the start', async () => {
+      const user = userEvent.setup()
+      await setUp(user)
+      await pick(user, 'Pick control')
+      await pick(user, 'Type km')
+      expect(nameField()).toHaveValue('')
+    })
+
+    it('clears an unedited suggestion when the rider goes back to the posted start', async () => {
+      const user = userEvent.setup()
+      await setUp(user)
+      await pick(user, 'Pick control')
+      // Choosing the posted start in the list is onChange(null), like "Clear pin".
+      await pick(user, 'Clear pin')
+      expect(queryNameField()).not.toBeInTheDocument()
+      await pick(user, 'Drop pin')
+      expect(nameField()).toHaveValue('')
+    })
+
+    it('keeps the suggestion for another pass of the same control', async () => {
+      const user = userEvent.setup()
+      await setUp(user)
+      await pick(user, 'Pick control')
+      await pick(user, 'Choose other pass')
+      expect(nameField()).toHaveValue('Cafe')
+      await done(user)
+      expect(
+        screen.getByText('Starts 150.0 km into the posted route from Cafe')
+      ).toBeInTheDocument()
+    })
+
+    it('never clears a name the rider typed when the start moves', async () => {
+      const user = userEvent.setup()
+      await setUp(user)
+      await pick(user, 'Drop pin')
+      await user.type(nameField(), 'My spot')
+      for (const button of ['Pick control', 'Drop pin', 'Type km', 'Clear pin', 'Drop pin']) {
+        await pick(user, button)
+      }
+      expect(nameField()).toHaveValue('My spot')
+    })
+
+    it('never clears an edited suggestion when the start moves', async () => {
+      const user = userEvent.setup()
+      await setUp(user)
+      await pick(user, 'Pick control')
+      await user.type(nameField(), ', Uxbridge')
+      await pick(user, 'Drop pin')
+      await pick(user, 'Type km')
+      expect(nameField()).toHaveValue('Cafe, Uxbridge')
+    })
+
+    it('clears the suggestion with the start when the route changes', async () => {
+      const user = userEvent.setup()
+      await setUp(user)
+      await pick(user, 'Pick control')
+      await done(user)
+      await selectRoute(user, mockRoutes[1])
+      await waitFor(() =>
+        expect(mockGetPermanentRouteTrack).toHaveBeenLastCalledWith(mockRoutes[1].id)
+      )
+      await openStartDialog(user)
+      expect(screen.getByTestId('picker-value')).toHaveTextContent('none')
+      await pick(user, 'Drop pin')
+      expect(nameField()).toHaveValue('')
+      await pick(user, 'Pick other control')
+      expect(nameField()).toHaveValue('Georgetown')
+    })
+  })
+
+  describe('joining an existing ride', () => {
+    it('shows the existing start, locks time and start, and submits those values', async () => {
+      const user = userEvent.setup()
+      mockGetPermanentRouteTrack.mockResolvedValue({ available: true, track: loopTrack })
+      mockGetExistingPermanentRide.mockResolvedValue({
+        startTime: '06:30',
+        startLocation: 'Tim Hortons, Uxbridge',
+        startOffsetKm: 42.3,
+      })
+      render(<PermanentRegistrationForm routes={mockRoutes} />)
+      await selectRoute(user, mockRoutes[0])
+      await selectDate(user)
+      expect(
+        await screen.findByText(
+          /A ride on this route is already registered for this date: 6:30 AM from Tim Hortons, Uxbridge, 42\.3 km into the posted route/
+        )
+      ).toBeInTheDocument()
+      expect(screen.getByLabelText('Start Time')).toBeDisabled()
+      expect(screen.getByLabelText('Start Time')).toHaveValue('06:30')
+      expect(
+        screen.queryByRole('button', { name: /start somewhere else/i })
+      ).not.toBeInTheDocument()
+      await fillRiderFieldsAndSubmit(user)
+      await waitFor(() =>
+        expect(mockRegisterForPermanent).toHaveBeenCalledWith(
+          expect.objectContaining({
+            startTime: '06:30',
+            startOffsetKm: 42.3,
+            startLocation: 'Tim Hortons, Uxbridge',
+          })
+        )
+      )
+    })
+
+    it('closes the start dialog when a ride arrives, and keeps it closed after the lock lifts', async () => {
+      const user = userEvent.setup()
+      mockGetPermanentRouteTrack.mockResolvedValue({ available: true, track: loopTrack })
+      let resolveRide: (ride: unknown) => void = () => {}
+      mockGetExistingPermanentRide.mockImplementationOnce(
+        () => new Promise((resolve) => (resolveRide = resolve))
+      )
+      render(<PermanentRegistrationForm routes={mockRoutes} />)
+      await selectRoute(user, mockRoutes[0])
+      await selectDate(user)
+      await waitFor(() => expect(mockGetExistingPermanentRide).toHaveBeenCalled())
+
+      // The rider opens the dialog while the lookup is still out.
+      await openStartDialog(user)
+      resolveRide({ startTime: '06:30', startLocation: null, startOffsetKm: null })
+      expect(await screen.findByText(/already registered for this date/)).toBeInTheDocument()
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+
+      // No ride the other way: the lock lifts and the dialog stays closed.
+      await selectDirection(user, 'Reversed')
+      await waitFor(() =>
+        expect(screen.queryByText(/already registered for this date/)).not.toBeInTheDocument()
+      )
+      expect(
+        await screen.findByRole('button', { name: /start somewhere else/i })
+      ).toBeInTheDocument()
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    })
+
+    it('describes an existing ride from the posted start', async () => {
+      const user = userEvent.setup()
+      mockGetExistingPermanentRide.mockResolvedValue({
+        startTime: '08:00',
+        startLocation: null,
+        startOffsetKm: null,
+      })
+      render(<PermanentRegistrationForm routes={mockRoutes} />)
+      await selectRoute(user, mockRoutes[0])
+      await selectDate(user)
+      expect(
+        await screen.findByText(/already registered for this date: 8:00 AM from the posted start/)
+      ).toBeInTheDocument()
+    })
+
+    it('looks the ride up again when the direction changes, and unlocks when none exists', async () => {
+      const user = userEvent.setup()
+      mockGetPermanentRouteTrack.mockResolvedValue({ available: true, track: loopTrack })
+      mockGetExistingPermanentRide.mockResolvedValueOnce({
+        startTime: '06:30',
+        startLocation: 'Tim Hortons, Uxbridge',
+        startOffsetKm: 42.3,
+      })
+      render(<PermanentRegistrationForm routes={mockRoutes} />)
+      await selectRoute(user, mockRoutes[0])
+      await selectDate(user)
+      await screen.findByText(/already registered for this date/)
+      await selectDirection(user, 'Reversed')
+      await waitFor(() =>
+        expect(mockGetExistingPermanentRide).toHaveBeenLastCalledWith(
+          mockRoutes[0].id,
+          expect.any(String),
+          'reversed'
+        )
+      )
+      await waitFor(() =>
+        expect(screen.queryByText(/already registered for this date/)).not.toBeInTheDocument()
+      )
+      expect(screen.getByLabelText('Start Time')).not.toBeDisabled()
+      expect(screen.getByLabelText('Start Time')).toHaveValue('08:00')
+
+      // The unlocked ride carries the rider's own (empty) start, not the other ride's.
+      await fillRiderFieldsAndSubmit(user)
+      await waitFor(() => expect(mockRegisterForPermanent).toHaveBeenCalled())
+      const payload = mockRegisterForPermanent.mock.calls[0][0]
+      expect(payload).toMatchObject({
+        startTime: '08:00',
+        startOffsetKm: null,
+        startLocation: '',
+        direction: 'reversed',
+      })
+    })
+  })
+
+  describe('rider match', () => {
+    it("echoes the ride's start from pendingData when completing the registration", async () => {
+      const rideStart = { startTime: '07:00:00', offsetKm: 12.5 }
+      mockRegisterForPermanent.mockResolvedValue({
+        success: false,
+        needsRiderMatch: true,
+        matchCandidates: [
+          {
+            id: 'rider-1',
+            firstName: 'John',
+            lastName: 'Doe',
+            fullName: 'John Doe',
+            firstSeason: 2020,
+            totalRides: 5,
+            obfuscatedEmail: null,
+          },
+        ],
+        pendingData: { eventId: 'event-1', rideStart },
+      })
+      mockCompleteRegistrationWithRider.mockResolvedValue({ success: true })
+
+      const user = userEvent.setup()
+      render(<PermanentRegistrationForm routes={mockRoutes} />)
+      await selectRoute(user, mockRoutes[0])
+      await selectDate(user)
+      await fillRiderFieldsAndSubmit(user)
+      await user.click(await screen.findByRole('button', { name: 'Select Rider' }))
+
+      await waitFor(() =>
+        expect(mockCompleteRegistrationWithRider).toHaveBeenCalledWith(
+          expect.objectContaining({ eventId: 'event-1', selectedRiderId: 'rider-1', rideStart })
+        )
+      )
+    })
   })
 
   describe('rendering', () => {

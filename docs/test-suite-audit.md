@@ -573,7 +573,7 @@ Completed 2026-03-13. Added 13 real-database integration tests for `lib/membersh
 - Second call uses DB cache (CCN called exactly once)
 - CCN no-match returns `{ found: false }`, nothing cached
 - CCN API error propagates, nothing cached
-- CCN_ENDPOINT missing error propagates
+- Lookups and upserts use the requested season, not the current one; `isTrialUsed` ignores other seasons (replaced the former `CCN_ENDPOINT` test when the var was removed)
 
 `isTrialUsed` (9 tests):
 

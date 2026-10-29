@@ -305,12 +305,39 @@ export type Database = {
           },
         ]
       }
+      event_slug_history: {
+        Row: {
+          created_at: string
+          event_id: string
+          slug: string
+        }
+        Insert: {
+          created_at?: string
+          event_id: string
+          slug: string
+        }
+        Update: {
+          created_at?: string
+          event_id?: string
+          slug?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'event_slug_history_event_id_fkey'
+            columns: ['event_id']
+            isOneToOne: false
+            referencedRelation: 'events'
+            referencedColumns: ['id']
+          },
+        ]
+      }
       events: {
         Row: {
           chapter_id: string
           collection: string | null
           created_at: string | null
           description: string | null
+          direction: string
           distance_km: number
           erw_canonical_url: string | null
           erw_event_id: string | null
@@ -328,7 +355,10 @@ export type Database = {
           route_id: string | null
           season: number | null
           slug: string
+          start_lat: number | null
+          start_lng: number | null
           start_location: string | null
+          start_offset_km: number | null
           start_time: string | null
           status: string
           updated_at: string | null
@@ -338,6 +368,7 @@ export type Database = {
           collection?: string | null
           created_at?: string | null
           description?: string | null
+          direction?: string
           distance_km: number
           erw_canonical_url?: string | null
           erw_event_id?: string | null
@@ -355,7 +386,10 @@ export type Database = {
           route_id?: string | null
           season?: number | null
           slug: string
+          start_lat?: number | null
+          start_lng?: number | null
           start_location?: string | null
+          start_offset_km?: number | null
           start_time?: string | null
           status?: string | null
           updated_at?: string | null
@@ -365,6 +399,7 @@ export type Database = {
           collection?: string | null
           created_at?: string | null
           description?: string | null
+          direction?: string
           distance_km?: number
           erw_canonical_url?: string | null
           erw_event_id?: string | null
@@ -382,7 +417,10 @@ export type Database = {
           route_id?: string | null
           season?: number | null
           slug?: string
+          start_lat?: number | null
+          start_lng?: number | null
           start_location?: string | null
+          start_offset_km?: number | null
           start_time?: string | null
           status?: string | null
           updated_at?: string | null
@@ -705,7 +743,8 @@ export type Database = {
           created_at: string | null
           id: string
           note: string | null
-          rider_id: string
+          recipient_name: string | null
+          rider_id: string | null
           season: number
           updated_at: string | null
         }
@@ -716,7 +755,8 @@ export type Database = {
           created_at?: string | null
           id?: string
           note?: string | null
-          rider_id: string
+          recipient_name?: string | null
+          rider_id?: string | null
           season: number
           updated_at?: string | null
         }
@@ -727,7 +767,8 @@ export type Database = {
           created_at?: string | null
           id?: string
           note?: string | null
-          rider_id?: string
+          recipient_name?: string | null
+          rider_id?: string | null
           season?: number
           updated_at?: string | null
         }
@@ -1120,7 +1161,7 @@ export type Database = {
         Returns: {
           award_year: number
           rider_name: string
-          rider_slug: string
+          rider_slug: string | null
         }[]
       }
       get_award_recipients_with_distance: {

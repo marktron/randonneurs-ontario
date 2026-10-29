@@ -21,9 +21,12 @@ export type ErwSyncOutcome = 'synced' | 'skipped' | 'failed'
  * Create the Epic Ride Weather event for a newly published (non-permanent)
  * event and store the returned ids on the row.
  *
- * Called from createEvent (status scheduled), updateEventStatus (draft ->
- * scheduled) and publishSeasonDrafts. Skips permanents and non-production
- * environments; a failed ERW call never fails the caller.
+ * Called from createEvent (status scheduled), updateEvent (an unlinked
+ * scheduled event gains a route), updateEventStatus (draft -> scheduled) and
+ * publishSeasonDrafts. Skips permanents, non-production environments, and
+ * events without an RWGPS route: ERW can't publish a routeless event, so it
+ * would sit as a draft forever and use up one of the account's 10 draft
+ * slots. A failed ERW call never fails the caller.
  */
 export async function syncNewEventToErw(event: ErwSyncableEvent): Promise<ErwSyncOutcome> {
   if (event.event_type === 'permanent' || !isErwSyncEnabled()) {
@@ -38,6 +41,11 @@ export async function syncNewEventToErw(event: ErwSyncableEvent): Promise<ErwSyn
       .eq('id', event.route_id)
       .single()
     rwgpsId = route?.rwgps_id ?? null
+  }
+
+  // No route, a route without an rwgps_id, or a collection route.
+  if (!rwgpsId) {
+    return 'skipped'
   }
 
   const erwResult = await createErwEvent({

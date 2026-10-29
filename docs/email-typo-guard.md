@@ -63,7 +63,7 @@ than either outcome.
 
 Two details worth preserving:
 
-- The guard sits **before** the rate limiter in `validateContactFields`, so the
+- The guard sits **before** the rate limiter (`isRegistrationRateLimited`, called by each entry point right after `validateContactFields`), so the
   confirmation round trip costs one rate-limit attempt in total, not two.
 - Editing the email field clears `emailConfirmed` (`registration-fields.tsx`).
   A confirmation only ever covers the exact address it was shown.

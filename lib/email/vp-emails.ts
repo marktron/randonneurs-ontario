@@ -1,13 +1,7 @@
-// VP email addresses by chapter slug
-// These match the contacts on /contact page
-
-const VP_EMAILS: Record<string, string> = {
-  huron: 'vp-huron@randonneursontario.ca',
-  ottawa: 'vp-ottawa@randonneursontario.ca',
-  simcoe: 'vp-simcoe@randonneursontario.ca',
-  toronto: 'vp-toronto@randonneursontario.ca',
-}
+// VP email addresses by chapter slug, derived from the shared VP list
+// (the same contacts shown on the /contact page).
+import { CHAPTER_VPS } from '@/lib/chapter-vps'
 
 export function getVpEmail(chapterSlug: string): string | null {
-  return VP_EMAILS[chapterSlug] || null
+  return CHAPTER_VPS[chapterSlug]?.email || null
 }

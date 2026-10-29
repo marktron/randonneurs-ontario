@@ -53,6 +53,10 @@ export function createMockEvent(overrides?: Partial<Event>): Event {
     organizer_name: null,
     organizer_phone: null,
     organizer_email: null,
+    direction: 'as_posted',
+    start_offset_km: null,
+    start_lat: null,
+    start_lng: null,
     ...overrides,
   }
 }

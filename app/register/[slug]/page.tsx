@@ -1,4 +1,4 @@
-import { notFound } from 'next/navigation'
+import { notFound, permanentRedirect } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
 import { PageShell } from '@/components/page-shell'
@@ -9,6 +9,7 @@ import { RwgpsCollectionEmbed } from '@/components/rwgps-collection-embed'
 import { fetchRwgpsCollection, buildRwgpsCollectionUrl } from '@/lib/rwgps'
 import {
   getEventBySlug,
+  getEventSlugRedirect,
   getRegisteredRiders,
   getFlecheTeams,
   getRegisteredRidersWithTeams,
@@ -20,6 +21,8 @@ import { Badge } from '@/components/ui/badge'
 import { EventJsonLd } from '@/components/structured-data'
 import { formatRideName } from '@/lib/events/format'
 import { SITE_URL } from '@/lib/site-url'
+import { seasonOfEventDate, torontoCalendarYear } from '@/lib/season'
+import { registrationSeasonBlock } from '@/lib/memberships/season-gate'
 
 interface PageProps {
   params: Promise<{ slug: string }>
@@ -122,6 +125,8 @@ export default async function RegisterPage({ params }: PageProps) {
   const event = await getEventBySlug(slug)
 
   if (!event) {
+    const currentSlug = await getEventSlugRedirect(slug)
+    if (currentSlug) permanentRedirect(`/register/${currentSlug}`)
     notFound()
   }
 
@@ -131,6 +136,13 @@ export default async function RegisterPage({ params }: PageProps) {
   const flecheDisplayName = isFleche
     ? `${new Date(event.date + 'T00:00:00').getFullYear()} Flèche${event.startLocation ? ` – ${event.startLocation}` : ''}`
     : null
+  // Next-season events stay closed until CCN sells that season's memberships.
+  // Cancelled and draft events already render closed, so skip the CCN lookup.
+  const eventSeason = seasonOfEventDate(event.date)
+  const seasonBlock =
+    !isCancelled && !isDraft && eventSeason > torontoCalendarYear()
+      ? await registrationSeasonBlock(eventSeason)
+      : null
   // Drafts show neither the riders list nor team info (see the alert
   // rendered below instead), so skip fetching data nobody will see.
   const [registeredRiders, flecheTeams, collection] = await Promise.all([
@@ -284,12 +296,25 @@ export default async function RegisterPage({ params }: PageProps) {
             </Alert>
           )}
 
+          {seasonBlock && (
+            <Alert className="mt-6 border-dashed py-4">
+              <AlertTitle className="text-base font-semibold">
+                Registration opens with {eventSeason} memberships
+              </AlertTitle>
+              <AlertDescription>{seasonBlock}</AlertDescription>
+            </Alert>
+          )}
+
           {/* Mobile Register CTA */}
           <div className="lg:hidden mt-6">
             {isCancelled ? (
               <RegistrationClosed />
             ) : isDraft ? (
               <RegistrationClosed message="Registration is not open yet for this draft event." />
+            ) : seasonBlock ? (
+              <RegistrationClosed
+                message={`Registration is not open yet for ${eventSeason} events.`}
+              />
             ) : (
               <RegisterCTA
                 eventId={event.id}
@@ -428,6 +453,10 @@ export default async function RegisterPage({ params }: PageProps) {
               <RegistrationClosed />
             ) : isDraft ? (
               <RegistrationClosed message="Registration is not open yet for this draft event." />
+            ) : seasonBlock ? (
+              <RegistrationClosed
+                message={`Registration is not open yet for ${eventSeason} events.`}
+              />
             ) : (
               <RegisterCTA
                 eventId={event.id}

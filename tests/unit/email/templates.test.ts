@@ -85,6 +85,27 @@ describe('email templates render ride name via formatRideName', () => {
   })
 })
 
+describe('registration confirmation membership warning', () => {
+  it('names the season it could not verify when one is given', () => {
+    const email = buildRegistrationConfirmationEmail({
+      ...baseRegistration,
+      membershipStatus: 'none',
+      membershipSeason: 2027,
+    })
+    expect(email.text).toContain('We could not verify your 2027 club membership.')
+    expect(email.html).toContain('We could not verify your 2027 club membership.')
+  })
+
+  it('keeps the generic wording when no season is given', () => {
+    const email = buildRegistrationConfirmationEmail({
+      ...baseRegistration,
+      membershipStatus: 'none',
+    })
+    expect(email.text).toContain('We could not verify your club membership.')
+    expect(email.html).toContain('We could not verify your club membership.')
+  })
+})
+
 describe('result submission reminder variant', () => {
   it('prefixes the subject with Reminder:', () => {
     const email = buildResultSubmissionRequestEmail({ ...baseResult, reminder: true })

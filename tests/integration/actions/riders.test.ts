@@ -579,6 +579,82 @@ describe('mergeRiders', () => {
       expect(riderUpdates).toHaveLength(1)
     })
 
+    describe('rider number', () => {
+      const merge = (target: string, ids: string[]) =>
+        mergeRiders({
+          targetRiderId: target,
+          sourceRiderIds: ids,
+          riderData: { firstName: 'Test', lastName: 'User', email: null, gender: null },
+        })
+
+      const riderUpdateArgs = () => {
+        const updates = mockModule.__calls.filter(
+          (c) => c.table === 'riders' && c.method === 'update'
+        )
+        expect(updates).toHaveLength(1)
+        return updates[0].args?.[0] as Record<string, unknown>
+      }
+
+      it('keeps the lowest number when a source rider has a lower number than the target', async () => {
+        mockModule.__mockRidersFound([
+          { id: 'rider-1', rider_number: 900 },
+          { id: 'rider-2', rider_number: 450 },
+        ])
+
+        const result = await merge('rider-1', ['rider-1', 'rider-2'])
+
+        expect(result.success).toBe(true)
+        expect(riderUpdateArgs().rider_number).toBe(450)
+      })
+
+      it('keeps the target number when the sources have no number', async () => {
+        mockModule.__mockRidersFound([
+          { id: 'rider-1', rider_number: 900 },
+          { id: 'rider-2', rider_number: null },
+        ])
+
+        const result = await merge('rider-1', ['rider-1', 'rider-2'])
+
+        expect(result.success).toBe(true)
+        expect(riderUpdateArgs().rider_number).toBe(900)
+      })
+
+      it('adopts a source number when the target has none', async () => {
+        mockModule.__mockRidersFound([
+          { id: 'rider-1', rider_number: null },
+          { id: 'rider-2', rider_number: 450 },
+        ])
+
+        const result = await merge('rider-1', ['rider-1', 'rider-2'])
+
+        expect(result.success).toBe(true)
+        expect(riderUpdateArgs().rider_number).toBe(450)
+      })
+
+      it('does not touch rider_number when no rider has one', async () => {
+        mockModule.__mockRidersFound([
+          { id: 'rider-1', rider_number: null },
+          { id: 'rider-2', rider_number: null },
+        ])
+
+        const result = await merge('rider-1', ['rider-1', 'rider-2'])
+
+        expect(result.success).toBe(true)
+        expect(riderUpdateArgs()).not.toHaveProperty('rider_number')
+      })
+
+      it('fails without modifying anything when the rider number lookup errors', async () => {
+        mockModule.__mockQueryError({ message: 'boom' })
+
+        const result = await merge('rider-1', ['rider-1', 'rider-2'])
+
+        expect(result.success).toBe(false)
+        expect(
+          mockModule.__calls.filter((c) => c.method === 'update' || c.method === 'delete')
+        ).toHaveLength(0)
+      })
+    })
+
     it('revalidates riders, results, and registrations caches after a successful merge', async () => {
       const result = await mergeRiders({
         targetRiderId: 'rider-1',

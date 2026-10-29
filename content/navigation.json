@@ -16,11 +16,6 @@
           "href": "/your-first-brevet"
         },
         {
-          "label": "Blog",
-          "href": "https://blog.randonneursontario.ca",
-          "external": true
-        },
-        {
           "separator": true
         },
         {
@@ -49,10 +44,6 @@
         {
           "label": "Club Policies",
           "href": "/policies"
-        },
-        {
-          "label": "Mailing List",
-          "href": "/mailing-list"
         },
         {
           "label": "Control Cards",
@@ -160,6 +151,40 @@
         {
           "label": "Records",
           "href": "/records"
+        }
+      ]
+    },
+    {
+      "label": "Community",
+      "children": [
+        {
+          "label": "Blog",
+          "href": "https://blog.randonneursontario.ca",
+          "external": true
+        },
+        {
+          "label": "Mailing List",
+          "href": "/mailing-list"
+        },
+        {
+          "label": "Slack",
+          "href": "{{slackInvite}}",
+          "external": true
+        },
+        {
+          "label": "Facebook Group",
+          "href": "https://www.facebook.com/groups/randonneursontario",
+          "external": true
+        },
+        {
+          "label": "Strava Club",
+          "href": "https://www.strava.com/clubs/6774",
+          "external": true
+        },
+        {
+          "label": "Ride with GPS Club",
+          "href": "https://ridewithgps.com/clubs/1406-randonneurs-ontario/home",
+          "external": true
         }
       ]
     },

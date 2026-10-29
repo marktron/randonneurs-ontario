@@ -4,6 +4,7 @@ import { RiderMatchDialog } from '@/components/rider-match-dialog'
 import { MembershipErrorModal } from '@/components/membership-error-modal'
 import { EmailConfirmDialog } from '@/components/registration/email-confirm-dialog'
 import type { RegistrationFormState } from '@/hooks/use-registration-form'
+import { torontoCalendarYear } from '@/lib/season'
 
 interface RegistrationDialogsProps {
   form: RegistrationFormState
@@ -38,6 +39,7 @@ export function RegistrationDialogs({
         open={form.membershipErrorVariant !== null}
         onClose={() => form.setMembershipErrorVariant(null)}
         variant={form.membershipErrorVariant || 'no-membership'}
+        season={form.membershipErrorSeason ?? torontoCalendarYear()}
       />
       <EmailConfirmDialog
         typedEmail={form.email}

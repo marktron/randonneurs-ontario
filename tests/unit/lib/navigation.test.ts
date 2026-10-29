@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, afterEach, vi } from 'vitest'
 import {
   getResolvedNavigation,
   expandItem,
@@ -24,6 +24,10 @@ describe('resolveHref', () => {
   })
 })
 
+afterEach(() => {
+  vi.unstubAllEnvs()
+})
+
 describe('getTemplateVariables', () => {
   it('returns season, pbpYear, and graniteAnvilYear', () => {
     const vars = getTemplateVariables()
@@ -37,6 +41,18 @@ describe('getTemplateVariables', () => {
     const vars = getTemplateVariables()
     expect(vars.season).toMatch(/^\d{4}$/)
     expect(vars.pbpYear).toMatch(/^\d{4}$/)
+  })
+
+  it('includes slackInvite from NEXT_PUBLIC_SLACK_INVITE_URL', () => {
+    vi.stubEnv('NEXT_PUBLIC_SLACK_INVITE_URL', 'https://join.slack.com/t/example/shared_invite/abc')
+    expect(getTemplateVariables().slackInvite).toBe(
+      'https://join.slack.com/t/example/shared_invite/abc'
+    )
+  })
+
+  it('returns an empty slackInvite when the env var is unset', () => {
+    vi.stubEnv('NEXT_PUBLIC_SLACK_INVITE_URL', undefined)
+    expect(getTemplateVariables().slackInvite).toBe('')
   })
 })
 
@@ -84,6 +100,71 @@ describe('expandItem', () => {
   it('preserves CTA style', () => {
     const result = expandItem({ label: 'Join', href: '/membership', style: 'cta' }, variables)
     expect(result[0].style).toBe('cta')
+  })
+
+  it('drops a link whose href resolves to an empty string', () => {
+    const result = expandItem(
+      { label: 'Slack', href: '{{slackInvite}}', external: true },
+      { ...variables, slackInvite: '' }
+    )
+    expect(result).toEqual([])
+  })
+
+  it('drops a link whose href resolves to whitespace only', () => {
+    const result = expandItem(
+      { label: 'Slack', href: '{{slackInvite}}' },
+      {
+        ...variables,
+        slackInvite: '   ',
+      }
+    )
+    expect(result).toEqual([])
+  })
+
+  it('keeps a link whose href variable is set', () => {
+    const result = expandItem(
+      { label: 'Slack', href: '{{slackInvite}}', external: true },
+      { ...variables, slackInvite: 'https://slack.example.com/invite' }
+    )
+    expect(result).toEqual([
+      { label: 'Slack', href: 'https://slack.example.com/invite', external: true },
+    ])
+  })
+
+  it('marks a link external when its href resolves to an absolute URL', () => {
+    // The admin editor only flags hrefs that start with http(s), so saving the
+    // nav strips `external` from templated links like {{slackInvite}}.
+    const result = expandItem(
+      { label: 'Slack', href: '{{slackInvite}}' },
+      { ...variables, slackInvite: 'https://slack.example.com/invite' }
+    )
+    expect(result).toEqual([
+      { label: 'Slack', href: 'https://slack.example.com/invite', external: true },
+    ])
+  })
+
+  it('does not mark internal links external', () => {
+    const result = expandItem({ label: 'Mailing List', href: '/mailing-list' }, variables)
+    expect(result[0].external).toBeUndefined()
+  })
+
+  it('keeps a parent item without an href', () => {
+    const result = expandItem({ label: 'Parent', children: [] }, variables)
+    expect(result).toEqual([{ label: 'Parent', children: [] }])
+  })
+
+  it('omits a dropped link from its parent children', () => {
+    const result = expandItem(
+      {
+        label: 'Community',
+        children: [
+          { label: 'Mailing List', href: '/mailing-list' },
+          { label: 'Slack', href: '{{slackInvite}}', external: true },
+        ],
+      },
+      { ...variables, slackInvite: '' }
+    )
+    expect(result[0].children).toEqual([{ label: 'Mailing List', href: '/mailing-list' }])
   })
 
   it('recursively expands children', () => {
@@ -150,5 +231,58 @@ describe('getResolvedNavigation', () => {
     expect(cta).toBeDefined()
     expect(cta!.label).toBe('Join the club')
     expect(cta!.href).toBe('/membership')
+  })
+
+  describe('Community menu', () => {
+    const SLACK = 'https://join.slack.com/t/example/shared_invite/abc'
+
+    it('sits after Results and before the CTA', () => {
+      const labels = getResolvedNavigation().items.map((item) => item.label)
+      const community = labels.indexOf('Community')
+      expect(community).toBeGreaterThan(-1)
+      expect(community).toBe(labels.indexOf('Results') + 1)
+      expect(community).toBe(labels.indexOf('Join the club') - 1)
+    })
+
+    it('lists the community channels in order when Slack is configured', () => {
+      vi.stubEnv('NEXT_PUBLIC_SLACK_INVITE_URL', SLACK)
+      const community = getResolvedNavigation().items.find((i) => i.label === 'Community')!
+      expect(community.children!.map((c) => c.label)).toEqual([
+        'Blog',
+        'Mailing List',
+        'Slack',
+        'Facebook Group',
+        'Strava Club',
+        'Ride with GPS Club',
+      ])
+      const slack = community.children!.find((c) => c.label === 'Slack')!
+      expect(slack.href).toBe(SLACK)
+      expect(slack.external).toBe(true)
+      const mailing = community.children!.find((c) => c.label === 'Mailing List')!
+      expect(mailing.href).toBe('/mailing-list')
+      expect(mailing.external).toBeUndefined()
+      for (const child of community.children!.filter((c) => c.label !== 'Mailing List')) {
+        expect(child.external).toBe(true)
+      }
+    })
+
+    it('omits Slack when the env var is unset', () => {
+      vi.stubEnv('NEXT_PUBLIC_SLACK_INVITE_URL', undefined)
+      const community = getResolvedNavigation().items.find((i) => i.label === 'Community')!
+      expect(community.children!.map((c) => c.label)).toEqual([
+        'Blog',
+        'Mailing List',
+        'Facebook Group',
+        'Strava Club',
+        'Ride with GPS Club',
+      ])
+    })
+
+    it('no longer lists Blog or Mailing List under About', () => {
+      const about = getResolvedNavigation().items.find((i) => i.label === 'About')!
+      const labels = about.children!.map((c) => c.label)
+      expect(labels).not.toContain('Blog')
+      expect(labels).not.toContain('Mailing List')
+    })
   })
 })
