@@ -150,6 +150,10 @@ cat "$SEED_FILE.tmp2" >> "$SEED_FILE"
 # Re-enable triggers for normal operation after the bulk load.
 printf '\n-- Re-enable triggers for normal operation after the bulk load.\nSET session_replication_role = DEFAULT;\n' >> "$SEED_FILE"
 
+# The rider_number sequence migration runs before the seed, so align the
+# sequence with the seeded riders or the first result insert reuses a number.
+printf '\n-- Align rider_number_seq with the seeded riders. Migrations run before the\n-- seed, so the sequence migration saw an empty riders table and set the\n-- sequence to start at 1; without this, the first result insert on a fresh\n-- database hands out a rider number that is already taken.\nSELECT setval(\n  '"'"'rider_number_seq'"'"',\n  GREATEST(COALESCE(MAX(rider_number), 1), 1),\n  MAX(rider_number) IS NOT NULL\n) FROM public.riders;\n' >> "$SEED_FILE"
+
 # Clean up temp files
 rm -f "$SEED_FILE.tmp" "$SEED_FILE.tmp2"
 

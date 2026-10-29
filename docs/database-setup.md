@@ -38,6 +38,8 @@ Located in `supabase/migrations/`. Key migrations include:
 
 The seed file (`supabase/seed.sql`) is automatically loaded when running `supabase db reset`. It contains chapters, awards, riders, routes, events, results, and result/rider awards. **PII is stripped** from this file (rider email, emergency contacts, ccn_id, birth_year are set to NULL).
 
+The seed ends by aligning `rider_number_seq` with the seeded riders. Migrations run before the seed, so the sequence migration sees an empty `riders` table; without the trailing `setval` the first result inserted on a fresh database (CI, a new local stack) would be assigned a rider number that is already taken. `scripts/generate-seed.sh` writes this footer, so regenerating the seed keeps it.
+
 A separate **gitignored** file `supabase/seed-memberships.sql` contains:
 
 - UPDATE statements to restore stripped rider PII (email, ccn_id, birth_year, etc.)

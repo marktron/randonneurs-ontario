@@ -15465,3 +15465,13 @@ INSERT INTO public.registrations (id, event_id, rider_id, registered_at, notes, 
 
 -- Re-enable triggers for normal operation after the bulk load.
 SET session_replication_role = DEFAULT;
+
+-- Align rider_number_seq with the seeded riders. Migrations run before the
+-- seed, so the sequence migration saw an empty riders table and set the
+-- sequence to start at 1; without this, the first result insert on a fresh
+-- database hands out a rider number that is already taken.
+SELECT setval(
+  'rider_number_seq',
+  GREATEST(COALESCE(MAX(rider_number), 1), 1),
+  MAX(rider_number) IS NOT NULL
+) FROM public.riders;
