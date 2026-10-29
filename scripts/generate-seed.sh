@@ -154,6 +154,11 @@ printf '\n-- Re-enable triggers for normal operation after the bulk load.\nSET s
 # sequence with the seeded riders or the first result insert reuses a number.
 printf '\n-- Align rider_number_seq with the seeded riders. Migrations run before the\n-- seed, so the sequence migration saw an empty riders table and set the\n-- sequence to start at 1; without this, the first result insert on a fresh\n-- database hands out a rider number that is already taken.\nSELECT setval(\n  '"'"'rider_number_seq'"'"',\n  GREATEST(COALESCE(MAX(rider_number), 1), 1),\n  MAX(rider_number) IS NOT NULL\n) FROM public.riders;\n' >> "$SEED_FILE"
 
+# The award announcements outbox migration stamps rows that exist when it runs;
+# seeded awards arrive after it, so stamp them or a fresh database would
+# announce every historical award.
+printf '\n-- Stamp seeded awards as already announced. The outbox migration stamps rows\n-- that exist when it runs, but the seed loads after migrations, so without\n-- this every historical award would be posted to Slack on the first cron run\n-- of a fresh database (and the announce-awards real-DB test sees them).\nUPDATE public.rider_awards SET announced_at = now() WHERE announced_at IS NULL;\nUPDATE public.result_awards SET announced_at = now() WHERE announced_at IS NULL;\n' >> "$SEED_FILE"
+
 # Clean up temp files
 rm -f "$SEED_FILE.tmp" "$SEED_FILE.tmp2"
 
