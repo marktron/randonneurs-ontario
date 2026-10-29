@@ -74,7 +74,7 @@ INSERT INTO awards (slug, title, description, award_type) VALUES
 ON CONFLICT (slug) DO NOTHING;
 
 -- ============================================================================
--- Winners (fails loudly if any slug does not resolve; idempotent)
+-- Winners (unknown award slug aborts; unknown rider slug is skipped; idempotent)
 -- ============================================================================
 
 DO $$
@@ -216,12 +216,16 @@ BEGIN
     RAISE EXCEPTION 'Banquet awards: unknown award slug(s): %', v_missing;
   END IF;
 
+  -- Rider slugs are prod data. On a fresh database (CI, a new local stack)
+  -- none of them exist, so unresolved winners are skipped with a warning
+  -- rather than aborting the migration. Production ran this with every slug
+  -- resolved, so the skip never applies there.
   SELECT string_agg(DISTINCT w.rider_slug, ', ') INTO v_missing
   FROM _banquet_winners w
   LEFT JOIN riders r ON r.slug = w.rider_slug
   WHERE w.rider_slug IS NOT NULL AND r.id IS NULL;
   IF v_missing IS NOT NULL THEN
-    RAISE EXCEPTION 'Banquet awards: unknown rider slug(s): %', v_missing;
+    RAISE WARNING 'Banquet awards: skipping winners with unknown rider slug(s): %', v_missing;
   END IF;
 
   INSERT INTO rider_awards (rider_id, award_id, season, recipient_name, note)
@@ -229,7 +233,8 @@ BEGIN
   FROM _banquet_winners w
   JOIN awards a ON a.slug = w.award_slug
   LEFT JOIN riders r ON r.slug = w.rider_slug
-  WHERE NOT EXISTS (
+  WHERE (w.rider_slug IS NULL OR r.id IS NOT NULL)
+    AND NOT EXISTS (
     SELECT 1 FROM rider_awards ra
     WHERE ra.award_id = a.id
       AND ra.season = w.season

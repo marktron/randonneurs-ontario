@@ -90,13 +90,38 @@ describe('banquet awards', () => {
     expect(row!.rider_slug).toBeNull()
   })
 
-  it('returns Mike Barry/Jock Wadley winners with non-empty names', async () => {
-    const { data, error } = await anon.rpc('get_award_recipients', {
-      p_award_slug: 'mike-barry-jock-wadley',
-    })
-    expect(error).toBeNull()
-    const rows = data as { rider_name: string }[]
-    expect(rows.length).toBeGreaterThanOrEqual(30)
-    for (const r of rows) expect(r.rider_name.trim()).not.toBe('')
+  it('returns a rider-linked banquet winner with slug and non-empty name', async () => {
+    // The migration's historical winners only resolve against prod riders, so
+    // a fresh database has none of them. Link a seeded rider instead.
+    const rider = await checked(
+      admin.from('riders').select('id, slug').order('slug').limit(1).single(),
+      'load a seeded rider'
+    )
+    const award = await checked(
+      admin.from('awards').select('id').eq('slug', 'mike-barry-jock-wadley').single(),
+      'load Mike Barry award'
+    )
+    await admin.from('rider_awards').delete().eq('award_id', award!.id).eq('season', SEASON)
+    await checked(
+      admin
+        .from('rider_awards')
+        .insert({ award_id: award!.id, season: SEASON, rider_id: rider!.id })
+        .select('id')
+        .single(),
+      'insert rider-linked award'
+    )
+    try {
+      const { data, error } = await anon.rpc('get_award_recipients', {
+        p_award_slug: 'mike-barry-jock-wadley',
+      })
+      expect(error).toBeNull()
+      const rows = data as { rider_slug: string | null; rider_name: string; award_year: number }[]
+      const row = rows.find((r) => r.award_year === SEASON)
+      expect(row).toBeDefined()
+      expect(row!.rider_slug).toBe(rider!.slug)
+      for (const r of rows) expect(r.rider_name.trim()).not.toBe('')
+    } finally {
+      await admin.from('rider_awards').delete().eq('award_id', award!.id).eq('season', SEASON)
+    }
   })
 })
