@@ -557,7 +557,7 @@ describe('getRegisteredRiders', () => {
     const result = await getRegisteredRiders('event-1')
 
     expect(result).toHaveLength(2)
-    expect(result[0].name).toBe('John D.')
+    expect(result[0].name).toBe('John Doe')
     expect(result[0].slug).toBe('john-doe')
     expect(result[1].name).toBe('Anonymous')
     // Anonymous riders must never carry a slug, even if the RPC row had one
@@ -571,7 +571,7 @@ describe('getRegisteredRiders', () => {
 
     const result = await getRegisteredRiders('event-1')
 
-    expect(result).toEqual([{ name: 'Sam L.', slug: null }])
+    expect(result).toEqual([{ name: 'Sam Lee', slug: null }])
   })
 
   it('handles RPC errors gracefully', async () => {

@@ -176,9 +176,13 @@ describe('getRegisteredRidersWithTeams', () => {
     const riders = await getRegisteredRidersWithTeams('event-1')
 
     expect(riders).toHaveLength(3)
-    expect(riders[0]).toEqual({ name: 'Alice A.', teamName: 'Team A', slug: 'alice-anderson' })
-    expect(riders[1]).toEqual({ name: 'Bob B.', teamName: 'Team A', slug: 'bob-brown' })
-    expect(riders[2]).toEqual({ name: 'Carol C.', teamName: null, slug: 'carol-clark' })
+    expect(riders[0]).toEqual({
+      name: 'Alice Anderson',
+      teamName: 'Team A',
+      slug: 'alice-anderson',
+    })
+    expect(riders[1]).toEqual({ name: 'Bob Brown', teamName: 'Team A', slug: 'bob-brown' })
+    expect(riders[2]).toEqual({ name: 'Carol Clark', teamName: null, slug: 'carol-clark' })
   })
 
   it('shows Anonymous for riders who opt out of sharing', async () => {

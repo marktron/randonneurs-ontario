@@ -325,7 +325,7 @@ export interface EventDetails {
  * Privacy-respecting: only shows first name and last initial.
  */
 export interface RegisteredRider {
-  name: string // "John D." or "Anonymous" if share_registration is false
+  name: string // "John Doe" or "Anonymous" if share_registration is false
   teamName?: string | null
   slug?: string | null // Profile slug, only present when the rider is named (never for Anonymous)
 }
@@ -367,10 +367,8 @@ const getRegisteredRidersInner = cache(async (eventId: string): Promise<Register
     if (!rider.share_registration) {
       return { name: 'Anonymous' }
     }
-    const firstName = rider.first_name || ''
-    const lastInitial = rider.last_name ? `${rider.last_name.charAt(0)}.` : ''
     return {
-      name: `${firstName} ${lastInitial}`.trim(),
+      name: `${rider.first_name || ''} ${rider.last_name || ''}`.trim(),
       slug: rider.slug ?? null,
     }
   })
@@ -465,10 +463,8 @@ const getRegisteredRidersWithTeamsInner = cache(
       if (!reg.share_registration || !reg.riders) {
         return { name: 'Anonymous', teamName: reg.team_name }
       }
-      const firstName = reg.riders.first_name || ''
-      const lastInitial = reg.riders.last_name ? `${reg.riders.last_name.charAt(0)}.` : ''
       return {
-        name: `${firstName} ${lastInitial}`.trim(),
+        name: `${reg.riders.first_name || ''} ${reg.riders.last_name || ''}`.trim(),
         teamName: reg.team_name,
         slug: reg.riders.slug ?? null,
       }

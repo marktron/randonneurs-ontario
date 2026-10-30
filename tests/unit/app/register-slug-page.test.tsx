@@ -278,14 +278,14 @@ describe('RegisterPage /register/[slug] — registered rider profile links', () 
   it('links named riders to their profile and leaves Anonymous riders unlinked', async () => {
     mockGetEventBySlug.mockResolvedValue({ ...draftEvent, status: 'scheduled' })
     mockGetRegisteredRiders.mockResolvedValue([
-      { name: 'John D.', slug: 'john-doe' },
+      { name: 'John Doe', slug: 'john-doe' },
       { name: 'Anonymous' },
     ])
 
     const Page = await RegisterPage({ params: Promise.resolve({ slug: 'winter-draft' }) })
     render(Page)
 
-    expect(screen.getByRole('link', { name: 'John D.' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'John Doe' })).toHaveAttribute(
       'href',
       '/riders/john-doe'
     )
