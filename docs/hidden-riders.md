@@ -59,7 +59,8 @@ opted to share their registration:
 
 - The `get_registered_riders` RPC nulls the name and returns
   `share_registration AND NOT hidden`, so `lib/data/events.ts` renders
-  "Anonymous".
+  "Anonymous". It also nulls `slug`, so the list never links a hidden rider's
+  profile.
 - The fleche/team path embeds `riders(...)` under `anon`; RLS nulls that embed,
   and the existing app code already renders a null rider as "Anonymous".
 

@@ -114,13 +114,14 @@ export async function getEventBySlug(slug: string): Promise<EventDetails | null>
 // Current slug for an event whose slug was rotated (see Event slug rotation)
 export async function getEventSlugRedirect(oldSlug: string): Promise<string | null>
 
-// Get registered riders for an event
+// Get registered riders for an event. Named riders carry a `slug` used to link
+// to /riders/[slug]; Anonymous rows have no slug.
 export async function getRegisteredRiders(eventId: string): Promise<RegisteredRider[]>
 
 // Get existing teams for a fleche event (for join-team dropdown)
 export async function getFlecheTeams(eventId: string): Promise<FlecheTeam[]>
 
-// Get registered riders with team info for fleche events
+// Get registered riders with team info for fleche events (same `slug` rule)
 export async function getRegisteredRidersWithTeams(eventId: string): Promise<RegisteredRider[]>
 ```
 
@@ -423,7 +424,8 @@ export function RegistrationForm({ eventId }: { eventId: string }) {
 ### Database Functions
 
 ```sql
--- Get registered riders for an event (respects share_registration setting)
+-- Get registered riders for an event (respects share_registration setting;
+-- also returns slug for profile links, NULL when hidden)
 get_registered_riders(p_event_id UUID)
 
 -- Check if current user is an admin

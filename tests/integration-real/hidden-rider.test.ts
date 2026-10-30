@@ -252,6 +252,7 @@ describe('hidden rider suppression', () => {
       first_name: string | null
       last_name: string | null
       share_registration: boolean
+      slug: string | null
     }>
     // Both registrations are present and counted.
     expect(rows).toHaveLength(2)
@@ -260,6 +261,8 @@ describe('hidden rider suppression', () => {
     const visible = rows.filter((r) => r.first_name === 'Visible')
     expect(visible).toHaveLength(1)
     expect(visible[0].share_registration).toBe(true)
+    expect(typeof visible[0].slug).toBe('string')
+    expect(visible[0].slug).not.toBe('')
 
     // The hidden rider is forced anonymous despite share_registration = true:
     // no name leaks and the effective share flag is false.
@@ -269,6 +272,8 @@ describe('hidden rider suppression', () => {
     expect(anonymous).toHaveLength(1)
     expect(anonymous[0].first_name).toBeNull()
     expect(anonymous[0].last_name).toBeNull()
+    // The profile slug must not leak either.
+    expect(anonymous[0].slug).toBeNull()
   })
 
   it('still counts the rider in nameless aggregates (route participant counts)', async () => {

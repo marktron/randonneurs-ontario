@@ -116,17 +116,17 @@ describe('getFlecheTeams', () => {
       {
         team_name: 'Speed Demons',
         is_team_captain: true,
-        riders: { first_name: 'Alice', last_name: 'Anderson' },
+        riders: { first_name: 'Alice', last_name: 'Anderson', slug: 'alice-anderson' },
       },
       {
         team_name: 'Speed Demons',
         is_team_captain: false,
-        riders: { first_name: 'Bob', last_name: 'Brown' },
+        riders: { first_name: 'Bob', last_name: 'Brown', slug: 'bob-brown' },
       },
       {
         team_name: 'Night Owls',
         is_team_captain: true,
-        riders: { first_name: 'Carol', last_name: 'Clark' },
+        riders: { first_name: 'Carol', last_name: 'Clark', slug: 'carol-clark' },
       },
     ])
 
@@ -159,26 +159,26 @@ describe('getRegisteredRidersWithTeams', () => {
       {
         team_name: 'Team A',
         share_registration: true,
-        riders: { first_name: 'Alice', last_name: 'Anderson' },
+        riders: { first_name: 'Alice', last_name: 'Anderson', slug: 'alice-anderson' },
       },
       {
         team_name: 'Team A',
         share_registration: true,
-        riders: { first_name: 'Bob', last_name: 'Brown' },
+        riders: { first_name: 'Bob', last_name: 'Brown', slug: 'bob-brown' },
       },
       {
         team_name: null,
         share_registration: true,
-        riders: { first_name: 'Carol', last_name: 'Clark' },
+        riders: { first_name: 'Carol', last_name: 'Clark', slug: 'carol-clark' },
       },
     ])
 
     const riders = await getRegisteredRidersWithTeams('event-1')
 
     expect(riders).toHaveLength(3)
-    expect(riders[0]).toEqual({ name: 'Alice A.', teamName: 'Team A' })
-    expect(riders[1]).toEqual({ name: 'Bob B.', teamName: 'Team A' })
-    expect(riders[2]).toEqual({ name: 'Carol C.', teamName: null })
+    expect(riders[0]).toEqual({ name: 'Alice A.', teamName: 'Team A', slug: 'alice-anderson' })
+    expect(riders[1]).toEqual({ name: 'Bob B.', teamName: 'Team A', slug: 'bob-brown' })
+    expect(riders[2]).toEqual({ name: 'Carol C.', teamName: null, slug: 'carol-clark' })
   })
 
   it('shows Anonymous for riders who opt out of sharing', async () => {
@@ -186,7 +186,7 @@ describe('getRegisteredRidersWithTeams', () => {
       {
         team_name: 'Team A',
         share_registration: false,
-        riders: { first_name: 'Alice', last_name: 'Anderson' },
+        riders: { first_name: 'Alice', last_name: 'Anderson', slug: 'alice-anderson' },
       },
     ])
 
