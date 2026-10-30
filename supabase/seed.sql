@@ -15475,3 +15475,10 @@ SELECT setval(
   GREATEST(COALESCE(MAX(rider_number), 1), 1),
   MAX(rider_number) IS NOT NULL
 ) FROM public.riders;
+
+-- Stamp seeded awards as already announced. The outbox migration stamps rows
+-- that exist when it runs, but the seed loads after migrations, so without
+-- this every historical award would be posted to Slack on the first cron run
+-- of a fresh database (and the announce-awards real-DB test sees them).
+UPDATE public.rider_awards SET announced_at = now() WHERE announced_at IS NULL;
+UPDATE public.result_awards SET announced_at = now() WHERE announced_at IS NULL;

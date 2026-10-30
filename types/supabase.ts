@@ -603,14 +603,17 @@ export type Database = {
       }
       result_awards: {
         Row: {
+          announced_at: string | null
           award_id: string
           result_id: string
         }
         Insert: {
+          announced_at?: string | null
           award_id: string
           result_id: string
         }
         Update: {
+          announced_at?: string | null
           award_id?: string
           result_id?: string
         }
@@ -734,6 +737,8 @@ export type Database = {
       }
       rider_awards: {
         Row: {
+          announced_at: string | null
+          auto_assigned: boolean
           award_id: string
           created_at: string | null
           id: string
@@ -744,6 +749,8 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
+          announced_at?: string | null
+          auto_assigned?: boolean
           award_id: string
           created_at?: string | null
           id?: string
@@ -754,6 +761,8 @@ export type Database = {
           updated_at?: string | null
         }
         Update: {
+          announced_at?: string | null
+          auto_assigned?: boolean
           award_id?: string
           created_at?: string | null
           id?: string
