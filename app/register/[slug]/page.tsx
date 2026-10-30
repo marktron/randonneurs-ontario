@@ -429,12 +429,7 @@ export default async function RegisterPage({ params }: PageProps) {
                   ) : (
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 sm:gap-x-8 gap-y-1">
                       {registeredRiders.map((rider, index) => (
-                        <p
-                          key={index}
-                          className="text-sm py-1.5 border-b border-border/50 truncate"
-                        >
-                          {rider.name}
-                        </p>
+                        <RegisteredRiderName key={index} rider={rider} />
                       ))}
                     </div>
                   )
@@ -472,6 +467,20 @@ export default async function RegisterPage({ params }: PageProps) {
   )
 }
 
+function RegisteredRiderName({ rider }: { rider: RegisteredRider }) {
+  return (
+    <p className="text-sm py-1.5 border-b border-border/50 truncate">
+      {rider.slug ? (
+        <Link href={`/riders/${rider.slug}`} className="hover:text-primary transition-colors">
+          {rider.name}
+        </Link>
+      ) : (
+        rider.name
+      )}
+    </p>
+  )
+}
+
 function FlecheRegisteredRiders({ riders }: { riders: RegisteredRider[] }) {
   // Group riders by team
   const teamMap = new Map<string, RegisteredRider[]>()
@@ -501,9 +510,7 @@ function FlecheRegisteredRiders({ riders }: { riders: RegisteredRider[] }) {
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 sm:gap-x-8 gap-y-1">
             {teamRiders.map((rider, index) => (
-              <p key={index} className="text-sm py-1.5 border-b border-border/50 truncate">
-                {rider.name}
-              </p>
+              <RegisteredRiderName key={index} rider={rider} />
             ))}
           </div>
         </div>
@@ -518,9 +525,7 @@ function FlecheRegisteredRiders({ riders }: { riders: RegisteredRider[] }) {
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 sm:gap-x-8 gap-y-1">
             {unassigned.map((rider, index) => (
-              <p key={index} className="text-sm py-1.5 border-b border-border/50 truncate">
-                {rider.name}
-              </p>
+              <RegisteredRiderName key={index} rider={rider} />
             ))}
           </div>
         </div>

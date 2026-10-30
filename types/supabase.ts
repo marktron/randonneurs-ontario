@@ -1265,6 +1265,7 @@ export type Database = {
           first_name: string
           last_name: string
           share_registration: boolean
+          slug: string
         }[]
       }
       get_report_event_stats: {

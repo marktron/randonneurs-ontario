@@ -542,11 +542,13 @@ describe('getRegisteredRiders', () => {
         first_name: 'John',
         last_name: 'Doe',
         share_registration: true,
+        slug: 'john-doe',
       },
       {
         first_name: 'Jane',
         last_name: 'Smith',
         share_registration: false,
+        slug: 'jane-smith',
       },
     ]
 
@@ -555,8 +557,21 @@ describe('getRegisteredRiders', () => {
     const result = await getRegisteredRiders('event-1')
 
     expect(result).toHaveLength(2)
-    expect(result[0].name).toBe('John D.')
+    expect(result[0].name).toBe('John Doe')
+    expect(result[0].slug).toBe('john-doe')
     expect(result[1].name).toBe('Anonymous')
+    // Anonymous riders must never carry a slug, even if the RPC row had one
+    expect(result[1]).toEqual({ name: 'Anonymous' })
+  })
+
+  it('returns a null slug when a shared rider has no slug', async () => {
+    mockModule.__mockRpcResponse([
+      { first_name: 'Sam', last_name: 'Lee', share_registration: true, slug: null },
+    ])
+
+    const result = await getRegisteredRiders('event-1')
+
+    expect(result).toEqual([{ name: 'Sam Lee', slug: null }])
   })
 
   it('handles RPC errors gracefully', async () => {
