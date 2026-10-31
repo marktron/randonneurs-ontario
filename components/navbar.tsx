@@ -10,7 +10,9 @@ import {
   NavigationMenuItem,
   NavigationMenuList,
   NavigationMenuTrigger,
+  navigationMenuTriggerStyle,
 } from '@/components/ui/navigation-menu'
+import { cn } from '@/lib/utils'
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Button } from '@/components/ui/button'
@@ -76,6 +78,19 @@ export function Navbar({ items }: NavbarProps) {
                   </NavigationMenuItem>
                 )
               }
+              if (item.href) {
+                return (
+                  <NavigationMenuItem key={i}>
+                    <TopLevelLink
+                      item={item}
+                      className={cn(
+                        navigationMenuTriggerStyle(),
+                        'bg-transparent hover:bg-muted/50'
+                      )}
+                    />
+                  </NavigationMenuItem>
+                )
+              }
               return null
             })}
           </NavigationMenuList>
@@ -120,6 +135,16 @@ export function Navbar({ items }: NavbarProps) {
                     </MobileNavSection>
                   )
                 }
+                if (item.href) {
+                  return (
+                    <TopLevelLink
+                      key={i}
+                      item={item}
+                      onClick={() => setOpen(false)}
+                      className="block px-3 py-2.5 text-sm font-medium rounded-lg hover:bg-muted transition-colors"
+                    />
+                  )
+                }
                 return null
               })}
             </nav>
@@ -127,6 +152,36 @@ export function Navbar({ items }: NavbarProps) {
         </Sheet>
       </div>
     </header>
+  )
+}
+
+/** A top-level item with an href and no children renders as a plain link. */
+function TopLevelLink({
+  item,
+  className,
+  onClick,
+}: {
+  item: NavItem
+  className: string
+  onClick?: () => void
+}) {
+  if (item.external) {
+    return (
+      <a
+        href={item.href}
+        target="_blank"
+        rel="noopener noreferrer"
+        onClick={onClick}
+        className={className}
+      >
+        {item.label}
+      </a>
+    )
+  }
+  return (
+    <Link href={item.href!} onClick={onClick} className={className}>
+      {item.label}
+    </Link>
   )
 }
 

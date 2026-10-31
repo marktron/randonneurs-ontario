@@ -285,13 +285,15 @@ Navbar renders desktop + mobile nav from data
 - `components/footer.tsx` — footer, including the crawlable site-section links
 - `components/admin/navigation-editor.tsx` — admin drag-and-drop editor
 
+**Item kinds:** A top-level item with `children` renders as a dropdown (desktop) or collapsible section (mobile). A top-level item with an `href` and no children renders as a direct link in both views, matching what the admin editor promises. `"style": "cta"` renders the red pill button. Child items may be links, `"type": "heading"` labels, or `"separator": true` rules.
+
 **Template system:** Items with `"template": "chapters"` expand into one link per chapter at read time. Variables like `{{season}}`, `{{pbpYear}}`, and `{{graniteAnvilYear}}` are resolved from environment config and computed values. `{{slackInvite}}` comes from `NEXT_PUBLIC_SLACK_INVITE_URL` and is an empty string when that is unset. Any link whose href resolves to an empty string is dropped from the resolved nav, so the Community menu's Slack item disappears when no invite URL is configured. Links whose resolved href starts with `http(s)://` are marked external (new tab) regardless of the stored flag, because the admin editor recomputes `external` from the raw href on save and would otherwise drop it from templated links.
 
 **Crawlability:** `PageShell` renders `Navbar` as a normal server-rendered import — it must not be wrapped in `dynamic(..., { ssr: false })`, or the primary navigation disappears from the server HTML on every page. Even so, the navbar's _dropdown_ links are not in the initial HTML: the desktop links live inside Radix `NavigationMenuContent` and the mobile links inside a `Sheet`, neither of which mounts its children until the user opens it. Force-mounting them would make every dropdown link permanently focusable (a keyboard/screen-reader regression) for no SEO gain, so instead `components/footer.tsx` renders a plain-`<Link>` list of every main site section on every page. That footer list is the crawl path — keep it in sync when routes are added or removed. `tests/unit/components/page-shell.test.tsx` asserts both properties against `renderToString`.
 
 ### News & Notices
 
-The `news` table stores homepage announcements managed through `/admin/news`. Each item has a title, markdown body, publish toggle, and sort order. Published items display as compact cards in the homepage sidebar with accordion-style expansion. All admins (both `admin` and `chapter_admin` roles) can manage news items. News is org-wide (not chapter-scoped).
+The `news` table stores homepage announcements managed through `/admin/news`. Each item has a title, markdown body, publish toggle, and sort order. Published items display as a compact list on the homepage: at the top of the sidebar on large screens, and above the intro copy on small screens so notices are visible without scrolling past the intro (the block is omitted entirely when there are no published items). The full list lives at `/news`, linked from the Community menu and the footer. All admins (both `admin` and `chapter_admin` roles) can manage news items. News is org-wide (not chapter-scoped).
 
 - **Data queries:** `lib/data/news.ts` — `getPublishedNews()`, `getAllNews()`, `getNewsItem(id)`
 - **Server actions:** `lib/actions/news.ts` — `createNewsItem()`, `updateNewsItem()`, `deleteNewsItem()`

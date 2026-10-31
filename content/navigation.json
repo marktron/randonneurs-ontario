@@ -158,6 +158,10 @@
       "label": "Community",
       "children": [
         {
+          "label": "News",
+          "href": "/news"
+        },
+        {
           "label": "Blog",
           "href": "https://blog.randonneursontario.ca",
           "external": true

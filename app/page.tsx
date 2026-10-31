@@ -23,11 +23,22 @@ export default async function Page() {
     <PageShell>
       <Hero images={heroImages} />
 
-      {/* Two-column layout: Intro + Sidebar */}
+      {/* Two-column layout: Intro + Sidebar.
+          On small screens the grid stacks in source order, so News comes first
+          and sits above the intro where time-sensitive notices get seen. On lg
+          the intro spans both rows on the left and News tops the sidebar column.
+          Row 1 is sized to the news block and row 2 absorbs the rest, so the
+          lower sidebar sections stay pinned directly beneath it. */}
       <div className="mx-auto max-w-7xl px-6 py-16">
-        <div className="flex flex-col gap-16 lg:flex-row lg:gap-20">
+        <div className="grid grid-cols-1 gap-16 lg:grid-cols-[minmax(0,1fr)_20rem] lg:grid-rows-[auto_1fr] lg:gap-x-20 lg:gap-y-0">
+          {newsItems.length > 0 && (
+            <div className="lg:col-start-2 lg:row-start-1 lg:border-l lg:border-border lg:pl-12">
+              <NewsSection items={newsItems} />
+            </div>
+          )}
+
           {/* Main content */}
-          <div className="flex-1 min-w-0">
+          <div className="min-w-0 lg:col-start-1 lg:row-start-1 lg:row-span-2">
             {/* Headline */}
             <h1 className="font-serif text-4xl leading-tight tracking-tight md:text-5xl lg:text-6xl">
               Long-Distance Cycling, at Your Own Pace
@@ -67,9 +78,8 @@ export default async function Page() {
             </div>
           </div>
 
-          {/* Sidebar */}
-          <div className="lg:w-80 lg:shrink-0 lg:border-l lg:border-border lg:pl-12">
-            <NewsSection items={newsItems} />
+          {/* Sidebar (remaining sections) */}
+          <div className="lg:col-start-2 lg:row-start-2 lg:border-l lg:border-border lg:pl-12">
             <MyRidesSection />
             <UpcomingRides />
           </div>

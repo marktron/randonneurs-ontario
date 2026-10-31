@@ -248,6 +248,7 @@ describe('getResolvedNavigation', () => {
       vi.stubEnv('NEXT_PUBLIC_SLACK_INVITE_URL', SLACK)
       const community = getResolvedNavigation().items.find((i) => i.label === 'Community')!
       expect(community.children!.map((c) => c.label)).toEqual([
+        'News',
         'Blog',
         'Mailing List',
         'Slack',
@@ -261,7 +262,8 @@ describe('getResolvedNavigation', () => {
       const mailing = community.children!.find((c) => c.label === 'Mailing List')!
       expect(mailing.href).toBe('/mailing-list')
       expect(mailing.external).toBeUndefined()
-      for (const child of community.children!.filter((c) => c.label !== 'Mailing List')) {
+      const internal = ['News', 'Mailing List']
+      for (const child of community.children!.filter((c) => !internal.includes(c.label))) {
         expect(child.external).toBe(true)
       }
     })
@@ -270,6 +272,7 @@ describe('getResolvedNavigation', () => {
       vi.stubEnv('NEXT_PUBLIC_SLACK_INVITE_URL', undefined)
       const community = getResolvedNavigation().items.find((i) => i.label === 'Community')!
       expect(community.children!.map((c) => c.label)).toEqual([
+        'News',
         'Blog',
         'Mailing List',
         'Facebook Group',
@@ -283,6 +286,16 @@ describe('getResolvedNavigation', () => {
       const labels = about.children!.map((c) => c.label)
       expect(labels).not.toContain('Blog')
       expect(labels).not.toContain('Mailing List')
+    })
+  })
+
+  describe('News link', () => {
+    it('is the first item in the Community menu, not a top-level item', () => {
+      const nav = getResolvedNavigation()
+      expect(nav.items.map((i) => i.label)).not.toContain('News')
+      const community = nav.items.find((i) => i.label === 'Community')!
+      const news = community.children![0]
+      expect(news).toEqual({ label: 'News', href: '/news' })
     })
   })
 })
