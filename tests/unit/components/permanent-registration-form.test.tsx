@@ -5,7 +5,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { PermanentRegistrationForm } from '@/components/permanent-registration-form'
+import {
+  PermanentRegistrationForm,
+  getMinPermanentDate,
+} from '@/components/permanent-registration-form'
 import type { ActiveRoute } from '@/lib/data/routes'
 
 // Mock server actions
@@ -893,8 +896,11 @@ describe('PermanentRegistrationForm', () => {
       // Calendar closes on select; reopen it
       await user.click(screen.getByRole('button', { name: 'Ride Date' }))
 
-      const today = new Date()
-      const expected = new Date(today.getFullYear(), today.getMonth() + 2, 1)
+      // The picker opens on the month of the earliest bookable date, which
+      // rolls past tomorrow after 20:00 ET, so derive the expectation from
+      // the same function rather than from today's date.
+      const min = getMinPermanentDate()
+      const expected = new Date(min.getFullYear(), min.getMonth() + 2, 1)
       const label = expected.toLocaleString('en-US', { month: 'long', year: 'numeric' })
       expect(await screen.findByRole('grid', { name: label })).toBeInTheDocument()
     })
