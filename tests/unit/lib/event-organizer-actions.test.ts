@@ -34,7 +34,7 @@ function resolveResponse(call: FromCall, state: TableState) {
   if (call.ops.includes('update')) return state.updateResponse ?? { data: null, error: null }
   if (call.ops.includes('upsert')) return state.upsertResponse ?? { data: null, error: null }
   if (call.ops.includes('delete')) return state.deleteResponse ?? { data: null, error: null }
-  if (call.ops.includes('single')) {
+  if (call.ops.includes('single') || call.ops.includes('maybeSingle')) {
     return state.singleResponse ?? state.selectResponse ?? { data: null, error: null }
   }
   return state.selectResponse ?? { data: [], error: null }
@@ -60,6 +60,14 @@ const mockFrom = vi.fn((table: string) => {
     }),
     limit: vi.fn(() => {
       call.ops.push('limit')
+      return builder
+    }),
+    ilike: vi.fn(() => {
+      call.ops.push('ilike')
+      return builder
+    }),
+    maybeSingle: vi.fn(() => {
+      call.ops.push('maybeSingle')
       return builder
     }),
     in: vi.fn((column: unknown, values: unknown) => {
@@ -123,31 +131,82 @@ function resetAll() {
 describe('getChapterOrganizerDefaults', () => {
   beforeEach(resetAll)
 
-  it('returns the chapter_admin name/phone/email for the chapter', async () => {
+  function chapterSlug(slug: string) {
+    tables.chapters = { singleResponse: { data: { slug }, error: null } }
+  }
+
+  it('uses the chapter VP name/email from CHAPTER_VPS and phone from the admins row', async () => {
+    chapterSlug('toronto')
+    tables.admins = { selectResponse: { data: [{ phone: '416-555-0101' }], error: null } }
+    const result = await getChapterOrganizerDefaults('chapter-1')
+    expect(result).toEqual({
+      name: 'Mark Allen',
+      phone: '416-555-0101',
+      email: 'vp-toronto@randonneursontario.ca',
+    })
+    const call = fromCalls.find((c) => c.table === 'admins')
+    expect(call?.ops).toContain('ilike')
+  })
+
+  it('returns empty phone when the VP has no admins row', async () => {
+    chapterSlug('toronto')
+    tables.admins = { selectResponse: { data: [], error: null } }
+    const result = await getChapterOrganizerDefaults('chapter-1')
+    expect(result).toEqual({
+      name: 'Mark Allen',
+      phone: '',
+      email: 'vp-toronto@randonneursontario.ca',
+    })
+  })
+
+  it('returns empty phone when the VP admins row has a null phone', async () => {
+    chapterSlug('toronto')
+    tables.admins = { selectResponse: { data: [{ phone: null }], error: null } }
+    const result = await getChapterOrganizerDefaults('chapter-1')
+    expect(result.phone).toBe('')
+    expect(result.name).toBe('Mark Allen')
+  })
+
+  it('falls back to the earliest chapter_admin when the chapter has no VP entry', async () => {
+    chapterSlug('nowhere')
     tables.admins = {
       selectResponse: {
-        data: [{ name: 'Mark Allen', phone: '416-555-0101', email: 'vp@example.ca' }],
+        data: [{ name: 'Old Admin', phone: '416-555-0199', email: 'old@example.ca' }],
         error: null,
       },
     }
     const result = await getChapterOrganizerDefaults('chapter-1')
-    expect(result).toEqual({ name: 'Mark Allen', phone: '416-555-0101', email: 'vp@example.ca' })
+    expect(result).toEqual({ name: 'Old Admin', phone: '416-555-0199', email: 'old@example.ca' })
     const call = fromCalls.find((c) => c.table === 'admins')
-    expect(call).toBeDefined()
+    expect(call?.ops).not.toContain('ilike')
   })
 
-  it('coalesces null phone/email to empty strings', async () => {
+  it('coalesces null phone/email to empty strings in the fallback', async () => {
+    chapterSlug('nowhere')
     tables.admins = {
-      selectResponse: { data: [{ name: 'VP', phone: null, email: 'a@b.ca' }], error: null },
+      selectResponse: { data: [{ name: 'VP', phone: null, email: null }], error: null },
     }
     const result = await getChapterOrganizerDefaults('chapter-1')
-    expect(result).toEqual({ name: 'VP', phone: '', email: 'a@b.ca' })
+    expect(result).toEqual({ name: 'VP', phone: '', email: '' })
   })
 
-  it('returns empty strings when the chapter has no chapter_admin', async () => {
+  it('returns empty strings when there is no VP entry and no chapter_admin', async () => {
+    chapterSlug('nowhere')
     tables.admins = { selectResponse: { data: [], error: null } }
     const result = await getChapterOrganizerDefaults('chapter-1')
     expect(result).toEqual({ name: '', phone: '', email: '' })
+  })
+
+  it('falls back (does not throw) when the chapters lookup errors', async () => {
+    tables.chapters = { singleResponse: { data: null, error: { message: 'boom' } } }
+    tables.admins = {
+      selectResponse: {
+        data: [{ name: 'Old Admin', phone: '416-555-0199', email: 'old@example.ca' }],
+        error: null,
+      },
+    }
+    const result = await getChapterOrganizerDefaults('chapter-1')
+    expect(result).toEqual({ name: 'Old Admin', phone: '416-555-0199', email: 'old@example.ca' })
   })
 
   it('throws when not an admin', async () => {
@@ -185,6 +244,68 @@ describe('saveEventOrganizer', () => {
       organizer_name: null,
       organizer_phone: null,
       organizer_email: null,
+    })
+  })
+
+  describe('admin phone write-back', () => {
+    const organizer = {
+      name: 'Mark Allen',
+      phone: '416-555-0101',
+      email: 'vp-toronto@randonneursontario.ca',
+    }
+    const adminUpdates = () =>
+      fromCalls.filter((c) => c.table === 'admins' && c.ops.includes('update'))
+
+    it('updates the matching admin when the phone differs', async () => {
+      tables.admins = {
+        selectResponse: { data: [{ id: 'a-1', phone: '416-555-9999' }], error: null },
+      }
+      const result = await saveEventOrganizer('event-1', organizer)
+      expect(result.success).toBe(true)
+      expect(adminUpdates()).toHaveLength(1)
+      expect(adminUpdates()[0].updatePayload).toEqual({ phone: '416-555-0101' })
+    })
+
+    it('updates the admin when the stored phone is null', async () => {
+      tables.admins = { selectResponse: { data: [{ id: 'a-1', phone: null }], error: null } }
+      await saveEventOrganizer('event-1', organizer)
+      expect(adminUpdates()[0]?.updatePayload).toEqual({ phone: '416-555-0101' })
+    })
+
+    it('does not update when the phone is unchanged', async () => {
+      tables.admins = {
+        selectResponse: { data: [{ id: 'a-1', phone: '416-555-0101' }], error: null },
+      }
+      await saveEventOrganizer('event-1', organizer)
+      expect(adminUpdates()).toHaveLength(0)
+    })
+
+    it('never clears the admin phone when the organizer phone is blank', async () => {
+      tables.admins = {
+        selectResponse: { data: [{ id: 'a-1', phone: '416-555-9999' }], error: null },
+      }
+      await saveEventOrganizer('event-1', { ...organizer, phone: '  ' })
+      expect(adminUpdates()).toHaveLength(0)
+    })
+
+    it('does not update when no admin matches the email', async () => {
+      tables.admins = { selectResponse: { data: [], error: null } }
+      await saveEventOrganizer('event-1', organizer)
+      expect(adminUpdates()).toHaveLength(0)
+    })
+
+    it('does not touch admins when the email is blank', async () => {
+      await saveEventOrganizer('event-1', { ...organizer, email: '' })
+      expect(fromCalls.filter((c) => c.table === 'admins')).toHaveLength(0)
+    })
+
+    it('still succeeds when the admins update errors', async () => {
+      tables.admins = {
+        selectResponse: { data: [{ id: 'a-1', phone: '416-555-9999' }], error: null },
+        updateResponse: { data: null, error: { message: 'boom' } },
+      }
+      const result = await saveEventOrganizer('event-1', organizer)
+      expect(result.success).toBe(true)
     })
   })
 

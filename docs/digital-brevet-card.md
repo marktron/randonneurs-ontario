@@ -754,10 +754,17 @@ Two implementation notes worth keeping:
   update.
 - **Prefill.** If the event already has a stored organizer, the form loads
   it. Otherwise `getChapterOrganizerDefaults(chapterId)` seeds it from the
-  chapter's earliest `chapter_admin` row (in practice, the chapter VP) —
-  empty strings if the chapter has none. Prefill is only a starting point:
-  saving writes the event's own record, so a later change to the chapter
-  admin roster doesn't retroactively change an already-set event.
+  chapter VP list in `lib/chapter-vps.ts` (name and email), with the phone
+  taken from that VP's `admins` row (matched by email, case-insensitive).
+  Chapters with no VP entry fall back to the earliest `chapter_admin` row;
+  empty strings if there is none. Prefill is only a starting point: saving
+  writes the event's own record, so a later change to the VP list doesn't
+  retroactively change an already-set event.
+- **Phone write-back.** On save, if the organizer email matches an `admins`
+  row (case-insensitive) and the organizer phone is non-empty and differs
+  from the stored one, the phone is written to that row. A blank phone never
+  clears it, and name/email are never touched. A write-back failure is logged
+  and does not fail the save.
 - Shown on the rider card beneath the check-ins (see §7). The **printed**
   control card is unaffected — it still takes the organizer name typed in
   by the logged-in admin at print time, not this stored field (the digital
