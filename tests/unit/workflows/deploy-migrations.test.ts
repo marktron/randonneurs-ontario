@@ -31,8 +31,13 @@ describe('deploy-migrations.yml', () => {
     // Strip leading ^ or ~ to get the minimum version
     const minVersion = supabaseVersion.replace(/^[\^~]/, '')
 
-    // Assert the workflow uses this exact version
-    expect(workflowContent).toMatch(new RegExp(`version:\\s+${minVersion.replace(/\./g, '\\.')}`))
+    // Assert both workflows use this exact version. CLAUDE.md requires the
+    // devDependency and the CI pins to move together; a package bump that
+    // leaves either workflow behind runs a different CLI than `npx supabase`.
+    const pin = new RegExp(`version:\\s+${minVersion.replace(/\./g, '\\.')}`)
+    expect(workflowContent).toMatch(pin)
+    const ciContent = fs.readFileSync(path.join(process.cwd(), '.github/workflows/ci.yml'), 'utf-8')
+    expect(ciContent).toMatch(pin)
   })
 
   it('push step invokes supabase db push with --project-ref, --password, and --yes', () => {

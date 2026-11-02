@@ -61,10 +61,10 @@ jobs:
       - uses: supabase/setup-cli@v1
         with:
           # Match the `supabase` devDependency in package.json, i.e. what
-          # `npx supabase db push` runs locally. Deliberately not the 2.105.0
-          # pin in ci.yml: that works around a `supabase start` regression,
-          # and this job never starts a local stack.
-          version: 2.115.0
+          # `npx supabase db push` runs locally. Bump together with the
+          # devDependency and the ci.yml pin; tests/unit/workflows checks all
+          # three agree.
+          version: 2.122.0
 
       # GitHub runners have no IPv6, and without a link the CLI dials the
       # database host directly, which resolves to IPv6 only (both deploy runs

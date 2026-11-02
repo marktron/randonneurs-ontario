@@ -81,8 +81,9 @@ jobs:
           # service_role/public-schema bootstrap grants were skipped and every
           # real-DB test failed with `42501 permission denied`. Verified fixed
           # on 2.116.0 (fresh `db reset` + full integration-real pass,
-          # 2026-09-12). Bump this together with the devDependency.
-          version: 2.116.0
+          # 2026-09-12). Bump this together with the devDependency;
+          # tests/unit/workflows checks they agree.
+          version: 2.122.0
 
       # Boots the local stack (Docker) and applies migrations + seed.sql, which
       # the integration-real tests depend on (chapters, awards, routes, etc.).
