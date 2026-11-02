@@ -204,3 +204,7 @@ npx supabase migration new   # Create new migration
 - [Randonneurs Ontario](https://randonneursontario.ca) - Club website
 - [Audax Club Parisien](https://www.audax-club-parisien.com/) - International organization
 - [Randonneurs USA](https://rusa.org/) - US randonneuring
+
+## License
+
+The code in this repository is released under the [MIT License](LICENSE) so other randonneuring clubs can reuse whatever is useful. Club logos, photos, newsletters, policy documents, and seed data are not covered; see the exceptions in the LICENSE file.
