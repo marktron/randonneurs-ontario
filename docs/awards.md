@@ -455,7 +455,9 @@ current-season O-5000 that the trigger can compute, or the rider ends up with tw
 
 **Status changes / deletions / reassignment / distance edits.** Flipping a
 result to `dnf`, deleting it, correcting its `distance_km`, or moving it to
-another rider re-runs the reconciler for every affected rider.
+another rider re-runs the reconciler for every affected rider. Correcting the
+_event's_ distance also reaches the reconciler, via the propagation trigger
+described under [Event distance corrections](#event-distance-corrections).
 
 **Deploying mid-season.** The companion migration
 (`supabase/migrations/20260921130200_o_5000_current_season_backfill.sql`)
@@ -567,6 +569,35 @@ hand to a result on an untagged event survives every reconcile.
 form has no field for this yet; set it directly). Without the tag nothing is
 awarded, and adding the tag later does not re-reconcile existing results, since
 the trigger fires on `results` changes only.
+
+### Event distance corrections
+
+`results.distance_km` is copied from `events.distance_km` when a result is
+created, and every distance-based award and total above sums the result column,
+never the event column. Correcting an event's distance after results are in
+therefore used to leave every result at the old figure. Seen on 2026-04-12:
+Jumbo's 2-Port Romp was corrected from 75 to 80 km after all 15 results were
+submitted, and a rider later finished the season at 4997 km with no O-5000
+because her result still said 75.
+
+`trg_events_propagate_distance` (migration
+`20261102120000_propagate_event_distance_to_results.sql`, `AFTER UPDATE OF
+distance_km ON events`) closes this:
+
+- Results on the event whose `distance_km` equals the **old** event distance
+  move to the new one.
+- Results carrying any other value are per-rider overrides (shortened course,
+  etc.) and are left alone.
+- Flèche events are skipped: there the result distance is the team's distance
+  and the event figure is nominal.
+
+The cascaded `UPDATE results` fires the results-side reconcilers row by row, so
+O-5000, Ontario Rover and the awards-page totals follow the correction with no
+further action. Like every other trigger write, it bypasses the Next.js cache:
+after correcting a distance outside a server action, `POST /api/revalidate` with
+`{"tags":["awards","records","riders"]}`.
+
+Covered by `tests/integration-real/event-distance-propagation.test.ts`.
 
 ## Slack announcements
 
