@@ -9,6 +9,7 @@ import { revalidateResultsTags } from '@/lib/revalidate-results'
 import type { ActionResult } from '@/types/actions'
 import { seasonOfEventDate } from '@/lib/season'
 import { getMembershipForRider, isTrialUsed } from '@/lib/memberships/service'
+import { assertEventMutable } from '@/lib/actions/event-mutability'
 import type {
   RegistrationInsert,
   ResultInsert,
@@ -41,6 +42,12 @@ export async function createResult(data: CreateResultData): Promise<ActionResult
   const admin = await requireAdmin()
 
   const { eventId, riderId, finishTime, status, teamName, note, season, distanceKm } = data
+
+  // Results on a submitted event are homologated and frozen.
+  const mutable = await assertEventMutable(eventId)
+  if (!mutable.ok) {
+    return { success: false, error: mutable.error }
+  }
 
   // Check if result already exists for this rider/event
   const { data: existing } = await getSupabaseAdmin()
@@ -339,6 +346,20 @@ export async function updateResult(
 ): Promise<ActionResult> {
   const admin = await requireAdmin()
 
+  // The freeze is per event, so look up which event this result belongs to.
+  const { data: target, error: targetError } = await getSupabaseAdmin()
+    .from('results')
+    .select('event_id')
+    .eq('id', resultId)
+    .single()
+  if (targetError || !target) {
+    return { success: false, error: 'Result not found' }
+  }
+  const mutable = await assertEventMutable((target as { event_id: string }).event_id)
+  if (!mutable.ok) {
+    return { success: false, error: mutable.error }
+  }
+
   const updateData: ResultUpdate = {
     finish_time: data.finishTime,
     status: data.status,
@@ -586,6 +607,14 @@ export async function deleteResult(resultId: string): Promise<ActionResult> {
     .eq('id', resultId)
     .single()
 
+  if (!result) {
+    return { success: false, error: 'Result not found' }
+  }
+  const mutable = await assertEventMutable((result as ResultWithEventId).event_id)
+  if (!mutable.ok) {
+    return { success: false, error: mutable.error }
+  }
+
   const { error } = await getSupabaseAdmin().from('results').delete().eq('id', resultId)
 
   if (error) {
@@ -638,6 +667,11 @@ export async function createBulkResults(
   distanceKm: number
 ): Promise<ActionResult> {
   const admin = await requireAdmin()
+
+  const mutable = await assertEventMutable(eventId)
+  if (!mutable.ok) {
+    return { success: false, error: mutable.error }
+  }
 
   const insertData: ResultInsert[] = results.map((r) => ({
     event_id: eventId,

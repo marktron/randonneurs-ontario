@@ -177,6 +177,24 @@ vi.mock('@/lib/email/results-spreadsheet', () => ({
   }),
 }))
 
+// The submitted-freeze gate is its own unit (tests/unit/lib/event-mutability.test.ts);
+// here it is a controllable stub so each test can say whether the event is
+// frozen. The lifecycle table stays real.
+const { mockAssertEventMutable } = vi.hoisted(() => ({
+  mockAssertEventMutable: vi.fn<
+    (eventId: string) => Promise<{ ok: true } | { ok: false; error: string }>
+  >(async () => ({ ok: true })),
+}))
+vi.mock('@/lib/actions/event-mutability', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/actions/event-mutability')>()),
+  assertEventMutable: (eventId: string) => mockAssertEventMutable(eventId),
+}))
+
+const FROZEN = {
+  ok: false as const,
+  error: 'Results for this event have been submitted; it is frozen',
+}
+
 // Import after mocking
 import {
   createEvent,
@@ -189,6 +207,8 @@ import {
 } from '@/lib/actions/events'
 import { sendResultSubmissionReminders } from '@/lib/events/send-result-reminders'
 import { requireAdmin } from '@/lib/auth/get-admin'
+import { EVENT_STATUS_TRANSITIONS } from '@/lib/events/status'
+import type { EventStatus } from '@/lib/events/status'
 
 // Access mock internals for test configuration
 const mockModule = await vi.importMock<{
@@ -237,6 +257,18 @@ describe('deleteEvent', () => {
 
     const { deleteErwEvent: mockDeleteErw } = await import('@/lib/erw/client')
     expect(mockDeleteErw).toHaveBeenCalledWith('erw-to-delete')
+  })
+
+  it('refuses to delete a submitted event without touching the database', async () => {
+    mockAssertEventMutable.mockResolvedValueOnce(FROZEN)
+
+    const result = await deleteEvent('event-1')
+
+    expect(result).toEqual({ success: false, error: FROZEN.error })
+    expect(mockAssertEventMutable).toHaveBeenCalledWith('event-1')
+    expect(mockModule.__calls.filter((c) => c.method === 'delete')).toEqual([])
+    const { deleteErwEvent: mockDeleteErw } = await import('@/lib/erw/client')
+    expect(mockDeleteErw).not.toHaveBeenCalled()
   })
 
   it('returns error when trying to delete past event', async () => {
@@ -1072,6 +1104,25 @@ describe('updateEvent', () => {
     vi.clearAllMocks()
   })
 
+  it('refuses to edit a submitted event without writing anything', async () => {
+    mockAssertEventMutable.mockResolvedValueOnce(FROZEN)
+
+    const result = await updateEvent('event-1', {
+      name: 'Renamed',
+      distanceKm: 210,
+      eventDate: `${CURRENT_SEASON}-06-22`,
+    })
+
+    expect(result).toEqual({ success: false, error: FROZEN.error })
+    expect(mockAssertEventMutable).toHaveBeenCalledWith('event-1')
+    const writes = mockModule.__calls.filter((c) =>
+      ['update', 'upsert', 'insert', 'delete'].includes(c.method)
+    )
+    expect(writes).toEqual([])
+    const { updateErwEvent: mockUpdateErw } = await import('@/lib/erw/client')
+    expect(mockUpdateErw).not.toHaveBeenCalled()
+  })
+
   it('updates event successfully', async () => {
     mockModule.__mockUpdateSuccess()
     mockModule.__mockEventFound({
@@ -1671,7 +1722,8 @@ describe('updateEventStatus', () => {
     mockModule.__mockUpdateSuccess() // status update
     mockModule.__mockEventFound({ slug: 'toronto' }) // revalidation
 
-    const result = await updateEventStatus('event-1', 'scheduled')
+    // A real transition: a same-state request is a no-op and writes nothing.
+    const result = await updateEventStatus('event-1', 'completed')
 
     expect(result.success).toBe(true)
     const eventsUpdateCalls = mockModule.__calls.filter(
@@ -1693,10 +1745,13 @@ describe('updateEventStatus', () => {
       status: 'scheduled',
       chapters: { name: 'Toronto' },
     })
-    mockModule.__mockUpdateSuccess()
+    mockModule.__mockUpdateSuccess() // results delete
+    mockModule.__mockUpdateSuccess() // status update
     mockModule.__mockEventFound({ slug: 'toronto' })
 
-    const result = await updateEventStatus('event-1', 'scheduled', { description: null })
+    // The cancel dialog sends null when the textarea is cleared. (A same-state
+    // request is a no-op and writes nothing, so this needs a real transition.)
+    const result = await updateEventStatus('event-1', 'cancelled', { description: null })
 
     expect(result.success).toBe(true)
     const eventsUpdateCalls = mockModule.__calls.filter(
@@ -1875,6 +1930,123 @@ describe('updateEventStatus', () => {
 
     const { createErwEvent: mockCreateErw } = await import('@/lib/erw/client')
     expect(mockCreateErw).not.toHaveBeenCalled()
+  })
+
+  describe('transition table', () => {
+    const ALL: EventStatus[] = ['draft', 'scheduled', 'completed', 'cancelled', 'submitted']
+    const others = (from: EventStatus) => ALL.filter((to) => to !== from)
+    const allowed = ALL.flatMap((from) =>
+      EVENT_STATUS_TRANSITIONS[from].map((to) => [from, to] as const)
+    )
+    const forbidden = ALL.flatMap((from) =>
+      others(from)
+        .filter((to) => !EVENT_STATUS_TRANSITIONS[from].includes(to))
+        .map((to) => [from, to] as const)
+    )
+
+    function eventIn(status: EventStatus) {
+      mockModule.__mockEventFound({
+        id: 'event-1',
+        name: 'Table Event',
+        event_date: `${CURRENT_SEASON}-06-15`,
+        distance_km: 200,
+        chapter_id: 'chapter-1',
+        event_type: 'brevet',
+        status,
+        erw_event_id: null,
+        slug: 'table-event-200km',
+        description: null,
+        start_time: null,
+        route_id: null,
+        chapters: { name: 'Toronto', slug: 'toronto' },
+      })
+    }
+
+    const writes = () =>
+      mockModule.__calls.filter(
+        (c) =>
+          (c.table === 'events' && c.method === 'update') ||
+          (c.table === 'results' && c.method === 'delete')
+      )
+
+    it('covers every ordered pair of distinct statuses exactly once', () => {
+      expect(allowed.length + forbidden.length).toBe(ALL.length * (ALL.length - 1))
+    })
+
+    it.each(forbidden)('refuses %s -> %s before any update or results delete', async (from, to) => {
+      eventIn(from)
+
+      const result = await updateEventStatus('event-1', to)
+
+      expect(result.success).toBe(false)
+      expect(writes()).toEqual([])
+      const { createPendingResultsAndSendEmails } = await import('@/lib/events/complete-event')
+      expect(createPendingResultsAndSendEmails).not.toHaveBeenCalled()
+    })
+
+    it('names both states when refusing a non-draft transition', async () => {
+      eventIn('cancelled')
+
+      const result = await updateEventStatus('event-1', 'completed')
+
+      expect(result).toEqual({
+        success: false,
+        error: 'Cannot change event status from cancelled to completed',
+      })
+    })
+
+    it('refuses submitted -> cancelled without deleting the filed results', async () => {
+      eventIn('submitted')
+
+      const result = await updateEventStatus('event-1', 'cancelled')
+
+      expect(result.success).toBe(false)
+      expect(result.error).toBe('Cannot change event status from submitted to cancelled')
+      const deleteCalls = mockModule.__calls.filter(
+        (c) => c.table === 'results' && c.method === 'delete'
+      )
+      expect(deleteCalls).toHaveLength(0)
+    })
+
+    it.each(allowed)('allows %s -> %s and writes the new status', async (from, to) => {
+      eventIn(from)
+
+      const result = await updateEventStatus('event-1', to)
+
+      expect(result.success).toBe(true)
+      const statusUpdate = mockModule.__calls.find(
+        (c) =>
+          c.table === 'events' &&
+          c.method === 'update' &&
+          (c.args?.[0] as { status?: string } | undefined)?.status === to
+      )
+      expect(statusUpdate).toBeDefined()
+    })
+
+    it('un-cancels (cancelled -> scheduled) without deleting results', async () => {
+      eventIn('cancelled')
+
+      const result = await updateEventStatus('event-1', 'scheduled')
+
+      expect(result.success).toBe(true)
+      expect(
+        mockModule.__calls.filter((c) => c.table === 'results' && c.method === 'delete')
+      ).toHaveLength(0)
+    })
+
+    it.each(ALL)('treats %s -> same status as a no-op success with no writes', async (status) => {
+      eventIn(status)
+
+      const result = await updateEventStatus('event-1', status, { description: 'ignored' })
+
+      expect(result).toEqual({ success: true })
+      expect(writes()).toEqual([])
+      const { createPendingResultsAndSendEmails } = await import('@/lib/events/complete-event')
+      expect(createPendingResultsAndSendEmails).not.toHaveBeenCalled()
+      const { createErwEvent, deleteErwEvent } = await import('@/lib/erw/client')
+      expect(createErwEvent).not.toHaveBeenCalled()
+      expect(deleteErwEvent).not.toHaveBeenCalled()
+    })
   })
 })
 

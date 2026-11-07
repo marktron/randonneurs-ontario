@@ -566,7 +566,7 @@ describe('adminSetCheckin', () => {
   it('rejects when the event is frozen (results submitted)', async () => {
     mockAssertEventMutable.mockResolvedValue({
       ok: false,
-      error: 'Results for this event have been submitted; check-ins are frozen',
+      error: 'Results for this event have been submitted; it is frozen',
     })
 
     const result = await adminSetCheckin(baseInput)

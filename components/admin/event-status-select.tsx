@@ -22,18 +22,27 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { updateEventStatus, type EventStatus } from '@/lib/actions/events'
+import { updateEventStatus } from '@/lib/actions/events'
+import { EVENT_STATUS_TRANSITIONS, type EventStatus } from '@/lib/events/status'
 import { toast } from 'sonner'
 import { Loader2, Check, AlertTriangle } from 'lucide-react'
 
-const STATUS_OPTIONS: { value: Exclude<EventStatus, 'submitted' | 'draft'>; label: string }[] = [
+/**
+ * Display order for the select. 'submitted' is never offered: it is reached
+ * only through the Submit results button, which also emails the ACP.
+ */
+const STATUS_LABELS: { value: Exclude<EventStatus, 'submitted'>; label: string }[] = [
+  { value: 'draft', label: 'Draft' },
   { value: 'scheduled', label: 'Scheduled' },
   { value: 'completed', label: 'Completed' },
   { value: 'cancelled', label: 'Cancelled' },
 ]
 
-/** Publishing is a draft's only status move — see `updateEventStatus`. */
-const DRAFT_STATUS_OPTIONS = STATUS_OPTIONS.filter((opt) => opt.value === 'scheduled')
+/** The current status plus every move the lifecycle table allows from it. */
+function optionsFor(current: EventStatus) {
+  const allowed = EVENT_STATUS_TRANSITIONS[current]
+  return STATUS_LABELS.filter((opt) => opt.value === current || allowed.includes(opt.value))
+}
 
 interface EventStatusSelectProps {
   eventId: string
@@ -117,10 +126,9 @@ export function EventStatusSelect({
             <SelectValue />
           </SelectTrigger>
           <SelectContent position="popper" sideOffset={4}>
-            {/* A draft can only be published; cancelling or completing it would
-                leak the event publicly. Discard by deleting it instead. */}
-            {isDraft && <SelectItem value="draft">Draft</SelectItem>}
-            {(isDraft ? DRAFT_STATUS_OPTIONS : STATUS_OPTIONS).map((opt) => (
+            {/* Options come from EVENT_STATUS_TRANSITIONS so the UI never offers
+                a move the server refuses (e.g. a draft can only be published). */}
+            {optionsFor(initialStatus).map((opt) => (
               <SelectItem key={opt.value} value={opt.value}>
                 {opt.label}
               </SelectItem>

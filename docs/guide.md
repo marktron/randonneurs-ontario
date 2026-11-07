@@ -91,10 +91,22 @@ You'll spend most of your time here. From this page you can:
 
 - **Edit** the event details (pencil icon).
 - **Print control cards** for the event.
-- **Change the event status** using the dropdown. The system won't let you mark an event as "submitted" unless it has results entered.
+- **Change the event status** using the dropdown. The dropdown only offers the moves allowed from the event's current status (table below). "Submitted" is never in the dropdown: an event becomes submitted only through the **Submit Results** button, which emails the results to the VP of Brevet Administration. Once an event is submitted the dropdown is replaced by a "Submitted" badge, and the event is frozen: its details, results, check-ins and controls can no longer be edited, and it can't be deleted.
 - When you set an event to **Cancelled**, a dialog opens with the event's current description in a textarea. Add a short cancellation note at the top — that note appears on the public event page so riders who missed the cancellation email can see what happened. If the event has results recorded, the dialog also warns that they will be deleted.
 - **Delete** the event (with confirmation). You'll be warned if the event has registrations.
 - **Email all participants** using a pre-populated mailto link, this will open in your email client with the participants on BCC and the subject prefilled with the event name.
+
+#### Allowed status changes
+
+| From      | Can move to                                           |
+| --------- | ----------------------------------------------------- |
+| Draft     | Scheduled (publish)                                   |
+| Scheduled | Completed, Cancelled                                  |
+| Completed | Submitted (Submit Results only), Cancelled, Scheduled |
+| Cancelled | Scheduled                                             |
+| Submitted | Nothing; submitted is final                           |
+
+Completed can go back to Scheduled so you can reopen an event the system completed too early, for example after a postponed start. A cancelled event can't jump straight to Completed, because that would skip creating the pending results and the email asking riders to submit; set it back to Scheduled first. Choosing the status an event already has does nothing.
 
 ### Event status auto-completion
 

@@ -247,3 +247,38 @@ describe('EventStatusSelect draft handling', () => {
     expect(toast.success).toHaveBeenCalledWith('Event published')
   })
 })
+
+describe('EventStatusSelect options follow EVENT_STATUS_TRANSITIONS', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockUpdateEventStatus.mockResolvedValue({ success: true })
+  })
+
+  async function optionsFor(initialStatus: 'scheduled' | 'completed' | 'cancelled') {
+    const user = userEvent.setup()
+    render(
+      <EventStatusSelect
+        eventId="event-1"
+        initialStatus={initialStatus}
+        resultsCount={0}
+        initialDescription={null}
+      />
+    )
+    await user.click(screen.getByRole('combobox'))
+    await screen.findAllByRole('option')
+    return screen.getAllByRole('option').map((o) => o.textContent)
+  }
+
+  it('offers a scheduled event Completed and Cancelled', async () => {
+    expect(await optionsFor('scheduled')).toEqual(['Scheduled', 'Completed', 'Cancelled'])
+  })
+
+  it('offers a completed event Scheduled and Cancelled, never Submitted', async () => {
+    // Submitting goes through the Submit results button, which emails the ACP.
+    expect(await optionsFor('completed')).toEqual(['Scheduled', 'Completed', 'Cancelled'])
+  })
+
+  it('offers a cancelled event only Scheduled (no straight jump to Completed)', async () => {
+    expect(await optionsFor('cancelled')).toEqual(['Scheduled', 'Cancelled'])
+  })
+})

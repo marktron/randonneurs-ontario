@@ -20,6 +20,8 @@ import { generateAcpXlsx, generateAcpCsv } from '@/lib/email/results-spreadsheet
 import type { AcpResultRow, SpreadsheetData } from '@/lib/email/results-spreadsheet'
 import { handleActionError, handleSupabaseError, createActionResult } from '@/lib/errors'
 import type { ActionResult } from '@/types/actions'
+import type { EventStatus } from '@/lib/events/status'
+import { assertEventMutable, canTransitionEvent } from '@/lib/actions/event-mutability'
 import type {
   ChapterSlugOnly,
   Event,
@@ -63,7 +65,7 @@ async function revalidateCalendarTags(chapterId: string, eventType: string, even
   }
 }
 
-export type EventStatus = 'draft' | 'scheduled' | 'completed' | 'cancelled' | 'submitted'
+export type { EventStatus }
 export type EventType = 'brevet' | 'populaire' | 'fleche' | 'permanent'
 
 export interface CreateEventData {
@@ -216,6 +218,13 @@ export interface UpdateEventData {
 export async function updateEvent(eventId: string, data: UpdateEventData): Promise<ActionResult> {
   try {
     const admin = await requireAdmin()
+
+    // A submitted event is homologated: no date/distance/route edits (which
+    // would rotate the slug and rewrite results via the distance trigger).
+    const mutable = await assertEventMutable(eventId)
+    if (!mutable.ok) {
+      return { success: false, error: mutable.error }
+    }
 
     const updateData: Record<string, unknown> = {}
 
@@ -418,6 +427,12 @@ export async function deleteEvent(eventId: string): Promise<ActionResult> {
   try {
     const admin = await requireAdmin()
 
+    // Deleting would cascade away results already filed with the ACP.
+    const mutable = await assertEventMutable(eventId)
+    if (!mutable.ok) {
+      return { success: false, error: mutable.error }
+    }
+
     // Fetch the event to check the date and get chapter info for revalidation
     const { data: event, error: fetchError } = await getSupabaseAdmin()
       .from('events')
@@ -510,20 +525,35 @@ export async function updateEventStatus(
       route_id: string | null
     }
 
-    if (status === 'draft' && typedEvent.status !== 'draft') {
+    const currentStatus = typedEvent.status as EventStatus
+
+    // Re-selecting the current status changes nothing: no write, no ERW call,
+    // no completion emails.
+    if (status === currentStatus) {
+      return { success: true }
+    }
+
+    if (status === 'draft') {
       return { success: false, error: 'Published events cannot be moved back to draft' }
     }
     // A draft is invisible to the public; the only status move that makes sense
     // is publishing it. Cancelled/completed would leak it (public reads include
     // cancelled, and completed skips the ERW sync + shows up in results).
-    if (typedEvent.status === 'draft' && status !== 'scheduled') {
+    if (currentStatus === 'draft' && status !== 'scheduled') {
       return { success: false, error: 'Drafts can only be published (or deleted)' }
     }
-    const isPublishingDraft = typedEvent.status === 'draft' && status === 'scheduled'
+    // Every other move must be in EVENT_STATUS_TRANSITIONS (lib/events/status.ts).
+    if (!canTransitionEvent(currentStatus, status)) {
+      return {
+        success: false,
+        error: `Cannot change event status from ${currentStatus} to ${status}`,
+      }
+    }
+    const isPublishingDraft = currentStatus === 'draft' && status === 'scheduled'
 
     // If cancelling, delete all results for this event. Runs after the fetch +
-    // draft guard above so a refused request (e.g. draft -> cancelled) never
-    // deletes anything.
+    // transition guards above so a refused request (e.g. submitted ->
+    // cancelled) never deletes anything.
     if (status === 'cancelled') {
       const { error: deleteError } = await getSupabaseAdmin()
         .from('results')
