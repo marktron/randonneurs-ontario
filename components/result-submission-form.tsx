@@ -123,92 +123,79 @@ export function ResultSubmissionForm({ token, initialData }: ResultSubmissionFor
   ) {
     setState((prev) => ({ ...prev, uploading: true, error: null }))
 
-    // 0. Compress images in the browser before upload (HEIC → JPEG, resize)
-    let uploadFile: File
+    // Every exit path must clear `uploading`, or the slot's input and buttons
+    // stay disabled until reload.
+    const fail = (message: string) =>
+      setState((prev) => ({ ...prev, uploading: false, error: message }))
+
     try {
-      uploadFile = await compressImageForUpload(file)
+      // 0. Compress images in the browser before upload (HEIC → JPEG, resize)
+      const uploadFile = await compressImageForUpload(file)
+
+      // Browsers (especially Safari/macOS) don't always recognize the GPX MIME
+      // type and report file.type as "" or "application/octet-stream" for .gpx
+      // files, which would fail both our server validation and Supabase Storage's
+      // bucket allowlist. Since the form already knows this is a GPX upload,
+      // bake the canonical MIME type into a new File object — supabase-js's
+      // uploadToSignedUrl wraps Blob bodies in FormData and uses the File's
+      // intrinsic .type as the multipart Content-Type, ignoring any contentType
+      // option we pass.
+      let fileToUpload = uploadFile
+      if (fileType === 'gpx' && uploadFile.type !== 'application/gpx+xml') {
+        fileToUpload = new File([uploadFile], uploadFile.name, {
+          type: 'application/gpx+xml',
+          lastModified: uploadFile.lastModified,
+        })
+      }
+
+      // 1. Ask the server for a signed upload URL (avoids the server-action body limit)
+      const signed = await createResultUploadUrl({
+        token,
+        fileType,
+        fileName: fileToUpload.name,
+        contentType: fileToUpload.type,
+        fileSize: fileToUpload.size,
+      })
+
+      if (!signed.success || !signed.data) {
+        fail(signed.error || 'Upload failed')
+        return
+      }
+
+      // 2. Upload directly to Supabase Storage using the signed URL
+      const supabase = createSupabaseBrowserClient()
+      const { error: uploadError } = await supabase.storage
+        .from('rider-submissions')
+        .uploadToSignedUrl(signed.data.path, signed.data.uploadToken, fileToUpload, {
+          upsert: false,
+        })
+
+      if (uploadError) {
+        fail(uploadError.message || 'Upload failed')
+        return
+      }
+
+      // 3. Tell the server the upload finished so it persists the path
+      const confirmed = await confirmResultUpload({
+        token,
+        fileType,
+        path: signed.data.path,
+      })
+
+      if (!confirmed.success || !confirmed.data) {
+        fail(confirmed.error || 'Upload failed')
+        return
+      }
+
+      setState({
+        uploading: false,
+        path: confirmed.data.path,
+        url: confirmed.data.url,
+        error: null,
+      })
     } catch (err) {
-      setState((prev) => ({
-        ...prev,
-        uploading: false,
-        error: err instanceof Error ? err.message : 'Upload failed',
-      }))
-      return
+      fail(err instanceof Error ? err.message : 'Upload failed')
     }
-
-    // Browsers (especially Safari/macOS) don't always recognize the GPX MIME
-    // type and report file.type as "" or "application/octet-stream" for .gpx
-    // files, which would fail both our server validation and Supabase Storage's
-    // bucket allowlist. Since the form already knows this is a GPX upload,
-    // bake the canonical MIME type into a new File object — supabase-js's
-    // uploadToSignedUrl wraps Blob bodies in FormData and uses the File's
-    // intrinsic .type as the multipart Content-Type, ignoring any contentType
-    // option we pass.
-    let fileToUpload = uploadFile
-    if (fileType === 'gpx' && uploadFile.type !== 'application/gpx+xml') {
-      fileToUpload = new File([uploadFile], uploadFile.name, {
-        type: 'application/gpx+xml',
-        lastModified: uploadFile.lastModified,
-      })
-    }
-
-    // 1. Ask the server for a signed upload URL (avoids the server-action body limit)
-    const signed = await createResultUploadUrl({
-      token,
-      fileType,
-      fileName: fileToUpload.name,
-      contentType: fileToUpload.type,
-      fileSize: fileToUpload.size,
-    })
-
-    if (!signed.success || !signed.data) {
-      setState((prev) => ({
-        ...prev,
-        uploading: false,
-        error: signed.error || 'Upload failed',
-      }))
-      return
-    }
-
-    // 2. Upload directly to Supabase Storage using the signed URL
-    const supabase = createSupabaseBrowserClient()
-    const { error: uploadError } = await supabase.storage
-      .from('rider-submissions')
-      .uploadToSignedUrl(signed.data.path, signed.data.uploadToken, fileToUpload, {
-        upsert: false,
-      })
-
-    if (uploadError) {
-      setState((prev) => ({
-        ...prev,
-        uploading: false,
-        error: uploadError.message || 'Upload failed',
-      }))
-      return
-    }
-
-    // 3. Tell the server the upload finished so it persists the path
-    const confirmed = await confirmResultUpload({
-      token,
-      fileType,
-      path: signed.data.path,
-    })
-
-    if (!confirmed.success || !confirmed.data) {
-      setState((prev) => ({
-        ...prev,
-        uploading: false,
-        error: confirmed.error || 'Upload failed',
-      }))
-      return
-    }
-
-    setState({
-      uploading: false,
-      path: confirmed.data.path,
-      url: confirmed.data.url,
-      error: null,
-    })
   }
 
   async function handleFileDelete(
@@ -656,7 +643,17 @@ export function ResultSubmissionForm({ token, initialData }: ResultSubmissionFor
         </div>
 
         {/* Submit */}
-        <Button type="submit" className="w-full" size="lg" disabled={isPending}>
+        <Button
+          type="submit"
+          className="w-full"
+          size="lg"
+          disabled={
+            isPending ||
+            gpxFile.uploading ||
+            controlCardFront.uploading ||
+            controlCardBack.uploading
+          }
+        >
           {isPending ? 'Saving…' : 'Submit Your Result'}
         </Button>
 

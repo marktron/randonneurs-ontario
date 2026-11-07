@@ -15,6 +15,7 @@ const mockConfirmResultUpload = vi.fn()
 const mockDeleteResultFile = vi.fn()
 const mockGetRiderUpcomingEvents = vi.fn()
 const mockGetChapterUpcomingEvents = vi.fn()
+const mockUploadToSignedUrl = vi.fn()
 
 vi.mock('@/lib/actions/rider-results', () => ({
   submitRiderResult: (...args: unknown[]) => mockSubmitRiderResult(...args),
@@ -30,7 +31,7 @@ vi.mock('@/lib/supabase-browser', () => ({
   createClient: () => ({
     storage: {
       from: () => ({
-        uploadToSignedUrl: vi.fn().mockResolvedValue({ error: null }),
+        uploadToSignedUrl: (...args: unknown[]) => mockUploadToSignedUrl(...args),
       }),
     },
   }),
@@ -112,6 +113,7 @@ describe('ResultSubmissionForm', () => {
       success: true,
       data: { path: 'test.gpx', url: 'https://example.com/test.gpx' },
     })
+    mockUploadToSignedUrl.mockResolvedValue({ error: null })
     mockDeleteResultFile.mockResolvedValue({ success: true })
     mockGetRiderUpcomingEvents.mockResolvedValue({ success: true, data: [] })
     mockGetChapterUpcomingEvents.mockResolvedValue({ success: true, data: [] })
@@ -337,6 +339,56 @@ describe('ResultSubmissionForm', () => {
   // Note: File upload tests removed because the file inputs are hidden and
   // accessed via button clicks, which is difficult to test in happy-dom.
   // File upload functionality is covered by E2E tests.
+
+  describe('file upload pipeline', () => {
+    function gpxInput(container: HTMLElement) {
+      return container.querySelector('input[type="file"][accept=".gpx,.xml"]') as HTMLInputElement
+    }
+    function pickGpx(container: HTMLElement) {
+      const file = new File(['<gpx/>'], 'ride.gpx', { type: 'application/gpx+xml' })
+      fireEvent.change(gpxInput(container), { target: { files: [file] } })
+    }
+
+    it.each([
+      [
+        'createResultUploadUrl',
+        () => mockCreateResultUploadUrl.mockRejectedValue(new Error('Network down')),
+      ],
+      [
+        'uploadToSignedUrl',
+        () => mockUploadToSignedUrl.mockRejectedValue(new Error('Network down')),
+      ],
+      [
+        'confirmResultUpload',
+        () => mockConfirmResultUpload.mockRejectedValue(new Error('Network down')),
+      ],
+    ])('recovers when %s rejects', async (_name, arrange) => {
+      arrange()
+      const { container } = render(<ResultSubmissionForm {...defaultProps} />)
+
+      pickGpx(container)
+
+      expect(await screen.findByText('Network down')).toBeInTheDocument()
+      expect(gpxInput(container)).not.toBeDisabled()
+      expect(screen.queryByText('Uploading…')).not.toBeInTheDocument()
+    })
+
+    it('disables Submit while an upload is in flight', async () => {
+      let release!: (v: unknown) => void
+      mockCreateResultUploadUrl.mockReturnValue(new Promise((r) => (release = r)))
+      const { container } = render(<ResultSubmissionForm {...defaultProps} />)
+      const submit = screen.getByRole('button', { name: /submit your result/i })
+      expect(submit).not.toBeDisabled()
+
+      pickGpx(container)
+
+      await waitFor(() => expect(submit).toBeDisabled())
+
+      release({ success: false, error: 'Nope' })
+      expect(await screen.findByText('Nope')).toBeInTheDocument()
+      expect(submit).not.toBeDisabled()
+    })
+  })
 
   // Note: File deletion tests require files to be displayed, which needs status="finished"
   // to be set via Radix Select. This flow is covered by E2E tests.
