@@ -6,14 +6,16 @@ The audit log records admin actions across the system, providing an immutable tr
 
 All mutating admin actions are recorded:
 
-| Entity     | Actions                                       |
-| ---------- | --------------------------------------------- |
-| Event      | create, update, delete, status_change, submit |
-| Route      | create, update, delete, merge, toggle active  |
-| Rider      | create, merge                                 |
-| Result     | create, update, delete, bulk create           |
-| Page       | save (create/update)                          |
-| Admin User | create, update, delete                        |
+| Entity       | Actions                                       |
+| ------------ | --------------------------------------------- |
+| Event        | create, update, delete, status_change, submit |
+| Route        | create, update, delete, merge, toggle active  |
+| Rider        | create, merge                                 |
+| Result       | create, update, delete, bulk create           |
+| Registration | cancel, restore (status changes)              |
+| Award        | manual assign, remove                         |
+| Page         | save (create/update)                          |
+| Admin User   | create, update, delete                        |
 
 Each entry includes:
 
@@ -37,5 +39,6 @@ The page has two tabs:
 - **Table:** `audit_logs` in Supabase
 - **Helper:** `logAuditEvent()` in `lib/audit-log.ts`
 - **Fire-and-forget:** Audit logging never fails the parent operation. Errors are logged to the console but do not propagate.
+- **Entity types:** The allowed values live in `AUDIT_ENTITY_TYPES` in `lib/audit-log.ts` (the `AuditEntityType` type derives from it) and in the `audit_logs_entity_type_check` CHECK constraint. Adding a type needs a migration that re-creates the constraint. `tests/integration-real/audit-log-entity-types.test.ts` inserts a row for every value in `AUDIT_ENTITY_TYPES`, so a type added without a migration fails CI. (Before the migration `20261107120000`, `registration` and `award` entries were silently dropped.)
 - **Immutable:** No UPDATE or DELETE policies exist on the table. Logs cannot be modified once written.
 - **RLS:** Only authenticated admins can read logs. Inserts are restricted to the service role (server actions).
