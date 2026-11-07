@@ -39,6 +39,10 @@ The system generates an `.xlsx` file using ExcelJS. If XLSX generation fails for
 
 The file is named `{yyyymmdd}-{event-name}-{distance}.xlsx` (e.g. `20250920-Warmup-200.xlsx`), or `.csv` for the fallback.
 
+## Submit ordering
+
+`submitEventResults()` first claims the event by flipping `completed` to `submitted` (a conditional update that must match a row), then sends the email, and reverts the claim to `completed` if the send fails, so concurrent clicks cannot double-send and a failed send can be retried.
+
 ## Implementation
 
 - Spreadsheet generation: `lib/email/results-spreadsheet.ts`

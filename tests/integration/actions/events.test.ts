@@ -349,8 +349,10 @@ describe('submitEventResults', () => {
       })
     })
 
-    // Mock the status update
-    mockModule.__mockUpdateSuccess()
+    // Mock the status claim (one row flipped completed -> submitted)
+    mockModule.__queryBuilder.then.mockImplementationOnce((resolve) =>
+      resolve({ data: [{ id: 'test-event-id' }], error: null })
+    )
 
     // Mock chapter query for revalidation
     mockModule.__mockEventFound({ slug: 'toronto' })
@@ -381,6 +383,109 @@ describe('submitEventResults', () => {
     expect(call.text).not.toMatch(/\d:\d{2}:\d{2}/)
   })
 
+  describe('claim-then-send ordering', () => {
+    const completedBrevet = {
+      id: 'test-event-id',
+      status: 'completed',
+      event_type: 'brevet',
+      name: 'Test Event',
+      event_date: '2025-01-15',
+      distance_km: 200,
+      chapters: { name: 'Toronto' },
+    }
+    const resultsRows = {
+      data: [
+        {
+          riders: { first_name: 'John', last_name: 'Doe', gender: 'M' },
+          status: 'finished',
+          finish_time: '10:30:00',
+          note: null,
+        },
+      ],
+      error: null,
+    }
+
+    it('does not send the email when the claim affects zero rows', async () => {
+      mockModule.__mockEventFound(completedBrevet)
+      mockModule.__queryBuilder.then.mockImplementationOnce((resolve) => resolve(resultsRows))
+      // Claim: event was flipped to submitted by a concurrent click
+      mockModule.__queryBuilder.then.mockImplementationOnce((resolve) =>
+        resolve({ data: [], error: null })
+      )
+
+      process.env.AWS_ACCESS_KEY_ID = 'test-key'
+      const result = await submitEventResults('test-event-id')
+      delete process.env.AWS_ACCESS_KEY_ID
+
+      const { sendEmail } = await import('@/lib/email/ses')
+      expect(result.success).toBe(false)
+      expect(result.error).toBe('Results have already been submitted')
+      expect(sendEmail).not.toHaveBeenCalled()
+    })
+
+    it('claims the event filtered on completed, before sending the email', async () => {
+      const order: string[] = []
+      const { sendEmail } = await import('@/lib/email/ses')
+      vi.mocked(sendEmail).mockImplementationOnce(async () => {
+        order.push('send')
+      })
+
+      mockModule.__mockEventFound(completedBrevet)
+      mockModule.__queryBuilder.then.mockImplementationOnce((resolve) => resolve(resultsRows))
+      mockModule.__queryBuilder.then.mockImplementationOnce((resolve) => {
+        order.push('claim')
+        resolve({ data: [{ id: 'test-event-id' }], error: null })
+      })
+
+      process.env.AWS_ACCESS_KEY_ID = 'test-key'
+      const result = await submitEventResults('test-event-id')
+      delete process.env.AWS_ACCESS_KEY_ID
+
+      expect(result.success).toBe(true)
+      expect(order).toEqual(['claim', 'send'])
+
+      const eventCalls = mockModule.__calls.filter((c) => c.table === 'events')
+      const updateIdx = eventCalls.findIndex((c) => c.method === 'update')
+      expect(eventCalls[updateIdx].args![0]).toEqual({ status: 'submitted' })
+      const claimChain = eventCalls.slice(updateIdx + 1, updateIdx + 4)
+      expect(claimChain.map((c) => [c.method, ...(c.args ?? [])])).toEqual([
+        ['eq', 'id', 'test-event-id'],
+        ['eq', 'status', 'completed'],
+        ['select', 'id'],
+      ])
+    })
+
+    it('reverts the claim to completed when the email send fails', async () => {
+      const { sendEmail } = await import('@/lib/email/ses')
+      vi.mocked(sendEmail).mockRejectedValueOnce(new Error('SES down'))
+
+      mockModule.__mockEventFound(completedBrevet)
+      mockModule.__queryBuilder.then.mockImplementationOnce((resolve) => resolve(resultsRows))
+      mockModule.__queryBuilder.then.mockImplementationOnce((resolve) =>
+        resolve({ data: [{ id: 'test-event-id' }], error: null })
+      )
+
+      process.env.AWS_ACCESS_KEY_ID = 'test-key'
+      const result = await submitEventResults('test-event-id')
+      delete process.env.AWS_ACCESS_KEY_ID
+
+      expect(result).toEqual({ success: false, error: 'Failed to send email. Please try again.' })
+
+      const eventCalls = mockModule.__calls.filter((c) => c.table === 'events')
+      const revertIdx = eventCalls.findIndex(
+        (c) =>
+          c.method === 'update' && (c.args![0] as Record<string, unknown>).status === 'completed'
+      )
+      expect(revertIdx).toBeGreaterThan(-1)
+      expect(
+        eventCalls.slice(revertIdx + 1, revertIdx + 3).map((c) => [c.method, ...(c.args ?? [])])
+      ).toEqual([
+        ['eq', 'id', 'test-event-id'],
+        ['eq', 'status', 'submitted'],
+      ])
+    })
+  })
+
   it('does not send email for permanent events', async () => {
     mockModule.__mockEventFound({
       id: 'test-event-id',
@@ -407,8 +512,10 @@ describe('submitEventResults', () => {
       })
     })
 
-    // Mock the status update
-    mockModule.__mockUpdateSuccess()
+    // Mock the status claim (one row flipped completed -> submitted)
+    mockModule.__queryBuilder.then.mockImplementationOnce((resolve) =>
+      resolve({ data: [{ id: 'test-event-id' }], error: null })
+    )
 
     // Mock chapter query for revalidation
     mockModule.__mockEventFound({ slug: 'toronto' })
@@ -449,8 +556,10 @@ describe('submitEventResults', () => {
       })
     })
 
-    // Mock the status update
-    mockModule.__mockUpdateSuccess()
+    // Mock the status claim (one row flipped completed -> submitted)
+    mockModule.__queryBuilder.then.mockImplementationOnce((resolve) =>
+      resolve({ data: [{ id: 'test-event-id' }], error: null })
+    )
 
     // Mock chapter query for revalidation
     mockModule.__mockEventFound({ slug: 'toronto' })
@@ -496,8 +605,10 @@ describe('submitEventResults', () => {
       })
     })
 
-    // Mock the status update
-    mockModule.__mockUpdateSuccess()
+    // Mock the status claim (one row flipped completed -> submitted)
+    mockModule.__queryBuilder.then.mockImplementationOnce((resolve) =>
+      resolve({ data: [{ id: 'test-event-id' }], error: null })
+    )
 
     // Mock chapter query for revalidation
     mockModule.__mockEventFound({ slug: 'toronto' })

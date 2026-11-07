@@ -870,6 +870,25 @@ export async function submitEventResults(eventId: string): Promise<ActionResult>
     // Only finishers with a finish time are included in email and spreadsheet
     const finishedResults = typedResults.filter((r) => r.status === 'finished' && r.finish_time)
 
+    // Claim the submission before emailing: the status flip is the race-safe guard, so two
+    // concurrent clicks cannot both send and a failed update cannot leave a re-sendable event.
+    const claimData: EventUpdate = { status: 'submitted' }
+    const { data: claimed, error: claimError } = await getSupabaseAdmin()
+      .from('events')
+      .update(claimData)
+      .eq('id', eventId)
+      .eq('status', 'completed')
+      .select('id')
+
+    if (claimError) {
+      console.error('Error claiming event for submission:', claimError)
+      return { success: false, error: 'Failed to update event status' }
+    }
+
+    if (!claimed || claimed.length === 0) {
+      return { success: false, error: 'Results have already been submitted' }
+    }
+
     // Send results email for brevets, fleches, and populaires (not permanents)
     const requiresEmail = typedEvent.event_type !== 'permanent'
 
@@ -971,21 +990,20 @@ This email was sent from the Randonneurs Ontario admin system.
           })
         } catch (emailError) {
           console.error('Failed to send results email:', emailError)
+          // Release the claim so the admin can retry. Direct update on purpose: the TS
+          // transition table forbids submitted -> completed; only this rollback is allowed.
+          const revertData: EventUpdate = { status: 'completed' }
+          const { error: revertError } = await getSupabaseAdmin()
+            .from('events')
+            .update(revertData)
+            .eq('id', eventId)
+            .eq('status', 'submitted')
+          if (revertError) {
+            console.error('Failed to revert submission claim:', revertError)
+          }
           return { success: false, error: 'Failed to send email. Please try again.' }
         }
       }
-    }
-
-    // Update event status to submitted
-    const updateData: EventUpdate = { status: 'submitted' }
-    const { error: updateError } = await getSupabaseAdmin()
-      .from('events')
-      .update(updateData)
-      .eq('id', eventId)
-
-    if (updateError) {
-      console.error('Error updating event status:', updateError)
-      return { success: false, error: 'Email sent but failed to update event status' }
     }
 
     // Revalidate admin pages (still use revalidatePath for admin routes)
