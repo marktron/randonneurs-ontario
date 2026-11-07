@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useEffect, useMemo } from 'react'
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react'
 import { format } from 'date-fns'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -88,6 +88,8 @@ export function ControlCardForm({ routes, mode = 'picker' }: ControlCardFormProp
   // RWGPS import state
   const [isLoadingRwgps, setIsLoadingRwgps] = useState(false)
   const [rwgpsError, setRwgpsError] = useState<string | null>(null)
+  // Monotonic id so only the most recent import (picker or URL) applies its result.
+  const rwgpsRequest = useRef(0)
 
   // RWGPS-mode state (only used when mode === 'rwgps')
   const [rwgpsInput, setRwgpsInput] = useState('')
@@ -182,11 +184,13 @@ export function ControlCardForm({ routes, mode = 'picker' }: ControlCardFormProp
   const importFromRwgps = useCallback(async () => {
     if (!pickerRwgpsId) return
 
+    const requestId = ++rwgpsRequest.current
     setIsLoadingRwgps(true)
     setRwgpsError(null)
 
     try {
       const result = await loadRwgpsControls(pickerRwgpsId)
+      if (requestId !== rwgpsRequest.current) return
       if (!result.success || !result.data) {
         setRwgpsError(result.error || 'Failed to fetch route data')
         return
@@ -199,9 +203,10 @@ export function ControlCardForm({ routes, mode = 'picker' }: ControlCardFormProp
         }))
       )
     } catch (error) {
+      if (requestId !== rwgpsRequest.current) return
       setRwgpsError(error instanceof Error ? error.message : 'Failed to fetch route data')
     } finally {
-      setIsLoadingRwgps(false)
+      if (requestId === rwgpsRequest.current) setIsLoadingRwgps(false)
     }
   }, [pickerRwgpsId])
 
@@ -223,11 +228,13 @@ export function ControlCardForm({ routes, mode = 'picker' }: ControlCardFormProp
       return
     }
 
+    const requestId = ++rwgpsRequest.current
     setIsLoadingRwgps(true)
     setRwgpsError(null)
 
     try {
       const result = await loadRwgpsRoute(ref.id, ref.privacyCode)
+      if (requestId !== rwgpsRequest.current) return
       if (!result.success || !result.data) {
         setRwgpsError(result.error || 'Failed to fetch route data')
         return
@@ -245,9 +252,10 @@ export function ControlCardForm({ routes, mode = 'picker' }: ControlCardFormProp
         }))
       )
     } catch (error) {
+      if (requestId !== rwgpsRequest.current) return
       setRwgpsError(error instanceof Error ? error.message : 'Failed to fetch route data')
     } finally {
-      setIsLoadingRwgps(false)
+      if (requestId === rwgpsRequest.current) setIsLoadingRwgps(false)
     }
   }, [rwgpsInput])
 
@@ -350,7 +358,12 @@ export function ControlCardForm({ routes, mode = 'picker' }: ControlCardFormProp
                     id="rwgpsInput"
                     placeholder="https://ridewithgps.com/routes/12345"
                     value={rwgpsInput}
-                    onChange={(e) => setRwgpsInput(e.target.value)}
+                    onChange={(e) => {
+                      setRwgpsInput(e.target.value)
+                      // The loaded route no longer matches the text; drop the pairing.
+                      setRwgpsLoadedId(null)
+                      setRwgpsLoadedPrivacyCode(null)
+                    }}
                     className="flex-1"
                   />
                   <Button

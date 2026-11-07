@@ -3,9 +3,10 @@
  */
 
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ControlCardForm } from '@/components/control-card-form'
+import { loadRwgpsControls, loadRwgpsRoute } from '@/lib/actions/rwgps'
 import type { ActiveRouteWithRwgps } from '@/lib/data/routes'
 
 // The form imports RWGPS server actions at module level; stub them so no
@@ -145,4 +146,87 @@ describe('ControlCardForm control-count cap', () => {
     expect((link.getAttribute('class') || '').split(/\s+/)).not.toContain('pointer-events-none')
     expect(link.getAttribute('href')).toContain('/control-cards/print?')
   }, 20000)
+})
+
+describe('ControlCardForm RWGPS import races', () => {
+  function deferred<T>() {
+    let resolve!: (v: T) => void
+    const promise = new Promise<T>((r) => (resolve = r))
+    return { promise, resolve }
+  }
+
+  type ControlsResult = Awaited<ReturnType<typeof loadRwgpsControls>>
+  const ok = (name: string): ControlsResult => ({
+    success: true,
+    data: [{ name, distance: '50' }],
+  })
+
+  const routeA: ActiveRouteWithRwgps = { ...route, id: 'a', name: 'Route A', rwgpsId: '111' }
+  const routeB: ActiveRouteWithRwgps = { ...route, id: 'b', name: 'Route B', rwgpsId: '222' }
+
+  async function pick(user: SetupUser, name: string) {
+    await user.click(screen.getByRole('combobox'))
+    await user.click(await screen.findByText(name))
+  }
+
+  const controlNames = () =>
+    (screen.getAllByPlaceholderText('Control name') as HTMLInputElement[]).map((i) => i.value)
+
+  it('keeps the later route controls and clears loading when the earlier import resolves last', async () => {
+    const user = userEvent.setup()
+    const first = deferred<ControlsResult>()
+    const second = deferred<ControlsResult>()
+    vi.mocked(loadRwgpsControls)
+      .mockReturnValueOnce(first.promise)
+      .mockReturnValueOnce(second.promise)
+
+    render(<ControlCardForm routes={[routeA, routeB]} />)
+    await pick(user, 'Route A')
+    await pick(user, 'Route B')
+
+    await act(async () => second.resolve(ok('From B')))
+    await act(async () => first.resolve(ok('From A')))
+
+    await waitFor(() => expect(controlNames()).toContain('From B'))
+    expect(controlNames()).not.toContain('From A')
+    expect(screen.getByRole('button', { name: /Import from RWGPS/i })).not.toBeDisabled()
+  })
+
+  it('keeps the loading indicator while the latest import is still pending', async () => {
+    const user = userEvent.setup()
+    const first = deferred<ControlsResult>()
+    const second = deferred<ControlsResult>()
+    vi.mocked(loadRwgpsControls)
+      .mockReturnValueOnce(first.promise)
+      .mockReturnValueOnce(second.promise)
+
+    render(<ControlCardForm routes={[routeA, routeB]} />)
+    await pick(user, 'Route A')
+    await pick(user, 'Route B')
+
+    await act(async () => first.resolve(ok('From A')))
+
+    expect(controlNames()).not.toContain('From A')
+    expect(screen.getByRole('button', { name: /Import from RWGPS/i })).toBeDisabled()
+    await act(async () => second.resolve(ok('From B')))
+  })
+
+  it('clears the loaded-route pairing when the URL text changes after a successful import', async () => {
+    const user = userEvent.setup()
+    vi.mocked(loadRwgpsRoute).mockResolvedValueOnce({
+      success: true,
+      data: { name: 'Pasted Route', distanceKm: 200, controls: [] },
+    } as Awaited<ReturnType<typeof loadRwgpsRoute>>)
+
+    render(<ControlCardForm routes={[]} mode="rwgps" />)
+    const input = screen.getByLabelText(/RideWithGPS route URL or ID/i)
+    await user.type(input, 'https://ridewithgps.com/routes/12345')
+    await user.click(screen.getByRole('button', { name: /Load/i }))
+
+    expect(await screen.findByText(/Loaded from/i)).toBeInTheDocument()
+
+    await user.type(input, '6')
+
+    expect(screen.queryByText(/Loaded from/i)).toBeNull()
+  })
 })
