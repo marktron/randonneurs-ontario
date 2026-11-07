@@ -10,6 +10,9 @@ leaderboards, and the public registered-rider lists. A hidden rider still:
 - Sees their **own** upcoming registrations in the homepage "My Rides" section
   (see [my-rides.md](my-rides.md)), because that lookup runs server-side with
   the service role.
+- Is never offered in the public registration form's "is this you?" rider-match
+  picker (`searchRiderCandidates` filters `hidden = false` explicitly, since it
+  runs with the service role).
 - Is never listed under "other riders checked in" on anyone else's digital
   brevet card, and gets no sharing switch on their own card (see
   [digital-brevet-card.md](digital-brevet-card.md) §7b).

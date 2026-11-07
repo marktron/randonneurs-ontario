@@ -96,6 +96,9 @@ export async function searchRiderCandidates(
       results(count)
 `
     )
+    // Public, service-role query: RLS doesn't apply, so hidden riders must be
+    // excluded explicitly (see docs/hidden-riders.md).
+    .eq('hidden', false)
     .or(orFilters)
     .limit(100)
 
