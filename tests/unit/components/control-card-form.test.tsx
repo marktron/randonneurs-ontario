@@ -229,4 +229,42 @@ describe('ControlCardForm RWGPS import races', () => {
 
     expect(screen.queryByText(/Loaded from/i)).toBeNull()
   })
+
+  it('discards an in-flight import when the user switches to a route without RWGPS', async () => {
+    const user = userEvent.setup()
+    const first = deferred<ControlsResult>()
+    vi.mocked(loadRwgpsControls).mockReturnValueOnce(first.promise)
+    const plain: ActiveRouteWithRwgps = { ...route, id: 'c', name: 'Plain Route', rwgpsId: null }
+
+    render(<ControlCardForm routes={[routeA, plain]} />)
+    await pick(user, 'Route A')
+    await pick(user, 'Plain Route')
+
+    await act(async () => first.resolve(ok('From A')))
+
+    expect(controlNames()).not.toContain('From A')
+  })
+
+  it('discards an in-flight URL import when the input text changes', async () => {
+    const user = userEvent.setup()
+    const pending = deferred<Awaited<ReturnType<typeof loadRwgpsRoute>>>()
+    vi.mocked(loadRwgpsRoute).mockReturnValueOnce(pending.promise)
+
+    render(<ControlCardForm routes={[]} mode="rwgps" />)
+    const input = screen.getByLabelText(/RideWithGPS route URL or ID/i)
+    await user.type(input, 'https://ridewithgps.com/routes/12345')
+    await user.click(screen.getByRole('button', { name: /Load/i }))
+    await user.type(input, '6')
+
+    await act(async () =>
+      pending.resolve({
+        success: true,
+        data: { name: 'Stale Route', distanceKm: 200, controls: [] },
+      } as Awaited<ReturnType<typeof loadRwgpsRoute>>)
+    )
+
+    expect(screen.queryByText(/Loaded from/i)).toBeNull()
+    expect((screen.getByLabelText(/Route name/i) as HTMLInputElement).value).toBe('')
+    expect(screen.getByRole('button', { name: /Load/i })).not.toBeDisabled()
+  })
 })

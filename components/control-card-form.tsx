@@ -139,6 +139,9 @@ export function ControlCardForm({ routes, mode = 'picker' }: ControlCardFormProp
   useEffect(() => {
     if (mode !== 'picker') return
     if (pickedRoute) {
+      // Discard any import still in flight for the previous route.
+      rwgpsRequest.current++
+      setIsLoadingRwgps(false)
       setControls([
         { id: crypto.randomUUID(), name: 'Start', distance: '0' },
         {
@@ -360,6 +363,9 @@ export function ControlCardForm({ routes, mode = 'picker' }: ControlCardFormProp
                     value={rwgpsInput}
                     onChange={(e) => {
                       setRwgpsInput(e.target.value)
+                      // Discard any URL import still in flight for the old text.
+                      rwgpsRequest.current++
+                      setIsLoadingRwgps(false)
                       // The loaded route no longer matches the text; drop the pairing.
                       setRwgpsLoadedId(null)
                       setRwgpsLoadedPrivacyCode(null)
