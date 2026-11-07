@@ -455,6 +455,29 @@ describe('submitEventResults', () => {
       ])
     })
 
+    it('never claims the event when building the email throws', async () => {
+      const { generateAcpXlsx, generateAcpCsv } = await import('@/lib/email/results-spreadsheet')
+      vi.mocked(generateAcpXlsx).mockRejectedValueOnce(new Error('xlsx boom'))
+      vi.mocked(generateAcpCsv).mockImplementationOnce(() => {
+        throw new Error('csv boom')
+      })
+
+      mockModule.__mockEventFound(completedBrevet)
+      mockModule.__queryBuilder.then.mockImplementationOnce((resolve) => resolve(resultsRows))
+
+      process.env.AWS_ACCESS_KEY_ID = 'test-key'
+      const result = await submitEventResults('test-event-id')
+      delete process.env.AWS_ACCESS_KEY_ID
+
+      const { sendEmail } = await import('@/lib/email/ses')
+      expect(result.success).toBe(false)
+      expect(sendEmail).not.toHaveBeenCalled()
+      const statusUpdates = mockModule.__calls.filter(
+        (c) => c.table === 'events' && c.method === 'update'
+      )
+      expect(statusUpdates).toEqual([])
+    })
+
     it('reverts the claim to completed when the email send fails', async () => {
       const { sendEmail } = await import('@/lib/email/ses')
       vi.mocked(sendEmail).mockRejectedValueOnce(new Error('SES down'))

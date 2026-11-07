@@ -870,27 +870,10 @@ export async function submitEventResults(eventId: string): Promise<ActionResult>
     // Only finishers with a finish time are included in email and spreadsheet
     const finishedResults = typedResults.filter((r) => r.status === 'finished' && r.finish_time)
 
-    // Claim the submission before emailing: the status flip is the race-safe guard, so two
-    // concurrent clicks cannot both send and a failed update cannot leave a re-sendable event.
-    const claimData: EventUpdate = { status: 'submitted' }
-    const { data: claimed, error: claimError } = await getSupabaseAdmin()
-      .from('events')
-      .update(claimData)
-      .eq('id', eventId)
-      .eq('status', 'completed')
-      .select('id')
-
-    if (claimError) {
-      console.error('Error claiming event for submission:', claimError)
-      return { success: false, error: 'Failed to update event status' }
-    }
-
-    if (!claimed || claimed.length === 0) {
-      return { success: false, error: 'Results have already been submitted' }
-    }
-
-    // Send results email for brevets, fleches, and populaires (not permanents)
+    // Build the results email for brevets, fleches, and populaires (not permanents) BEFORE
+    // claiming, so nothing that can throw sits between the claim and the send.
     const requiresEmail = typedEvent.event_type !== 'permanent'
+    let outgoingEmail: Parameters<typeof sendEmail>[0] | null = null
 
     if (requiresEmail) {
       const eventDate = parseLocalDate(typedEvent.event_date).toLocaleDateString('en-CA', {
@@ -966,32 +949,53 @@ This email was sent from the Randonneurs Ontario admin system.
         }
       }
 
-      // Send email
+      const toAddress = 'leissp@mac.com' // NOTE: change to vp-admin@randonneursontario.ca when someone other than Peter handles the admin emails
+      // Deduplicate recipients
+      const ccAddresses = [
+        ...new Set([admin.email, 'vp-toronto@randonneursontario.ca'].map((e) => e.toLowerCase())),
+      ].filter((email) => email !== toAddress.toLowerCase())
+
+      outgoingEmail = {
+        to: toAddress,
+        cc: ccAddresses.length > 0 ? ccAddresses : undefined,
+        from: fromEmail,
+        replyTo: admin.email,
+        subject,
+        text: emailBody,
+        attachments: [attachment],
+      }
+    }
+
+    // Claim the submission before emailing: the status flip is the race-safe guard, so two
+    // concurrent clicks cannot both send and a failed update cannot leave a re-sendable event.
+    const claimData: EventUpdate = { status: 'submitted' }
+    const { data: claimed, error: claimError } = await getSupabaseAdmin()
+      .from('events')
+      .update(claimData)
+      .eq('id', eventId)
+      .eq('status', 'completed')
+      .select('id')
+
+    if (claimError) {
+      console.error('Error claiming event for submission:', claimError)
+      return { success: false, error: 'Failed to update event status' }
+    }
+
+    if (!claimed || claimed.length === 0) {
+      return { success: false, error: 'Results have already been submitted' }
+    }
+
+    // Send email
+    if (outgoingEmail) {
       if (!isEmailConfigured()) {
         console.warn('AWS SES not configured, skipping email')
       } else {
         try {
-          const toAddress = 'leissp@mac.com' // NOTE: change to vp-admin@randonneursontario.ca when someone other than Peter handles the admin emails
-          // Deduplicate recipients
-          const ccAddresses = [
-            ...new Set(
-              [admin.email, 'vp-toronto@randonneursontario.ca'].map((e) => e.toLowerCase())
-            ),
-          ].filter((email) => email !== toAddress.toLowerCase())
-
-          await sendEmail({
-            to: toAddress,
-            cc: ccAddresses && ccAddresses.length > 0 ? ccAddresses : undefined,
-            from: fromEmail,
-            replyTo: admin.email,
-            subject,
-            text: emailBody,
-            attachments: [attachment],
-          })
+          await sendEmail(outgoingEmail)
         } catch (emailError) {
           console.error('Failed to send results email:', emailError)
-          // Release the claim so the admin can retry. Direct update on purpose: the TS
-          // transition table forbids submitted -> completed; only this rollback is allowed.
+          // Release the claim so the admin can retry. A later guard forbids leaving
+          // `submitted` except back to `completed`; this direct revert is that sanctioned exit.
           const revertData: EventUpdate = { status: 'completed' }
           const { error: revertError } = await getSupabaseAdmin()
             .from('events')
