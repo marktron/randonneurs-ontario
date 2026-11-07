@@ -1935,9 +1935,14 @@ describe('updateEventStatus', () => {
   describe('transition table', () => {
     const ALL: EventStatus[] = ['draft', 'scheduled', 'completed', 'cancelled', 'submitted']
     const others = (from: EventStatus) => ALL.filter((to) => to !== from)
-    const allowed = ALL.flatMap((from) =>
+    // 'submitted' is in the table (completed -> submitted) but only
+    // submitEventResults may perform it, because it also sends the ACP email.
+    // updateEventStatus refuses it as a target, so it is tested separately.
+    const tablePairs = ALL.flatMap((from) =>
       EVENT_STATUS_TRANSITIONS[from].map((to) => [from, to] as const)
     )
+    const allowed = tablePairs.filter(([, to]) => to !== 'submitted')
+    const submitOnly = tablePairs.filter(([, to]) => to === 'submitted')
     const forbidden = ALL.flatMap((from) =>
       others(from)
         .filter((to) => !EVENT_STATUS_TRANSITIONS[from].includes(to))
@@ -1970,7 +1975,19 @@ describe('updateEventStatus', () => {
       )
 
     it('covers every ordered pair of distinct statuses exactly once', () => {
-      expect(allowed.length + forbidden.length).toBe(ALL.length * (ALL.length - 1))
+      expect(allowed.length + submitOnly.length + forbidden.length).toBe(
+        ALL.length * (ALL.length - 1)
+      )
+      expect(submitOnly).toEqual([['completed', 'submitted']])
+    })
+
+    it('refuses completed -> submitted: only Submit Results may submit an event', async () => {
+      eventIn('completed')
+
+      const result = await updateEventStatus('event-1', 'submitted')
+
+      expect(result).toEqual({ success: false, error: 'Use Submit Results to submit an event' })
+      expect(writes()).toEqual([])
     })
 
     it.each(forbidden)('refuses %s -> %s before any update or results delete', async (from, to) => {

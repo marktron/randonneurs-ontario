@@ -507,6 +507,16 @@ describe('deleteResult', () => {
     expect(resultWrites()).toEqual([])
   })
 
+  it('refuses to delete a result that does not exist', async () => {
+    mockModule.__mockResultNotFound()
+
+    const result = await deleteResult('missing')
+
+    expect(result).toEqual({ success: false, error: 'Result not found' })
+    expect(mockAssertEventMutable).not.toHaveBeenCalled()
+    expect(resultWrites()).toEqual([])
+  })
+
   it('deletes result successfully', async () => {
     mockModule.__mockResultFound({ id: 'result-1', event_id: 'event-1' })
     mockModule.__mockUpdateSuccess() // For delete

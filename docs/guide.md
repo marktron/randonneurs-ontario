@@ -106,6 +106,8 @@ You'll spend most of your time here. From this page you can:
 | Cancelled | Scheduled                                             |
 | Submitted | Nothing; submitted is final                           |
 
+The status dropdown can't submit an event, and the server refuses to set Submitted any other way: use the **Submit Results** button.
+
 Completed can go back to Scheduled so you can reopen an event the system completed too early, for example after a postponed start. A cancelled event can't jump straight to Completed, because that would skip creating the pending results and the email asking riders to submit; set it back to Scheduled first. Choosing the status an event already has does nothing.
 
 ### Event status auto-completion

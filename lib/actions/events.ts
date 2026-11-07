@@ -533,6 +533,12 @@ export async function updateEventStatus(
       return { success: true }
     }
 
+    // completed -> submitted is in the table, but only submitEventResults may
+    // perform it: it sends the ACP results email. Setting the status here
+    // would skip the email and leave the event frozen.
+    if (status === 'submitted') {
+      return { success: false, error: 'Use Submit Results to submit an event' }
+    }
     if (status === 'draft') {
       return { success: false, error: 'Published events cannot be moved back to draft' }
     }

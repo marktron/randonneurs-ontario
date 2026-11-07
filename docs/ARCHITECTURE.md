@@ -160,6 +160,8 @@ The `lib/chapter-config.ts` file is the single source of truth for chapter metad
 | `cancelled` | `scheduled`                           |
 | `submitted` | none                                  |
 
+`updateEventStatus` refuses `submitted` as a target ("Use Submit Results to submit an event"), so `completed -> submitted` only happens through `submitEventResults`.
+
 - `updateEventStatus` checks `canTransitionEvent(from, to)` before any side effect (results delete on cancel, ERW calls, completion emails). A same-state request is a no-op success. The admin status select builds its options from the same table and never offers `submitted`, which only `submitEventResults` sets.
 - The cron (`/api/cron/complete-events`) and `publishSeasonDrafts` each update with a filter on the from-state (`scheduled` and `draft`), so they stay inside the table.
 - A `submitted` event is frozen. `assertEventMutable` refuses `updateEvent`, `deleteEvent`, the admin results CRUD in `lib/actions/results.ts`, check-ins and controls.
