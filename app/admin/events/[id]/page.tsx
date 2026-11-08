@@ -158,6 +158,10 @@ export default async function EventDetailPage({ params, searchParams }: EventPag
     checkinsResult.success && checkinsResult.data ? checkinsResult.data : []
   )
 
+  // Submitted events are frozen: updateEvent and deleteEvent refuse them, so
+  // the page offers neither. See docs/guide.md "Correcting a submitted event".
+  const isSubmitted = event.status === 'submitted'
+
   const participantRiderIds = Array.from(
     new Set([...registrations.map((r) => r.rider_id), ...results.map((r) => r.rider_id)])
   )
@@ -190,12 +194,14 @@ export default async function EventDetailPage({ params, searchParams }: EventPag
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Button variant="outline" asChild>
-            <Link href={`/admin/events/${event.id}/edit`}>
-              <Pencil className="h-4 w-4 mr-2" />
-              Edit
-            </Link>
-          </Button>
+          {!isSubmitted && (
+            <Button variant="outline" asChild>
+              <Link href={`/admin/events/${event.id}/edit`}>
+                <Pencil className="h-4 w-4 mr-2" />
+                Edit
+              </Link>
+            </Button>
+          )}
           <Button variant="outline" asChild>
             <Link href={`/admin/events/${event.id}/control-cards`}>
               <FileText className="h-4 w-4 mr-2" />
@@ -221,12 +227,14 @@ export default async function EventDetailPage({ params, searchParams }: EventPag
             resultsCount={results.length}
             initialDescription={event.description ?? null}
           />
-          <EventDeleteButton
-            eventId={event.id}
-            eventName={event.name}
-            isPastEvent={event.event_date < new Date().toISOString().split('T')[0]}
-            registrationsCount={registrations.length}
-          />
+          {!isSubmitted && (
+            <EventDeleteButton
+              eventId={event.id}
+              eventName={event.name}
+              isPastEvent={event.event_date < new Date().toISOString().split('T')[0]}
+              registrationsCount={registrations.length}
+            />
+          )}
         </div>
       </div>
 

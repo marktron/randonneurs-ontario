@@ -167,6 +167,8 @@ The `lib/chapter-config.ts` file is the single source of truth for chapter metad
 - A `submitted` event is frozen. `assertEventMutable` refuses `updateEvent`, `deleteEvent`, the admin results CRUD in `lib/actions/results.ts`, check-ins and controls.
 - The trigger `enforce_event_status_transition()` (migration `20261107130000_guard_event_status_transitions.sql`) enforces two of the rules for every writer, including the service role: nothing leaves `submitted` except back to `completed`, and a published event cannot move back to `draft`. Violations raise `23514`. The `submitted -> completed` exit exists only for `submitEventResults`, which rolls its claim back that way when the ACP email fails; the TypeScript table still forbids it.
 
+The admin UI mirrors the freeze: on a `submitted` event the detail page drops Edit and Delete, and `EventResultsManager` hides Add Rider and disables the inline result editors (also right after a successful submit, before the refresh lands). Correcting a submitted event has no in-app path; the webmaster reopens it with a direct `submitted -> completed` update and the VP re-runs Submit Results (see `docs/guide.md`, "Correcting a submitted event").
+
 Changing the lifecycle means editing the table, its pinned unit test (`tests/unit/lib/event-mutability.test.ts`), and the trigger if one of the two DB rules is affected.
 
 ## Data Flow Diagrams

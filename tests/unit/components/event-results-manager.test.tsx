@@ -42,8 +42,13 @@ vi.mock('@/components/admin/add-rider-dialog', () => ({
   ),
 }))
 
+// Stub Submit as a plain button so tests can drive the post-submit transition.
 vi.mock('@/components/admin/submit-results-button', () => ({
-  SubmitResultsButton: () => null,
+  SubmitResultsButton: ({ onSuccess }: { onSuccess?: () => void }) => (
+    <button data-testid="stub-submit-results" onClick={() => onSuccess?.()}>
+      stub submit results
+    </button>
+  ),
 }))
 
 type Registration = Parameters<typeof EventResultsManager>[0]['registrations'][number]
@@ -644,5 +649,91 @@ describe('EventResultsManager — un-cancelling in the same page session', () =>
     await user.click(restoreButtons[restoreButtons.length - 1])
 
     await waitFor(() => expect(adminRestoreRegistration).toHaveBeenCalledWith('reg-rider-gone'))
+  })
+})
+
+describe('EventResultsManager — submitted events are read-only', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  const finishedFleche: Result = {
+    id: 'result-frozen',
+    rider_id: 'rider-frozen',
+    finish_time: '22:00:00',
+    status: 'finished',
+    team_name: 'Team Frost',
+    distance_km: 360,
+    note: null,
+    gpx_url: null,
+    gpx_file_path: null,
+    control_card_front_path: null,
+    control_card_back_path: null,
+    rider_notes: null,
+    submitted_at: null,
+    submission_token: null,
+    riders: {
+      id: 'rider-frozen',
+      first_name: 'Freya',
+      last_name: 'Frozen',
+      email: 'freya@example.com',
+    },
+  }
+
+  function renderWithStatus(eventStatus: string) {
+    render(
+      <EventResultsManager
+        {...baseProps}
+        eventType="fleche"
+        eventStatus={eventStatus}
+        isPastEvent
+        registrations={[
+          makeRegistration({ riderId: 'rider-frozen', firstName: 'Freya', lastName: 'Frozen' }),
+        ]}
+        results={[finishedFleche]}
+        firstTimeRiderIds={[]}
+      />
+    )
+    return screen.getByText('Freya Frozen').closest('tr')!
+  }
+
+  function inlineEditors(row: HTMLElement) {
+    return {
+      status: within(row).getByRole('combobox'),
+      time: within(row).getByPlaceholderText('HH:MM'),
+      team: within(row).getByPlaceholderText('Team name'),
+      distance: within(row).getByPlaceholderText('km'),
+    }
+  }
+
+  it('hides Add Rider and disables every inline editor on a submitted event', () => {
+    const row = renderWithStatus('submitted')
+
+    expect(screen.queryByRole('button', { name: 'Add Rider' })).toBeNull()
+    for (const editor of Object.values(inlineEditors(row))) {
+      expect(editor).toBeDisabled()
+    }
+  })
+
+  it('keeps Add Rider and the inline editors on a completed event', () => {
+    const row = renderWithStatus('completed')
+
+    expect(screen.getByRole('button', { name: 'Add Rider' })).toBeTruthy()
+    for (const editor of Object.values(inlineEditors(row))) {
+      expect(editor).not.toBeDisabled()
+    }
+  })
+
+  it('locks the page as soon as Submit Results succeeds, without a reload', async () => {
+    const row = renderWithStatus('completed')
+
+    await userEvent.click(screen.getByTestId('stub-submit-results'))
+
+    await waitFor(() => {
+      expect(screen.queryByRole('button', { name: 'Add Rider' })).toBeNull()
+    })
+    for (const editor of Object.values(inlineEditors(row))) {
+      expect(editor).toBeDisabled()
+    }
   })
 })
