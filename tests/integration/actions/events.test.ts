@@ -190,6 +190,12 @@ vi.mock('@/lib/actions/event-mutability', async (importOriginal) => ({
   assertEventMutable: (eventId: string) => mockAssertEventMutable(eventId),
 }))
 
+// Pass-through spy so tests can assert a failure was reported to Sentry.
+vi.mock('@/lib/errors', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/errors')>()
+  return { ...actual, handleSupabaseError: vi.fn(actual.handleSupabaseError) }
+})
+
 const FROZEN = {
   ok: false as const,
   error: 'Results for this event have been submitted; it is frozen',
@@ -207,6 +213,7 @@ import {
 } from '@/lib/actions/events'
 import { sendResultSubmissionReminders } from '@/lib/events/send-result-reminders'
 import { requireAdmin } from '@/lib/auth/get-admin'
+import { handleSupabaseError } from '@/lib/errors'
 import { EVENT_STATUS_TRANSITIONS } from '@/lib/events/status'
 import type { EventStatus } from '@/lib/events/status'
 
@@ -538,6 +545,40 @@ describe('submitEventResults', () => {
         ['eq', 'id', 'test-event-id'],
         ['eq', 'status', 'submitted'],
       ])
+      expect(handleSupabaseError).not.toHaveBeenCalled()
+    })
+
+    it('reports a failed revert and tells the admin the event is stuck', async () => {
+      const { sendEmail } = await import('@/lib/email/ses')
+      vi.mocked(sendEmail).mockRejectedValueOnce(new Error('SES down'))
+      const revertError = { code: '08006', message: 'connection lost' }
+
+      mockModule.__mockEventFound(completedBrevet)
+      mockModule.__queryBuilder.then.mockImplementationOnce((resolve) => resolve(resultsRows))
+      mockModule.__queryBuilder.then.mockImplementationOnce((resolve) =>
+        resolve({ data: [{ id: 'test-event-id' }], error: null })
+      )
+      // The revert update fails: the event stays submitted
+      mockModule.__queryBuilder.then.mockImplementationOnce((resolve) =>
+        resolve({ data: null, error: revertError })
+      )
+
+      process.env.AWS_ACCESS_KEY_ID = 'test-key'
+      const result = await submitEventResults('test-event-id')
+      delete process.env.AWS_ACCESS_KEY_ID
+
+      expect(result).toEqual({
+        success: false,
+        error: 'Failed to send email and could not reopen the event; contact the webmaster',
+      })
+      expect(handleSupabaseError).toHaveBeenCalledWith(
+        revertError,
+        expect.objectContaining({
+          operation: 'submitEventResults',
+          context: expect.objectContaining({ eventId: 'test-event-id' }),
+        }),
+        expect.any(String)
+      )
     })
   })
 

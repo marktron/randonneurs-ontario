@@ -1039,7 +1039,19 @@ This email was sent from the Randonneurs Ontario admin system.
             .eq('id', eventId)
             .eq('status', 'submitted')
           if (revertError) {
-            console.error('Failed to revert submission claim:', revertError)
+            // The event is now submitted with no email sent, and the freeze blocks the
+            // admin from retrying. Only a direct DB fix gets it out, so make it loud.
+            const stuckMessage =
+              'Failed to send email and could not reopen the event; contact the webmaster'
+            return handleSupabaseError(
+              revertError,
+              {
+                operation: 'submitEventResults',
+                context: { eventId, step: 'revert submission claim after failed send' },
+                userMessage: stuckMessage,
+              },
+              stuckMessage
+            )
           }
           return { success: false, error: 'Failed to send email. Please try again.' }
         }
