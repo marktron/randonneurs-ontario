@@ -19,8 +19,14 @@ interface RiderListItem {
  * and turns "upcoming" into "past" as the calendar advances (see
  * docs/TESTING.md -> "Avoiding Test Rot").
  */
+// Local calendar date (not UTC): the app's deadlines are Eastern-time, and toISOString() rolls to tomorrow after 7 p.m. EST.
 export function isoDaysFromNow(days: number): string {
-  return new Date(Date.now() + days * 86_400_000).toISOString().split('T')[0]
+  const d = new Date()
+  d.setDate(d.getDate() + days)
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
 }
 
 /**
