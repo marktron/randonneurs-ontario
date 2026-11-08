@@ -9,6 +9,7 @@ import { revalidateResultsTags } from '@/lib/revalidate-results'
 import type { ActionResult } from '@/types/actions'
 import { seasonOfEventDate } from '@/lib/season'
 import { getMembershipForRider, isTrialUsed } from '@/lib/memberships/service'
+import { assertEventMutable } from '@/lib/actions/event-mutability'
 import type {
   RegistrationInsert,
   ResultInsert,
@@ -41,6 +42,12 @@ export async function createResult(data: CreateResultData): Promise<ActionResult
   const admin = await requireAdmin()
 
   const { eventId, riderId, finishTime, status, teamName, note, season, distanceKm } = data
+
+  // Results on a submitted event are homologated and frozen.
+  const mutable = await assertEventMutable(eventId)
+  if (!mutable.ok) {
+    return { success: false, error: mutable.error }
+  }
 
   // Check if result already exists for this rider/event
   const { data: existing } = await getSupabaseAdmin()
@@ -339,6 +346,25 @@ export async function updateResult(
 ): Promise<ActionResult> {
   const admin = await requireAdmin()
 
+  // The freeze is per event, so look up which event this result belongs to.
+  // The event and rider names feed the audit entry; the update can't change them.
+  const { data: target, error: targetError } = await getSupabaseAdmin()
+    .from('results')
+    .select('event_id, events (name), riders (first_name, last_name)')
+    .eq('id', resultId)
+    .single()
+  if (targetError || !target) {
+    return { success: false, error: 'Result not found' }
+  }
+  const typedTarget = target as ResultWithEventId & {
+    events: { name: string } | null
+    riders: { first_name: string; last_name: string } | null
+  }
+  const mutable = await assertEventMutable(typedTarget.event_id)
+  if (!mutable.ok) {
+    return { success: false, error: mutable.error }
+  }
+
   const updateData: ResultUpdate = {
     finish_time: data.finishTime,
     status: data.status,
@@ -358,25 +384,10 @@ export async function updateResult(
 
   // Revalidate admin pages (still use revalidatePath for admin routes)
   revalidatePath('/admin/events')
+  await revalidateResultsTags(typedTarget.event_id)
 
-  // Get the event_id to revalidate results cache tags
-  const { data: result } = await getSupabaseAdmin()
-    .from('results')
-    .select('event_id, events (name), riders (first_name, last_name)')
-    .eq('id', resultId)
-    .single()
-
-  if (result) {
-    const typedResult = result as ResultWithEventId
-    if (typedResult.event_id) {
-      await revalidateResultsTags(typedResult.event_id)
-    }
-  }
-
-  const updateEvent = (result as { events: { name: string } | null } | null)?.events
-  const updateRider = (
-    result as { riders: { first_name: string; last_name: string } | null } | null
-  )?.riders
+  const updateEvent = typedTarget.events
+  const updateRider = typedTarget.riders
   const updateDesc = [
     updateEvent ? updateEvent.name : null,
     updateRider ? `${updateRider.first_name} ${updateRider.last_name}` : null,
@@ -586,6 +597,14 @@ export async function deleteResult(resultId: string): Promise<ActionResult> {
     .eq('id', resultId)
     .single()
 
+  if (!result) {
+    return { success: false, error: 'Result not found' }
+  }
+  const mutable = await assertEventMutable((result as ResultWithEventId).event_id)
+  if (!mutable.ok) {
+    return { success: false, error: mutable.error }
+  }
+
   const { error } = await getSupabaseAdmin().from('results').delete().eq('id', resultId)
 
   if (error) {
@@ -638,6 +657,11 @@ export async function createBulkResults(
   distanceKm: number
 ): Promise<ActionResult> {
   const admin = await requireAdmin()
+
+  const mutable = await assertEventMutable(eventId)
+  if (!mutable.ok) {
+    return { success: false, error: mutable.error }
+  }
 
   const insertData: ResultInsert[] = results.map((r) => ({
     event_id: eventId,

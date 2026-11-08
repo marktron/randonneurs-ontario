@@ -126,6 +126,22 @@ vi.mock('@/lib/memberships/service', () => ({
   isTrialUsed: vi.fn(),
 }))
 
+// The submitted-freeze gate is its own unit (tests/unit/lib/event-mutability.test.ts);
+// here it is a controllable stub so each test can say whether the event is frozen.
+const { mockAssertEventMutable } = vi.hoisted(() => ({
+  mockAssertEventMutable: vi.fn<
+    (eventId: string) => Promise<{ ok: true } | { ok: false; error: string }>
+  >(async () => ({ ok: true })),
+}))
+vi.mock('@/lib/actions/event-mutability', () => ({
+  assertEventMutable: (eventId: string) => mockAssertEventMutable(eventId),
+}))
+
+const FROZEN = {
+  ok: false as const,
+  error: 'Results for this event have been submitted; it is frozen',
+}
+
 // Import after mocks
 import {
   createResult,
@@ -155,10 +171,32 @@ const mockModule = await vi.importMock<{
   __mockUpdateSuccess: () => void
 }>('@/lib/supabase-server')
 
+const resultWrites = () =>
+  mockModule.__calls.filter(
+    (c) => c.table === 'results' && ['insert', 'update', 'delete', 'upsert'].includes(c.method)
+  )
+
 describe('createResult', () => {
   beforeEach(() => {
     mockModule.__reset()
     vi.clearAllMocks()
+  })
+
+  it('refuses to add a result to a submitted event without writing', async () => {
+    mockAssertEventMutable.mockResolvedValueOnce(FROZEN)
+
+    const result = await createResult({
+      eventId: 'event-1',
+      riderId: 'rider-1',
+      status: 'finished',
+      finishTime: '10:00',
+      season: 2026,
+      distanceKm: 200,
+    })
+
+    expect(result).toEqual({ success: false, error: FROZEN.error })
+    expect(mockAssertEventMutable).toHaveBeenCalledWith('event-1')
+    expect(resultWrites()).toEqual([])
   })
 
   it('revalidates the permanent results path for permanent events', async () => {
@@ -356,6 +394,26 @@ describe('updateResult', () => {
     vi.clearAllMocks()
   })
 
+  it("refuses to edit a result on a submitted event, checking the result's event", async () => {
+    mockModule.__mockResultFound({ event_id: 'event-9' })
+    mockAssertEventMutable.mockResolvedValueOnce(FROZEN)
+
+    const result = await updateResult('result-1', { status: 'dnf' })
+
+    expect(result).toEqual({ success: false, error: FROZEN.error })
+    expect(mockAssertEventMutable).toHaveBeenCalledWith('event-9')
+    expect(resultWrites()).toEqual([])
+  })
+
+  it('refuses to edit a result that does not exist', async () => {
+    mockModule.__mockResultNotFound()
+
+    const result = await updateResult('missing', { status: 'dnf' })
+
+    expect(result).toEqual({ success: false, error: 'Result not found' })
+    expect(resultWrites()).toEqual([])
+  })
+
   it('updates result successfully', async () => {
     mockModule.__mockResultFound({ id: 'result-1', event_id: 'event-1' })
     mockModule.__mockUpdateSuccess()
@@ -436,6 +494,27 @@ describe('deleteResult', () => {
   beforeEach(() => {
     mockModule.__reset()
     vi.clearAllMocks()
+  })
+
+  it("refuses to delete a result on a submitted event, checking the result's event", async () => {
+    mockModule.__mockResultFound({ event_id: 'event-9' })
+    mockAssertEventMutable.mockResolvedValueOnce(FROZEN)
+
+    const result = await deleteResult('result-1')
+
+    expect(result).toEqual({ success: false, error: FROZEN.error })
+    expect(mockAssertEventMutable).toHaveBeenCalledWith('event-9')
+    expect(resultWrites()).toEqual([])
+  })
+
+  it('refuses to delete a result that does not exist', async () => {
+    mockModule.__mockResultNotFound()
+
+    const result = await deleteResult('missing')
+
+    expect(result).toEqual({ success: false, error: 'Result not found' })
+    expect(mockAssertEventMutable).not.toHaveBeenCalled()
+    expect(resultWrites()).toEqual([])
   })
 
   it('deletes result successfully', async () => {
@@ -681,6 +760,21 @@ describe('createBulkResults', () => {
   beforeEach(() => {
     mockModule.__reset()
     vi.clearAllMocks()
+  })
+
+  it('refuses to bulk-add results to a submitted event without writing', async () => {
+    mockAssertEventMutable.mockResolvedValueOnce(FROZEN)
+
+    const result = await createBulkResults(
+      'event-1',
+      [{ riderId: 'rider-1', status: 'finished', finishTime: '13:30' }],
+      2025,
+      200
+    )
+
+    expect(result).toEqual({ success: false, error: FROZEN.error })
+    expect(mockAssertEventMutable).toHaveBeenCalledWith('event-1')
+    expect(resultWrites()).toEqual([])
   })
 
   it('creates multiple results successfully', async () => {

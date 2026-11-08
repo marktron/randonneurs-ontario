@@ -44,28 +44,30 @@ async function historyFor(slug: string) {
   return data ?? []
 }
 
+function fixtureRow(overrides: Record<string, unknown> = {}) {
+  return {
+    id: ID,
+    slug: SLUG_A,
+    name: 'Inttest Slug Rot',
+    chapter_id: TORONTO_CHAPTER_ID,
+    event_type: 'brevet',
+    distance_km: 200,
+    event_date: '2099-05-02',
+    status: 'scheduled',
+    collection: null,
+    description: null,
+    direction: 'as_posted',
+    route_id: null,
+    start_time: null,
+    start_location: null,
+    image_url: null,
+    ...overrides,
+  }
+}
+
 beforeEach(async () => {
   await cleanup()
-  await checked(
-    admin.from('events').insert({
-      id: ID,
-      slug: SLUG_A,
-      name: 'Inttest Slug Rot',
-      chapter_id: TORONTO_CHAPTER_ID,
-      event_type: 'brevet',
-      distance_km: 200,
-      event_date: '2099-05-02',
-      status: 'scheduled',
-      collection: null,
-      description: null,
-      direction: 'as_posted',
-      route_id: null,
-      start_time: null,
-      start_location: null,
-      image_url: null,
-    }),
-    'insert slug rotation fixture'
-  )
+  await checked(admin.from('events').insert(fixtureRow()), 'insert slug rotation fixture')
 })
 
 afterAll(async () => {
@@ -130,11 +132,13 @@ describe('getEventSlugRedirect (real DB)', () => {
   })
 
   it('returns null when the event behind the old slug is a draft (RLS)', async () => {
+    // A published event cannot be moved back to draft (DB guard
+    // enforce_event_status_transition), so re-seed the fixture as a draft.
+    await checked(admin.from('events').delete().eq('id', ID), 'drop scheduled fixture')
     await checked(
       admin
         .from('events')
-        .update({ slug: SLUG_B, event_date: '2099-05-09', status: 'draft' })
-        .eq('id', ID)
+        .insert(fixtureRow({ slug: SLUG_B, event_date: '2099-05-09', status: 'draft' }))
         .select(),
       'seed draft event'
     )

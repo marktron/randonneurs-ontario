@@ -91,10 +91,28 @@ You'll spend most of your time here. From this page you can:
 
 - **Edit** the event details (pencil icon).
 - **Print control cards** for the event.
-- **Change the event status** using the dropdown. The system won't let you mark an event as "submitted" unless it has results entered.
+- **Change the event status** using the dropdown. The dropdown only offers the moves allowed from the event's current status (table below). "Submitted" is never in the dropdown: an event becomes submitted only through the **Submit Results** button, which emails the results to the VP of Brevet Administration. Once an event is submitted the dropdown is replaced by a "Submitted" badge, and the event is frozen: its details, results, check-ins and controls can no longer be edited, and it can't be deleted.
 - When you set an event to **Cancelled**, a dialog opens with the event's current description in a textarea. Add a short cancellation note at the top — that note appears on the public event page so riders who missed the cancellation email can see what happened. If the event has results recorded, the dialog also warns that they will be deleted.
 - **Delete** the event (with confirmation). You'll be warned if the event has registrations.
 - **Email all participants** using a pre-populated mailto link, this will open in your email client with the participants on BCC and the subject prefilled with the event name.
+
+#### Allowed status changes
+
+| From      | Can move to                                           |
+| --------- | ----------------------------------------------------- |
+| Draft     | Scheduled (publish)                                   |
+| Scheduled | Completed, Cancelled                                  |
+| Completed | Submitted (Submit Results only), Cancelled, Scheduled |
+| Cancelled | Scheduled                                             |
+| Submitted | Nothing; submitted is final                           |
+
+The status dropdown can't submit an event, and the server refuses to set Submitted any other way: use the **Submit Results** button.
+
+Completed can go back to Scheduled so you can reopen an event the system completed too early, for example after a postponed start. A cancelled event can't jump straight to Completed, because that would skip creating the pending results and the email asking riders to submit; set it back to Scheduled first. Choosing the status an event already has does nothing.
+
+#### Correcting a submitted event
+
+There is no way to reopen a submitted event from the admin site, by design: the page hides Edit, Delete and Add Rider, and the result fields are read-only. If a submitted result is wrong, ask the webmaster. They reopen the event with a direct database update from Submitted back to Completed (`UPDATE events SET status = 'completed' WHERE id = '<event id>' AND status = 'submitted'`), the one move out of Submitted the database allows. The chapter VP then fixes the results and presses **Submit Results** again, which sends a fresh results email to the VP of Brevet Administration.
 
 ### Event status auto-completion
 
@@ -117,11 +135,11 @@ On phones, the results table converts each rider row into a stacked card with la
 
 A **First event** badge appears next to riders who have never shown up to a Randonneurs Ontario event before — that is, they have no result recorded for any other event with a status other than DNS. DNF, OTL, DQ, finished, and pending results all count as having shown up, so the badge only highlights brand-new riders. Use it as a heads-up to introduce yourself, walk them through the controls, and make them feel welcome.
 
-You can also add riders using the "Add Rider" button, which is available for both scheduled and completed events. For scheduled events, this adds a registration; for completed events, it adds a result entry. Search by name to find an existing rider, or create a new rider directly from the dialog.
+You can also add riders using the "Add Rider" button, which is available for both scheduled and completed events (not submitted ones; see [Correcting a submitted event](#correcting-a-submitted-event)). For scheduled events, this adds a registration; for completed events, it adds a result entry. Search by name to find an existing rider, or create a new rider directly from the dialog.
 
 If a registration has been cancelled (by the rider or an admin), it appears in a "Cancelled" section below the main table showing the rider's name, email, and cancellation date. This gives you a complete picture of who registered, even if they later cancelled. Cancelled riders are not included in the rider count or email list.
 
-When all results are entered, use the "Submit Results" button to have the system send the results to the VP of Ride Administration (you will be cc'd on the email). This changes the event status to "submitted."
+When all results are entered, use the "Submit Results" button to have the system send the results to the VP of Ride Administration (you will be cc'd on the email). This changes the event status to "submitted." From then on the results manager is read-only: the status, time, team and distance fields are disabled and the Add Rider button is gone.
 
 ## Routes
 

@@ -20,6 +20,8 @@ import { generateAcpXlsx, generateAcpCsv } from '@/lib/email/results-spreadsheet
 import type { AcpResultRow, SpreadsheetData } from '@/lib/email/results-spreadsheet'
 import { handleActionError, handleSupabaseError, createActionResult } from '@/lib/errors'
 import type { ActionResult } from '@/types/actions'
+import type { EventStatus } from '@/lib/events/status'
+import { assertEventMutable, canTransitionEvent } from '@/lib/actions/event-mutability'
 import type {
   ChapterSlugOnly,
   Event,
@@ -63,7 +65,7 @@ async function revalidateCalendarTags(chapterId: string, eventType: string, even
   }
 }
 
-export type EventStatus = 'draft' | 'scheduled' | 'completed' | 'cancelled' | 'submitted'
+export type { EventStatus }
 export type EventType = 'brevet' | 'populaire' | 'fleche' | 'permanent'
 
 export interface CreateEventData {
@@ -216,6 +218,13 @@ export interface UpdateEventData {
 export async function updateEvent(eventId: string, data: UpdateEventData): Promise<ActionResult> {
   try {
     const admin = await requireAdmin()
+
+    // A submitted event is homologated: no date/distance/route edits (which
+    // would rotate the slug and rewrite results via the distance trigger).
+    const mutable = await assertEventMutable(eventId)
+    if (!mutable.ok) {
+      return { success: false, error: mutable.error }
+    }
 
     const updateData: Record<string, unknown> = {}
 
@@ -418,6 +427,12 @@ export async function deleteEvent(eventId: string): Promise<ActionResult> {
   try {
     const admin = await requireAdmin()
 
+    // Deleting would cascade away results already filed with the ACP.
+    const mutable = await assertEventMutable(eventId)
+    if (!mutable.ok) {
+      return { success: false, error: mutable.error }
+    }
+
     // Fetch the event to check the date and get chapter info for revalidation
     const { data: event, error: fetchError } = await getSupabaseAdmin()
       .from('events')
@@ -510,20 +525,41 @@ export async function updateEventStatus(
       route_id: string | null
     }
 
-    if (status === 'draft' && typedEvent.status !== 'draft') {
+    const currentStatus = typedEvent.status as EventStatus
+
+    // Re-selecting the current status changes nothing: no write, no ERW call,
+    // no completion emails.
+    if (status === currentStatus) {
+      return { success: true }
+    }
+
+    // completed -> submitted is in the table, but only submitEventResults may
+    // perform it: it sends the ACP results email. Setting the status here
+    // would skip the email and leave the event frozen.
+    if (status === 'submitted') {
+      return { success: false, error: 'Use Submit Results to submit an event' }
+    }
+    if (status === 'draft') {
       return { success: false, error: 'Published events cannot be moved back to draft' }
     }
     // A draft is invisible to the public; the only status move that makes sense
     // is publishing it. Cancelled/completed would leak it (public reads include
     // cancelled, and completed skips the ERW sync + shows up in results).
-    if (typedEvent.status === 'draft' && status !== 'scheduled') {
+    if (currentStatus === 'draft' && status !== 'scheduled') {
       return { success: false, error: 'Drafts can only be published (or deleted)' }
     }
-    const isPublishingDraft = typedEvent.status === 'draft' && status === 'scheduled'
+    // Every other move must be in EVENT_STATUS_TRANSITIONS (lib/events/status.ts).
+    if (!canTransitionEvent(currentStatus, status)) {
+      return {
+        success: false,
+        error: `Cannot change event status from ${currentStatus} to ${status}`,
+      }
+    }
+    const isPublishingDraft = currentStatus === 'draft' && status === 'scheduled'
 
     // If cancelling, delete all results for this event. Runs after the fetch +
-    // draft guard above so a refused request (e.g. draft -> cancelled) never
-    // deletes anything.
+    // transition guards above so a refused request (e.g. submitted ->
+    // cancelled) never deletes anything.
     if (status === 'cancelled') {
       const { error: deleteError } = await getSupabaseAdmin()
         .from('results')
@@ -870,8 +906,10 @@ export async function submitEventResults(eventId: string): Promise<ActionResult>
     // Only finishers with a finish time are included in email and spreadsheet
     const finishedResults = typedResults.filter((r) => r.status === 'finished' && r.finish_time)
 
-    // Send results email for brevets, fleches, and populaires (not permanents)
+    // Build the results email for brevets, fleches, and populaires (not permanents) BEFORE
+    // claiming, so nothing that can throw sits between the claim and the send.
     const requiresEmail = typedEvent.event_type !== 'permanent'
+    let outgoingEmail: Parameters<typeof sendEmail>[0] | null = null
 
     if (requiresEmail) {
       const eventDate = parseLocalDate(typedEvent.event_date).toLocaleDateString('en-CA', {
@@ -947,45 +985,77 @@ This email was sent from the Randonneurs Ontario admin system.
         }
       }
 
-      // Send email
+      const toAddress = 'leissp@mac.com' // NOTE: change to vp-admin@randonneursontario.ca when someone other than Peter handles the admin emails
+      // Deduplicate recipients
+      const ccAddresses = [
+        ...new Set([admin.email, 'vp-toronto@randonneursontario.ca'].map((e) => e.toLowerCase())),
+      ].filter((email) => email !== toAddress.toLowerCase())
+
+      outgoingEmail = {
+        to: toAddress,
+        cc: ccAddresses.length > 0 ? ccAddresses : undefined,
+        from: fromEmail,
+        replyTo: admin.email,
+        subject,
+        text: emailBody,
+        attachments: [attachment],
+      }
+    }
+
+    // Claim the submission before emailing: the status flip is the race-safe guard, so two
+    // concurrent clicks cannot both send and a failed update cannot leave a re-sendable event.
+    const claimData: EventUpdate = { status: 'submitted' }
+    const { data: claimed, error: claimError } = await getSupabaseAdmin()
+      .from('events')
+      .update(claimData)
+      .eq('id', eventId)
+      .eq('status', 'completed')
+      .select('id')
+
+    if (claimError) {
+      console.error('Error claiming event for submission:', claimError)
+      return { success: false, error: 'Failed to update event status' }
+    }
+
+    if (!claimed || claimed.length === 0) {
+      return { success: false, error: 'Results have already been submitted' }
+    }
+
+    // Send email
+    if (outgoingEmail) {
       if (!isEmailConfigured()) {
         console.warn('AWS SES not configured, skipping email')
       } else {
         try {
-          const toAddress = 'leissp@mac.com' // NOTE: change to vp-admin@randonneursontario.ca when someone other than Peter handles the admin emails
-          // Deduplicate recipients
-          const ccAddresses = [
-            ...new Set(
-              [admin.email, 'vp-toronto@randonneursontario.ca'].map((e) => e.toLowerCase())
-            ),
-          ].filter((email) => email !== toAddress.toLowerCase())
-
-          await sendEmail({
-            to: toAddress,
-            cc: ccAddresses && ccAddresses.length > 0 ? ccAddresses : undefined,
-            from: fromEmail,
-            replyTo: admin.email,
-            subject,
-            text: emailBody,
-            attachments: [attachment],
-          })
+          await sendEmail(outgoingEmail)
         } catch (emailError) {
           console.error('Failed to send results email:', emailError)
+          // Release the claim so the admin can retry. A later guard forbids leaving
+          // `submitted` except back to `completed`; this direct revert is that sanctioned exit.
+          const revertData: EventUpdate = { status: 'completed' }
+          const { error: revertError } = await getSupabaseAdmin()
+            .from('events')
+            .update(revertData)
+            .eq('id', eventId)
+            .eq('status', 'submitted')
+          if (revertError) {
+            // The event is now submitted with no email sent, and the freeze blocks the
+            // admin from retrying. Only a direct DB fix gets it out, so make it loud.
+            const stuckMessage =
+              'Failed to send email and could not reopen the event; contact the webmaster'
+            return handleSupabaseError(
+              revertError,
+              {
+                operation: 'submitEventResults',
+                context: { eventId, step: 'revert submission claim after failed send' },
+                userMessage: stuckMessage,
+              },
+              stuckMessage
+            )
+          }
           return { success: false, error: 'Failed to send email. Please try again.' }
         }
       }
-    }
-
-    // Update event status to submitted
-    const updateData: EventUpdate = { status: 'submitted' }
-    const { error: updateError } = await getSupabaseAdmin()
-      .from('events')
-      .update(updateData)
-      .eq('id', eventId)
-
-    if (updateError) {
-      console.error('Error updating event status:', updateError)
-      return { success: false, error: 'Email sent but failed to update event status' }
     }
 
     // Revalidate admin pages (still use revalidatePath for admin routes)

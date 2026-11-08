@@ -3,6 +3,7 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js'
 import { getTestSupabase, checked } from './helpers/supabase'
 import { TORONTO_CHAPTER_ID, daysFromNow } from './registration/helpers'
 import { getMyUpcomingRides } from '@/lib/actions/my-rides'
+import { searchRiderCandidates } from '@/lib/actions/rider-match'
 
 // A "hidden" rider must NEVER appear on public-facing surfaces (riders
 // directory, results, awards, records, registered-rider lists) but must remain
@@ -33,6 +34,7 @@ const IDS = {
   scheduledEvent: '00000000-1111-4000-a000-00000000a002',
   hiddenRider: '00000000-1111-4000-a000-00000000b001',
   visibleRider: '00000000-1111-4000-a000-00000000b002',
+  namesakeRider: '00000000-1111-4000-a000-00000000b003',
   hiddenResult: '00000000-1111-4000-a000-00000000c001',
   visibleResult: '00000000-1111-4000-a000-00000000c002',
 }
@@ -40,14 +42,16 @@ const IDS = {
 const SLUGS = {
   hidden: 'inttest-hidden-rider',
   visible: 'inttest-visible-rider',
+  namesake: 'inttest-namesake-rider',
 }
 
 const EMAILS = {
   hidden: 'inttest-hidden@example.com',
   visible: 'inttest-visible@example.com',
+  namesake: 'inttest-namesake@example.com',
 }
 
-const RIDER_IDS = [IDS.hiddenRider, IDS.visibleRider]
+const RIDER_IDS = [IDS.hiddenRider, IDS.visibleRider, IDS.namesakeRider]
 let srAwardId: string
 
 async function cleanup(): Promise<void> {
@@ -61,8 +65,8 @@ async function cleanup(): Promise<void> {
   // Clean by both id and the shared natural keys (slug/email) so a prior failed
   // run leaves nothing behind that would break unique-constraint inserts.
   await admin.from('riders').delete().in('id', RIDER_IDS)
-  await admin.from('riders').delete().in('slug', [SLUGS.hidden, SLUGS.visible])
-  await admin.from('riders').delete().in('email', [EMAILS.hidden, EMAILS.visible])
+  await admin.from('riders').delete().in('slug', [SLUGS.hidden, SLUGS.visible, SLUGS.namesake])
+  await admin.from('riders').delete().in('email', [EMAILS.hidden, EMAILS.visible, EMAILS.namesake])
 }
 
 beforeAll(async () => {
@@ -130,6 +134,16 @@ beforeAll(async () => {
         first_name: 'Visible',
         last_name: 'Rider',
         email: EMAILS.visible,
+        hidden: false,
+      },
+      {
+        // Same name as the hidden rider, to prove the match picker filters on
+        // the flag rather than on the name.
+        id: IDS.namesakeRider,
+        slug: SLUGS.namesake,
+        first_name: 'Hidden',
+        last_name: 'Rider',
+        email: EMAILS.namesake,
         hidden: false,
       },
     ]),
@@ -206,7 +220,7 @@ describe('hidden rider suppression', () => {
     const { data } = await anon
       .from('public_riders')
       .select('slug')
-      .in('slug', [SLUGS.hidden, SLUGS.visible])
+      .in('slug', [SLUGS.hidden, SLUGS.visible, SLUGS.namesake])
     const slugs = (data ?? []).map((r) => r.slug)
     expect(slugs).toContain(SLUGS.visible)
     expect(slugs).not.toContain(SLUGS.hidden)
@@ -291,6 +305,13 @@ describe('hidden rider suppression', () => {
     expect(result.success).toBe(true)
     const slugs = (result.data ?? []).map((r) => r.slug)
     expect(slugs).toContain('inttest-hidden-scheduled')
+  })
+
+  it('keeps the rider out of the public registration rider-match search', async () => {
+    const { candidates } = await searchRiderCandidates('Hidden', 'Rider')
+    const ids = candidates.map((c) => c.id)
+    expect(ids).toContain(IDS.namesakeRider)
+    expect(ids).not.toContain(IDS.hiddenRider)
   })
 
   it('remains fully visible to admins (service role bypasses RLS)', async () => {

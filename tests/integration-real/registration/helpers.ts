@@ -5,10 +5,14 @@ import type { CompleteRegistrationData } from '@/lib/actions/register'
 
 export const TORONTO_CHAPTER_ID = 'ad83d0b9-4d25-472b-9d3e-5732730d761c'
 
+// Local calendar date (not UTC): the app's deadlines are Eastern-time, and toISOString() rolls to tomorrow after 7 p.m. EST.
 export function daysFromNow(days: number): string {
   const d = new Date()
   d.setDate(d.getDate() + days)
-  return d.toISOString().split('T')[0]
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
 }
 
 export function buildRegistrationData(

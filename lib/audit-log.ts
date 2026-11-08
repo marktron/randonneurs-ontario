@@ -1,17 +1,24 @@
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 
 export type AuditAction = 'create' | 'update' | 'delete' | 'status_change' | 'merge' | 'submit'
-export type AuditEntityType =
-  | 'event'
-  | 'route'
-  | 'rider'
-  | 'result'
-  | 'registration'
-  | 'page'
-  | 'admin_user'
-  | 'news'
-  | 'navigation'
-  | 'award'
+/**
+ * Every entity type the audit_logs CHECK constraint must accept. The real-DB
+ * test tests/integration-real/audit-log-entity-types.test.ts inserts one row
+ * per value, so adding a type here without a migration fails CI.
+ */
+export const AUDIT_ENTITY_TYPES = [
+  'event',
+  'route',
+  'rider',
+  'result',
+  'registration',
+  'page',
+  'admin_user',
+  'news',
+  'navigation',
+  'award',
+] as const
+export type AuditEntityType = (typeof AUDIT_ENTITY_TYPES)[number]
 
 interface AuditLogParams {
   adminId: string

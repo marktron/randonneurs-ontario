@@ -177,6 +177,30 @@ vi.mock('@/lib/email/results-spreadsheet', () => ({
   }),
 }))
 
+// The submitted-freeze gate is its own unit (tests/unit/lib/event-mutability.test.ts);
+// here it is a controllable stub so each test can say whether the event is
+// frozen. The lifecycle table stays real.
+const { mockAssertEventMutable } = vi.hoisted(() => ({
+  mockAssertEventMutable: vi.fn<
+    (eventId: string) => Promise<{ ok: true } | { ok: false; error: string }>
+  >(async () => ({ ok: true })),
+}))
+vi.mock('@/lib/actions/event-mutability', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/actions/event-mutability')>()),
+  assertEventMutable: (eventId: string) => mockAssertEventMutable(eventId),
+}))
+
+// Pass-through spy so tests can assert a failure was reported to Sentry.
+vi.mock('@/lib/errors', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/errors')>()
+  return { ...actual, handleSupabaseError: vi.fn(actual.handleSupabaseError) }
+})
+
+const FROZEN = {
+  ok: false as const,
+  error: 'Results for this event have been submitted; it is frozen',
+}
+
 // Import after mocking
 import {
   createEvent,
@@ -189,6 +213,9 @@ import {
 } from '@/lib/actions/events'
 import { sendResultSubmissionReminders } from '@/lib/events/send-result-reminders'
 import { requireAdmin } from '@/lib/auth/get-admin'
+import { handleSupabaseError } from '@/lib/errors'
+import { EVENT_STATUS_TRANSITIONS } from '@/lib/events/status'
+import type { EventStatus } from '@/lib/events/status'
 
 // Access mock internals for test configuration
 const mockModule = await vi.importMock<{
@@ -237,6 +264,18 @@ describe('deleteEvent', () => {
 
     const { deleteErwEvent: mockDeleteErw } = await import('@/lib/erw/client')
     expect(mockDeleteErw).toHaveBeenCalledWith('erw-to-delete')
+  })
+
+  it('refuses to delete a submitted event without touching the database', async () => {
+    mockAssertEventMutable.mockResolvedValueOnce(FROZEN)
+
+    const result = await deleteEvent('event-1')
+
+    expect(result).toEqual({ success: false, error: FROZEN.error })
+    expect(mockAssertEventMutable).toHaveBeenCalledWith('event-1')
+    expect(mockModule.__calls.filter((c) => c.method === 'delete')).toEqual([])
+    const { deleteErwEvent: mockDeleteErw } = await import('@/lib/erw/client')
+    expect(mockDeleteErw).not.toHaveBeenCalled()
   })
 
   it('returns error when trying to delete past event', async () => {
@@ -349,8 +388,10 @@ describe('submitEventResults', () => {
       })
     })
 
-    // Mock the status update
-    mockModule.__mockUpdateSuccess()
+    // Mock the status claim (one row flipped completed -> submitted)
+    mockModule.__queryBuilder.then.mockImplementationOnce((resolve) =>
+      resolve({ data: [{ id: 'test-event-id' }], error: null })
+    )
 
     // Mock chapter query for revalidation
     mockModule.__mockEventFound({ slug: 'toronto' })
@@ -381,6 +422,166 @@ describe('submitEventResults', () => {
     expect(call.text).not.toMatch(/\d:\d{2}:\d{2}/)
   })
 
+  describe('claim-then-send ordering', () => {
+    const completedBrevet = {
+      id: 'test-event-id',
+      status: 'completed',
+      event_type: 'brevet',
+      name: 'Test Event',
+      event_date: '2025-01-15',
+      distance_km: 200,
+      chapters: { name: 'Toronto' },
+    }
+    const resultsRows = {
+      data: [
+        {
+          riders: { first_name: 'John', last_name: 'Doe', gender: 'M' },
+          status: 'finished',
+          finish_time: '10:30:00',
+          note: null,
+        },
+      ],
+      error: null,
+    }
+
+    it('does not send the email when the claim affects zero rows', async () => {
+      mockModule.__mockEventFound(completedBrevet)
+      mockModule.__queryBuilder.then.mockImplementationOnce((resolve) => resolve(resultsRows))
+      // Claim: event was flipped to submitted by a concurrent click
+      mockModule.__queryBuilder.then.mockImplementationOnce((resolve) =>
+        resolve({ data: [], error: null })
+      )
+
+      process.env.AWS_ACCESS_KEY_ID = 'test-key'
+      const result = await submitEventResults('test-event-id')
+      delete process.env.AWS_ACCESS_KEY_ID
+
+      const { sendEmail } = await import('@/lib/email/ses')
+      expect(result.success).toBe(false)
+      expect(result.error).toBe('Results have already been submitted')
+      expect(sendEmail).not.toHaveBeenCalled()
+    })
+
+    it('claims the event filtered on completed, before sending the email', async () => {
+      const order: string[] = []
+      const { sendEmail } = await import('@/lib/email/ses')
+      vi.mocked(sendEmail).mockImplementationOnce(async () => {
+        order.push('send')
+      })
+
+      mockModule.__mockEventFound(completedBrevet)
+      mockModule.__queryBuilder.then.mockImplementationOnce((resolve) => resolve(resultsRows))
+      mockModule.__queryBuilder.then.mockImplementationOnce((resolve) => {
+        order.push('claim')
+        resolve({ data: [{ id: 'test-event-id' }], error: null })
+      })
+
+      process.env.AWS_ACCESS_KEY_ID = 'test-key'
+      const result = await submitEventResults('test-event-id')
+      delete process.env.AWS_ACCESS_KEY_ID
+
+      expect(result.success).toBe(true)
+      expect(order).toEqual(['claim', 'send'])
+
+      const eventCalls = mockModule.__calls.filter((c) => c.table === 'events')
+      const updateIdx = eventCalls.findIndex((c) => c.method === 'update')
+      expect(eventCalls[updateIdx].args![0]).toEqual({ status: 'submitted' })
+      const claimChain = eventCalls.slice(updateIdx + 1, updateIdx + 4)
+      expect(claimChain.map((c) => [c.method, ...(c.args ?? [])])).toEqual([
+        ['eq', 'id', 'test-event-id'],
+        ['eq', 'status', 'completed'],
+        ['select', 'id'],
+      ])
+    })
+
+    it('never claims the event when building the email throws', async () => {
+      const { generateAcpXlsx, generateAcpCsv } = await import('@/lib/email/results-spreadsheet')
+      vi.mocked(generateAcpXlsx).mockRejectedValueOnce(new Error('xlsx boom'))
+      vi.mocked(generateAcpCsv).mockImplementationOnce(() => {
+        throw new Error('csv boom')
+      })
+
+      mockModule.__mockEventFound(completedBrevet)
+      mockModule.__queryBuilder.then.mockImplementationOnce((resolve) => resolve(resultsRows))
+
+      process.env.AWS_ACCESS_KEY_ID = 'test-key'
+      const result = await submitEventResults('test-event-id')
+      delete process.env.AWS_ACCESS_KEY_ID
+
+      const { sendEmail } = await import('@/lib/email/ses')
+      expect(result.success).toBe(false)
+      expect(sendEmail).not.toHaveBeenCalled()
+      const statusUpdates = mockModule.__calls.filter(
+        (c) => c.table === 'events' && c.method === 'update'
+      )
+      expect(statusUpdates).toEqual([])
+    })
+
+    it('reverts the claim to completed when the email send fails', async () => {
+      const { sendEmail } = await import('@/lib/email/ses')
+      vi.mocked(sendEmail).mockRejectedValueOnce(new Error('SES down'))
+
+      mockModule.__mockEventFound(completedBrevet)
+      mockModule.__queryBuilder.then.mockImplementationOnce((resolve) => resolve(resultsRows))
+      mockModule.__queryBuilder.then.mockImplementationOnce((resolve) =>
+        resolve({ data: [{ id: 'test-event-id' }], error: null })
+      )
+
+      process.env.AWS_ACCESS_KEY_ID = 'test-key'
+      const result = await submitEventResults('test-event-id')
+      delete process.env.AWS_ACCESS_KEY_ID
+
+      expect(result).toEqual({ success: false, error: 'Failed to send email. Please try again.' })
+
+      const eventCalls = mockModule.__calls.filter((c) => c.table === 'events')
+      const revertIdx = eventCalls.findIndex(
+        (c) =>
+          c.method === 'update' && (c.args![0] as Record<string, unknown>).status === 'completed'
+      )
+      expect(revertIdx).toBeGreaterThan(-1)
+      expect(
+        eventCalls.slice(revertIdx + 1, revertIdx + 3).map((c) => [c.method, ...(c.args ?? [])])
+      ).toEqual([
+        ['eq', 'id', 'test-event-id'],
+        ['eq', 'status', 'submitted'],
+      ])
+      expect(handleSupabaseError).not.toHaveBeenCalled()
+    })
+
+    it('reports a failed revert and tells the admin the event is stuck', async () => {
+      const { sendEmail } = await import('@/lib/email/ses')
+      vi.mocked(sendEmail).mockRejectedValueOnce(new Error('SES down'))
+      const revertError = { code: '08006', message: 'connection lost' }
+
+      mockModule.__mockEventFound(completedBrevet)
+      mockModule.__queryBuilder.then.mockImplementationOnce((resolve) => resolve(resultsRows))
+      mockModule.__queryBuilder.then.mockImplementationOnce((resolve) =>
+        resolve({ data: [{ id: 'test-event-id' }], error: null })
+      )
+      // The revert update fails: the event stays submitted
+      mockModule.__queryBuilder.then.mockImplementationOnce((resolve) =>
+        resolve({ data: null, error: revertError })
+      )
+
+      process.env.AWS_ACCESS_KEY_ID = 'test-key'
+      const result = await submitEventResults('test-event-id')
+      delete process.env.AWS_ACCESS_KEY_ID
+
+      expect(result).toEqual({
+        success: false,
+        error: 'Failed to send email and could not reopen the event; contact the webmaster',
+      })
+      expect(handleSupabaseError).toHaveBeenCalledWith(
+        revertError,
+        expect.objectContaining({
+          operation: 'submitEventResults',
+          context: expect.objectContaining({ eventId: 'test-event-id' }),
+        }),
+        expect.any(String)
+      )
+    })
+  })
+
   it('does not send email for permanent events', async () => {
     mockModule.__mockEventFound({
       id: 'test-event-id',
@@ -407,8 +608,10 @@ describe('submitEventResults', () => {
       })
     })
 
-    // Mock the status update
-    mockModule.__mockUpdateSuccess()
+    // Mock the status claim (one row flipped completed -> submitted)
+    mockModule.__queryBuilder.then.mockImplementationOnce((resolve) =>
+      resolve({ data: [{ id: 'test-event-id' }], error: null })
+    )
 
     // Mock chapter query for revalidation
     mockModule.__mockEventFound({ slug: 'toronto' })
@@ -449,8 +652,10 @@ describe('submitEventResults', () => {
       })
     })
 
-    // Mock the status update
-    mockModule.__mockUpdateSuccess()
+    // Mock the status claim (one row flipped completed -> submitted)
+    mockModule.__queryBuilder.then.mockImplementationOnce((resolve) =>
+      resolve({ data: [{ id: 'test-event-id' }], error: null })
+    )
 
     // Mock chapter query for revalidation
     mockModule.__mockEventFound({ slug: 'toronto' })
@@ -496,8 +701,10 @@ describe('submitEventResults', () => {
       })
     })
 
-    // Mock the status update
-    mockModule.__mockUpdateSuccess()
+    // Mock the status claim (one row flipped completed -> submitted)
+    mockModule.__queryBuilder.then.mockImplementationOnce((resolve) =>
+      resolve({ data: [{ id: 'test-event-id' }], error: null })
+    )
 
     // Mock chapter query for revalidation
     mockModule.__mockEventFound({ slug: 'toronto' })
@@ -936,6 +1143,25 @@ describe('updateEvent', () => {
   beforeEach(() => {
     mockModule.__reset()
     vi.clearAllMocks()
+  })
+
+  it('refuses to edit a submitted event without writing anything', async () => {
+    mockAssertEventMutable.mockResolvedValueOnce(FROZEN)
+
+    const result = await updateEvent('event-1', {
+      name: 'Renamed',
+      distanceKm: 210,
+      eventDate: `${CURRENT_SEASON}-06-22`,
+    })
+
+    expect(result).toEqual({ success: false, error: FROZEN.error })
+    expect(mockAssertEventMutable).toHaveBeenCalledWith('event-1')
+    const writes = mockModule.__calls.filter((c) =>
+      ['update', 'upsert', 'insert', 'delete'].includes(c.method)
+    )
+    expect(writes).toEqual([])
+    const { updateErwEvent: mockUpdateErw } = await import('@/lib/erw/client')
+    expect(mockUpdateErw).not.toHaveBeenCalled()
   })
 
   it('updates event successfully', async () => {
@@ -1537,7 +1763,8 @@ describe('updateEventStatus', () => {
     mockModule.__mockUpdateSuccess() // status update
     mockModule.__mockEventFound({ slug: 'toronto' }) // revalidation
 
-    const result = await updateEventStatus('event-1', 'scheduled')
+    // A real transition: a same-state request is a no-op and writes nothing.
+    const result = await updateEventStatus('event-1', 'completed')
 
     expect(result.success).toBe(true)
     const eventsUpdateCalls = mockModule.__calls.filter(
@@ -1559,10 +1786,13 @@ describe('updateEventStatus', () => {
       status: 'scheduled',
       chapters: { name: 'Toronto' },
     })
-    mockModule.__mockUpdateSuccess()
+    mockModule.__mockUpdateSuccess() // results delete
+    mockModule.__mockUpdateSuccess() // status update
     mockModule.__mockEventFound({ slug: 'toronto' })
 
-    const result = await updateEventStatus('event-1', 'scheduled', { description: null })
+    // The cancel dialog sends null when the textarea is cleared. (A same-state
+    // request is a no-op and writes nothing, so this needs a real transition.)
+    const result = await updateEventStatus('event-1', 'cancelled', { description: null })
 
     expect(result.success).toBe(true)
     const eventsUpdateCalls = mockModule.__calls.filter(
@@ -1741,6 +1971,140 @@ describe('updateEventStatus', () => {
 
     const { createErwEvent: mockCreateErw } = await import('@/lib/erw/client')
     expect(mockCreateErw).not.toHaveBeenCalled()
+  })
+
+  describe('transition table', () => {
+    const ALL: EventStatus[] = ['draft', 'scheduled', 'completed', 'cancelled', 'submitted']
+    const others = (from: EventStatus) => ALL.filter((to) => to !== from)
+    // 'submitted' is in the table (completed -> submitted) but only
+    // submitEventResults may perform it, because it also sends the ACP email.
+    // updateEventStatus refuses it as a target, so it is tested separately.
+    const tablePairs = ALL.flatMap((from) =>
+      EVENT_STATUS_TRANSITIONS[from].map((to) => [from, to] as const)
+    )
+    const allowed = tablePairs.filter(([, to]) => to !== 'submitted')
+    const submitOnly = tablePairs.filter(([, to]) => to === 'submitted')
+    const forbidden = ALL.flatMap((from) =>
+      others(from)
+        .filter((to) => !EVENT_STATUS_TRANSITIONS[from].includes(to))
+        .map((to) => [from, to] as const)
+    )
+
+    function eventIn(status: EventStatus) {
+      mockModule.__mockEventFound({
+        id: 'event-1',
+        name: 'Table Event',
+        event_date: `${CURRENT_SEASON}-06-15`,
+        distance_km: 200,
+        chapter_id: 'chapter-1',
+        event_type: 'brevet',
+        status,
+        erw_event_id: null,
+        slug: 'table-event-200km',
+        description: null,
+        start_time: null,
+        route_id: null,
+        chapters: { name: 'Toronto', slug: 'toronto' },
+      })
+    }
+
+    const writes = () =>
+      mockModule.__calls.filter(
+        (c) =>
+          (c.table === 'events' && c.method === 'update') ||
+          (c.table === 'results' && c.method === 'delete')
+      )
+
+    it('covers every ordered pair of distinct statuses exactly once', () => {
+      expect(allowed.length + submitOnly.length + forbidden.length).toBe(
+        ALL.length * (ALL.length - 1)
+      )
+      expect(submitOnly).toEqual([['completed', 'submitted']])
+    })
+
+    it('refuses completed -> submitted: only Submit Results may submit an event', async () => {
+      eventIn('completed')
+
+      const result = await updateEventStatus('event-1', 'submitted')
+
+      expect(result).toEqual({ success: false, error: 'Use Submit Results to submit an event' })
+      expect(writes()).toEqual([])
+    })
+
+    it.each(forbidden)('refuses %s -> %s before any update or results delete', async (from, to) => {
+      eventIn(from)
+
+      const result = await updateEventStatus('event-1', to)
+
+      expect(result.success).toBe(false)
+      expect(writes()).toEqual([])
+      const { createPendingResultsAndSendEmails } = await import('@/lib/events/complete-event')
+      expect(createPendingResultsAndSendEmails).not.toHaveBeenCalled()
+    })
+
+    it('names both states when refusing a non-draft transition', async () => {
+      eventIn('cancelled')
+
+      const result = await updateEventStatus('event-1', 'completed')
+
+      expect(result).toEqual({
+        success: false,
+        error: 'Cannot change event status from cancelled to completed',
+      })
+    })
+
+    it('refuses submitted -> cancelled without deleting the filed results', async () => {
+      eventIn('submitted')
+
+      const result = await updateEventStatus('event-1', 'cancelled')
+
+      expect(result.success).toBe(false)
+      expect(result.error).toBe('Cannot change event status from submitted to cancelled')
+      const deleteCalls = mockModule.__calls.filter(
+        (c) => c.table === 'results' && c.method === 'delete'
+      )
+      expect(deleteCalls).toHaveLength(0)
+    })
+
+    it.each(allowed)('allows %s -> %s and writes the new status', async (from, to) => {
+      eventIn(from)
+
+      const result = await updateEventStatus('event-1', to)
+
+      expect(result.success).toBe(true)
+      const statusUpdate = mockModule.__calls.find(
+        (c) =>
+          c.table === 'events' &&
+          c.method === 'update' &&
+          (c.args?.[0] as { status?: string } | undefined)?.status === to
+      )
+      expect(statusUpdate).toBeDefined()
+    })
+
+    it('un-cancels (cancelled -> scheduled) without deleting results', async () => {
+      eventIn('cancelled')
+
+      const result = await updateEventStatus('event-1', 'scheduled')
+
+      expect(result.success).toBe(true)
+      expect(
+        mockModule.__calls.filter((c) => c.table === 'results' && c.method === 'delete')
+      ).toHaveLength(0)
+    })
+
+    it.each(ALL)('treats %s -> same status as a no-op success with no writes', async (status) => {
+      eventIn(status)
+
+      const result = await updateEventStatus('event-1', status, { description: 'ignored' })
+
+      expect(result).toEqual({ success: true })
+      expect(writes()).toEqual([])
+      const { createPendingResultsAndSendEmails } = await import('@/lib/events/complete-event')
+      expect(createPendingResultsAndSendEmails).not.toHaveBeenCalled()
+      const { createErwEvent, deleteErwEvent } = await import('@/lib/erw/client')
+      expect(createErwEvent).not.toHaveBeenCalled()
+      expect(deleteErwEvent).not.toHaveBeenCalled()
+    })
   })
 })
 

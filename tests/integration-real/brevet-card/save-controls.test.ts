@@ -50,6 +50,26 @@ async function cleanup(supabase: ReturnType<typeof getTestSupabase>) {
   await supabase.from('riders').delete().ilike('email', RIDER_EMAIL)
 }
 
+/**
+ * Return the event to 'scheduled'. The DB guard
+ * (enforce_event_status_transition) only lets a submitted event go back to
+ * 'completed', so step through that first; completed -> scheduled is allowed.
+ */
+async function resetEventToScheduled(supabase: ReturnType<typeof getTestSupabase>) {
+  await checked(
+    supabase
+      .from('events')
+      .update({ status: 'completed' })
+      .eq('id', IDS.event)
+      .eq('status', 'submitted'),
+    'un-submit event'
+  )
+  await checked(
+    supabase.from('events').update({ status: 'scheduled' }).eq('id', IDS.event),
+    'reset event status'
+  )
+}
+
 describe('saveEventControls (real DB)', () => {
   const supabase = getTestSupabase()
 
@@ -59,10 +79,7 @@ describe('saveEventControls (real DB)', () => {
    * same rows regardless of order or previous runs.
    */
   async function seedControls(): Promise<ControlRow[]> {
-    await checked(
-      supabase.from('events').update({ status: 'scheduled' }).eq('id', IDS.event),
-      'reset event status'
-    )
+    await resetEventToScheduled(supabase)
     await supabase.from('control_checkins').delete().eq('registration_id', IDS.registration)
     await supabase.from('event_controls').delete().eq('event_id', IDS.event)
 
@@ -375,7 +392,7 @@ describe('saveEventControls (real DB)', () => {
       expect((checkins as unknown[]).length).toBe(1)
     } finally {
       // Un-freeze so afterAll cleanup (and reruns) start from a mutable event.
-      await supabase.from('events').update({ status: 'scheduled' }).eq('id', IDS.event)
+      await resetEventToScheduled(supabase)
     }
   })
 

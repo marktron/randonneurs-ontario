@@ -198,6 +198,8 @@ interface RiderRowProps {
   registrationId: string | null
   isFirstTimeRider: boolean
   checkinControls: CheckinEvidenceControl[] | null
+  /** Results are submitted: the server refuses every result write, so offer none. */
+  readOnly: boolean
   onRegistrationCancelled: (
     registrationId: string,
     riderId: string,
@@ -292,6 +294,7 @@ function RiderRow({
   registrationId,
   isFirstTimeRider,
   checkinControls,
+  readOnly,
   onRegistrationCancelled,
 }: RiderRowProps) {
   const [isPending, startTransition] = useTransition()
@@ -572,7 +575,7 @@ function RiderRow({
         <Select
           value={localStatus}
           onValueChange={(v) => handleStatusChange(v as ResultStatus)}
-          disabled={isPending}
+          disabled={isPending || readOnly}
         >
           <SelectTrigger className="w-[110px] h-8">
             <SelectValue />
@@ -602,7 +605,7 @@ function RiderRow({
           onChange={(e) => setLocalTime(e.target.value)}
           onBlur={handleTimeBlur}
           onKeyDown={handleTimeKeyDown}
-          disabled={isPending || localStatus !== 'finished'}
+          disabled={isPending || readOnly || localStatus !== 'finished'}
           className="w-[80px] h-8 font-mono"
         />
       </TableCell>
@@ -617,7 +620,7 @@ function RiderRow({
               onChange={(e) => setLocalTeamName(e.target.value)}
               onBlur={handleTeamNameBlur}
               onKeyDown={handleTimeKeyDown}
-              disabled={isPending}
+              disabled={isPending || readOnly}
               className="w-[140px] h-8"
             />
           </TableCell>
@@ -630,7 +633,7 @@ function RiderRow({
               onChange={(e) => setLocalDistance(e.target.value)}
               onBlur={handleDistanceBlur}
               onKeyDown={handleTimeKeyDown}
-              disabled={isPending}
+              disabled={isPending || readOnly}
               className="w-[80px] h-8 font-mono"
             />
           </TableCell>
@@ -775,6 +778,7 @@ function RiderRow({
             (participant.registrationStatus === 'registered' ||
               participant.registrationStatus === 'incomplete: membership') &&
             (eventStatus === 'scheduled' || eventStatus === 'completed') &&
+            !readOnly &&
             !result && (
               <AlertDialog>
                 <AlertDialogTrigger asChild>
@@ -823,7 +827,7 @@ function RiderRow({
                 </AlertDialogContent>
               </AlertDialog>
             )}
-          {result && eventStatus === 'completed' && (
+          {result && eventStatus === 'completed' && !readOnly && (
             <DeleteResultButton
               resultId={result.id}
               riderId={participant.riderId}
@@ -859,6 +863,10 @@ export function EventResultsManager({
   const firstTimeRiderIdSet = new Set(firstTimeRiderIds)
   const [addRiderOpen, setAddRiderOpen] = useState(false)
   const [isSubmitted, setIsSubmitted] = useState(eventStatus === 'submitted')
+  // Submitted events are frozen server-side (assertEventMutable). `isSubmitted`
+  // flips on a successful submit, so the page locks without waiting for the
+  // refresh to deliver the new status.
+  const readOnly = isSubmitted || eventStatus === 'submitted'
   // Cancelling is optimistic — the row is hidden client-side rather than
   // re-fetched. `localCancelled` is the single source of truth for that: the
   // rows it holds are both hidden from the participant list and shown under
@@ -1049,9 +1057,7 @@ export function EventResultsManager({
               </a>
             </Button>
           )}
-          {(eventStatus === 'scheduled' ||
-            eventStatus === 'completed' ||
-            eventStatus === 'submitted') && (
+          {(eventStatus === 'scheduled' || eventStatus === 'completed') && !readOnly && (
             <Button variant="outline" size="sm" onClick={() => setAddRiderOpen(true)}>
               <Plus className="mr-2 h-4 w-4" />
               Add Rider
@@ -1106,6 +1112,7 @@ export function EventResultsManager({
                     registrationId={participant.hasRegistration ? participant.id : null}
                     isFirstTimeRider={firstTimeRiderIdSet.has(participant.riderId)}
                     checkinControls={checkinEvidence[participant.riderId] ?? null}
+                    readOnly={readOnly}
                     onRegistrationCancelled={handleRegistrationCancelled}
                   />
                 ))}
