@@ -347,15 +347,20 @@ export async function updateResult(
   const admin = await requireAdmin()
 
   // The freeze is per event, so look up which event this result belongs to.
+  // The event and rider names feed the audit entry; the update can't change them.
   const { data: target, error: targetError } = await getSupabaseAdmin()
     .from('results')
-    .select('event_id')
+    .select('event_id, events (name), riders (first_name, last_name)')
     .eq('id', resultId)
     .single()
   if (targetError || !target) {
     return { success: false, error: 'Result not found' }
   }
-  const mutable = await assertEventMutable((target as { event_id: string }).event_id)
+  const typedTarget = target as ResultWithEventId & {
+    events: { name: string } | null
+    riders: { first_name: string; last_name: string } | null
+  }
+  const mutable = await assertEventMutable(typedTarget.event_id)
   if (!mutable.ok) {
     return { success: false, error: mutable.error }
   }
@@ -379,25 +384,10 @@ export async function updateResult(
 
   // Revalidate admin pages (still use revalidatePath for admin routes)
   revalidatePath('/admin/events')
+  await revalidateResultsTags(typedTarget.event_id)
 
-  // Get the event_id to revalidate results cache tags
-  const { data: result } = await getSupabaseAdmin()
-    .from('results')
-    .select('event_id, events (name), riders (first_name, last_name)')
-    .eq('id', resultId)
-    .single()
-
-  if (result) {
-    const typedResult = result as ResultWithEventId
-    if (typedResult.event_id) {
-      await revalidateResultsTags(typedResult.event_id)
-    }
-  }
-
-  const updateEvent = (result as { events: { name: string } | null } | null)?.events
-  const updateRider = (
-    result as { riders: { first_name: string; last_name: string } | null } | null
-  )?.riders
+  const updateEvent = typedTarget.events
+  const updateRider = typedTarget.riders
   const updateDesc = [
     updateEvent ? updateEvent.name : null,
     updateRider ? `${updateRider.first_name} ${updateRider.last_name}` : null,
