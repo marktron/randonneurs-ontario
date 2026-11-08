@@ -205,19 +205,25 @@ export function ResultSubmissionForm({ token, initialData }: ResultSubmissionFor
   ) {
     setState((prev) => ({ ...prev, uploading: true, error: null }))
 
-    const result = await deleteResultFile(token, fileType)
+    // Same rule as handleFileUpload: every exit clears `uploading`, or the slot
+    // and the Submit button stay disabled until reload.
+    const fail = (message: string) =>
+      setState((prev) => ({ ...prev, uploading: false, error: message }))
 
-    if (result.success) {
+    try {
+      const result = await deleteResultFile(token, fileType)
+
+      if (!result.success) {
+        fail(result.error || 'Delete failed')
+        return
+      }
+
       setState({ uploading: false, path: null, url: null, error: null })
       if (inputRef.current) {
         inputRef.current.value = ''
       }
-    } else {
-      setState((prev) => ({
-        ...prev,
-        uploading: false,
-        error: result.error || 'Delete failed',
-      }))
+    } catch (err) {
+      fail(err instanceof Error ? err.message : 'Delete failed')
     }
   }
 
@@ -808,28 +814,35 @@ function FileUploadField({
 
   if (state.path && state.url) {
     return (
-      <div className="flex items-center gap-2 p-2 rounded-lg border border-border bg-background">
-        <a
-          href={state.url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex-1 flex items-center gap-2 text-sm text-primary hover:underline truncate"
-        >
-          {icon}
-          <span className="truncate">{state.path.split('/').pop()}</span>
-          <ExternalLink className="h-3 w-3 flex-shrink-0" />
-        </a>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          onClick={onDelete}
-          disabled={disabled || state.uploading}
-          className="h-8 w-8 p-0"
-        >
-          <X className="h-4 w-4" />
-          <span className="sr-only">Remove</span>
-        </Button>
+      <div>
+        <div className="flex items-center gap-2 p-2 rounded-lg border border-border bg-background">
+          <a
+            href={state.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex-1 flex items-center gap-2 text-sm text-primary hover:underline truncate"
+          >
+            {icon}
+            <span className="truncate">{state.path.split('/').pop()}</span>
+            <ExternalLink className="h-3 w-3 flex-shrink-0" />
+          </a>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={onDelete}
+            disabled={disabled || state.uploading}
+            className="h-8 w-8 p-0"
+          >
+            <X className="h-4 w-4" />
+            <span className="sr-only">Remove</span>
+          </Button>
+        </div>
+        {state.error && (
+          <p role="alert" className="text-xs text-destructive mt-1">
+            {state.error}
+          </p>
+        )}
       </div>
     )
   }

@@ -336,10 +336,6 @@ describe('ResultSubmissionForm', () => {
     })
   })
 
-  // Note: File upload tests removed because the file inputs are hidden and
-  // accessed via button clicks, which is difficult to test in happy-dom.
-  // File upload functionality is covered by E2E tests.
-
   describe('file upload pipeline', () => {
     function gpxInput(container: HTMLElement) {
       return container.querySelector('input[type="file"][accept=".gpx,.xml"]') as HTMLInputElement
@@ -388,10 +384,43 @@ describe('ResultSubmissionForm', () => {
       expect(await screen.findByText('Nope')).toBeInTheDocument()
       expect(submit).not.toBeDisabled()
     })
-  })
 
-  // Note: File deletion tests require files to be displayed, which needs status="finished"
-  // to be set via Radix Select. This flow is covered by E2E tests.
+    it('recovers when deleteResultFile rejects on the GPX slot', async () => {
+      mockDeleteResultFile.mockRejectedValue(new Error('Network down'))
+      const { container } = render(
+        <ResultSubmissionForm
+          {...defaultProps}
+          initialData={{ ...mockInitialData, gpxFilePath: 'event-1/rider-1/ride.gpx' }}
+        />
+      )
+      const gpxLink = screen.getByRole('link', { name: 'ride.gpx' })
+      const remove = within(gpxLink.parentElement!).getByRole('button')
+
+      fireEvent.click(remove)
+
+      expect(await screen.findByText('Network down')).toBeInTheDocument()
+      expect(remove).not.toBeDisabled()
+      expect(gpxInput(container)).not.toBeDisabled()
+      expect(screen.getByRole('button', { name: /submit your result/i })).not.toBeDisabled()
+    })
+
+    it('recovers when deleteResultFile rejects on a control card slot', async () => {
+      mockDeleteResultFile.mockRejectedValue(new Error('Network down'))
+      render(
+        <ResultSubmissionForm
+          {...defaultProps}
+          initialData={{ ...mockInitialData, controlCardFrontPath: 'event-1/rider-1/front.jpg' }}
+        />
+      )
+      const remove = screen.getByRole('button', { name: 'Remove' })
+
+      fireEvent.click(remove)
+
+      expect(await screen.findByText('Network down')).toBeInTheDocument()
+      expect(remove).not.toBeDisabled()
+      expect(screen.getByRole('button', { name: /submit your result/i })).not.toBeDisabled()
+    })
+  })
 
   describe('populaire events', () => {
     it('hides control card photos for populaires', () => {
