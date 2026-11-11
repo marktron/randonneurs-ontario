@@ -1,3 +1,8 @@
+# pg_cron is the primary scheduler for this endpoint (see
+# supabase/migrations/20261110120000_app_cron_triggers.sql). This GitHub
+# schedule stays as a best-effort backstop and as the red-job signal when the
+# endpoint returns non-200. It is safe to run alongside pg_cron because every
+# side effect is claimed atomically before it happens.
 name: Complete Events Cron
 
 permissions:

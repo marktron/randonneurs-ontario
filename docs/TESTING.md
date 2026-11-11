@@ -58,6 +58,8 @@ npm run test:e2e
 > local Postgres. Run it explicitly with `npm run test:integration-real` after
 > `npx supabase start`. It is gated in CI by its own job (see
 > [CI/CD Integration](#cicd-integration)).
+>
+> `app-cron-triggers.test.ts` in that suite connects with `pg` directly (default local DB URL, override with `SUPABASE_DB_URL`) because cron, net and vault are not reachable through PostgREST. It rolls back every test, so pg_net never sends a request.
 
 ### Run with Coverage
 

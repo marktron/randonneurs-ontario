@@ -350,30 +350,35 @@ Admin features:
 
 ## Scheduled Tasks
 
-The site uses **GitHub Actions** to run scheduled tasks (cron jobs). This avoids Vercel's paid cron feature.
+The site runs scheduled tasks (cron jobs) from **pg_cron** inside Supabase, which calls the `/api/cron/*` endpoints through pg_net. This avoids Vercel's paid cron feature. GitHub Actions scheduled workflows were the original scheduler, but GitHub treats them as best-effort: from 2026-09-15 to 2026-11-10 the hourly card-reminders workflow ran 265 times instead of about 1,340, and reminders went out hours late.
+
+The jobs, the Vault secrets they need, and how to check them are in [Database Setup: Cron triggers](database-setup.md#cron-triggers). The migration is `supabase/migrations/20261110120000_app_cron_triggers.sql`.
+
+The `complete-events` and `card-reminders` workflows keep their GitHub schedule as a backstop and as a red-job signal when the endpoint returns non-200. That is safe because every side effect is claimed atomically before it happens. The `announce-awards` workflow is manual-only: it stamps rows after posting with no claim, so two schedulers could double-post.
 
 ### Event Auto-Completion
 
 Events are automatically marked as "completed" once their closing time passes:
 
 ```
-GitHub Actions (hourly) → /api/cron/complete-events → Update event status → Send result emails
+pg_cron (hourly) → /api/cron/complete-events → Update event status → Send result emails
 ```
 
 **Workflow:** `.github/workflows/complete-events.yml`
 
 **How it works:**
 
-1. GitHub Actions triggers every hour (`0 * * * *`)
+1. pg_cron triggers every hour at minute 0 (job `app-cron-complete-events`); the GitHub workflow also runs on its own schedule as a backstop
 2. Calls the `/api/cron/complete-events` endpoint with `CRON_SECRET` for auth
 3. The endpoint checks each scheduled event's closing time (start + BRM time limit)
 4. Events past their closing time are marked "completed"
 5. Registered riders receive emails with links to submit their results
 
-**Required GitHub Secrets:**
+**Required secrets:**
 
-- `CRON_SECRET` - Must match the Vercel environment variable
-- `SITE_URL` - Production URL (e.g., `https://randonneursontario.ca`)
+- Supabase Vault: `app_cron_site_url` and `app_cron_secret` (see Database Setup)
+- `CRON_SECRET` - Vercel environment variable; the Vault secret must match it
+- GitHub Secrets for the backstop workflows: `CRON_SECRET` and `SITE_URL` - Production URL (e.g., `https://randonneursontario.ca`)
 
 **Timezone handling:** All event times are interpreted as Toronto time (`America/Toronto`), with proper EST/EDT handling via `createTorontoDate()` in `lib/brmTimes.ts`.
 
@@ -382,36 +387,36 @@ GitHub Actions (hourly) → /api/cron/complete-events → Update event status �
 Riders who chose a digital brevet card get a reminder email as their start approaches:
 
 ```
-GitHub Actions (hourly) → /api/cron/card-reminders → Sweep in-window registrations → Claim + send reminder emails
+pg_cron (hourly) → /api/cron/card-reminders → Sweep in-window registrations → Claim + send reminder emails
 ```
 
 **Workflow:** `.github/workflows/card-reminders.yml`
 
 **How it works:**
 
-1. GitHub Actions triggers every hour (`15 * * * *`)
+1. pg_cron triggers every hour at minute 15 (job `app-cron-card-reminders`); the GitHub workflow also runs on its own schedule as a backstop
 2. Calls the `/api/cron/card-reminders` endpoint with `CRON_SECRET` for auth
 3. The endpoint calls `sendCardReminders()` in `lib/events/send-card-reminders.ts`, which finds registrations with `brevet_card_type = 'digital'` on scheduled, card-eligible events whose rider start (event start, or an approved pre-ride start) falls 11-12 hours out
 4. Late signups, events with no controls saved, riders with no email (`noEmail`), and registrations with no management token (`noToken`) are skipped, each counted separately in the response
 5. Each row is claimed by stamping `registrations.card_reminder_sent_at` while it's still `NULL`, then the reminder is sent with a link to the rider's card
 6. One run sweeps at most `CARD_REMINDER_BATCH_LIMIT` (500) candidates, oldest registration first, inside the route's 60-second `maxDuration`. A row left over is still an unsent candidate on the next hourly run
-7. Setup failures (SES unconfigured, a failed candidate or controls query) throw: the endpoint reports them to Sentry and answers 500, which fails the Actions job. Per-row failures also go to Sentry but leave the run at 200 with the details in `errors`, so one bad row doesn't hide the riders who were emailed
+7. Setup failures (SES unconfigured, a failed candidate or controls query) throw: the endpoint reports them to Sentry and answers 500, which shows as a 500 in `app_cron_runs` and fails the backstop Actions job. Per-row failures also go to Sentry but leave the run at 200 with the details in `errors`, so one bad row doesn't hide the riders who were emailed
 
-**Required GitHub Secrets:** the same `CRON_SECRET` and `SITE_URL` as Event Auto-Completion above. All cron endpoints share their bearer-token check via `authorizeCronRequest()` in `lib/cron-auth.ts`.
+**Required secrets:** the same Vault secrets and `CRON_SECRET` as Event Auto-Completion above (and the same GitHub Secrets for the backstop workflow). All cron endpoints share their bearer-token check via `authorizeCronRequest()` in `lib/cron-auth.ts`.
 
 ### Award Announcements
 
 Newly assigned awards are posted to a Slack channel as an hourly digest:
 
 ```
-GitHub Actions (hourly) → /api/cron/announce-awards → Fetch unannounced award rows → Post to Slack → Stamp announced_at
+pg_cron (hourly) → /api/cron/announce-awards → Fetch unannounced award rows → Post to Slack → Stamp announced_at
 ```
 
 **Workflow:** `.github/workflows/announce-awards.yml`
 
 **How it works:**
 
-1. GitHub Actions triggers every hour (`30 * * * *`)
+1. pg_cron triggers every hour at minute 30 (job `app-cron-announce-awards`); the GitHub workflow is manual-only
 2. Calls the `/api/cron/announce-awards` endpoint with `CRON_SECRET` for auth
 3. The endpoint calls `announceNewAwards()` in `lib/awards/announce-awards.ts`, which reads `rider_awards` and `result_awards` rows whose `announced_at` is `NULL` (at most 200 per table per run)
 4. Posted as one digest grouped by award: hidden riders are skipped, and result-scoped awards (`result_awards`) only post when their slug is in `ANNOUNCED_RESULT_AWARD_SLUGS` (currently just O-12) — season-scoped awards (`rider_awards`) always post
@@ -420,7 +425,7 @@ GitHub Actions (hourly) → /api/cron/announce-awards → Fetch unannounced awar
 
 See [Awards: Slack announcements](awards.md#slack-announcements) for grouping, hidden riders, and double-announce edge cases.
 
-**Required GitHub Secrets:** the same `CRON_SECRET` and `SITE_URL` as above.
+**Required secrets:** the same Vault secrets and `CRON_SECRET` as above. The GitHub workflow is manual-only, so it needs the GitHub Secrets only when run by hand.
 
 **Vercel environment variables:** `SLACK_AWARDS_WEBHOOK_URL` (the Slack Workflow Builder webhook trigger URL) and `SLACK_AWARDS_WEBHOOK_TOKEN` (the shared secret the workflow checks), both set for **Production only** so previews never post. The payload is `{token, text}`; `text` is relayed verbatim and link unfurling is controlled on the workflow side.
 
@@ -451,14 +456,14 @@ Errors are automatically captured for both client and server. View them at [sent
 
 ## Key Configuration Files
 
-| File                   | Purpose                                     |
-| ---------------------- | ------------------------------------------- |
-| `next.config.ts`       | Next.js configuration (wrapped with Sentry) |
-| `tailwind.config.ts`   | Tailwind CSS customization                  |
-| `components.json`      | shadcn/ui component settings                |
-| `supabase/config.toml` | Local Supabase settings                     |
-| `.env.local`           | Environment variables (secrets)             |
-| `.github/workflows/`   | GitHub Actions for scheduled tasks          |
+| File                   | Purpose                                            |
+| ---------------------- | -------------------------------------------------- |
+| `next.config.ts`       | Next.js configuration (wrapped with Sentry)        |
+| `tailwind.config.ts`   | Tailwind CSS customization                         |
+| `components.json`      | shadcn/ui component settings                       |
+| `supabase/config.toml` | Local Supabase settings                            |
+| `.env.local`           | Environment variables (secrets)                    |
+| `.github/workflows/`   | GitHub Actions (backstop/manual cron triggers, CI) |
 
 ## Common Patterns
 

@@ -8,7 +8,8 @@ import { logError } from '@/lib/errors'
  * start is within the next 12 hours (see lib/events/send-card-reminders.ts
  * for the full sweep logic and windowing rules).
  *
- * This endpoint is called by GitHub Actions (see .github/workflows/card-reminders.yml).
+ * This endpoint is called by pg_cron (see supabase/migrations/20261110120000_app_cron_triggers.sql),
+ * with .github/workflows/card-reminders.yml as a backstop schedule.
  * It requires the CRON_SECRET environment variable for authentication.
  */
 
