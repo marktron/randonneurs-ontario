@@ -1,11 +1,14 @@
+# pg_cron is the scheduler for this endpoint (see
+# supabase/migrations/20261110120000_app_cron_triggers.sql). This workflow is
+# manual-only on purpose: announce-awards reads unannounced rows, posts to
+# Slack, then stamps them with no claim (lib/awards/announce-awards.ts), so
+# two schedulers overlapping could double-post.
 name: Award Announcements Cron
 
 permissions:
   contents: read
 
 on:
-  schedule:
-    - cron: '30 * * * *' # Every hour at minute 30
   workflow_dispatch: # Allow manual trigger for testing
 
 concurrency:

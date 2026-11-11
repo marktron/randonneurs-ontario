@@ -235,6 +235,56 @@ npx supabase link --project-ref <project-ref>
 npx supabase db push
 ```
 
+### Cron triggers
+
+Hourly jobs in Postgres call the site's `/api/cron/*` endpoints. They replaced GitHub Actions `schedule:` triggers as the scheduler, because GitHub runs those on a best-effort basis (see the header of `supabase/migrations/20261110120000_app_cron_triggers.sql`). The migration enables `pg_cron` and `pg_net`, and each job runs `public.trigger_app_cron(job)`, which makes an authenticated GET to `<site>/api/cron/<job>`.
+
+| Job                        | Schedule (UTC) | Does                                                                       |
+| -------------------------- | -------------- | -------------------------------------------------------------------------- |
+| `app-cron-complete-events` | `0 * * * *`    | GET `/api/cron/complete-events`                                            |
+| `app-cron-card-reminders`  | `15 * * * *`   | GET `/api/cron/card-reminders`                                             |
+| `app-cron-announce-awards` | `30 * * * *`   | GET `/api/cron/announce-awards`                                            |
+| `app-cron-prune-logs`      | `45 3 * * *`   | Deletes `cron.job_run_details` and `app_cron_runs` rows older than 30 days |
+
+Each request is logged in `public.app_cron_runs (job, request_id, requested_at)`.
+
+#### One-time production setup
+
+The site URL and the cron secret come from Supabase Vault. Run this once in the Supabase SQL editor, with real values in place of the placeholders:
+
+```sql
+select vault.create_secret('https://<canonical-host>', 'app_cron_site_url');
+select vault.create_secret('<same value as CRON_SECRET in Vercel>', 'app_cron_secret');
+```
+
+- The URL must be the canonical host exactly, with no path. pg_net does not follow redirects, and the site's canonical host is the `www` one.
+- The secret must match the `CRON_SECRET` environment variable in Vercel.
+- To rotate the secret, call `vault.update_secret(<id>, '<new>')` with the id from `select id from vault.secrets where name = 'app_cron_secret'`, and change `CRON_SECRET` in Vercel to the same value.
+
+The secrets can be set before or after the migration deploys. Until both exist, each job logs a warning and does nothing.
+
+#### Checking that it works
+
+```sql
+-- Did the jobs fire, and what did the endpoint answer? (responses are kept ~6 hours)
+select r.job, r.requested_at, h.status_code, h.timed_out, h.error_msg, left(h.content, 300) as body
+from app_cron_runs r
+left join net._http_response h on h.id = r.request_id
+order by r.requested_at desc
+limit 20;
+
+-- pg_cron's own log
+select j.jobname, d.status, d.return_message, d.start_time
+from cron.job_run_details d join cron.job j using (jobid)
+order by d.start_time desc limit 20;
+```
+
+Errors raised inside an endpoint still go to Sentry. A 401 in the first query means the Vault secret and the Vercel `CRON_SECRET` differ. No rows in `app_cron_runs` means the Vault secrets are missing or pg_cron is not running.
+
+#### Local development and pausing
+
+The jobs exist in local databases too, but no Vault secrets are set there, so they do nothing. To stop a job in production, run `select cron.unschedule('app-cron-card-reminders');`. Re-running the migration's `cron.schedule` call brings it back.
+
 ### Generate TypeScript types
 
 ```bash

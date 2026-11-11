@@ -843,7 +843,7 @@ made here — the dialog links to the Digital Cards grid, which owns editing.
   (`brevet_card_type = 'digital'`). An hourly cron sweep
   (`lib/events/send-card-reminders.ts`, called from
   `app/api/cron/card-reminders/route.ts` via
-  `.github/workflows/card-reminders.yml`) lands it 11-12 hours before the
+  pg_cron, with `.github/workflows/card-reminders.yml` as a backstop) lands it 11-12 hours before the
   rider's resolved start: the event's start for most riders, or the approved
   pre-ride start for a pre-ride rider. It's skipped for: a rider who
   registered after the reminder window opened (they already have the card

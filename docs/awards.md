@@ -620,8 +620,10 @@ Migration `20260923120000_award_announcements.sql` added the columns, stamped
 every existing row so nothing historical is posted, and added partial indexes
 on `announced_at IS NULL`.
 
-**Cron.** `.github/workflows/announce-awards.yml` calls
-`/api/cron/announce-awards` every hour at minute 30. The route calls
+**Cron.** pg_cron (job `app-cron-announce-awards`, see
+[Database Setup](database-setup.md#cron-triggers)) calls
+`/api/cron/announce-awards` every hour at minute 30. The
+`.github/workflows/announce-awards.yml` workflow is manual-only. The route calls
 `announceNewAwards()` in `lib/awards/announce-awards.ts`, which:
 
 1. Returns `configured: false` without touching the database when

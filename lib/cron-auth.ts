@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server'
 import { logError } from '@/lib/errors'
 
 /**
- * Shared bearer-token gate for GitHub Actions cron endpoints. Returns a
+ * Shared bearer-token gate for the cron endpoints, which are called by
+ * pg_cron (via pg_net) and by the GitHub Actions workflows. Returns a
  * NextResponse to send immediately (500 when CRON_SECRET is unset, 401 on
  * mismatch) or null when the request is authorized.
  */

@@ -7,7 +7,8 @@ import { logError } from '@/lib/errors'
  * Cron endpoint that posts newly assigned awards to Slack (see
  * lib/awards/announce-awards.ts for the outbox sweep and retry rules).
  *
- * This endpoint is called by GitHub Actions (see .github/workflows/announce-awards.yml).
+ * This endpoint is called by pg_cron (see supabase/migrations/20261110120000_app_cron_triggers.sql).
+ * The GitHub workflow .github/workflows/announce-awards.yml is a manual trigger only.
  * It requires the CRON_SECRET environment variable for authentication. When
  * SLACK_AWARDS_WEBHOOK_URL or SLACK_AWARDS_WEBHOOK_TOKEN is unset the sweep is a no-op that reports
  * `configured: false`.

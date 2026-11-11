@@ -14,7 +14,8 @@ import type { EventForCronCompletion, EventUpdate } from '@/types/queries'
  * Closing time is calculated as: event_date + start_time + closeHours(distance)
  * All times are interpreted as Toronto timezone (America/Toronto).
  *
- * This endpoint is called by GitHub Actions (see .github/workflows/complete-events.yml).
+ * This endpoint is called by pg_cron (see supabase/migrations/20261110120000_app_cron_triggers.sql),
+ * with .github/workflows/complete-events.yml as a backstop schedule.
  * It requires the CRON_SECRET environment variable for authentication.
  */
 

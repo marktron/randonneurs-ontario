@@ -88,7 +88,7 @@ The admin login page validates redirect URLs to prevent open redirect attacks. O
 ## Secrets Management
 
 - `SUPABASE_SERVICE_ROLE_KEY` is server-side only (no `NEXT_PUBLIC_` prefix)
-- `CRON_SECRET` authenticates the cron endpoint via Bearer token
+- `CRON_SECRET` authenticates the cron endpoints via Bearer token. pg_cron sends the same value from a Supabase Vault secret (`app_cron_secret`), so the two must match
 - `.env*` files are in `.gitignore`
 - Sentry `dataCollection` is pinned to the pre-v11 no-PII baseline (user info, cookies, bodies, query params and identifying headers are not sent)
 
